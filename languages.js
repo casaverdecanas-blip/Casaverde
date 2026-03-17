@@ -2,37 +2,57 @@ const translations = {
     es: {
         welcome: "Bienvenido a Casa Verde Posada",
         "nav-about": "Sobre Nosotros",
+        "nav-cabins": "Nuestras Cabañas",
+        "nav-booking": "Reservar",
+        "nav-contact": "Contacto",
         "about-title": "Sobre Casa Verde",
         "about-text": "Tu alquiler vacacional perfecto para una escapada relajante en la naturaleza.",
         "cabins-title": "Nuestras Cabañas",
-        "cabin-1": "Cabaña 1: Acogedora, hasta 4 personas"
+        "cabin-1": "Cabaña 1: Acogedora, hasta 4 personas",
+        "btn-check": "Consultar Disponibilidad"
     },
     en: {
         welcome: "Welcome to Casa Verde Posada",
         "nav-about": "About Us",
+        "nav-cabins": "Our Cabins",
+        "nav-booking": "Book Now",
+        "nav-contact": "Contact",
         "about-title": "About Casa Verde",
         "about-text": "Your perfect vacation rental for a relaxing getaway in nature.",
         "cabins-title": "Our Cabins",
-        "cabin-1": "Cabin 1: Cozy cabin for up to 4 guests"
+        "cabin-1": "Cabin 1: Cozy cabin for up to 4 guests",
+        "btn-check": "Check Availability"
     },
     pt: {
         welcome: "Bem-vindo à Casa Verde Posada",
         "nav-about": "Sobre Nós",
+        "nav-cabins": "Nossas Cabanas",
+        "nav-booking": "Reservar",
+        "nav-contact": "Contato",
         "about-title": "Sobre a Casa Verde",
         "about-text": "O seu aluguel de temporada perfeito para uma escapada relaxante na natureza.",
         "cabins-title": "Nossas Cabanas",
-        "cabin-1": "Cabana 1: Cabana aconchegante para até 4 pessoas"
+        "cabin-1": "Cabana 1: Cabana aconchegante para até 4 pessoas",
+        "btn-check": "Verificar Disponibilidade"
     }
 };
 
 function changeLanguage(lang) {
+    console.log("Cambiando a:", lang); // Esto te dirá en la consola si el botón funciona
+    
     const elements = document.querySelectorAll('[data-key]');
     elements.forEach(el => {
         const key = el.getAttribute('data-key');
-        if (translations[lang][key]) {
-            el.innerText = translations[lang][key];
+        if (translations[lang] && translations[lang][key]) {
+            // Si es un botón o input, usamos .value o .innerText según corresponda
+            if (el.tagName === 'INPUT' && el.type === 'submit') {
+                el.value = translations[lang][key];
+            } else {
+                el.innerText = translations[lang][key];
+            }
         }
     });
-    // Opcional: Guardar la preferencia en el navegador
-    localStorage.setItem('preferredLang', lang);
+    
+    // Cambia el atributo lang del HTML para accesibilidad
+    document.documentElement.lang = lang;
 }
