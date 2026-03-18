@@ -55,4 +55,15 @@ function changeLanguage(lang) {
     
     // Cambia el atributo lang del HTML para accesibilidad
     document.documentElement.lang = lang;
+    // Al final de tu script de idiomas
+window.onload = function() {
+    // Si el usuario entra desde Brasil o tiene el navegador en PT
+    const userLang = navigator.language || navigator.userLanguage; 
+    if (userLang.startsWith('pt')) {
+        changeLanguage('pt');
+    } else {
+        changeLanguage('es'); // O el que prefieras por defecto
+    }
+};
+
 }
