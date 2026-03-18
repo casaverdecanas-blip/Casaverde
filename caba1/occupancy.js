@@ -8,82 +8,96 @@ const firebaseConfig = {
     appId: "1:441572853741:web:25e588b5161d7486e4c9e4"
 };
 
-// Inicializar Firebase
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 let editMode = localStorage.getItem('admin') === 'true';
-window.currentCalendar = null;
+const CABIN_ID = 'cabin-1'; // Cambiar a cabin-2 en la otra carpeta
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Aplicar idioma inicial
     changeLanguage(currentLang);
-
-    // 2. Escuchar datos de Firebase (Fotos y Reservas)
+    // Escuchar cambios en tiempo real
     db.ref().on('value', snap => {
         const data = snap.val() || {};
-        renderCabin1(data);
+        renderGallery(data.fotos?.[CABIN_ID]);
+        renderCalendar(data.reservas?.[CABIN_ID]);
     });
-
-    // 3. Mostrar botón admin si está activo
-    if (editMode) document.getElementById('add-img').classList.remove('hidden');
 });
 
-function renderCabin1(data) {
-    const id = 'cabin-1';
-    
-    // Render de Fotos
+// --- GESTIÓN DE FOTOS ---
+function renderGallery(fotos) {
     const gallery = document.getElementById('photo-gallery');
     gallery.innerHTML = '';
-    const fotos = data.fotos?.[id] || {};
-    Object.keys(fotos).forEach(k => {
-        gallery.innerHTML += `<img src="${fotos[k]}" alt="Foto Cabaña">`;
-    });
+    if (!fotos) return;
 
-    // Render de Calendario
+    Object.keys(fotos).forEach(key => {
+        const container = document.createElement('div');
+        container.className = 'img-container';
+        container.style.position = 'relative';
+        container.innerHTML = `
+            <img src="${fotos[key]}" style="height:200px; border-radius:10px;">
+            ${editMode ? `<button onclick="deletePhoto('${key}')" style="position:absolute; top:5px; right:5px; background:red; color:white; border:none; border-radius:50%; cursor:pointer; width:25px; height:25px;">X</button>` : ''}
+        `;
+        gallery.appendChild(container);
+    });
+}
+
+function deletePhoto(key) {
+    if (confirm("¿Eliminar esta foto permanentemente?")) {
+        db.ref(`fotos/${CABIN_ID}/${key}`).remove();
+    }
+}
+
+// --- GESTIÓN DE CALENDARIO ---
+function renderCalendar(reservas) {
     const calEl = document.getElementById('calendar');
-    calEl.innerHTML = ''; // Limpiar antes de re-dibujar
-    
+    calEl.innerHTML = '';
+
+    const events = reservas ? Object.keys(reservas).map(k => ({
+        id: k,
+        title: reservas[k].title,
+        start: reservas[k].start,
+        end: reservas[k].end, // FullCalendar usa 'end' para marcar rangos
+        color: '#e74c3c',
+        allDay: true
+    })) : [];
+
     const calendar = new FullCalendar.Calendar(calEl, {
         initialView: 'dayGridMonth',
         locale: currentLang,
-        events: data.reservas?.[id] ? Object.values(data.reservas[id]) : [],
+        events: events,
         height: 'auto',
         dateClick: (info) => {
             if (!editMode) return;
-            const guest = prompt("Registrar Huésped (Bloquear fecha):");
-            if (guest) {
-                db.ref(`reservas/${id}`).push({ 
-                    title: guest, 
-                    start: info.dateStr, 
-                    color: '#e74c3c', 
-                    allDay: true 
+            
+            const guest = prompt("Nombre del Huésped (Check-in: " + info.dateStr + "):");
+            if (!guest) return;
+
+            const checkOut = prompt("Fecha de Check-out (AAAA-MM-DD):", info.dateStr);
+            if (checkOut) {
+                // FullCalendar 'end' es exclusivo (no incluye el día final en el color), 
+                // por eso a veces hay que sumar un día o avisar al usuario.
+                db.ref(`reservas/${CABIN_ID}`).push({
+                    title: guest,
+                    start: info.dateStr,
+                    end: checkOut, 
+                    allDay: true
                 });
             }
         },
         eventClick: (info) => {
-            if (editMode && confirm("¿Eliminar reserva de " + info.event.title + "?")) {
-                db.ref(`reservas/${id}/${info.event.id}`).remove();
+            if (!editMode) return;
+
+            const accion = prompt("Reserva: " + info.event.title + "\nEscriba 'E' para Editar nombre o 'D' para Borrar:").toUpperCase();
+            
+            if (accion === 'D') {
+                if (confirm("¿Eliminar reserva?")) db.ref(`reservas/${CABIN_ID}/${info.event.id}`).remove();
+            } else if (accion === 'E') {
+                const nuevoNombre = prompt("Nuevo nombre del huésped:", info.event.title);
+                if (nuevoNombre) db.ref(`reservas/${CABIN_ID}/${info.event.id}`).update({ title: nuevoNombre });
             }
         }
     });
 
     calendar.render();
-    window.currentCalendar = calendar; // Guardar referencia global
-}
-
-function addPhoto() {
-    const url = prompt("Pega el enlace directo de la imagen (.jpg o .png):");
-    if (url) db.ref(`fotos/cabin-1`).push(url);
-}
-
-function toggleAdmin() {
-    const pass = prompt("Clave de Administrador:");
-    if (pass === "Casaverde-199") {
-        editMode = !editMode;
-        localStorage.setItem('admin', editMode);
-        location.reload();
-    } else if (pass !== null) {
-        alert("Clave incorrecta");
-    }
 }
