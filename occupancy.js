@@ -14,7 +14,6 @@ const db = firebase.database();
 let currentCabin = null;
 let editMode = localStorage.getItem('adminEnabled') === 'true';
 
-// Inicio
 document.addEventListener('DOMContentLoaded', () => {
     db.ref().on('value', snapshot => {
         const data = snapshot.val() || {};
@@ -28,8 +27,8 @@ function updateThumbs(fotos) {
     ['cabin-1', 'cabin-2'].forEach(id => {
         const el = document.getElementById(`thumb-${id}`);
         if (!el) return;
-        const url = (fotos && fotos[id]) ? Object.values(fotos[id])[0] : 'https://via.placeholder.com/400x250';
-        el.innerHTML = `<img src="${url}" alt="Cabaña">`;
+        const url = (fotos && fotos[id]) ? Object.values(fotos[id])[0] : 'https://via.placeholder.com/400x250?text=CasaVerde';
+        el.innerHTML = `<img src="${url}">`;
     });
 }
 
@@ -37,13 +36,15 @@ function showCabinDetails(id) {
     currentCabin = id;
     document.getElementById('grid-wrapper').classList.add('hidden');
     document.getElementById('detail-wrapper').classList.remove('hidden');
-    db.ref().once('value', s => refreshUI(id, s.val() || {}));
+    
+    // Forzar redibujado para el calendario
+    setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 200);
 }
 
 function refreshUI(id, data) {
     document.getElementById('detail-title').innerText = translations[currentLang][`${id}-name`];
     document.getElementById('detail-desc').innerText = translations[currentLang][`${id}-desc`];
-    document.getElementById('wa-booking').href = `https://wa.me/5548999999999?text=Hola, consulto por ${id}`;
+    document.getElementById('wa-booking').href = `https://wa.me/5548999999999?text=Reserva ${id}`;
     
     // Fotos
     const carousel = document.getElementById('carousel-photos');
@@ -59,13 +60,10 @@ function refreshUI(id, data) {
         });
     }
 
-    // Botones Admin
     const addBtn = document.getElementById('add-photo-btn');
     if (editMode) addBtn.classList.remove('hidden');
-    else addBtn.classList.add('hidden');
-    
     addBtn.onclick = () => {
-        const url = prompt("Pega la URL de la imagen:");
+        const url = prompt("URL de la imagen:");
         if (url) db.ref(`fotos/${id}`).push(url);
     };
 
@@ -81,19 +79,14 @@ function renderCalendar(cabinId, eventsObj) {
         initialView: 'dayGridMonth',
         locale: currentLang,
         events: events,
+        height: 'auto',
         dateClick: (info) => {
             if (!editMode) return;
-            const guest = prompt("Nombre del huésped:");
-            if (guest) {
-                db.ref(`reservas/${cabinId}`).push({ 
-                    title: guest, start: info.dateStr, color: '#ff4d4d', allDay: true 
-                });
-            }
+            const guest = prompt("Huésped:");
+            if (guest) db.ref(`reservas/${cabinId}`).push({ title: guest, start: info.dateStr, color: '#ff4d4d', allDay: true });
         },
         eventClick: (info) => {
-            if (editMode && confirm("¿Eliminar reserva?")) {
-                db.ref(`reservas/${cabinId}/${info.event.id}`).remove();
-            }
+            if (editMode && confirm("¿Eliminar?")) db.ref(`reservas/${cabinId}/${info.event.id}`).remove();
         }
     });
     calendar.render();
@@ -106,15 +99,11 @@ function hideCabinDetails() {
 }
 
 function toggleAdmin() {
-    const pass = prompt("Clave de Gestión:");
-    if (pass === "Casaverde-199") {
+    if (prompt("Clave:") === "Casaverde-199") {
         editMode = !editMode;
         localStorage.setItem('adminEnabled', editMode);
-        alert(editMode ? "Modo Administrador Activo" : "Modo Lectura");
         location.reload();
     }
 }
 
-function deletePhoto(cabinId, key) {
-    if (confirm("¿Eliminar foto?")) db.ref(`fotos/${cabinId}/${key}`).remove();
-}
+function deletePhoto(cid, key) { db.ref(`fotos/${cid}/${key}`).remove(); }
