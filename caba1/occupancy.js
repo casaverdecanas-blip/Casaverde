@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderGallery(data.fotos?.[CABIN_ID]);
         renderCalendar(data.reservas?.[CABIN_ID]);
     });
-    if(editMode) document.getElementById('add-img').classList.remove('hidden');
+    if(editMode) document.getElementById('add-img-btn').classList.remove('hidden');
 });
 
 function renderGallery(fotos) {
@@ -29,10 +29,17 @@ function renderGallery(fotos) {
     gallery.innerHTML = '';
     if (!fotos) return;
     Object.keys(fotos).forEach(k => {
+        const url = (typeof fotos[k] === 'string') ? fotos[k] : fotos[k].url;
+        if(!url) return;
         const div = document.createElement('div');
-        div.innerHTML = `<img src="${fotos[k]}">` + (editMode ? `<button onclick="deletePhoto('${k}')" style="position:absolute;top:5px;right:5px;background:red;color:white;border:none;border-radius:50%;width:25px;height:25px;cursor:pointer;">X</button>` : '');
+        div.innerHTML = `<img src="${url}">` + (editMode ? `<button onclick="deletePhoto('${k}')" style="position:absolute;top:5px;right:5px;background:red;color:white;border:none;border-radius:50%;width:25px;height:25px;cursor:pointer;">X</button>` : '');
         gallery.appendChild(div);
     });
+}
+
+function addPhotoUrl() {
+    const url = prompt("Pega la URL de la imagen (.jpg, .png):");
+    if(url) db.ref(`fotos/${CABIN_ID}`).push(url);
 }
 
 function deletePhoto(key) { if(confirm("¿Eliminar foto?")) db.ref(`fotos/${CABIN_ID}/${key}`).remove(); }
@@ -82,9 +89,4 @@ function openAdminModal() {
         localStorage.setItem('admin', editMode);
         location.reload();
     }
-}
-
-function addPhoto() {
-    const url = prompt("URL de imagen:");
-    if(url) db.ref(`fotos/${CABIN_ID}`).push(url);
 }
