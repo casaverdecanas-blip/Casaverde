@@ -9,7 +9,6 @@ const firebaseConfig = {
   measurementId: "G-5LLT1XKF1W"
 };
 
-// Inicializar Firebase
 if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
 const db = firebase.database();
 
@@ -39,19 +38,48 @@ function actualizarCalendarios(data) {
 function renderCal(id, events) {
     const el = document.getElementById(id);
     if (!el) return;
+    
     const cal = new FullCalendar.Calendar(el, {
         initialView: 'dayGridMonth',
         locale: document.documentElement.lang || 'es',
         height: 'auto',
         events: events,
+        // Configuración para que los eventos no ocupen todo el día y se vean mejor
+        displayEventTime: false, 
+        eventOrder: "start",
+        
+        // CUANDO HACES CLIC EN UN DÍA VACÍO (CREAR)
         dateClick: function(info) {
-            if (editMode && confirm(`¿Marcar ${info.dateStr} como OCUPADO?`)) {
-                guardarEnNube(id, info.dateStr);
-            }
+            if (!editMode) return;
+            
+            const nombre = prompt("Nombre del huésped:");
+            if (!nombre) return;
+            
+            const fechaFin = prompt("Fecha de salida (AAAA-MM-DD):", info.dateStr);
+            if (!fechaFin) return;
+
+            guardarReserva(id, nombre, info.dateStr, fechaFin);
         },
+
+        // CUANDO HACES CLIC EN UNA RESERVA EXISTENTE (EDITAR/ELIMINAR)
         eventClick: function(info) {
-            if (editMode && confirm("¿Eliminar esta reserva?")) {
-                eliminarDeNube(id, info.event.startStr);
+            if (!editMode) return;
+
+            const accion = prompt("Escribe 'E' para editar, 'D' para eliminar o cancela para salir:");
+            
+            if (accion?.toUpperCase() === 'D') {
+                if (confirm("¿Eliminar reserva de " + info.event.title + "?")) {
+                    eliminarReserva(id, info.event.id);
+                }
+            } else if (accion?.toUpperCase() === 'E') {
+                const nuevoNombre = prompt("Nuevo nombre:", info.event.title);
+                const nuevoInicio = prompt("Nueva fecha entrada (AAAA-MM-DD):", info.event.startStr);
+                const nuevoFin = prompt("Nueva fecha salida (AAAA-MM-DD):", info.event.endStr || info.event.startStr);
+                
+                if (nuevoNombre && nuevoInicio && nuevoFin) {
+                    eliminarReserva(id, info.event.id); // Borramos la vieja
+                    guardarReserva(id, nuevoNombre, nuevoInicio, nuevoFin); // Guardamos la nueva
+                }
             }
         }
     });
@@ -59,23 +87,28 @@ function renderCal(id, events) {
     calendars[id] = cal;
 }
 
-function guardarEnNube(id, fecha) {
+// FUNCIONES DE NUBE MEJORADAS
+function guardarReserva(id, nombre, inicio, fin) {
     const ref = db.ref(`reservas/${id}`);
-    ref.once('value').then((snapshot) => {
-        let actual = snapshot.val() || [];
-        if (!actual.some(e => e.start === fecha)) {
-            actual.push({ title: 'Ocupado', start: fecha, color: '#ff4d4d' });
-            ref.set(actual);
-        }
+    const nuevaReservaRef = ref.push(); // Genera un ID único para la reserva
+    
+    nuevaReservaRef.set({
+        id: nuevaReservaRef.key,
+        title: nombre,
+        start: inicio,
+        end: fin, // FullCalendar trata el 'end' como exclusivo (no lo pinta), ideal para check-out
+        color: '#ff4d4d',
+        allDay: true
     });
 }
 
-function eliminarDeNube(id, fecha) {
+function eliminarReserva(id, reservaId) {
+    // Buscamos en el array y eliminamos por ID único
     const ref = db.ref(`reservas/${id}`);
     ref.once('value').then((snapshot) => {
         let actual = snapshot.val() || [];
-        const filtrado = actual.filter(e => e.start !== fecha);
-        ref.set(filtrado);
+        // Si es un objeto de objetos (push), lo manejamos así:
+        db.ref(`reservas/${id}/${reservaId}`).remove();
     });
 }
 
@@ -83,10 +116,11 @@ function toggleAdmin() {
     const pass = prompt("Contraseña de Admin:");
     if (pass === "Casaverde-199") {
         editMode = !editMode;
-        alert(editMode ? "MODO EDITOR ACTIVADO" : "MODO LECTURA ACTIVADO");
+        alert(editMode ? "MODO GESTIÓN ACTIVADO\n- Clic en día vacío para Nueva Reserva\n- Clic en reserva para Editar/Borrar" : "MODO LECTURA ACTIVADO");
     } else { alert("Incorrecto"); }
 }
 
+// ... Mantener showCabinDetails, hideCabinDetails y updateCalendarsLanguage igual ...
 function showCabinDetails(cabinId) {
     document.getElementById('main-content-wrapper').style.display = 'none';
     document.getElementById('cabin-details-wrapper').style.display = 'block';
