@@ -8,73 +8,82 @@ const firebaseConfig = {
     appId: "1:441572853741:web:25e588b5161d7486e4c9e4"
 };
 
-firebase.initializeApp(firebaseConfig);
+// Inicializar Firebase
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-let currentCabin = null;
 let editMode = localStorage.getItem('admin') === 'true';
+window.currentCalendar = null;
 
-// Carga inicial
 document.addEventListener('DOMContentLoaded', () => {
+    // 1. Aplicar idioma inicial
+    changeLanguage(currentLang);
+
+    // 2. Escuchar datos de Firebase (Fotos y Reservas)
     db.ref().on('value', snap => {
         const data = snap.val() || {};
-        // Actualizar miniaturas
-        ['cabin-1', 'cabin-2'].forEach(id => {
-            const slot = document.getElementById(`thumb-${id}`);
-            const url = data.fotos?.[id] ? Object.values(data.fotos[id])[0] : '';
-            if(url) slot.innerHTML = `<img src="${url}">`;
-        });
-        if (currentCabin) renderDetails(currentCabin, data);
+        renderCabin1(data);
     });
-    changeLanguage(currentLang);
+
+    // 3. Mostrar botón admin si está activo
+    if (editMode) document.getElementById('add-img').classList.remove('hidden');
 });
 
-function showCabinDetails(id) {
-    currentCabin = id;
-    document.getElementById('grid-wrapper').classList.add('hidden');
-    document.getElementById('detail-wrapper').classList.remove('hidden');
-}
-
-function renderDetails(id, data) {
-    document.getElementById('detail-title').innerText = translations[currentLang][`${id}-name`] || id;
+function renderCabin1(data) {
+    const id = 'cabin-1';
     
-    // Render Fotos
-    const carousel = document.getElementById('carousel-photos');
-    carousel.innerHTML = '';
+    // Render de Fotos
+    const gallery = document.getElementById('photo-gallery');
+    gallery.innerHTML = '';
     const fotos = data.fotos?.[id] || {};
     Object.keys(fotos).forEach(k => {
-        carousel.innerHTML += `<img src="${fotos[k]}">`;
+        gallery.innerHTML += `<img src="${fotos[k]}" alt="Foto Cabaña">`;
     });
 
-    // Admin button
-    document.getElementById('add-photo-btn').className = editMode ? '' : 'hidden';
-
-    // Render Calendario
-    const calEl = document.getElementById('calendar-render');
-    calEl.innerHTML = '';
+    // Render de Calendario
+    const calEl = document.getElementById('calendar');
+    calEl.innerHTML = ''; // Limpiar antes de re-dibujar
+    
     const calendar = new FullCalendar.Calendar(calEl, {
         initialView: 'dayGridMonth',
         locale: currentLang,
         events: data.reservas?.[id] ? Object.values(data.reservas[id]) : [],
+        height: 'auto',
         dateClick: (info) => {
             if (!editMode) return;
-            const guest = prompt("Nombre:");
-            if (guest) db.ref(`reservas/${id}`).push({ title: guest, start: info.dateStr, allDay: true, color: 'red' });
+            const guest = prompt("Registrar Huésped (Bloquear fecha):");
+            if (guest) {
+                db.ref(`reservas/${id}`).push({ 
+                    title: guest, 
+                    start: info.dateStr, 
+                    color: '#e74c3c', 
+                    allDay: true 
+                });
+            }
+        },
+        eventClick: (info) => {
+            if (editMode && confirm("¿Eliminar reserva de " + info.event.title + "?")) {
+                db.ref(`reservas/${id}/${info.event.id}`).remove();
+            }
         }
     });
+
     calendar.render();
+    window.currentCalendar = calendar; // Guardar referencia global
 }
 
-function hideCabinDetails() {
-    currentCabin = null;
-    document.getElementById('detail-wrapper').classList.add('hidden');
-    document.getElementById('grid-wrapper').classList.remove('hidden');
+function addPhoto() {
+    const url = prompt("Pega el enlace directo de la imagen (.jpg o .png):");
+    if (url) db.ref(`fotos/cabin-1`).push(url);
 }
 
 function toggleAdmin() {
-    if (prompt("Clave:") === "Casaverde-199") {
+    const pass = prompt("Clave de Administrador:");
+    if (pass === "Casaverde-199") {
         editMode = !editMode;
         localStorage.setItem('admin', editMode);
         location.reload();
+    } else if (pass !== null) {
+        alert("Clave incorrecta");
     }
 }
