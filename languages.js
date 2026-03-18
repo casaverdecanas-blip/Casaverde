@@ -1,6 +1,6 @@
 const translations = {
-    es: {
-        welcome: "Bienvenido a CasaVerdeCanas Posada",
+    es: { 
+        welcome: "Bienvenido a CasaVerdeCanas Posada", 
         "nav-about": "Sobre Nosotros", "nav-cabins": "Cabañas", "nav-contact": "Contacto",
         "about-title": "Sobre CasaVerdeCanas", "about-text": "Tu lugar en la naturaleza.",
         "cabins-title": "Nuestras Cabañas",
@@ -10,8 +10,8 @@ const translations = {
         "btn-back": "Volver", "footer-rights": "Todos los derechos reservados.",
         wa_msg: "Hola! Quisiera consultar disponibilidad para "
     },
-    pt: {
-        welcome: "Bem-vindo à CasaVerdeCanas Posada",
+    pt: { 
+        welcome: "Bem-vindo à CasaVerdeCanas Posada", 
         "nav-about": "Sobre Nós", "nav-cabins": "Cabanas", "nav-contact": "Contato",
         "about-title": "Sobre a CasaVerdeCanas", "about-text": "O seu lugar na natureza.",
         "cabins-title": "Nossas Cabanas",
@@ -21,8 +21,8 @@ const translations = {
         "btn-back": "Voltar", "footer-rights": "Todos os direitos reservados.",
         wa_msg: "Olá! Gostaria de consultar a disponibilidade para "
     },
-    en: {
-        welcome: "Welcome to CasaVerdeCanas Posada",
+    en: { 
+        welcome: "Welcome to CasaVerdeCanas Posada", 
         "nav-about": "About Us", "nav-cabins": "Cabins", "nav-contact": "Contact",
         "about-title": "About CasaVerdeCanas", "about-text": "Your place in nature.",
         "cabins-title": "Our Cabins",
@@ -48,7 +48,7 @@ function changeLanguage(lang) {
 }
 
 function updateWhatsAppLinks() {
-    const phone = "5548999999999"; // TU TELÉFONO AQUÍ
+    const phone = "5548999999999"; // Reemplaza con tu número real
     const msg = translations[currentLang].wa_msg;
     document.getElementById('wa-cabin-1').href = `https://wa.me/${phone}?text=${encodeURIComponent(msg + "Cabaña 1")}`;
     document.getElementById('wa-cabin-2').href = `https://wa.me/${phone}?text=${encodeURIComponent(msg + "Cabaña 2")}`;
@@ -58,5 +58,4 @@ window.addEventListener('DOMContentLoaded', () => {
     const userLang = navigator.language || navigator.userLanguage;
     changeLanguage(userLang.startsWith('pt') ? 'pt' : userLang.startsWith('en') ? 'en' : 'es');
 });
-
 
