@@ -23,14 +23,23 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function actualizarCalendarios(data) {
-    const ids = ['calendar-cabin-1', 'calendar-cabin-2'];
-    ids.forEach(id => {
-        const eventosNube = data[id] || [];
+    ['calendar-cabin-1', 'calendar-cabin-2'].forEach(id => {
+        const eventosObjeto = data[id] || {};
+        // Convertimos el objeto raro de Firebase en una lista limpia
+        const eventosArray = Object.keys(eventosObjeto).map(key => ({
+            id: key,
+            title: eventosObjeto[key].title,
+            start: eventosObjeto[key].start,
+            end: eventosObjeto[key].end,
+            color: eventosObjeto[key].color || '#ff4d4d',
+            allDay: true
+        }));
+
         if (!calendars[id]) {
-            renderCal(id, eventosNube);
+            renderCal(id, eventosArray);
         } else {
             calendars[id].removeAllEvents();
-            calendars[id].addEventSource(eventosNube);
+            calendars[id].addEventSource(eventosArray);
         }
     });
 }
@@ -38,47 +47,36 @@ function actualizarCalendarios(data) {
 function renderCal(id, events) {
     const el = document.getElementById(id);
     if (!el) return;
-    
     const cal = new FullCalendar.Calendar(el, {
         initialView: 'dayGridMonth',
-        locale: document.documentElement.lang || 'es',
+        locale: 'es',
         height: 'auto',
         events: events,
-        // Configuración para que los eventos no ocupen todo el día y se vean mejor
-        displayEventTime: false, 
-        eventOrder: "start",
-        
-        // CUANDO HACES CLIC EN UN DÍA VACÍO (CREAR)
         dateClick: function(info) {
             if (!editMode) return;
-            
             const nombre = prompt("Nombre del huésped:");
             if (!nombre) return;
-            
             const fechaFin = prompt("Fecha de salida (AAAA-MM-DD):", info.dateStr);
-            if (!fechaFin) return;
-
-            guardarReserva(id, nombre, info.dateStr, fechaFin);
+            if (fechaFin) {
+                db.ref(`reservas/${id}`).push({
+                    title: nombre,
+                    start: info.dateStr,
+                    end: fechaFin,
+                    color: '#ff4d4d'
+                });
+            }
         },
-
-        // CUANDO HACES CLIC EN UNA RESERVA EXISTENTE (EDITAR/ELIMINAR)
         eventClick: function(info) {
             if (!editMode) return;
-
-            const accion = prompt("Escribe 'E' para editar, 'D' para eliminar o cancela para salir:");
-            
+            const accion = prompt("Escribe 'D' para eliminar o 'E' para editar:");
             if (accion?.toUpperCase() === 'D') {
-                if (confirm("¿Eliminar reserva de " + info.event.title + "?")) {
-                    eliminarReserva(id, info.event.id);
-                }
+                db.ref(`reservas/${id}/${info.event.id}`).remove();
             } else if (accion?.toUpperCase() === 'E') {
-                const nuevoNombre = prompt("Nuevo nombre:", info.event.title);
-                const nuevoInicio = prompt("Nueva fecha entrada (AAAA-MM-DD):", info.event.startStr);
-                const nuevoFin = prompt("Nueva fecha salida (AAAA-MM-DD):", info.event.endStr || info.event.startStr);
-                
-                if (nuevoNombre && nuevoInicio && nuevoFin) {
-                    eliminarReserva(id, info.event.id); // Borramos la vieja
-                    guardarReserva(id, nuevoNombre, nuevoInicio, nuevoFin); // Guardamos la nueva
+                const n = prompt("Nuevo nombre:", info.event.title);
+                const i = prompt("Nueva entrada:", info.event.startStr);
+                const f = prompt("Nueva salida:", info.event.endStr || info.event.startStr);
+                if (n && i && f) {
+                    db.ref(`reservas/${id}/${info.event.id}`).update({ title: n, start: i, end: f });
                 }
             }
         }
@@ -87,54 +85,28 @@ function renderCal(id, events) {
     calendars[id] = cal;
 }
 
-// FUNCIONES DE NUBE MEJORADAS
-function guardarReserva(id, nombre, inicio, fin) {
-    const ref = db.ref(`reservas/${id}`);
-    const nuevaReservaRef = ref.push(); // Genera un ID único para la reserva
-    
-    nuevaReservaRef.set({
-        id: nuevaReservaRef.key,
-        title: nombre,
-        start: inicio,
-        end: fin, // FullCalendar trata el 'end' como exclusivo (no lo pinta), ideal para check-out
-        color: '#ff4d4d',
-        allDay: true
-    });
-}
-
-function eliminarReserva(id, reservaId) {
-    // Buscamos en el array y eliminamos por ID único
-    const ref = db.ref(`reservas/${id}`);
-    ref.once('value').then((snapshot) => {
-        let actual = snapshot.val() || [];
-        // Si es un objeto de objetos (push), lo manejamos así:
-        db.ref(`reservas/${id}/${reservaId}`).remove();
-    });
-}
-
 function toggleAdmin() {
-    const pass = prompt("Contraseña de Admin:");
+    const pass = prompt("Contraseña:");
     if (pass === "Casaverde-199") {
         editMode = !editMode;
-        alert(editMode ? "MODO GESTIÓN ACTIVADO\n- Clic en día vacío para Nueva Reserva\n- Clic en reserva para Editar/Borrar" : "MODO LECTURA ACTIVADO");
-    } else { alert("Incorrecto"); }
+        alert(editMode ? "MODO EDITOR ACTIVADO" : "MODO LECTURA ACTIVADO");
+    } else {
+        alert("Incorrecta");
+    }
 }
 
-// ... Mantener showCabinDetails, hideCabinDetails y updateCalendarsLanguage igual ...
-function showCabinDetails(cabinId) {
-    document.getElementById('main-content-wrapper').style.display = 'none';
-    document.getElementById('cabin-details-wrapper').style.display = 'block';
-    document.querySelectorAll('.cabin-detail-section').forEach(s => s.style.display = 'none');
-    document.getElementById('details-' + cabinId).style.display = 'block';
-    setTimeout(() => {
-        if (calendars['calendar-' + cabinId]) calendars['calendar-' + cabinId].updateSize();
-    }, 150);
+function showCabinDetails(id) {
+    document.getElementById('main-content-wrapper').style.display='none';
+    document.getElementById('cabin-details-wrapper').style.display='block';
+    document.querySelectorAll('.cabin-detail-section').forEach(s=>s.style.display='none');
+    document.getElementById('details-'+id).style.display='block';
+    setTimeout(() => { if(calendars['calendar-'+id]) calendars['calendar-'+id].updateSize(); }, 200);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function hideCabinDetails() {
-    document.getElementById('cabin-details-wrapper').style.display = 'none';
-    document.getElementById('main-content-wrapper').style.display = 'block';
+    document.getElementById('cabin-details-wrapper').style.display='none';
+    document.getElementById('main-content-wrapper').style.display='block';
 }
 
 function updateCalendarsLanguage(lang) {
