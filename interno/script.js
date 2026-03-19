@@ -27,8 +27,8 @@ let unsubscribeTasks = null;
 let unsubscribeHistorial = null;
 let tareasCache = [];
 let historialCache = [];
-let realizadasHoySet = new Set(); // Para actualización en tiempo real
-const adminEmail = 'admin@casaverde.com'; // Email del administrador
+let realizadasHoySet = new Set();
+const adminEmail = 'admin@casaverde.com';
 
 // ============================================
 // ELEMENTOS DEL DOM
@@ -53,7 +53,7 @@ const editForm = document.getElementById('editForm');
 const tareasCount = document.getElementById('tareasCount');
 const semanaCount = document.getElementById('semanaCount');
 const historialCount = document.getElementById('historialCount');
-const adminSection = document.getElementById('adminSection');
+const adminTaskForm = document.getElementById('adminTaskForm');
 const viewOnlyMessage = document.getElementById('viewOnlyMessage');
 
 // ============================================
@@ -77,10 +77,10 @@ auth.onAuthStateChanged((user) => {
         
         // Controlar visibilidad según si es admin
         if (user.email === adminEmail) {
-            adminSection.style.display = 'block';
+            adminTaskForm.style.display = 'block';
             viewOnlyMessage.style.display = 'none';
         } else {
-            adminSection.style.display = 'none';
+            adminTaskForm.style.display = 'none';
             viewOnlyMessage.style.display = 'flex';
         }
         
@@ -158,7 +158,7 @@ function configurarListenersTiempoReal() {
             console.error('Error en listener de tareas:', error);
         });
 
-    // Listener para historial (últimos 1000 registros)
+    // Listener para historial
     if (unsubscribeHistorial) unsubscribeHistorial();
     
     unsubscribeHistorial = db.collection('historial')
@@ -192,9 +192,7 @@ function actualizarSetRealizadasHoy() {
                 if (fechaHistorial >= inicioDia) {
                     realizadasHoySet.add(h.tareaId);
                 }
-            } catch (e) {
-                // Ignorar errores de fecha
-            }
+            } catch (e) {}
         }
     });
 }
@@ -254,8 +252,6 @@ function actualizarDashboard() {
     
     pendingToday.textContent = tareasHoy.length;
     totalActive.textContent = tareasCache.length;
-    
-    // Tareas completadas hoy (usando el Set)
     completedToday.textContent = realizadasHoySet.size;
     
     // Contadores de filtros
@@ -584,7 +580,7 @@ window.completarTarea = async (tareaId, titulo) => {
         return;
     }
     
-    // Verificar si ya fue realizada hoy (usando el Set actualizado)
+    // Verificar si ya fue realizada hoy
     if (realizadasHoySet.has(tareaId)) {
         const registro = historialCache.find(h => h.tareaId === tareaId);
         let hora = 'hora desconocida';
@@ -628,10 +624,8 @@ window.completarTarea = async (tareaId, titulo) => {
                         break;
                     case 'biweekly':
                         nuevaFecha.setDate(nuevaFecha.getDate() + 1);
-                        let contador = 0;
-                        while (nuevaFecha.getDay() !== 1 && nuevaFecha.getDay() !== 4 && contador < 7) {
+                        while (nuevaFecha.getDay() !== 1 && nuevaFecha.getDay() !== 4) {
                             nuevaFecha.setDate(nuevaFecha.getDate() + 1);
-                            contador++;
                         }
                         break;
                     case 'monthly':
@@ -645,7 +639,7 @@ window.completarTarea = async (tareaId, titulo) => {
                 
                 alert('✅ Tarea completada y reprogramada');
             } catch (e) {
-                alert('✅ Tarea completada (error en reprogramación)');
+                alert('✅ Tarea completada');
             }
         } else {
             await tareaRef.update({ activa: false });
@@ -659,7 +653,7 @@ window.completarTarea = async (tareaId, titulo) => {
 };
 
 // ============================================
-// EDITAR TAREA (solo admin)
+// EDITAR TAREA
 // ============================================
 window.abrirModalEdicion = async (tareaId) => {
     if (!currentUser || currentUser.email !== adminEmail) {
