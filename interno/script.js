@@ -79,6 +79,7 @@ auth.onAuthStateChanged((user) => {
         if (user.email === adminEmail) {
             adminTaskForm.style.display = 'block';
             viewOnlyMessage.style.display = 'none';
+            mostrarPanelAdmin(); // Mostrar panel adicional para admin
         } else {
             adminTaskForm.style.display = 'none';
             viewOnlyMessage.style.display = 'flex';
@@ -298,6 +299,92 @@ function getInicioSemana() {
 }
 
 // ============================================
+// MOSTRAR PANEL DE ADMIN
+// ============================================
+function mostrarPanelAdmin() {
+    // Verificar si ya existe el panel, si no, crearlo
+    if (!document.getElementById('adminPanel')) {
+        const panel = document.createElement('div');
+        panel.id = 'adminPanel';
+        panel.className = 'admin-panel';
+        panel.innerHTML = `
+            <div style="margin: 20px 0; padding: 20px; background: #fff3cd; border-radius: 10px; border: 2px solid #e74c3c;">
+                <h3 style="color: #e74c3c; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+                    <span class="material-icons">warning</span>
+                    Panel de Administración
+                </h3>
+                <button onclick="limpiarBaseDatos()" class="delete-btn" style="background: #e74c3c; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 16px;">
+                    <span class="material-icons">cleaning_services</span>
+                    Limpiar Base de Datos (Eliminar todo)
+                </button>
+                <p style="color: #666; margin-top: 10px; font-size: 12px;">
+                    ⚠️ Esta acción eliminará TODAS las tareas y TODO el historial. No se puede deshacer.
+                </p>
+            </div>
+        `;
+        
+        // Insertar después del formulario de tareas
+        adminTaskForm.parentNode.insertBefore(panel, adminTaskForm.nextSibling);
+    }
+}
+
+// ============================================
+// LIMPIAR BASE DE DATOS (SOLO ADMIN)
+// ============================================
+window.limpiarBaseDatos = async () => {
+    if (!currentUser || currentUser.email !== adminEmail) {
+        alert('❌ Solo el administrador puede limpiar la base de datos');
+        return;
+    }
+    
+    // Confirmación múltiple por seguridad
+    const confirmacion1 = confirm('⚠️ ¿Estás SEGURO de que quieres limpiar la base de datos?\n\nEsta acción eliminará TODAS las tareas y TODO el historial.');
+    if (!confirmacion1) return;
+    
+    const confirmacion2 = prompt('Escribe "LIMPIAR" para confirmar (en mayúsculas):');
+    if (confirmacion2 !== 'LIMPIAR') {
+        alert('❌ Operación cancelada');
+        return;
+    }
+    
+    try {
+        // Mostrar estado
+        alert('🔄 Limpiando base de datos... Por favor espera.');
+        
+        // 1. Eliminar todas las tareas
+        const tareasSnapshot = await db.collection('tareas').get();
+        const batchTareas = db.batch();
+        tareasSnapshot.docs.forEach(doc => {
+            batchTareas.delete(doc.ref);
+        });
+        await batchTareas.commit();
+        
+        // 2. Eliminar todo el historial
+        const historialSnapshot = await db.collection('historial').get();
+        const batchHistorial = db.batch();
+        historialSnapshot.docs.forEach(doc => {
+            batchHistorial.delete(doc.ref);
+        });
+        await batchHistorial.commit();
+        
+        // 3. Actualizar caches locales
+        tareasCache = [];
+        historialCache = [];
+        realizadasHoySet.clear();
+        
+        // 4. Actualizar UI
+        actualizarDashboard();
+        actualizarVista();
+        
+        alert('✅ Base de datos limpiada correctamente');
+        
+    } catch (error) {
+        console.error('Error limpiando base de datos:', error);
+        alert('❌ Error al limpiar la base de datos: ' + error.message);
+    }
+};
+
+// ============================================
 // ACTUALIZAR VISTA SEGÚN FILTRO
 // ============================================
 function actualizarVista() {
@@ -387,7 +474,7 @@ function renderizarTareas(tareas, completadas = false) {
                 </div>
             </div>
             <div class="task-actions">
-                ${esAdmin && !completadas ? `
+                ${esAdmin ? `
                     <button onclick="abrirModalEdicion('${tarea.id}')" class="edit-btn">
                         <span class="material-icons">edit</span> Editar
                     </button>
@@ -637,14 +724,15 @@ window.completarTarea = async (tareaId, titulo) => {
                     fechaInicio: nuevaFecha.toISOString().split('T')[0]
                 });
                 
-                alert('✅ Tarea completada y reprogramada');
+                // No mostrar alerta para no interrumpir el flujo
             } catch (e) {
-                alert('✅ Tarea completada');
+                console.error('Error en reprogramación:', e);
             }
         } else {
             await tareaRef.update({ activa: false });
-            alert('✅ Tarea completada');
         }
+        
+        // No mostrar alerta de éxito para que sea más fluido
         
     } catch (error) {
         console.error('Error:', error);
