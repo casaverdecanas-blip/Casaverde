@@ -376,71 +376,102 @@ taskForm.addEventListener('submit', async (e) => {
 });
 
 // ============================================
-// CONTROL DE DUPLICADOS - VERSIÓN ÚNICA Y CORREGIDA
+// CONTROL DE DUPLICADOS - VERSIÓN ROBUSTA
 // ============================================
-async function quienRealizoHoy(tareaId) {
+
+/**
+ * Verifica si una tarea ya fue marcada hoy y devuelve quién la hizo
+ * @param {string} tareaId - ID de la tarea
+ * @returns {Promise<object|null>} Datos de quien la realizó o null
+ */
+async function verificarTareaRealizadaHoy(tareaId) {
     try {
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
-        const manana = new Date(hoy);
-        manana.setDate(hoy.getDate() + 1);
+        // Definir rango del día actual
+        const inicioDia = new Date();
+        inicioDia.setHours(0, 0, 0, 0);
         
-        console.log('🔍 Buscando si la tarea ya fue realizada hoy:', tareaId);
+        const finDia = new Date(inicioDia);
+        finDia.setDate(inicioDia.getDate() + 1);
         
-        const historialHoy = await db.collection('historial')
-            .where('tareaId', '==', tareaId)
-            .where('fecha', '>=', hoy)
-            .where('fecha', '<', manana)
-            .limit(1)
+        console.log('🔍 Verificando tarea:', tareaId);
+        console.log('📅 Rango:', inicioDia.toLocaleString(), '-', finDia.toLocaleString());
+        
+        // Obtener TODOS los registros de hoy
+        const snapshot = await db.collection('historial')
+            .where('fecha', '>=', inicioDia)
+            .where('fecha', '<', finDia)
             .get();
         
-        if (!historialHoy.empty) {
-            const data = historialHoy.docs[0].data();
-            const hora = data.fecha ? new Date(data.fecha.toDate()).toLocaleTimeString() : 'hora desconocida';
-            console.log('⛔ Tarea ya realizada por:', data.completadaPor, 'a las', hora);
+        console.log('📊 Total registros hoy:', snapshot.size);
+        
+        // Buscar si esta tarea específica está en los registros
+        let encontrado = null;
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            console.log('   - Registro:', data.tareaId, data.titulo, 'por', data.completadaPor);
+            
+            if (data.tareaId === tareaId) {
+                encontrado = data;
+            }
+        });
+        
+        if (encontrado) {
+            const hora = encontrado.fecha ? 
+                new Date(encontrado.fecha.toDate()).toLocaleTimeString() : 
+                'hora desconocida';
+            
+            console.log('⛔ Tarea YA realizada por:', encontrado.completadaPor, 'a las', hora);
             
             return {
-                usuario: data.completadaPor,
-                fecha: hora
+                realizada: true,
+                usuario: encontrado.completadaPor,
+                hora: hora
             };
         }
         
         console.log('✅ Tarea disponible para marcar hoy');
-        return null;
+        return { realizada: false };
         
     } catch (error) {
-        console.error('Error verificando duplicado:', error);
-        return null;
+        console.error('❌ Error verificando tarea:', error);
+        return { realizada: false, error: true };
     }
 }
 
-// ÚNICA VERSIÓN DE completarTarea - ELIMINA CUALQUIER OTRA QUE TENGAS
+/**
+ * Marca una tarea como realizada (con control anti-duplicado)
+ */
 window.completarTarea = async (tareaId, titulo) => {
-    console.log('🔄 Intentando marcar tarea:', tareaId, titulo);
+    console.log('🔄 Iniciando proceso para marcar tarea:', tareaId, titulo);
     
+    // Validar usuario
     if (!currentUser) {
-        alert('Debes iniciar sesión');
+        alert('❌ Debes iniciar sesión');
         return;
     }
     
     try {
-        // PASO 1: Verificar si ya fue marcada hoy
-        const realizadoHoy = await quienRealizoHoy(tareaId);
+        // PASO 1: Verificar si ya fue realizada hoy
+        const resultado = await verificarTareaRealizadaHoy(tareaId);
         
-        if (realizadoHoy) {
-            // Mostrar mensaje con QUIÉN la realizó
-            alert(`⛔ LA TAREA YA FUE REALIZADA HOY\n\n` +
-                  `Tarea: "${titulo}"\n` +
-                  `Realizada por: ${realizadoHoy.usuario}\n` +
-                  `Hora: ${realizadoHoy.fecha}\n\n` +
-                  `No puedes marcarla nuevamente.`);
+        if (resultado.realizada) {
+            // Mostrar mensaje con la información de quién ya la hizo
+            alert(
+                `⛔ TAREA YA REALIZADA HOY\n\n` +
+                `📌 Tarea: "${titulo}"\n` +
+                `👤 Realizada por: ${resultado.usuario}\n` +
+                `🕐 Hora: ${resultado.hora}\n\n` +
+                `❌ No puedes marcarla nuevamente.`
+            );
             return; // BLOQUEAR COMPLETAMENTE
         }
         
-        // PASO 2: Confirmar
-        if (!confirm(`¿Marcar "${titulo}" como realizada?`)) return;
+        // PASO 2: Confirmar con el usuario
+        if (!confirm(`✅ ¿Marcar "${titulo}" como realizada?`)) {
+            return;
+        }
         
-        // PASO 3: Obtener datos de la tarea
+        // PASO 3: Obtener datos actualizados de la tarea
         const tareaRef = db.collection('tareas').doc(tareaId);
         const tareaDoc = await tareaRef.get();
         
@@ -449,20 +480,23 @@ window.completarTarea = async (tareaId, titulo) => {
             return;
         }
         
-        const data = tareaDoc.data();
+        const tareaData = tareaDoc.data();
         
         // PASO 4: Guardar en historial
-        await db.collection('historial').add({
+        const historialRef = await db.collection('historial').add({
             tareaId: tareaId,
-            titulo: data.titulo,
+            titulo: tareaData.titulo,
             completadaPor: currentUser.email,
             fecha: firebase.firestore.FieldValue.serverTimestamp()
         });
         
+        console.log('✅ Registro guardado en historial:', historialRef.id);
+        
         // PASO 5: Manejar recurrencia
-        if (data.recurrencia && data.recurrencia !== 'none') {
-            const fechaActual = new Date(data.fechaInicio + 'T00:00:00');
-            const nuevaFecha = calcularSiguienteFecha(fechaActual, data.recurrencia);
+        if (tareaData.recurrencia && tareaData.recurrencia !== 'none') {
+            // Calcular siguiente fecha
+            const fechaActual = new Date(tareaData.fechaInicio + 'T00:00:00');
+            const nuevaFecha = calcularSiguienteFecha(fechaActual, tareaData.recurrencia);
             
             await tareaRef.update({
                 fechaInicio: nuevaFecha.toISOString().split('T')[0]
@@ -470,6 +504,7 @@ window.completarTarea = async (tareaId, titulo) => {
             
             alert(`✅ Tarea marcada y reprogramada para ${nuevaFecha.toLocaleDateString()}`);
         } else {
+            // Tarea sin recurrencia: desactivar
             await tareaRef.update({ activa: false });
             alert('✅ Tarea marcada como completada');
         }
@@ -478,8 +513,8 @@ window.completarTarea = async (tareaId, titulo) => {
         actualizarEstadisticasSemanales(currentUser.email);
         
     } catch (error) {
-        console.error('Error completando tarea:', error);
-        alert('❌ Error al marcar la tarea');
+        console.error('❌ Error completando tarea:', error);
+        alert('❌ Error al marcar la tarea. Revisa la consola para más detalles.');
     }
 };
 
@@ -488,41 +523,49 @@ window.completarTarea = async (tareaId, titulo) => {
 // ============================================
 window.verTareasRealizadasHoy = async () => {
     if (!currentUser) {
-        alert('Debes iniciar sesión');
+        alert('❌ Debes iniciar sesión');
         return;
     }
     
     try {
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
-        const manana = new Date(hoy);
-        manana.setDate(hoy.getDate() + 1);
+        // Definir rango del día
+        const inicioDia = new Date();
+        inicioDia.setHours(0, 0, 0, 0);
         
-        const historialHoy = await db.collection('historial')
-            .where('fecha', '>=', hoy)
-            .where('fecha', '<', manana)
+        const finDia = new Date(inicioDia);
+        finDia.setDate(inicioDia.getDate() + 1);
+        
+        // Obtener historial de hoy
+        const snapshot = await db.collection('historial')
+            .where('fecha', '>=', inicioDia)
+            .where('fecha', '<', finDia)
             .orderBy('fecha', 'asc')
             .get();
         
-        if (historialHoy.empty) {
+        if (snapshot.empty) {
             alert('📭 No hay tareas realizadas hoy');
             return;
         }
         
+        // Construir mensaje
         let mensaje = '📋 TAREAS REALIZADAS HOY:\n\n';
         let contador = 1;
         
-        historialHoy.docs.forEach(doc => {
+        snapshot.forEach(doc => {
             const data = doc.data();
-            const hora = data.fecha ? new Date(data.fecha.toDate()).toLocaleTimeString() : 'hora desconocida';
-            mensaje += `${contador++}. ${data.titulo}\n   👤 ${data.completadaPor} - 🕐 ${hora}\n\n`;
+            const hora = data.fecha ? 
+                new Date(data.fecha.toDate()).toLocaleTimeString() : 
+                'hora desconocida';
+            
+            mensaje += `${contador++}. ${data.titulo}\n`;
+            mensaje += `   👤 ${data.completadaPor} - 🕐 ${hora}\n\n`;
         });
         
         alert(mensaje);
         
     } catch (error) {
-        console.error('Error:', error);
-        alert('Error al obtener tareas realizadas');
+        console.error('❌ Error:', error);
+        alert('❌ Error al obtener tareas realizadas');
     }
 };
 
@@ -531,7 +574,7 @@ window.verTareasRealizadasHoy = async () => {
 // ============================================
 window.abrirModalEdicion = async (tareaId) => {
     if (!currentUser || currentUser.email !== adminUser) {
-        alert('Solo el administrador puede editar tareas');
+        alert('❌ Solo el administrador puede editar tareas');
         return;
     }
     
@@ -555,7 +598,7 @@ window.abrirModalEdicion = async (tareaId) => {
         
         editModal.style.display = 'block';
     } catch (error) {
-        console.error('Error abriendo modal:', error);
+        console.error('❌ Error abriendo modal:', error);
         alert('❌ Error al cargar la tarea');
     }
 };
@@ -574,7 +617,7 @@ editForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     
     if (!currentUser || currentUser.email !== adminUser) {
-        alert('Solo el administrador puede editar tareas');
+        alert('❌ Solo el administrador puede editar tareas');
         return;
     }
     
@@ -594,7 +637,7 @@ editForm.addEventListener('submit', async (e) => {
         alert('✅ Tarea actualizada correctamente');
         
     } catch (error) {
-        console.error('Error actualizando tarea:', error);
+        console.error('❌ Error actualizando tarea:', error);
         alert('❌ Error al actualizar la tarea');
     }
 });
@@ -851,7 +894,7 @@ function calcularSiguienteFecha(fecha, recurrencia) {
 // ============================================
 window.limpiarDuplicados = async () => {
     if (!currentUser || currentUser.email !== adminUser) {
-        alert('Solo el administrador puede ejecutar esta función');
+        alert('❌ Solo el administrador puede ejecutar esta función');
         return;
     }
     
@@ -859,9 +902,8 @@ window.limpiarDuplicados = async () => {
     
     try {
         const historial = await db.collection('historial').get();
-        const mapaDuplicados = new Map();
+        const vistos = new Map();
         const aEliminar = [];
-        let contador = 0;
         
         historial.docs.forEach(doc => {
             const data = doc.data();
@@ -870,11 +912,10 @@ window.limpiarDuplicados = async () => {
             const fecha = data.fecha.toDate();
             const clave = `${data.tareaId}_${fecha.toLocaleDateString()}`;
             
-            if (mapaDuplicados.has(clave)) {
+            if (vistos.has(clave)) {
                 aEliminar.push(doc.id);
-                contador++;
             } else {
-                mapaDuplicados.set(clave, doc.id);
+                vistos.set(clave, doc.id);
             }
         });
         
@@ -882,10 +923,10 @@ window.limpiarDuplicados = async () => {
             await db.collection('historial').doc(id).delete();
         }
         
-        alert(`✅ Eliminados ${contador} registros duplicados`);
+        alert(`✅ Eliminados ${aEliminar.length} registros duplicados`);
         
     } catch (error) {
-        console.error('Error limpiando duplicados:', error);
+        console.error('❌ Error limpiando duplicados:', error);
         alert('❌ Error al limpiar duplicados');
     }
 };
