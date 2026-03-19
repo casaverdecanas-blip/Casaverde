@@ -235,17 +235,141 @@ async function cargarDatosIniciales() {
 }
 
 // ============================================
+// CALCULAR OCURRENCIAS SEMANALES DE UNA TAREA
+// ============================================
+function calcularOcurrenciasSemanales(tarea) {
+    if (!tarea.activa || !tarea.fechaInicio) return 0;
+    
+    try {
+        const fechaInicio = new Date(tarea.fechaInicio + 'T00:00:00');
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        
+        // Si la tarea no tiene recurrencia, solo cuenta si está en la semana actual
+        if (tarea.recurrencia === 'none') {
+            // Verificar si la fecha de inicio está en la semana actual
+            const inicioSemana = getInicioSemana();
+            const finSemana = new Date(inicioSemana);
+            finSemana.setDate(inicioSemana.getDate() + 6);
+            finSemana.setHours(23, 59, 59, 999);
+            
+            return (fechaInicio >= inicioSemana && fechaInicio <= finSemana) ? 1 : 0;
+        }
+        
+        // Para tareas con recurrencia, calcular cuántas veces ocurren en la semana
+        let ocurrencias = 0;
+        const inicioSemana = getInicioSemana();
+        const finSemana = new Date(inicioSemana);
+        finSemana.setDate(inicioSemana.getDate() + 6);
+        finSemana.setHours(23, 59, 59, 999);
+        
+        // Calcular la primera ocurrencia después o igual a inicioSemana
+        let fecha = new Date(fechaInicio);
+        let intentos = 0;
+        const maxIntentos = 100;
+        
+        // Avanzar hasta la semana actual o después
+        while (fecha < inicioSemana && intentos < maxIntentos) {
+            switch(tarea.recurrencia) {
+                case 'daily':
+                    fecha.setDate(fecha.getDate() + 1);
+                    break;
+                case 'weekly':
+                    fecha.setDate(fecha.getDate() + 7);
+                    break;
+                case 'biweekly':
+                    fecha.setDate(fecha.getDate() + 1);
+                    while (fecha.getDay() !== 1 && fecha.getDay() !== 4 && intentos < 7) {
+                        fecha.setDate(fecha.getDate() + 1);
+                        intentos++;
+                    }
+                    break;
+                case 'monthly':
+                    fecha.setMonth(fecha.getMonth() + 1);
+                    break;
+            }
+            intentos++;
+        }
+        
+        // Contar ocurrencias dentro de la semana
+        intentos = 0;
+        while (fecha <= finSemana && intentos < maxIntentos) {
+            if (fecha >= inicioSemana) {
+                ocurrencias++;
+            }
+            
+            // Avanzar a la siguiente ocurrencia
+            switch(tarea.recurrencia) {
+                case 'daily':
+                    fecha.setDate(fecha.getDate() + 1);
+                    break;
+                case 'weekly':
+                    fecha.setDate(fecha.getDate() + 7);
+                    break;
+                case 'biweekly':
+                    fecha.setDate(fecha.getDate() + 1);
+                    let subIntentos = 0;
+                    while (fecha.getDay() !== 1 && fecha.getDay() !== 4 && subIntentos < 7) {
+                        fecha.setDate(fecha.getDate() + 1);
+                        subIntentos++;
+                    }
+                    break;
+                case 'monthly':
+                    fecha.setMonth(fecha.getMonth() + 1);
+                    break;
+            }
+            intentos++;
+        }
+        
+        return ocurrencias;
+        
+    } catch (error) {
+        console.error('Error calculando ocurrencias:', error);
+        return 0;
+    }
+}
+
+// ============================================
 // ACTUALIZAR DASHBOARD
 // ============================================
 function actualizarDashboard() {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
     
+    // Tareas para hoy
     const tareasHoy = tareasCache.filter(t => {
         if (!t.fechaInicio) return false;
         try {
             const fechaTarea = new Date(t.fechaInicio + 'T00:00:00');
-            return fechaTarea.toDateString() === hoy.toDateString();
+            
+            // Si es sin repetición, verificar si es hoy
+            if (t.recurrencia === 'none') {
+                return fechaTarea.toDateString() === hoy.toDateString();
+            }
+            
+            // Para tareas con repetición, verificar si hoy es un día de ejecución
+            if (t.recurrencia === 'biweekly') {
+                return (hoy.getDay() === 1 || hoy.getDay() === 4);
+            } else {
+                // Para daily, weekly, monthly - verificar si la fecha coincide con el ciclo
+                // Simplificamos: si la fecha de inicio es anterior o igual a hoy,
+                // y la diferencia de días es múltiplo del período
+                if (fechaTarea > hoy) return false;
+                
+                const diffTime = hoy - fechaTarea;
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                
+                switch(t.recurrencia) {
+                    case 'daily':
+                        return true; // Todos los días
+                    case 'weekly':
+                        return diffDays % 7 === 0;
+                    case 'monthly':
+                        return fechaTarea.getDate() === hoy.getDate();
+                    default:
+                        return false;
+                }
+            }
         } catch (e) {
             return false;
         }
@@ -257,29 +381,54 @@ function actualizarDashboard() {
     
     tareasCount.textContent = tareasCache.length;
     
-    const tareasSemana = new Set();
+    // Calcular tareas únicas realizadas esta semana
+    const tareasSemanaUnicas = new Set();
     const inicioSemana = getInicioSemana();
     historialCache.forEach(h => {
         if (h.fecha) {
             try {
                 const fechaHistorial = h.fecha.toDate();
                 if (fechaHistorial >= inicioSemana) {
-                    tareasSemana.add(h.titulo);
+                    tareasSemanaUnicas.add(h.titulo);
                 }
             } catch (e) {}
         }
     });
-    semanaCount.textContent = tareasSemana.size;
+    semanaCount.textContent = tareasSemanaUnicas.size;
     historialCount.textContent = historialCache.length;
     
+    // ============================================
+    // NUEVO CÁLCULO CORREGIDO: Actividades proyectadas vs realizadas
+    // ============================================
     if (currentUser) {
-        const misCompletadas = historialCache.filter(h => 
-            h.completadaPor === currentUser.email && h.fecha
-        ).length;
+        // Calcular total de ocurrencias de tareas en la semana
+        let totalOcurrenciasSemana = 0;
+        tareasCache.forEach(tarea => {
+            totalOcurrenciasSemana += calcularOcurrenciasSemanales(tarea);
+        });
         
-        weeklyStatsText.textContent = `Llevas realizadas ${misCompletadas} tareas de las ${tareasCache.length} propuestas`;
+        // Calcular realizadas por el usuario en la semana
+        const inicioSemana = getInicioSemana();
+        const finSemana = new Date(inicioSemana);
+        finSemana.setDate(inicioSemana.getDate() + 6);
+        finSemana.setHours(23, 59, 59, 999);
         
-        const porcentaje = tareasCache.length > 0 ? (misCompletadas / tareasCache.length) * 100 : 0;
+        let realizadasSemana = 0;
+        historialCache.forEach(h => {
+            if (h.completadaPor === currentUser.email && h.fecha) {
+                try {
+                    const fechaHistorial = h.fecha.toDate();
+                    if (fechaHistorial >= inicioSemana && fechaHistorial <= finSemana) {
+                        realizadasSemana++;
+                    }
+                } catch (e) {}
+            }
+        });
+        
+        // Actualizar UI
+        weeklyStatsText.textContent = `Llevas realizadas ${realizadasSemana} actividades de las ${totalOcurrenciasSemana} programadas para esta semana`;
+        
+        const porcentaje = totalOcurrenciasSemana > 0 ? (realizadasSemana / totalOcurrenciasSemana) * 100 : 0;
         weeklyProgress.style.width = `${porcentaje}%`;
     }
 }
@@ -712,7 +861,7 @@ editForm.addEventListener('submit', async (e) => {
 });
 
 // ============================================
-// LIMPIAR BASE DE DATOS - CON CONFIRMACIÓN
+// LIMPIAR BASE DE DATOS
 // ============================================
 let limpiandoDB = false;
 
