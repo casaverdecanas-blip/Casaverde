@@ -417,48 +417,7 @@
             background: #219a52;
         }
 
-        .complete-btn:disabled {
-            background: #95a5a6;
-            cursor: not-allowed;
-        }
-
-        .delete-btn {
-            background: #e74c3c;
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 14px;
-        }
-
-        .delete-btn:hover {
-            background: #c0392b;
-        }
-
-        .completed-task {
-            opacity: 0.7;
-            background: #e8f8e8;
-        }
-
-        .completed-task h3 {
-            text-decoration: line-through;
-            color: #27ae60;
-        }
-
-        .completion-info {
-            font-size: 12px;
-            color: #27ae60;
-            margin-top: 5px;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        /* Historial */
+        /* Tabla de Historial */
         .history-container {
             background: white;
             padding: 25px;
@@ -466,24 +425,51 @@
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
 
-        .history-item {
-            padding: 15px;
-            border-bottom: 1px solid #eee;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
         }
 
-        .history-item:last-child {
-            border-bottom: none;
-        }
-
-        .history-item .user-badge {
+        .history-table th {
             background: #667eea;
             color: white;
-            padding: 3px 10px;
-            border-radius: 15px;
-            font-size: 12px;
+            padding: 12px;
+            text-align: left;
+            font-weight: 500;
+        }
+
+        .history-table td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .history-table tr:hover {
+            background: #f5f5f5;
+        }
+
+        .history-table .fecha-col {
+            width: 150px;
+            color: #666;
+        }
+
+        .history-table .tarea-col {
+            font-weight: 500;
+        }
+
+        .history-table .usuario-col {
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        .history-date-group {
+            background: #f0f0f0;
+            font-weight: bold;
+        }
+
+        .history-date-group td {
+            padding: 8px 12px;
+            background: #e0e0e0;
         }
 
         .loading-spinner {
@@ -515,6 +501,15 @@
             .task-actions {
                 width: 100%;
                 justify-content: center;
+            }
+
+            .history-table {
+                font-size: 14px;
+            }
+
+            .history-table td, 
+            .history-table th {
+                padding: 8px;
             }
         }
     </style>
@@ -976,70 +971,81 @@
 
             contentArea.innerHTML = `
                 <div class="history-container">
-                    <h2>Completadas hoy</h2>
-                    ${historial.empty ? 
-                        '<p style="text-align: center; color: #999;">No hay tareas completadas hoy</p>' :
-                        historial.docs.map(doc => {
-                            const data = doc.data();
-                            return `
-                                <div class="history-item">
-                                    <div>
-                                        <strong>${data.titulo}</strong>
-                                        <div style="font-size: 12px; color: #666;">
-                                            Realizada por: <span class="user-badge">${data.completadaPor}</span>
-                                        </div>
-                                    </div>
-                                    <div style="font-size: 12px; color: #999;">
-                                        ${new Date(data.fecha.toDate()).toLocaleTimeString()}
-                                    </div>
-                                </div>
-                            `;
-                        }).join('')
-                    }
+                    <h2>✅ Completadas hoy - ${hoy.toLocaleDateString()}</h2>
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                <th>Tarea</th>
+                                <th>Realizada por</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${historial.empty ? 
+                                '<tr><td colspan="3" style="text-align: center; color: #999;">No hay tareas completadas hoy</td></tr>' :
+                                historial.docs.map(doc => {
+                                    const data = doc.data();
+                                    const hora = new Date(data.fecha.toDate()).toLocaleTimeString();
+                                    return `
+                                        <tr>
+                                            <td class="fecha-col">${hora}</td>
+                                            <td class="tarea-col">${data.titulo}</td>
+                                            <td class="usuario-col">${data.completadaPor}</td>
+                                        </tr>
+                                    `;
+                                }).join('')
+                            }
+                        </tbody>
+                    </table>
                 </div>
             `;
         }
 
-        // Mostrar historial completo
+        // Mostrar historial completo en tabla
         async function mostrarHistorial() {
             const historial = await db.collection('historial')
                 .orderBy('fecha', 'desc')
-                .limit(100)
+                .limit(500)
                 .get();
 
-            // Agrupar por fecha
-            const grouped = {};
+            const registros = [];
             historial.docs.forEach(doc => {
                 const data = doc.data();
-                const fecha = new Date(data.fecha.toDate()).toLocaleDateString();
-                if (!grouped[fecha]) grouped[fecha] = [];
-                grouped[fecha].push(data);
+                const fecha = new Date(data.fecha.toDate());
+                registros.push({
+                    fecha: fecha,
+                    fechaStr: fecha.toLocaleDateString(),
+                    hora: fecha.toLocaleTimeString(),
+                    titulo: data.titulo,
+                    usuario: data.completadaPor
+                });
             });
 
             contentArea.innerHTML = `
                 <div class="history-container">
-                    <h2>Historial de Tareas Realizadas</h2>
-                    ${Object.keys(grouped).length === 0 ? 
-                        '<p style="text-align: center; color: #999;">No hay historial</p>' :
-                        Object.keys(grouped).sort().reverse().map(fecha => `
-                            <div style="margin-bottom: 20px;">
-                                <h3 style="color: #667eea; margin-bottom: 10px;">${fecha}</h3>
-                                ${grouped[fecha].map(data => `
-                                    <div class="history-item">
-                                        <div>
-                                            <strong>${data.titulo}</strong>
-                                            <div style="font-size: 12px; color: #666;">
-                                                Realizada por: <span class="user-badge">${data.completadaPor}</span>
-                                            </div>
-                                        </div>
-                                        <div style="font-size: 12px; color: #999;">
-                                            ${new Date(data.fecha.toDate()).toLocaleTimeString()}
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        `).join('')
-                    }
+                    <h2>📋 Historial de Tareas Realizadas</h2>
+                    <p style="color: #666; margin-bottom: 10px;">Total: ${registros.length} tareas realizadas</p>
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Tarea</th>
+                                <th>Realizada por</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${registros.length === 0 ? 
+                                '<tr><td colspan="3" style="text-align: center; color: #999;">No hay historial</td></tr>' :
+                                registros.map(r => `
+                                    <tr>
+                                        <td class="fecha-col">${r.fechaStr} ${r.hora}</td>
+                                        <td class="tarea-col">${r.titulo}</td>
+                                        <td class="usuario-col">${r.usuario}</td>
+                                    </tr>
+                                `).join('')
+                            }
+                        </tbody>
+                    </table>
                 </div>
             `;
         }
