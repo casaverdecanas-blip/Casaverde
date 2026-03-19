@@ -24,7 +24,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 let currentUser = null;
 let currentFilter = 'pendientes';
 let unsubscribeTasks = null;
-const adminUser = 'admin@casaverde.com'; // Email del administrador
+const adminUser = 'admin@casaverde.com';
 
 // ============================================
 // ELEMENTOS DEL DOM
@@ -303,7 +303,7 @@ function calcularProximaFecha(fechaInicio, recurrencia, fechaReferencia) {
     
     let fecha = new Date(fechaInicio);
     let intentos = 0;
-    const maxIntentos = 100; // Evitar bucles infinitos
+    const maxIntentos = 100;
     
     while (fecha <= fechaReferencia && intentos < maxIntentos) {
         switch(recurrencia) {
@@ -376,7 +376,7 @@ taskForm.addEventListener('submit', async (e) => {
 });
 
 // ============================================
-// CONTROL DE DUPLICADOS - NO PERMITIR MARCAR DOS VECES EL MISMO DÍA
+// CONTROL DE DUPLICADOS - VERSIÓN ÚNICA Y CORREGIDA
 // ============================================
 async function quienRealizoHoy(tareaId) {
     try {
@@ -384,6 +384,8 @@ async function quienRealizoHoy(tareaId) {
         hoy.setHours(0, 0, 0, 0);
         const manana = new Date(hoy);
         manana.setDate(hoy.getDate() + 1);
+        
+        console.log('🔍 Buscando si la tarea ya fue realizada hoy:', tareaId);
         
         const historialHoy = await db.collection('historial')
             .where('tareaId', '==', tareaId)
@@ -394,36 +396,51 @@ async function quienRealizoHoy(tareaId) {
         
         if (!historialHoy.empty) {
             const data = historialHoy.docs[0].data();
+            const hora = data.fecha ? new Date(data.fecha.toDate()).toLocaleTimeString() : 'hora desconocida';
+            console.log('⛔ Tarea ya realizada por:', data.completadaPor, 'a las', hora);
+            
             return {
                 usuario: data.completadaPor,
-                fecha: data.fecha ? new Date(data.fecha.toDate()).toLocaleTimeString() : 'hora desconocida'
+                fecha: hora
             };
         }
         
+        console.log('✅ Tarea disponible para marcar hoy');
         return null;
+        
     } catch (error) {
         console.error('Error verificando duplicado:', error);
         return null;
     }
 }
 
+// ÚNICA VERSIÓN DE completarTarea - ELIMINA CUALQUIER OTRA QUE TENGAS
 window.completarTarea = async (tareaId, titulo) => {
+    console.log('🔄 Intentando marcar tarea:', tareaId, titulo);
+    
     if (!currentUser) {
         alert('Debes iniciar sesión');
         return;
     }
     
     try {
-        // Verificar si ya fue marcada hoy
+        // PASO 1: Verificar si ya fue marcada hoy
         const realizadoHoy = await quienRealizoHoy(tareaId);
         
         if (realizadoHoy) {
-            alert(`⛔ La tarea "${titulo}" YA FUE REALIZADA hoy a las ${realizadoHoy.fecha} por ${realizadoHoy.usuario}\n\nNo puedes marcarla nuevamente.`);
-            return;
+            // Mostrar mensaje con QUIÉN la realizó
+            alert(`⛔ LA TAREA YA FUE REALIZADA HOY\n\n` +
+                  `Tarea: "${titulo}"\n` +
+                  `Realizada por: ${realizadoHoy.usuario}\n` +
+                  `Hora: ${realizadoHoy.fecha}\n\n` +
+                  `No puedes marcarla nuevamente.`);
+            return; // BLOQUEAR COMPLETAMENTE
         }
         
+        // PASO 2: Confirmar
         if (!confirm(`¿Marcar "${titulo}" como realizada?`)) return;
         
+        // PASO 3: Obtener datos de la tarea
         const tareaRef = db.collection('tareas').doc(tareaId);
         const tareaDoc = await tareaRef.get();
         
@@ -434,7 +451,7 @@ window.completarTarea = async (tareaId, titulo) => {
         
         const data = tareaDoc.data();
         
-        // Guardar en historial
+        // PASO 4: Guardar en historial
         await db.collection('historial').add({
             tareaId: tareaId,
             titulo: data.titulo,
@@ -442,6 +459,7 @@ window.completarTarea = async (tareaId, titulo) => {
             fecha: firebase.firestore.FieldValue.serverTimestamp()
         });
         
+        // PASO 5: Manejar recurrencia
         if (data.recurrencia && data.recurrencia !== 'none') {
             const fechaActual = new Date(data.fechaInicio + 'T00:00:00');
             const nuevaFecha = calcularSiguienteFecha(fechaActual, data.recurrencia);
@@ -456,11 +474,55 @@ window.completarTarea = async (tareaId, titulo) => {
             alert('✅ Tarea marcada como completada');
         }
         
+        // PASO 6: Actualizar estadísticas
         actualizarEstadisticasSemanales(currentUser.email);
         
     } catch (error) {
         console.error('Error completando tarea:', error);
         alert('❌ Error al marcar la tarea');
+    }
+};
+
+// ============================================
+// FUNCIÓN PARA VER TAREAS REALIZADAS HOY
+// ============================================
+window.verTareasRealizadasHoy = async () => {
+    if (!currentUser) {
+        alert('Debes iniciar sesión');
+        return;
+    }
+    
+    try {
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        const manana = new Date(hoy);
+        manana.setDate(hoy.getDate() + 1);
+        
+        const historialHoy = await db.collection('historial')
+            .where('fecha', '>=', hoy)
+            .where('fecha', '<', manana)
+            .orderBy('fecha', 'asc')
+            .get();
+        
+        if (historialHoy.empty) {
+            alert('📭 No hay tareas realizadas hoy');
+            return;
+        }
+        
+        let mensaje = '📋 TAREAS REALIZADAS HOY:\n\n';
+        let contador = 1;
+        
+        historialHoy.docs.forEach(doc => {
+            const data = doc.data();
+            const hora = data.fecha ? new Date(data.fecha.toDate()).toLocaleTimeString() : 'hora desconocida';
+            mensaje += `${contador++}. ${data.titulo}\n   👤 ${data.completadaPor} - 🕐 ${hora}\n\n`;
+        });
+        
+        alert(mensaje);
+        
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error al obtener tareas realizadas');
     }
 };
 
@@ -502,7 +564,6 @@ window.cerrarModal = () => {
     editModal.style.display = 'none';
 };
 
-// Cerrar modal al hacer clic fuera
 window.onclick = function(event) {
     if (event.target === editModal) {
         cerrarModal();
@@ -553,7 +614,6 @@ function actualizarVista(tareas) {
     pendingToday.textContent = tareasHoy.length;
     totalActive.textContent = tareasActivas.length;
     
-    // Contar completadas hoy
     db.collection('historial')
         .where('fecha', '>=', hoy)
         .where('fecha', '<', new Date(hoy.getTime() + 86400000))
@@ -787,54 +847,8 @@ function calcularSiguienteFecha(fecha, recurrencia) {
 }
 
 // ============================================
-// FUNCIONES DE UTILIDAD (OPCIONALES)
+// FUNCIONES DE UTILIDAD (ADMIN)
 // ============================================
-
-/**
- * Muestra un resumen de las tareas realizadas hoy
- */
-window.verTareasRealizadasHoy = async () => {
-    if (!currentUser) {
-        alert('Debes iniciar sesión');
-        return;
-    }
-    
-    try {
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
-        const manana = new Date(hoy);
-        manana.setDate(hoy.getDate() + 1);
-        
-        const historialHoy = await db.collection('historial')
-            .where('fecha', '>=', hoy)
-            .where('fecha', '<', manana)
-            .orderBy('fecha', 'asc')
-            .get();
-        
-        if (historialHoy.empty) {
-            alert('📭 No hay tareas realizadas hoy');
-            return;
-        }
-        
-        let mensaje = '📋 TAREAS REALIZADAS HOY:\n\n';
-        
-        historialHoy.docs.forEach(doc => {
-            const data = doc.data();
-            const hora = data.fecha ? new Date(data.fecha.toDate()).toLocaleTimeString() : 'hora desconocida';
-            mensaje += `• ${data.titulo}\n  Realizada por: ${data.completadaPor} a las ${hora}\n\n`;
-        });
-        
-        alert(mensaje);
-        
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error al obtener tareas realizadas');
-    }
-};
-
-/**
- * Limpia registros duplicados del historial (solo admin)
- */
 window.limpiarDuplicados = async () => {
     if (!currentUser || currentUser.email !== adminUser) {
         alert('Solo el administrador puede ejecutar esta función');
@@ -876,9 +890,6 @@ window.limpiarDuplicados = async () => {
     }
 };
 
-/**
- * Muestra estadísticas en consola
- */
 window.mostrarEstadisticas = async () => {
     if (!currentUser || currentUser.email !== adminUser) {
         console.log('Función solo para administradores');
