@@ -253,7 +253,7 @@
             grid-column: 1 / -1;
         }
 
-        .add-task-btn {
+        .add-task-btn, .edit-task-btn {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
@@ -268,8 +268,35 @@
             grid-column: 1 / -1;
         }
 
+        .edit-task-btn {
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+        }
+
         .add-task-btn:hover {
             transform: translateY(-2px);
+        }
+
+        .edit-task-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .cancel-edit {
+            background: #95a5a6;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 16px;
+            grid-column: 1 / -1;
+        }
+
+        .cancel-edit:hover {
+            background: #7f8c8d;
         }
 
         /* Mensaje para usuarios no-admin */
@@ -277,12 +304,56 @@
             background: #fff3cd;
             border: 1px solid #ffeeba;
             color: #856404;
-            padding: 15px;
+            padding: 20px;
             border-radius: 10px;
             margin-bottom: 30px;
             display: flex;
             align-items: center;
+            gap: 15px;
+            font-size: 16px;
+        }
+
+        .view-only-message .material-icons {
+            font-size: 32px;
+            color: #856404;
+        }
+
+        .view-only-content {
+            flex: 1;
+        }
+
+        .view-only-stats {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 10px;
+            color: #333;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
             gap: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .view-only-stats .material-icons {
+            font-size: 24px;
+            color: #667eea;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background: #e0e0e0;
+            border-radius: 5px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 5px;
+            transition: width 0.3s ease;
         }
 
         /* Filtros */
@@ -398,6 +469,7 @@
         .task-actions {
             display: flex;
             gap: 10px;
+            flex-wrap: wrap;
         }
 
         .complete-btn {
@@ -415,6 +487,28 @@
 
         .complete-btn:hover {
             background: #219a52;
+        }
+
+        .edit-btn {
+            background: #f39c12;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+
+        .edit-btn:hover {
+            background: #e67e22;
+        }
+
+        .edit-btn:disabled, .complete-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         /* Tabla de Historial */
@@ -449,7 +543,7 @@
         }
 
         .history-table .fecha-col {
-            width: 150px;
+            width: 180px;
             color: #666;
         }
 
@@ -460,16 +554,6 @@
         .history-table .usuario-col {
             color: #667eea;
             font-weight: 500;
-        }
-
-        .history-date-group {
-            background: #f0f0f0;
-            font-weight: bold;
-        }
-
-        .history-date-group td {
-            padding: 8px 12px;
-            background: #e0e0e0;
         }
 
         .loading-spinner {
@@ -485,6 +569,46 @@
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+
+        /* Modal de edición */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 50px auto;
+            padding: 30px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .close-modal {
+            cursor: pointer;
+            font-size: 24px;
+            color: #999;
+        }
+
+        .close-modal:hover {
+            color: #333;
         }
 
         @media (max-width: 768px) {
@@ -533,7 +657,7 @@
                 </button>
                 <div id="loginError" class="error-message"></div>
                 <div id="loginInfo" class="info-message">
-                    Usa email para acceder (mínimo 6 caracteres)
+                    Usa cualquier email para acceder (mínimo 6 caracteres)
                 </div>
             </form>
         </div>
@@ -585,7 +709,7 @@
                 <div class="add-task-card">
                     <div class="admin-badge">
                         <span class="material-icons">admin_panel_settings</span>
-                        Modo Administrador - Crear nueva tarea
+                        Modo Administrador
                     </div>
                     <form id="taskForm" class="form-grid">
                         <input type="text" id="taskTitle" placeholder="Título de la tarea" required>
@@ -610,10 +734,19 @@
                 </div>
             </div>
 
-            <!-- Mensaje para usuarios no-admin -->
+            <!-- Mensaje para usuarios no-admin con estadísticas semanales -->
             <div id="viewOnlyMessage" class="view-only-message" style="display: none;">
                 <span class="material-icons">visibility</span>
-                <span>Modo visualización - Puedes marcar tareas como realizadas pero no crear nuevas</span>
+                <div class="view-only-content">
+                    <strong>Modo visualización</strong>
+                    <div id="weeklyStats" class="view-only-stats">
+                        <span class="material-icons">assessment</span>
+                        <span id="weeklyStatsText">Cargando estadísticas...</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="weeklyProgress" class="progress-fill" style="width: 0%"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- Filtros -->
@@ -640,6 +773,40 @@
             <!-- Contenido Dinámico -->
             <div id="contentArea"></div>
         </main>
+    </div>
+
+    <!-- Modal de Edición -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Editar Tarea</h2>
+                <span class="close-modal" onclick="cerrarModal()">&times;</span>
+            </div>
+            <form id="editForm" class="form-grid">
+                <input type="hidden" id="editTaskId">
+                <input type="text" id="editTitle" placeholder="Título de la tarea" required>
+                <select id="editPriority" required>
+                    <option value="media">Prioridad Media</option>
+                    <option value="alta">Prioridad Alta</option>
+                    <option value="baja">Prioridad Baja</option>
+                </select>
+                <select id="editRecurrence" required>
+                    <option value="none">Sin repetición</option>
+                    <option value="daily">Diariamente</option>
+                    <option value="weekly">Semanalmente</option>
+                    <option value="biweekly">Dos veces por semana</option>
+                    <option value="monthly">Mensualmente</option>
+                </select>
+                <input type="date" id="editStartDate" required>
+                <textarea id="editDescription" placeholder="Descripción (opcional)"></textarea>
+                <button type="submit" class="edit-task-btn">
+                    <span class="material-icons">save</span> Guardar Cambios
+                </button>
+                <button type="button" class="cancel-edit" onclick="cerrarModal()">
+                    <span class="material-icons">cancel</span> Cancelar
+                </button>
+            </form>
+        </div>
     </div>
 
     <script>
@@ -683,6 +850,10 @@
         const pendingToday = document.getElementById('pendingToday');
         const completedToday = document.getElementById('completedToday');
         const totalActive = document.getElementById('totalActive');
+        const weeklyStatsText = document.getElementById('weeklyStatsText');
+        const weeklyProgress = document.getElementById('weeklyProgress');
+        const editModal = document.getElementById('editModal');
+        const editForm = document.getElementById('editForm');
 
         // Actualizar fecha
         const hoy = new Date();
@@ -710,12 +881,114 @@
                 
                 showPrivateArea();
                 setupRealtimeTasks();
+                actualizarEstadisticasSemanales(user.email);
             } else {
                 currentUser = null;
                 showLoginArea();
                 if (unsubscribeTasks) unsubscribeTasks();
             }
         });
+
+        // Función para actualizar estadísticas semanales del usuario
+        async function actualizarEstadisticasSemanales(email) {
+            if (!email) return;
+            
+            try {
+                // Obtener inicio y fin de la semana actual (lunes a domingo)
+                const hoy = new Date();
+                const inicioSemana = new Date(hoy);
+                inicioSemana.setDate(hoy.getDate() - hoy.getDay() + (hoy.getDay() === 0 ? -6 : 1));
+                inicioSemana.setHours(0, 0, 0, 0);
+                
+                const finSemana = new Date(inicioSemana);
+                finSemana.setDate(inicioSemana.getDate() + 6);
+                finSemana.setHours(23, 59, 59, 999);
+                
+                // Contar tareas completadas por el usuario en la semana
+                const historialSemana = await db.collection('historial')
+                    .where('completadaPor', '==', email)
+                    .where('fecha', '>=', inicioSemana)
+                    .where('fecha', '<=', finSemana)
+                    .get();
+                
+                const completadas = historialSemana.size;
+                
+                // Contar tareas activas (pendientes para la semana)
+                const tareasActivas = await db.collection('tareas')
+                    .where('activa', '==', true)
+                    .get();
+                
+                const tareasProcesadas = procesarTareasSemana(tareasActivas.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                const totalSemana = tareasProcesadas.length;
+                
+                // Actualizar UI
+                weeklyStatsText.textContent = `Llevas realizadas ${completadas} tareas de las ${totalSemana} propuestas para esta semana`;
+                
+                // Calcular y mostrar barra de progreso
+                const porcentaje = totalSemana > 0 ? (completadas / totalSemana) * 100 : 0;
+                weeklyProgress.style.width = `${porcentaje}%`;
+                
+            } catch (error) {
+                console.error('Error calculando estadísticas:', error);
+                weeklyStatsText.textContent = 'Error al cargar estadísticas';
+            }
+        }
+
+        // Función para procesar tareas de la semana
+        function procesarTareasSemana(tareas) {
+            const hoy = new Date();
+            hoy.setHours(0, 0, 0, 0);
+            
+            const inicioSemana = new Date(hoy);
+            inicioSemana.setDate(hoy.getDate() - hoy.getDay() + (hoy.getDay() === 0 ? -6 : 1));
+            
+            const finSemana = new Date(inicioSemana);
+            finSemana.setDate(inicioSemana.getDate() + 6);
+            
+            return tareas
+                .filter(t => t.activa)
+                .map(t => {
+                    const fechaInicio = new Date(t.fechaInicio + 'T00:00:00');
+                    const proximaFecha = calcularProximaFechaSemana(fechaInicio, t.recurrencia, inicioSemana, finSemana);
+                    return { ...t, proximaFecha };
+                })
+                .filter(t => t.proximaFecha && t.proximaFecha >= inicioSemana && t.proximaFecha <= finSemana);
+        }
+
+        // Función auxiliar para calcular próxima fecha en rango de semana
+        function calcularProximaFechaSemana(fechaInicio, recurrencia, inicioSemana, finSemana) {
+            if (recurrencia === 'none') {
+                return fechaInicio >= inicioSemana && fechaInicio <= finSemana ? fechaInicio : null;
+            }
+            
+            let fecha = new Date(fechaInicio);
+            
+            while (fecha <= finSemana) {
+                if (fecha >= inicioSemana) {
+                    return fecha;
+                }
+                
+                switch(recurrencia) {
+                    case 'daily':
+                        fecha.setDate(fecha.getDate() + 1);
+                        break;
+                    case 'weekly':
+                        fecha.setDate(fecha.getDate() + 7);
+                        break;
+                    case 'biweekly':
+                        fecha.setDate(fecha.getDate() + 1);
+                        while (fecha.getDay() !== 1 && fecha.getDay() !== 4) {
+                            fecha.setDate(fecha.getDate() + 1);
+                        }
+                        break;
+                    case 'monthly':
+                        fecha.setMonth(fecha.getMonth() + 1);
+                        break;
+                }
+            }
+            
+            return null;
+        }
 
         // Login (automático con cualquier email)
         loginForm.addEventListener('submit', async (e) => {
@@ -798,6 +1071,11 @@
                 // Procesar tareas según su recurrencia
                 const tareasProcesadas = procesarRecurrencias(tareas);
                 actualizarVista(tareasProcesadas);
+                
+                // Actualizar estadísticas semanales
+                if (currentUser) {
+                    actualizarEstadisticasSemanales(currentUser.email);
+                }
             });
         }
 
@@ -922,6 +1200,8 @@
                 return;
             }
 
+            const esAdmin = currentUser && currentUser.email === adminUser;
+
             contentArea.innerHTML = `
                 <div class="tasks-container">
                     <h2>${getTituloFiltro()}</h2>
@@ -948,6 +1228,11 @@
                                 </div>
                             </div>
                             <div class="task-actions">
+                                ${esAdmin ? `
+                                    <button onclick="abrirModalEdicion('${tarea.id}')" class="edit-btn">
+                                        <span class="material-icons">edit</span> Editar
+                                    </button>
+                                ` : ''}
                                 <button onclick="completarTarea('${tarea.id}', '${tarea.titulo}')" class="complete-btn">
                                     <span class="material-icons">check_circle</span> Realizada
                                 </button>
@@ -1028,7 +1313,7 @@
                     <table class="history-table">
                         <thead>
                             <tr>
-                                <th>Fecha</th>
+                                <th>Fecha y Hora</th>
                                 <th>Tarea</th>
                                 <th>Realizada por</th>
                             </tr>
@@ -1049,6 +1334,50 @@
                 </div>
             `;
         }
+
+        // Función para abrir modal de edición
+        window.abrirModalEdicion = async (tareaId) => {
+            if (currentUser.email !== adminUser) {
+                alert('Solo el administrador puede editar tareas');
+                return;
+            }
+            
+            const tareaRef = db.collection('tareas').doc(tareaId);
+            const tarea = await tareaRef.get();
+            const data = tarea.data();
+            
+            document.getElementById('editTaskId').value = tareaId;
+            document.getElementById('editTitle').value = data.titulo;
+            document.getElementById('editDescription').value = data.descripcion || '';
+            document.getElementById('editPriority').value = data.prioridad;
+            document.getElementById('editRecurrence').value = data.recurrencia;
+            document.getElementById('editStartDate').value = data.fechaInicio;
+            
+            editModal.style.display = 'block';
+        };
+
+        // Función para cerrar modal
+        window.cerrarModal = () => {
+            editModal.style.display = 'none';
+        };
+
+        // Guardar edición
+        editForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const tareaId = document.getElementById('editTaskId').value;
+            const tareaRef = db.collection('tareas').doc(tareaId);
+            
+            await tareaRef.update({
+                titulo: document.getElementById('editTitle').value,
+                descripcion: document.getElementById('editDescription').value,
+                prioridad: document.getElementById('editPriority').value,
+                recurrencia: document.getElementById('editRecurrence').value,
+                fechaInicio: document.getElementById('editStartDate').value
+            });
+            
+            cerrarModal();
+        });
 
         // Completar tarea (cualquier usuario puede)
         window.completarTarea = async (tareaId, titulo) => {
@@ -1079,6 +1408,9 @@
                 // Si no es recurrente, desactivar
                 await tareaRef.update({ activa: false });
             }
+            
+            // Actualizar estadísticas
+            actualizarEstadisticasSemanales(currentUser.email);
         };
 
         // Calcular siguiente fecha
@@ -1134,6 +1466,13 @@
         function showLoginArea() {
             loginContainer.style.display = 'flex';
             privateArea.style.display = 'none';
+        }
+
+        // Cerrar modal si se hace clic fuera
+        window.onclick = function(event) {
+            if (event.target === editModal) {
+                cerrarModal();
+            }
         }
     </script>
 </body>
