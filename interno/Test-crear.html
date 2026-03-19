@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+</head>
+<body>
+    <h2>🧪 Crear Tarea - Test</h2>
+    
+    <div>
+        <input type="email" id="email" value="admin@casaverde.com" placeholder="Email">
+        <input type="password" id="pass" value="123456" placeholder="Contraseña">
+        <button onclick="login()">Login</button>
+    </div>
+    
+    <div style="margin-top: 20px;">
+        <input type="text" id="titulo" value="Tarea de prueba" placeholder="Título">
+        <button onclick="crearTarea()">Crear Tarea</button>
+    </div>
+    
+    <div id="status" style="margin-top: 20px; padding: 10px; background: #f0f0f0;"></div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+            authDomain: "tatareas-d8a80.firebaseapp.com",
+            projectId: "tatareas-d8a80",
+            storageBucket: "tatareas-d8a80.firebasestorage.app",
+            messagingSenderId: "709332495480",
+            appId: "1:709332495480:web:7060b2c75984352354918d"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        window.login = async () => {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('pass').value;
+            
+            try {
+                await auth.signInWithEmailAndPassword(email, pass);
+                document.getElementById('status').innerHTML = '✅ Login exitoso como: ' + email;
+            } catch (error) {
+                if (error.code === 'auth/user-not-found') {
+                    try {
+                        await auth.createUserWithEmailAndPassword(email, pass);
+                        document.getElementById('status').innerHTML = '✅ Usuario creado: ' + email;
+                    } catch (e) {
+                        document.getElementById('status').innerHTML = '❌ Error: ' + e.message;
+                    }
+                } else {
+                    document.getElementById('status').innerHTML = '❌ Error: ' + error.message;
+                }
+            }
+        };
+
+        window.crearTarea = async () => {
+            if (!auth.currentUser) {
+                document.getElementById('status').innerHTML = '❌ Primero haz login';
+                return;
+            }
+            
+            const titulo = document.getElementById('titulo').value;
+            
+            try {
+                const docRef = await db.collection('tareas').add({
+                    titulo: titulo,
+                    descripcion: 'Creada desde test',
+                    prioridad: 'media',
+                    recurrencia: 'none',
+                    fechaInicio: new Date().toISOString().split('T')[0],
+                    activa: true,
+                    fechaCreacion: firebase.firestore.FieldValue.serverTimestamp(),
+                    creadaPor: auth.currentUser.email
+                });
+                
+                document.getElementById('status').innerHTML = `✅ Tarea creada con ID: ${docRef.id}`;
+            } catch (error) {
+                document.getElementById('status').innerHTML = '❌ Error: ' + error.message;
+            }
+        };
+    </script>
+</body>
+</html>
