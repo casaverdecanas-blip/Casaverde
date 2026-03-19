@@ -54,6 +54,7 @@ const tareasCount = document.getElementById('tareasCount');
 const semanaCount = document.getElementById('semanaCount');
 const historialCount = document.getElementById('historialCount');
 const adminTaskForm = document.getElementById('adminTaskForm');
+const adminPanel = document.getElementById('adminPanel');
 const viewOnlyMessage = document.getElementById('viewOnlyMessage');
 
 // ============================================
@@ -78,10 +79,11 @@ auth.onAuthStateChanged((user) => {
         // Controlar visibilidad según si es admin
         if (user.email === adminEmail) {
             adminTaskForm.style.display = 'block';
+            adminPanel.style.display = 'block';
             viewOnlyMessage.style.display = 'none';
-            mostrarPanelAdmin(); // Mostrar panel adicional para admin
         } else {
             adminTaskForm.style.display = 'none';
+            adminPanel.style.display = 'none';
             viewOnlyMessage.style.display = 'flex';
         }
         
@@ -104,22 +106,25 @@ loginForm.addEventListener('submit', async (e) => {
 
     if (password.length < 6) {
         loginError.textContent = 'La contraseña debe tener al menos 6 caracteres';
+        loginError.style.display = 'block';
         return;
     }
 
     try {
         await auth.signInWithEmailAndPassword(email, password);
-        loginError.textContent = '';
+        loginError.style.display = 'none';
     } catch (error) {
         if (error.code === 'auth/user-not-found') {
             try {
                 await auth.createUserWithEmailAndPassword(email, password);
-                loginError.textContent = '';
+                loginError.style.display = 'none';
             } catch (createError) {
                 loginError.textContent = 'Error al crear usuario';
+                loginError.style.display = 'block';
             }
         } else {
             loginError.textContent = 'Email o contraseña incorrectos';
+            loginError.style.display = 'block';
         }
     }
 });
@@ -143,7 +148,6 @@ filterTabs.forEach(tab => {
 // LISTENERS EN TIEMPO REAL
 // ============================================
 function configurarListenersTiempoReal() {
-    // Listener para tareas
     if (unsubscribeTasks) unsubscribeTasks();
     
     unsubscribeTasks = db.collection('tareas')
@@ -159,7 +163,6 @@ function configurarListenersTiempoReal() {
             console.error('Error en listener de tareas:', error);
         });
 
-    // Listener para historial
     if (unsubscribeHistorial) unsubscribeHistorial();
     
     unsubscribeHistorial = db.collection('historial')
@@ -203,7 +206,6 @@ function actualizarSetRealizadasHoy() {
 // ============================================
 async function cargarDatosIniciales() {
     try {
-        // Cargar tareas
         const tareasSnapshot = await db.collection('tareas')
             .where('activa', '==', true)
             .get();
@@ -213,7 +215,6 @@ async function cargarDatosIniciales() {
             tareasCache.push({ id: doc.id, ...doc.data() });
         });
         
-        // Cargar historial
         const historialSnapshot = await db.collection('historial')
             .orderBy('fecha', 'desc')
             .limit(1000)
@@ -240,7 +241,6 @@ function actualizarDashboard() {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
     
-    // Tareas para hoy
     const tareasHoy = tareasCache.filter(t => {
         if (!t.fechaInicio) return false;
         try {
@@ -255,7 +255,6 @@ function actualizarDashboard() {
     totalActive.textContent = tareasCache.length;
     completedToday.textContent = realizadasHoySet.size;
     
-    // Contadores de filtros
     tareasCount.textContent = tareasCache.length;
     
     const tareasSemana = new Set();
@@ -273,7 +272,6 @@ function actualizarDashboard() {
     semanaCount.textContent = tareasSemana.size;
     historialCount.textContent = historialCache.length;
     
-    // Estadísticas semanales del usuario
     if (currentUser) {
         const misCompletadas = historialCache.filter(h => 
             h.completadaPor === currentUser.email && h.fecha
@@ -297,92 +295,6 @@ function getInicioSemana() {
     fecha.setDate(fecha.getDate() - diff);
     return fecha;
 }
-
-// ============================================
-// MOSTRAR PANEL DE ADMIN
-// ============================================
-function mostrarPanelAdmin() {
-    // Verificar si ya existe el panel, si no, crearlo
-    if (!document.getElementById('adminPanel')) {
-        const panel = document.createElement('div');
-        panel.id = 'adminPanel';
-        panel.className = 'admin-panel';
-        panel.innerHTML = `
-            <div style="margin: 20px 0; padding: 20px; background: #fff3cd; border-radius: 10px; border: 2px solid #e74c3c;">
-                <h3 style="color: #e74c3c; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
-                    <span class="material-icons">warning</span>
-                    Panel de Administración
-                </h3>
-                <button onclick="limpiarBaseDatos()" class="delete-btn" style="background: #e74c3c; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 16px;">
-                    <span class="material-icons">cleaning_services</span>
-                    Limpiar Base de Datos (Eliminar todo)
-                </button>
-                <p style="color: #666; margin-top: 10px; font-size: 12px;">
-                    ⚠️ Esta acción eliminará TODAS las tareas y TODO el historial. No se puede deshacer.
-                </p>
-            </div>
-        `;
-        
-        // Insertar después del formulario de tareas
-        adminTaskForm.parentNode.insertBefore(panel, adminTaskForm.nextSibling);
-    }
-}
-
-// ============================================
-// LIMPIAR BASE DE DATOS (SOLO ADMIN)
-// ============================================
-window.limpiarBaseDatos = async () => {
-    if (!currentUser || currentUser.email !== adminEmail) {
-        alert('❌ Solo el administrador puede limpiar la base de datos');
-        return;
-    }
-    
-    // Confirmación múltiple por seguridad
-    const confirmacion1 = confirm('⚠️ ¿Estás SEGURO de que quieres limpiar la base de datos?\n\nEsta acción eliminará TODAS las tareas y TODO el historial.');
-    if (!confirmacion1) return;
-    
-    const confirmacion2 = prompt('Escribe "LIMPIAR" para confirmar (en mayúsculas):');
-    if (confirmacion2 !== 'LIMPIAR') {
-        alert('❌ Operación cancelada');
-        return;
-    }
-    
-    try {
-        // Mostrar estado
-        alert('🔄 Limpiando base de datos... Por favor espera.');
-        
-        // 1. Eliminar todas las tareas
-        const tareasSnapshot = await db.collection('tareas').get();
-        const batchTareas = db.batch();
-        tareasSnapshot.docs.forEach(doc => {
-            batchTareas.delete(doc.ref);
-        });
-        await batchTareas.commit();
-        
-        // 2. Eliminar todo el historial
-        const historialSnapshot = await db.collection('historial').get();
-        const batchHistorial = db.batch();
-        historialSnapshot.docs.forEach(doc => {
-            batchHistorial.delete(doc.ref);
-        });
-        await batchHistorial.commit();
-        
-        // 3. Actualizar caches locales
-        tareasCache = [];
-        historialCache = [];
-        realizadasHoySet.clear();
-        
-        // 4. Actualizar UI
-        actualizarDashboard();
-        actualizarVista();
-        
-        alert('✅ Base de datos limpiada correctamente');
-        
-    } catch (error) {
-        console.error('Error limpiando base de datos:', error);
-        alert('❌ Error al limpiar la base de datos: ' + error.message);
-    }
-};
 
 // ============================================
 // ACTUALIZAR VISTA SEGÚN FILTRO
@@ -416,7 +328,6 @@ function mostrarVistaTareas() {
         }
     });
     
-    // Ordenar pendientes por prioridad
     const ordenPrioridad = { 'alta': 1, 'media': 2, 'baja': 3 };
     pendientes.sort((a, b) => ordenPrioridad[a.prioridad] - ordenPrioridad[b.prioridad]);
     
@@ -429,8 +340,8 @@ function mostrarVistaTareas() {
             </h2>
             
             ${pendientes.length > 0 ? `
-                <div style="margin-bottom: 20px;">
-                    <h3 style="color: #27ae60; margin-bottom: 10px;">
+                <div class="task-section">
+                    <h3 class="section-title pending-title">
                         <span class="material-icons">pending</span> Pendientes (${pendientes.length})
                     </h3>
                     ${renderizarTareas(pendientes, false)}
@@ -438,8 +349,8 @@ function mostrarVistaTareas() {
             ` : ''}
             
             ${realizadas.length > 0 ? `
-                <div>
-                    <h3 style="color: #7f8c8d; margin-bottom: 10px;">
+                <div class="task-section">
+                    <h3 class="section-title completed-title">
                         <span class="material-icons">check_circle</span> Realizadas hoy (${realizadas.length})
                     </h3>
                     ${renderizarTareas(realizadas, true)}
@@ -447,9 +358,9 @@ function mostrarVistaTareas() {
             ` : ''}
             
             ${pendientes.length === 0 && realizadas.length === 0 ? `
-                <div style="text-align: center; padding: 40px;">
-                    <span class="material-icons" style="font-size: 48px; color: #ccc;">assignment</span>
-                    <p style="color: #999; margin-top: 10px;">No hay tareas</p>
+                <div class="empty-state">
+                    <span class="material-icons empty-icon">assignment</span>
+                    <p class="empty-text">No hay tareas</p>
                 </div>
             ` : ''}
         </div>
@@ -527,24 +438,26 @@ function mostrarVistaSemana() {
             </h2>
             
             ${tareasArray.length === 0 ? `
-                <div style="text-align: center; padding: 40px;">
-                    <span class="material-icons" style="font-size: 48px; color: #ccc;">event_busy</span>
-                    <p style="color: #999; margin-top: 10px;">No hay tareas realizadas esta semana</p>
+                <div class="empty-state">
+                    <span class="material-icons empty-icon">event_busy</span>
+                    <p class="empty-text">No hay tareas realizadas esta semana</p>
                 </div>
-            ` : tareasArray.map(t => `
-                <div class="stat-item">
-                    <div class="task-name">
-                        <span class="material-icons">task</span>
-                        ${escapeHtml(t.titulo)}
-                    </div>
-                    <div>
-                        <span class="task-count">${t.veces} ${t.veces === 1 ? 'vez' : 'veces'}</span>
-                        <span style="margin-left: 10px; color: #666; font-size: 12px;">
-                            por ${Array.from(t.usuarios).join(', ')}
-                        </span>
-                    </div>
+            ` : `
+                <div class="weekly-stats">
+                    ${tareasArray.map(t => `
+                        <div class="stat-item">
+                            <div class="task-name">
+                                <span class="material-icons">task</span>
+                                ${escapeHtml(t.titulo)}
+                            </div>
+                            <div>
+                                <span class="task-count">${t.veces} ${t.veces === 1 ? 'vez' : 'veces'}</span>
+                                <span class="task-users">por ${Array.from(t.usuarios).join(', ')}</span>
+                            </div>
+                        </div>
+                    `).join('')}
                 </div>
-            `).join('')}
+            `}
         </div>
     `;
 }
@@ -589,13 +502,13 @@ function mostrarHistorial() {
                 </thead>
                 <tbody>
                     ${registros.length === 0 ? 
-                        '<tr><td colspan="4" style="text-align: center; color: #999;">No hay historial</td></tr>' :
+                        '<tr><td colspan="4" class="empty-table">No hay historial</td></tr>' :
                         registros.map(r => `
                             <tr>
-                                <td>${r.fecha}</td>
+                                <td class="fecha-col">${r.fecha}</td>
                                 <td>${r.hora}</td>
-                                <td>${escapeHtml(r.titulo)}</td>
-                                <td>${escapeHtml(r.usuario)}</td>
+                                <td class="tarea-col">${escapeHtml(r.titulo)}</td>
+                                <td class="usuario-col">${escapeHtml(r.usuario)}</td>
                             </tr>
                         `).join('')
                     }
@@ -616,7 +529,6 @@ taskForm.addEventListener('submit', async (e) => {
         return;
     }
     
-    // Solo admin puede crear tareas
     if (currentUser.email !== adminEmail) {
         alert('❌ Solo el administrador puede crear tareas');
         return;
@@ -645,12 +557,8 @@ taskForm.addEventListener('submit', async (e) => {
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        alert('✅ Tarea creada correctamente');
         taskForm.reset();
-        
-        // Restablecer fecha al día actual
-        const hoy = new Date().toISOString().split('T')[0];
-        document.getElementById('taskStartDate').value = hoy;
+        document.getElementById('taskStartDate').value = new Date().toISOString().split('T')[0];
         
     } catch (error) {
         console.error('Error:', error);
@@ -667,7 +575,6 @@ window.completarTarea = async (tareaId, titulo) => {
         return;
     }
     
-    // Verificar si ya fue realizada hoy
     if (realizadasHoySet.has(tareaId)) {
         const registro = historialCache.find(h => h.tareaId === tareaId);
         let hora = 'hora desconocida';
@@ -684,7 +591,6 @@ window.completarTarea = async (tareaId, titulo) => {
     if (!confirm(`¿Marcar "${titulo}" como realizada?`)) return;
     
     try {
-        // Guardar en historial
         await db.collection('historial').add({
             tareaId: tareaId,
             titulo: titulo,
@@ -692,7 +598,6 @@ window.completarTarea = async (tareaId, titulo) => {
             fecha: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        // Actualizar tarea si es recurrente
         const tareaRef = db.collection('tareas').doc(tareaId);
         const tareaDoc = await tareaRef.get();
         const tareaData = tareaDoc.data();
@@ -723,16 +628,10 @@ window.completarTarea = async (tareaId, titulo) => {
                 await tareaRef.update({
                     fechaInicio: nuevaFecha.toISOString().split('T')[0]
                 });
-                
-                // No mostrar alerta para no interrumpir el flujo
-            } catch (e) {
-                console.error('Error en reprogramación:', e);
-            }
+            } catch (e) {}
         } else {
             await tareaRef.update({ activa: false });
         }
-        
-        // No mostrar alerta de éxito para que sea más fluido
         
     } catch (error) {
         console.error('Error:', error);
@@ -805,13 +704,97 @@ editForm.addEventListener('submit', async (e) => {
         });
         
         cerrarModal();
-        alert('✅ Tarea actualizada correctamente');
         
     } catch (error) {
         console.error('Error:', error);
         alert('❌ Error al actualizar la tarea');
     }
 });
+
+// ============================================
+// LIMPIAR BASE DE DATOS - CON CONFIRMACIÓN
+// ============================================
+let limpiandoDB = false;
+
+window.mostrarModalLimpiarDB = () => {
+    if (!currentUser || currentUser.email !== adminEmail) {
+        alert('❌ Solo el administrador puede limpiar la base de datos');
+        return;
+    }
+    
+    document.getElementById('confirmPassword').value = '';
+    document.getElementById('limpiarError').style.display = 'none';
+    document.getElementById('limpiarModal').style.display = 'block';
+};
+
+window.cerrarModalLimpiar = () => {
+    document.getElementById('limpiarModal').style.display = 'none';
+};
+
+window.ejecutarLimpiarDB = async () => {
+    if (limpiandoDB) return;
+    
+    const password = document.getElementById('confirmPassword').value;
+    const errorDiv = document.getElementById('limpiarError');
+    
+    if (!password) {
+        errorDiv.textContent = '❌ Debes ingresar tu contraseña';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    limpiandoDB = true;
+    
+    try {
+        const credential = firebase.auth.EmailAuthProvider.credential(
+            currentUser.email,
+            password
+        );
+        
+        await currentUser.reauthenticateWithCredential(credential);
+        
+        errorDiv.style.display = 'none';
+        cerrarModalLimpiar();
+        
+        const confirmar = confirm('⚠️ ¿Estás ABSOLUTAMENTE SEGURO?\n\nEsta acción eliminará TODAS las tareas y TODO el historial permanentemente.\n\nNo hay forma de recuperar los datos.');
+        if (!confirmar) {
+            limpiandoDB = false;
+            return;
+        }
+        
+        alert('🔄 Limpiando base de datos... Por favor espera.');
+        
+        const tareasSnapshot = await db.collection('tareas').get();
+        const batchTareas = db.batch();
+        tareasSnapshot.docs.forEach(doc => {
+            batchTareas.delete(doc.ref);
+        });
+        await batchTareas.commit();
+        
+        const historialSnapshot = await db.collection('historial').get();
+        const batchHistorial = db.batch();
+        historialSnapshot.docs.forEach(doc => {
+            batchHistorial.delete(doc.ref);
+        });
+        await batchHistorial.commit();
+        
+        tareasCache = [];
+        historialCache = [];
+        realizadasHoySet.clear();
+        
+        actualizarDashboard();
+        actualizarVista();
+        
+        alert('✅ Base de datos limpiada correctamente');
+        
+    } catch (error) {
+        console.error('Error:', error);
+        errorDiv.textContent = '❌ Contraseña incorrecta o error de autenticación';
+        errorDiv.style.display = 'block';
+    } finally {
+        limpiandoDB = false;
+    }
+};
 
 // ============================================
 // FUNCIONES AUXILIARES
@@ -842,3 +825,11 @@ function showLoginArea() {
     loginContainer.style.display = 'flex';
     privateArea.style.display = 'none';
 }
+
+// Cerrar modal de limpieza al hacer clic fuera
+window.addEventListener('click', (event) => {
+    const modal = document.getElementById('limpiarModal');
+    if (event.target === modal) {
+        cerrarModalLimpiar();
+    }
+});
