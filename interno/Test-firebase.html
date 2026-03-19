@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+</head>
+<body>
+    <h2>🔧 Diagnóstico Firebase</h2>
+    <div id="output" style="white-space: pre-wrap; font-family: monospace; padding: 20px;"></div>
+    
+    <script>
+        const output = document.getElementById('output');
+        
+        function log(mensaje) {
+            output.innerHTML += mensaje + '\n';
+            console.log(mensaje);
+        }
+
+        // Configuración
+        const firebaseConfig = {
+            apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+            authDomain: "tatareas-d8a80.firebaseapp.com",
+            projectId: "tatareas-d8a80",
+            storageBucket: "tatareas-d8a80.firebasestorage.app",
+            messagingSenderId: "709332495480",
+            appId: "1:709332495480:web:7060b2c75984352354918d"
+        };
+
+        log('1. Inicializando Firebase...');
+        
+        try {
+            firebase.initializeApp(firebaseConfig);
+            const db = firebase.firestore();
+            log('✅ Firebase inicializado');
+            
+            // Probar escritura
+            log('2. Probando escritura...');
+            db.collection('test').add({
+                test: true,
+                timestamp: new Date().toISOString()
+            }).then(() => {
+                log('✅ Escritura exitosa');
+                
+                // Probar lectura
+                log('3. Probando lectura...');
+                return db.collection('test').get();
+            }).then((snapshot) => {
+                log(`✅ Lectura exitosa (${snapshot.size} documentos)`);
+                
+                // Verificar colección tareas
+                log('4. Verificando colección "tareas"...');
+                return db.collection('tareas').get();
+            }).then((snapshot) => {
+                log(`📊 Colección "tareas": ${snapshot.size} documentos`);
+                if (snapshot.size === 0) {
+                    log('⚠️ La colección "tareas" está vacía');
+                }
+                
+                // Verificar reglas
+                log('5. Verificando reglas...');
+                return db.collection('tareas').add({
+                    test: 'Si ves esto, las reglas permiten escritura',
+                    timestamp: new Date().toISOString()
+                });
+            }).then((docRef) => {
+                log('✅ Las reglas PERMITEN escritura');
+                // Limpiar el documento de prueba
+                return docRef.delete();
+            }).then(() => {
+                log('✅ Documento de prueba eliminado');
+                log('\n🎉 TODO FUNCIONA CORRECTAMENTE');
+            }).catch((error) => {
+                log(`❌ ERROR: ${error.code} - ${error.message}`);
+            });
+            
+        } catch (error) {
+            log(`❌ Error fatal: ${error.message}`);
+        }
+    </script>
+</body>
+</html>
