@@ -1,15 +1,538 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Tareas con Repeticiones</title>
+    
+    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        /* Login */
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 350px;
+        }
+
+        .login-box h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .input-group span {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #999;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px 12px 12px 40px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .error-message {
+            color: #e74c3c;
+            text-align: center;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        /* Área Privada */
+        .private-area {
+            background: #f5f5f5;
+            min-height: 100vh;
+            display: none;
+        }
+
+        .app-header {
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .header-content h1 {
+            color: #333;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .logout-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .main-content {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+
+        /* Dashboard de hoy */
+        .today-dashboard {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        .today-dashboard h2 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .today-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .stat-card {
+            background: rgba(255,255,255,0.2);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .stat-card .number {
+            font-size: 36px;
+            font-weight: bold;
+        }
+
+        /* Formulario de tareas */
+        .add-task-card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .add-task-card input,
+        .add-task-card textarea,
+        .add-task-card select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .add-task-card textarea {
+            resize: vertical;
+            min-height: 80px;
+            grid-column: 1 / -1;
+        }
+
+        .add-task-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 16px;
+            grid-column: 1 / -1;
+        }
+
+        /* Filtros */
+        .filters-section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .filter-tab {
+            padding: 10px 20px;
+            border: none;
+            background: #f0f0f0;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .filter-tab.active {
+            background: #667eea;
+            color: white;
+        }
+
+        /* Lista de tareas */
+        .tasks-container {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .task-item {
+            background: #f9f9f9;
+            border-left: 4px solid;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.2s;
+        }
+
+        .task-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .task-item.priority-alta {
+            border-left-color: #e74c3c;
+        }
+
+        .task-item.priority-media {
+            border-left-color: #f39c12;
+        }
+
+        .task-item.priority-baja {
+            border-left-color: #27ae60;
+        }
+
+        .task-content {
+            flex: 1;
+        }
+
+        .task-content h3 {
+            color: #333;
+            margin-bottom: 5px;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .task-content p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .task-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 12px;
+            color: #999;
+            flex-wrap: wrap;
+        }
+
+        .task-meta span {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .recurrence-badge {
+            background: #e8f4fd;
+            color: #3498db;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+
+        .task-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .task-actions button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #999;
+            transition: color 0.3s;
+            padding: 5px;
+        }
+
+        .task-actions button:hover {
+            color: #333;
+        }
+
+        .complete-btn:hover {
+            color: #27ae60 !important;
+        }
+
+        .delete-btn:hover {
+            color: #e74c3c !important;
+        }
+
+        /* Historial */
+        .history-container {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .history-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+            }
+            
+            .task-item {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .task-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+    </style>
 </head>
 <body>
-    <h2>Prueba Firebase</h2>
-    <div id="status"></div>
-    
+    <!-- Login -->
+    <div id="loginContainer" class="login-container">
+        <div class="login-box">
+            <h2><span class="material-icons">lock</span> Acceso Privado</h2>
+            <form id="loginForm">
+                <div class="input-group">
+                    <span class="material-icons">person</span>
+                    <input type="email" id="username" placeholder="Email" required>
+                </div>
+                <div class="input-group">
+                    <span class="material-icons">password</span>
+                    <input type="password" id="password" placeholder="Contraseña" required>
+                </div>
+                <button type="submit" class="login-btn">
+                    <span class="material-icons">login</span> Entrar / Registrarse
+                </button>
+                <div id="loginError" class="error-message"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Área Principal -->
+    <div id="privateArea" class="private-area">
+        <header class="app-header">
+            <div class="header-content">
+                <h1>
+                    <span class="material-icons">assignment</span> 
+                    Gestor de Tareas
+                </h1>
+                <div class="user-info">
+                    <span id="userEmail"></span>
+                    <button id="logoutBtn" class="logout-btn">
+                        <span class="material-icons">logout</span> Salir
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- Dashboard de Hoy -->
+            <div class="today-dashboard">
+                <h2>
+                    <span class="material-icons">today</span> 
+                    Tareas para hoy <span id="todayDate"></span>
+                </h2>
+                <div class="today-stats">
+                    <div class="stat-card">
+                        <div class="number" id="todayCount">0</div>
+                        <div>Pendientes hoy</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="number" id="completedToday">0</div>
+                        <div>Completadas hoy</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="number" id="totalTasks">0</div>
+                        <div>Tareas activas</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formulario Nueva Tarea -->
+            <div class="add-task-card">
+                <h2>Agregar Nueva Tarea</h2>
+                <form id="taskForm" class="form-grid">
+                    <input type="text" id="taskTitle" placeholder="Título de la tarea" required>
+                    <select id="taskPriority" required>
+                        <option value="media">Prioridad Media</option>
+                        <option value="alta">Prioridad Alta</option>
+                        <option value="baja">Prioridad Baja</option>
+                    </select>
+                    <select id="taskRecurrence" required>
+                        <option value="none">Sin repetición</option>
+                        <option value="daily">Diariamente</option>
+                        <option value="weekly">Semanalmente</option>
+                        <option value="biweekly">Dos veces por semana</option>
+                        <option value="monthly">Mensualmente</option>
+                    </select>
+                    <input type="date" id="taskStartDate" required>
+                    <textarea id="taskDescription" placeholder="Descripción (opcional)"></textarea>
+                    <button type="submit" class="add-task-btn">
+                        <span class="material-icons">add_task</span> Agregar Tarea
+                    </button>
+                </form>
+            </div>
+
+            <!-- Filtros -->
+            <div class="filters-section">
+                <div class="filter-tabs">
+                    <button class="filter-tab active" data-filter="pendientes">
+                        <span class="material-icons">pending</span> Pendientes
+                    </button>
+                    <button class="filter-tab" data-filter="hoy">
+                        <span class="material-icons">today</span> Para hoy
+                    </button>
+                    <button class="filter-tab" data-filter="repetitivas">
+                        <span class="material-icons">repeat</span> Repetitivas
+                    </button>
+                    <button class="filter-tab" data-filter="historial">
+                        <span class="material-icons">history</span> Historial
+                    </button>
+                </div>
+            </div>
+
+            <!-- Contenido Dinámico -->
+            <div id="contentArea"></div>
+        </main>
+    </div>
+
     <script>
-        // Tu configuración guardada
+        // Configuración Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
             authDomain: "tatareas-d8a80.firebaseapp.com",
@@ -18,10 +541,399 @@
             messagingSenderId: "709332495480",
             appId: "1:709332495480:web:7060b2c75984352354918d"
         };
-        
-        // Inicializar
+
+        // Inicializar Firebase
         firebase.initializeApp(firebaseConfig);
-        document.getElementById('status').innerHTML = '✅ Firebase conectado';
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // Variables globales
+        let currentUser = null;
+        let currentFilter = 'pendientes';
+        let unsubscribeTasks = null;
+
+        // Elementos DOM
+        const loginContainer = document.getElementById('loginContainer');
+        const privateArea = document.getElementById('privateArea');
+        const loginForm = document.getElementById('loginForm');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const taskForm = document.getElementById('taskForm');
+        const userEmail = document.getElementById('userEmail');
+        const loginError = document.getElementById('loginError');
+        const todayDate = document.getElementById('todayDate');
+        const filterTabs = document.querySelectorAll('.filter-tab');
+        const contentArea = document.getElementById('contentArea');
+
+        // Actualizar fecha
+        const hoy = new Date();
+        todayDate.textContent = hoy.toLocaleDateString('es-ES', { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        });
+
+        // Autenticación
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                currentUser = user;
+                userEmail.textContent = user.email;
+                showPrivateArea();
+                setupRealtimeTasks();
+            } else {
+                currentUser = null;
+                showLoginArea();
+                if (unsubscribeTasks) unsubscribeTasks();
+            }
+        });
+
+        // Login
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+            } catch (error) {
+                if (error.code === 'auth/user-not-found') {
+                    try {
+                        await auth.createUserWithEmailAndPassword(email, password);
+                    } catch (createError) {
+                        loginError.textContent = 'Error al crear usuario';
+                    }
+                } else {
+                    loginError.textContent = 'Email o contraseña incorrectos';
+                }
+            }
+        });
+
+        // Logout
+        logoutBtn.addEventListener('click', () => auth.signOut());
+
+        // Filtros
+        filterTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                filterTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentFilter = tab.dataset.filter;
+                if (currentUser) setupRealtimeTasks();
+            });
+        });
+
+        // Agregar tarea
+        taskForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const tarea = {
+                titulo: document.getElementById('taskTitle').value,
+                descripcion: document.getElementById('taskDescription').value,
+                prioridad: document.getElementById('taskPriority').value,
+                recurrencia: document.getElementById('taskRecurrence').value,
+                fechaInicio: document.getElementById('taskStartDate').value,
+                usuarioId: currentUser.uid,
+                activa: true,
+                fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            await db.collection('tareas').add(tarea);
+            taskForm.reset();
+        });
+
+        // Configurar listener en tiempo real
+        function setupRealtimeTasks() {
+            if (unsubscribeTasks) unsubscribeTasks();
+
+            let query = db.collection('tareas')
+                .where('usuarioId', '==', currentUser.uid);
+
+            unsubscribeTasks = query.onSnapshot((snapshot) => {
+                const tareas = [];
+                snapshot.forEach(doc => {
+                    tareas.push({ id: doc.id, ...doc.data() });
+                });
+                
+                // Procesar tareas según su recurrencia
+                const tareasProcesadas = procesarRecurrencias(tareas);
+                actualizarVista(tareasProcesadas);
+            });
+        }
+
+        // Procesar recurrencias
+        function procesarRecurrencias(tareas) {
+            const hoy = new Date();
+            hoy.setHours(0, 0, 0, 0);
+            
+            const inicioSemana = new Date(hoy);
+            inicioSemana.setDate(hoy.getDate() - hoy.getDay() + (hoy.getDay() === 0 ? -6 : 1));
+            
+            return tareas.map(tarea => {
+                const fechaInicio = new Date(tarea.fechaInicio + 'T00:00:00');
+                
+                // Calcular próxima fecha según recurrencia
+                let proximaFecha = calcularProximaFecha(fechaInicio, tarea.recurrencia, hoy);
+                
+                return {
+                    ...tarea,
+                    proximaFecha: proximaFecha,
+                    debeAparecerHoy: debeAparecerEnFecha(proximaFecha, hoy, tarea.recurrencia),
+                    enSemanaActual: estaEnSemanaActual(proximaFecha, inicioSemana)
+                };
+            });
+        }
+
+        // Calcular próxima fecha según recurrencia
+        function calcularProximaFecha(fechaInicio, recurrencia, fechaReferencia) {
+            if (recurrencia === 'none') return fechaInicio;
+            
+            let fecha = new Date(fechaInicio);
+            
+            while (fecha <= fechaReferencia) {
+                switch(recurrencia) {
+                    case 'daily':
+                        fecha.setDate(fecha.getDate() + 1);
+                        break;
+                    case 'weekly':
+                        fecha.setDate(fecha.getDate() + 7);
+                        break;
+                    case 'biweekly':
+                        // Dos veces por semana: lunes y jueves
+                        fecha.setDate(fecha.getDate() + 1);
+                        while (fecha.getDay() !== 1 && fecha.getDay() !== 4) {
+                            fecha.setDate(fecha.getDate() + 1);
+                        }
+                        break;
+                    case 'monthly':
+                        fecha.setMonth(fecha.getMonth() + 1);
+                        break;
+                }
+            }
+            
+            return fecha;
+        }
+
+        // Verificar si debe aparecer hoy
+        function debeAparecerEnFecha(fecha, hoy, recurrencia) {
+            if (recurrencia === 'biweekly') {
+                return (fecha.getDay() === 1 || fecha.getDay() === 4) && 
+                       fecha.toDateString() === hoy.toDateString();
+            }
+            return fecha.toDateString() === hoy.toDateString();
+        }
+
+        // Verificar si está en semana actual
+        function estaEnSemanaActual(fecha, inicioSemana) {
+            const finSemana = new Date(inicioSemana);
+            finSemana.setDate(inicioSemana.getDate() + 6);
+            return fecha >= inicioSemana && fecha <= finSemana;
+        }
+
+        // Actualizar vista según filtro
+        function actualizarVista(tareas) {
+            const tareasActivas = tareas.filter(t => t.activa);
+            const hoy = new Date();
+            hoy.setHours(0, 0, 0, 0);
+            
+            // Actualizar dashboard
+            document.getElementById('todayCount').textContent = 
+                tareasActivas.filter(t => t.proximaFecha.toDateString() === hoy.toDateString()).length;
+            
+            document.getElementById('totalTasks').textContent = tareasActivas.length;
+            
+            // Filtrar según pestaña
+            let tareasMostrar = [];
+            switch(currentFilter) {
+                case 'pendientes':
+                    tareasMostrar = tareasActivas;
+                    break;
+                case 'hoy':
+                    tareasMostrar = tareasActivas.filter(t => 
+                        t.proximaFecha.toDateString() === hoy.toDateString()
+                    );
+                    break;
+                case 'repetitivas':
+                    tareasMostrar = tareasActivas.filter(t => t.recurrencia !== 'none');
+                    break;
+                case 'historial':
+                    mostrarHistorial();
+                    return;
+            }
+            
+            renderizarTareas(tareasMostrar);
+        }
+
+        // Renderizar tareas
+        function renderizarTareas(tareas) {
+            if (tareas.length === 0) {
+                contentArea.innerHTML = `
+                    <div class="tasks-container">
+                        <div style="text-align: center; padding: 40px;">
+                            <span class="material-icons" style="font-size: 48px; color: #ccc;">assignment</span>
+                            <p style="color: #999; margin-top: 10px;">No hay tareas para mostrar</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            contentArea.innerHTML = `
+                <div class="tasks-container">
+                    <h2>${getTituloFiltro()}</h2>
+                    ${tareas.map(tarea => `
+                        <div class="task-item priority-${tarea.prioridad}">
+                            <div class="task-content">
+                                <h3>
+                                    ${tarea.titulo}
+                                    ${tarea.recurrencia !== 'none' ? 
+                                        `<span class="recurrence-badge">
+                                            ${getRecurrenciaText(tarea.recurrencia)}
+                                        </span>` : ''}
+                                </h3>
+                                ${tarea.descripcion ? `<p>${tarea.descripcion}</p>` : ''}
+                                <div class="task-meta">
+                                    <span>
+                                        <span class="material-icons">event</span> 
+                                        ${tarea.proximaFecha.toLocaleDateString()}
+                                    </span>
+                                    <span>
+                                        <span class="material-icons">flag</span> 
+                                        ${tarea.prioridad}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="task-actions">
+                                <button onclick="completarTarea('${tarea.id}')" class="complete-btn">
+                                    <span class="material-icons">check_circle</span>
+                                </button>
+                                <button onclick="eliminarTarea('${tarea.id}')" class="delete-btn">
+                                    <span class="material-icons">delete</span>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        // Mostrar historial
+        async function mostrarHistorial() {
+            const historial = await db.collection('historial')
+                .where('usuarioId', '==', currentUser.uid)
+                .orderBy('fecha', 'desc')
+                .limit(50)
+                .get();
+
+            contentArea.innerHTML = `
+                <div class="history-container">
+                    <h2>Historial de Tareas Completadas</h2>
+                    ${historial.empty ? 
+                        '<p style="text-align: center; color: #999;">No hay historial</p>' :
+                        historial.docs.map(doc => {
+                            const data = doc.data();
+                            return `
+                                <div class="history-item">
+                                    <div>
+                                        <strong>${data.titulo}</strong>
+                                        <div style="font-size: 12px; color: #666;">
+                                            Completada por: ${data.completadaPor}
+                                        </div>
+                                    </div>
+                                    <div style="font-size: 12px; color: #999;">
+                                        ${new Date(data.fecha.toDate()).toLocaleString()}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')
+                    }
+                </div>
+            `;
+        }
+
+        // Completar tarea
+        window.completarTarea = async (tareaId) => {
+            const tareaRef = db.collection('tareas').doc(tareaId);
+            const tarea = await tareaRef.get();
+            const data = tarea.data();
+            
+            // Guardar en historial
+            await db.collection('historial').add({
+                tareaId: tareaId,
+                titulo: data.titulo,
+                completadaPor: currentUser.email,
+                fecha: firebase.firestore.FieldValue.serverTimestamp(),
+                usuarioId: currentUser.uid
+            });
+            
+            // Si es recurrente, actualizar fecha
+            if (data.recurrencia !== 'none') {
+                const nuevaFecha = calcularSiguienteFecha(data.fechaInicio, data.recurrencia);
+                await tareaRef.update({
+                    fechaInicio: nuevaFecha.toISOString().split('T')[0]
+                });
+            } else {
+                // Si no es recurrente, desactivar
+                await tareaRef.update({ activa: false });
+            }
+        };
+
+        // Eliminar tarea
+        window.eliminarTarea = async (tareaId) => {
+            if (confirm('¿Eliminar esta tarea?')) {
+                await db.collection('tareas').doc(tareaId).delete();
+            }
+        };
+
+        // Funciones auxiliares
+        function getTituloFiltro() {
+            const titulos = {
+                pendientes: 'Todas las tareas pendientes',
+                hoy: 'Tareas para hoy',
+                repetitivas: 'Tareas repetitivas'
+            };
+            return titulos[currentFilter];
+        }
+
+        function getRecurrenciaText(recurrencia) {
+            const textos = {
+                daily: 'Diaria',
+                weekly: 'Semanal',
+                biweekly: '2 veces/semana',
+                monthly: 'Mensual'
+            };
+            return textos[recurrencia] || recurrencia;
+        }
+
+        function calcularSiguienteFecha(fechaInicioStr, recurrencia) {
+            const fecha = new Date(fechaInicioStr + 'T00:00:00');
+            switch(recurrencia) {
+                case 'daily':
+                    fecha.setDate(fecha.getDate() + 1);
+                    break;
+                case 'weekly':
+                    fecha.setDate(fecha.getDate() + 7);
+                    break;
+                case 'biweekly':
+                    fecha.setDate(fecha.getDate() + 1);
+                    while (fecha.getDay() !== 1 && fecha.getDay() !== 4) {
+                        fecha.setDate(fecha.getDate() + 1);
+                    }
+                    break;
+                case 'monthly':
+                    fecha.setMonth(fecha.getMonth() + 1);
+                    break;
+            }
+            return fecha;
+        }
+
+        function showPrivateArea() {
+            loginContainer.style.display = 'none';
+            privateArea.style.display = 'block';
+        }
+
+        function showLoginArea() {
+            loginContainer.style.display = 'flex';
+            privateArea.style.display = 'none';
+        }
     </script>
 </body>
 </html>
