@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Admin Firebase - CasaVerdeCanas</title>
+    <title>Administrador Visual - CasaVerdeCanas</title>
     <style>
         * {
             margin: 0;
@@ -22,7 +22,6 @@
             margin: 0 auto;
         }
         
-        /* Header */
         .header {
             background: #2d5a27;
             color: white;
@@ -35,11 +34,6 @@
         .header h1 {
             margin-bottom: 8px;
             font-size: 1.5rem;
-        }
-        
-        .header p {
-            opacity: 0.9;
-            font-size: 0.9rem;
         }
         
         .stats {
@@ -57,7 +51,6 @@
             font-size: 0.85rem;
         }
         
-        /* Botones de acción */
         .action-bar {
             display: flex;
             gap: 12px;
@@ -88,8 +81,9 @@
             color: white;
         }
         
-        .btn-success:hover {
-            background: #219a52;
+        .btn-secondary {
+            background: #3498db;
+            color: white;
         }
         
         .btn-warning {
@@ -97,30 +91,9 @@
             color: white;
         }
         
-        .btn-danger {
-            background: #e74c3c;
-            color: white;
-        }
-        
-        /* Estado de conexión */
-        .connection-status {
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 10px 15px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            font-size: 14px;
-        }
-        
-        .connection-status.connected {
-            background: #d4edda;
-            border-left-color: #28a745;
-        }
-        
-        /* Grid de imágenes */
         .images-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 20px;
         }
         
@@ -129,12 +102,6 @@
             border-radius: 12px;
             overflow: hidden;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
-        }
-        
-        .image-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
         }
         
         .image-preview {
@@ -148,7 +115,7 @@
             padding: 12px;
         }
         
-        .image-url {
+        .image-filename {
             font-size: 10px;
             color: #888;
             word-break: break-all;
@@ -167,7 +134,7 @@
             margin-bottom: 10px;
         }
         
-        .image-select {
+        .image-section {
             width: 100%;
             padding: 8px;
             border: 1px solid #ddd;
@@ -184,7 +151,7 @@
             text-align: center;
         }
         
-        .status-saved {
+        .status-assigned {
             background: #d4edda;
             color: #155724;
         }
@@ -194,12 +161,6 @@
             color: #856404;
         }
         
-        .status-error {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        /* Modal */
         .modal {
             display: none;
             position: fixed;
@@ -221,9 +182,20 @@
             background: white;
             border-radius: 12px;
             max-width: 90%;
-            width: 500px;
+            width: 600px;
+            max-height: 80%;
+            overflow: auto;
             padding: 20px;
-            text-align: center;
+        }
+        
+        .modal-content pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 11px;
+            white-space: pre-wrap;
         }
         
         .loading {
@@ -238,31 +210,23 @@
             }
         }
     </style>
-    
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🔥 Admin Firebase - CasaVerdeCanas</h1>
-            <p>Asigna nombre y ubicación a cada imagen. Los datos se guardan DIRECTAMENTE en tu Firebase.</p>
+            <h1>🏷️ Administrador de Imágenes - CasaVerdeCanas</h1>
+            <p>Asigna cada imagen a una sección del sitio. Luego exporta el código para subirlo a Firebase.</p>
             <div class="stats">
                 <span class="stat-badge" id="total-count">Total: 0</span>
-                <span class="stat-badge" id="saved-count">Guardadas: 0</span>
+                <span class="stat-badge" id="assigned-count">Asignadas: 0</span>
                 <span class="stat-badge" id="pending-count">Pendientes: 0</span>
             </div>
         </div>
         
-        <div id="connection-status" class="connection-status">
-            🔌 Conectando a Firebase...
-        </div>
-        
         <div class="action-bar">
-            <button class="btn btn-success" onclick="saveAllToFirebase()">💾 Guardar TODAS en Firebase</button>
-            <button class="btn btn-primary" onclick="loadFromFirebase()">📥 Cargar datos existentes</button>
-            <button class="btn btn-warning" onclick="clearLocal()">🗑️ Limpiar cambios locales</button>
+            <button class="btn btn-success" onclick="generateAndExport()">📤 GENERAR CÓDIGO PARA WEB</button>
+            <button class="btn btn-secondary" onclick="copyToClipboard()">📋 Copiar JSON</button>
+            <button class="btn btn-warning" onclick="resetAll()">🗑️ Reiniciar Todo</button>
         </div>
         
         <div id="images-container" class="images-grid">
@@ -270,35 +234,22 @@
         </div>
     </div>
     
-    <!-- Modal de resultado -->
-    <div id="result-modal" class="modal">
+    <!-- Modal de exportación -->
+    <div id="export-modal" class="modal">
         <div class="modal-content">
-            <h3 id="modal-title">✅ Completado</h3>
-            <p id="modal-message"></p>
-            <button class="btn btn-primary" onclick="closeModal()">Cerrar</button>
+            <h3 style="margin-bottom: 15px;">📋 Código para tu sitio web</h3>
+            <p>Este código debe ir en tu archivo <strong>firebase-config.js</strong> o donde cargas los datos de imágenes.</p>
+            <pre id="export-data"></pre>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button class="btn btn-primary" onclick="copyToClipboardExport()">📋 Copiar código</button>
+                <button class="btn btn-warning" onclick="closeModal()">Cerrar</button>
+            </div>
         </div>
     </div>
 
     <script>
         // ============================================
-        // CONFIGURACIÓN FIREBASE (LA MISMA QUE USA TU PÁGINA)
-        // ============================================
-        const firebaseConfig = {
-            apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
-            authDomain: "casaverdecanas-199.firebaseapp.com",
-            databaseURL: "https://casaverdecanas-199-default-rtdb.firebaseio.com",
-            projectId: "casaverdecanas-199",
-            storageBucket: "casaverdecanas-199.firebasestorage.app",
-            messagingSenderId: "417825635316",
-            appId: "1:417825635316:web:ff7f4fe52edcab43d8d7a1"
-        };
-
-        // Inicializar Firebase
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-        
-        // ============================================
-        // LISTA DE URLs (las 89 imágenes que me diste)
+        // LISTA DE URLs (las 89 imágenes)
         // ============================================
         const urls = [
             "https://i.postimg.cc/5N0DsqLJ/20241212-155622.jpg",
@@ -394,218 +345,90 @@
             "https://i.postimg.cc/XN80HYPj/IMG-20260105-WA0041.jpg"
         ];
         
-        // Destinos (corresponden a los nodos en Firebase)
-        const destinations = [
-            { value: "cabin-1", label: "🌲 Cabaña 1 - Vista al Bosque" },
-            { value: "cabin-2", label: "🏢 Cabaña 2 - Loft en Canasvieiras" },
-            { value: "cabin-3", label: "👨‍👩‍👧‍👦 Cabaña 3 - Familiar Premium" }
+        // ============================================
+        // SECCIONES DEL SITIO
+        // ============================================
+        const sections = [
+            { value: "index_cabin1", label: "🏠 Página Principal - Portada Cabaña 1" },
+            { value: "index_cabin2", label: "🏠 Página Principal - Portada Cabaña 2" },
+            { value: "index_cabin3", label: "🏠 Página Principal - Portada Cabaña 3" },
+            { value: "cabin1_cocina", label: "🌲 Cabaña 1 - Cocina" },
+            { value: "cabin1_comedor", label: "🌲 Cabaña 1 - Comedor" },
+            { value: "cabin1_dormitorio", label: "🌲 Cabaña 1 - Dormitorio" },
+            { value: "cabin1_bano", label: "🌲 Cabaña 1 - Baño" },
+            { value: "cabin1_terraza", label: "🌲 Cabaña 1 - Terraza/Exterior" },
+            { value: "cabin2_cocina", label: "🏢 Cabaña 2 - Cocina" },
+            { value: "cabin2_living", label: "🏢 Cabaña 2 - Living" },
+            { value: "cabin2_entrepiso", label: "🏢 Cabaña 2 - Entrepiso/Camas" },
+            { value: "cabin2_bano", label: "🏢 Cabaña 2 - Baño" },
+            { value: "cabin2_terraza", label: "🏢 Cabaña 2 - Terraza/Balcón" },
+            { value: "cabin3_cocina", label: "👨‍👩‍👧‍👦 Cabaña 3 - Cocina" },
+            { value: "cabin3_comedor", label: "👨‍👩‍👧‍👦 Cabaña 3 - Comedor" },
+            { value: "cabin3_habitacion1", label: "👨‍👩‍👧‍👦 Cabaña 3 - Habitación 1" },
+            { value: "cabin3_habitacion2", label: "👨‍👩‍👧‍👦 Cabaña 3 - Habitación 2" },
+            { value: "cabin3_bano", label: "👨‍👩‍👧‍👦 Cabaña 3 - Baño" },
+            { value: "cabin3_exterior", label: "👨‍👩‍👧‍👦 Cabaña 3 - Exterior/Jardín" },
+            { value: "common_entrada", label: "🏡 Espacio Común - Entrada" },
+            { value: "common_living", label: "🏡 Espacio Común - Living/Sala de estar" },
+            { value: "common_juegos", label: "🏡 Espacio Común - Sala de juegos con TV" },
+            { value: "common_barbacoa", label: "🏡 Espacio Común - Barbacoa/Asador" },
+            { value: "common_piscina", label: "🏡 Espacio Común - Piscina" },
+            { value: "common_hamacas", label: "🏡 Espacio Común - Hamacas/Descanso" }
         ];
         
-        // Estado local de clasificación
+        // Estado de clasificación
         let classification = {};
         
-        // ============================================
-        // FUNCIONES DE FIREBASE
-        // ============================================
-        
-        // Verificar conexión
-        function checkConnection() {
-            const statusDiv = document.getElementById('connection-status');
-            const connectedRef = firebase.database().ref(".info/connected");
-            
-            connectedRef.on("value", (snap) => {
-                if (snap.val() === true) {
-                    statusDiv.innerHTML = "✅ Conectado a Firebase Realtime Database";
-                    statusDiv.className = "connection-status connected";
-                } else {
-                    statusDiv.innerHTML = "⚠️ Desconectado de Firebase. Verifica tu conexión a internet.";
-                    statusDiv.className = "connection-status";
-                }
-            });
-        }
-        
-        // Cargar datos existentes desde Firebase
-        async function loadFromFirebase() {
-            const statusDiv = document.getElementById('connection-status');
-            statusDiv.innerHTML = "📥 Cargando datos desde Firebase...";
-            
-            try {
-                const snapshot = await db.ref('fotos').once('value');
-                const firebaseData = snapshot.val() || {};
-                
-                let loadedCount = 0;
-                
-                // Para cada URL, verificar si ya existe en Firebase
-                for (const url of urls) {
-                    // Buscar si esta URL ya está guardada en alguna cabaña
-                    let found = false;
-                    for (const cabinId of ['cabin-1', 'cabin-2', 'cabin-3']) {
-                        if (firebaseData[cabinId]) {
-                            for (const [name, savedUrl] of Object.entries(firebaseData[cabinId])) {
-                                if (savedUrl === url) {
-                                    classification[url] = {
-                                        name: name,
-                                        destination: cabinId
-                                    };
-                                    found = true;
-                                    loadedCount++;
-                                    break;
-                                }
-                            }
-                        }
-                        if (found) break;
-                    }
-                    
-                    if (!found && !classification[url]) {
-                        // Inicializar si no existe
-                        const defaultName = url.substring(url.lastIndexOf('/') + 1).replace(/\.(jpg|jpeg|png)$/i, '');
-                        classification[url] = {
-                            name: defaultName,
-                            destination: ""
-                        };
-                    }
-                }
-                
-                saveLocalData();
-                renderImages();
-                updateStats();
-                statusDiv.innerHTML = `✅ Cargados ${loadedCount} registros desde Firebase`;
-                setTimeout(() => {
-                    statusDiv.innerHTML = "✅ Conectado a Firebase Realtime Database";
-                    statusDiv.className = "connection-status connected";
-                }, 2000);
-                
-            } catch (error) {
-                console.error("Error cargando desde Firebase:", error);
-                statusDiv.innerHTML = `❌ Error al cargar: ${error.message}`;
-            }
-        }
-        
-        // Guardar TODAS las imágenes clasificadas en Firebase
-        async function saveAllToFirebase() {
-            const statusDiv = document.getElementById('connection-status');
-            const total = Object.keys(classification).length;
-            let saved = 0;
-            let errors = 0;
-            
-            statusDiv.innerHTML = "💾 Guardando datos en Firebase...";
-            
-            // Primero, obtener datos actuales para no sobrescribir lo que no se modifica
-            const updates = {};
-            
-            for (const [url, data] of Object.entries(classification)) {
-                if (data.destination && data.destination !== "") {
-                    // Esta imagen está asignada a una cabaña
-                    const path = `fotos/${data.destination}/${data.name}`;
-                    updates[path] = url;
-                    saved++;
-                }
-            }
-            
-            // También necesitamos limpiar imágenes que ya no están asignadas
-            // Para simplificar, vamos a leer lo que hay y luego actualizar
-            try {
-                const snapshot = await db.ref('fotos').once('value');
-                const currentData = snapshot.val() || {};
-                
-                // Marcar para eliminar imágenes que ya no están en nuestra clasificación
-                for (const cabinId of ['cabin-1', 'cabin-2', 'cabin-3']) {
-                    if (currentData[cabinId]) {
-                        for (const [name, url] of Object.entries(currentData[cabinId])) {
-                            // Verificar si esta URL sigue en nuestra clasificación con la misma asignación
-                            const classificationEntry = Object.entries(classification).find(
-                                ([imgUrl, data]) => imgUrl === url && data.destination === cabinId && data.name === name
-                            );
-                            if (!classificationEntry) {
-                                // Esta imagen ya no está asignada, marcarla para eliminar
-                                updates[`fotos/${cabinId}/${name}`] = null;
-                            }
-                        }
-                    }
-                }
-                
-                // Ejecutar todas las actualizaciones
-                await db.ref().update(updates);
-                
-                statusDiv.innerHTML = `✅ Guardados ${saved} registros en Firebase (${errors} errores)`;
-                setTimeout(() => {
-                    statusDiv.innerHTML = "✅ Conectado a Firebase Realtime Database";
-                    statusDiv.className = "connection-status connected";
-                }, 2000);
-                
-                showModal("✅ Éxito", `Se guardaron ${saved} imágenes en Firebase correctamente.`);
-                
-            } catch (error) {
-                console.error("Error guardando:", error);
-                statusDiv.innerHTML = `❌ Error al guardar: ${error.message}`;
-                showModal("❌ Error", `No se pudo guardar: ${error.message}`);
-            }
-        }
-        
-        // ============================================
-        // FUNCIONES LOCALES
-        // ============================================
-        
-        function saveLocalData() {
-            localStorage.setItem('casaverde_admin_classification', JSON.stringify(classification));
-        }
-        
-        function loadLocalData() {
-            const saved = localStorage.getItem('casaverde_admin_classification');
+        // Cargar datos guardados
+        function loadData() {
+            const saved = localStorage.getItem('casaverde_complete_classification');
             if (saved) {
                 classification = JSON.parse(saved);
             } else {
-                // Inicializar con nombres por defecto
                 urls.forEach((url, index) => {
                     const defaultName = url.substring(url.lastIndexOf('/') + 1).replace(/\.(jpg|jpeg|png)$/i, '');
                     classification[url] = {
                         name: defaultName,
-                        destination: ""
+                        section: ""
                     };
                 });
-                saveLocalData();
+                saveData();
             }
             updateStats();
         }
         
-        function clearLocal() {
-            if (confirm('⚠️ ¿Borrar todos los cambios locales? Esto no afecta a Firebase.')) {
-                loadLocalData();
-                renderImages();
-                showModal("🗑️ Limpiado", "Los cambios locales han sido restablecidos.");
-            }
+        function saveData() {
+            localStorage.setItem('casaverde_complete_classification', JSON.stringify(classification));
+            updateStats();
         }
         
         function updateStats() {
             const total = urls.length;
-            const saved = Object.values(classification).filter(c => c.destination && c.destination !== "").length;
-            const pending = total - saved;
-            
+            const assigned = Object.values(classification).filter(c => c.section && c.section !== "").length;
+            const pending = total - assigned;
             document.getElementById('total-count').textContent = `Total: ${total}`;
-            document.getElementById('saved-count').textContent = `Asignadas: ${saved}`;
+            document.getElementById('assigned-count').textContent = `Asignadas: ${assigned}`;
             document.getElementById('pending-count').textContent = `Pendientes: ${pending}`;
         }
         
         function updateImageName(url, newName) {
             if (classification[url]) {
                 classification[url].name = newName;
-                saveLocalData();
+                saveData();
             }
         }
         
-        function updateDestination(url, destination) {
+        function updateSection(url, section) {
             if (classification[url]) {
-                classification[url].destination = destination;
-                saveLocalData();
-                updateStats();
-                
-                // Actualizar estilo visual de la tarjeta
+                classification[url].section = section;
+                saveData();
+                // Actualizar estilo visual
                 const card = document.getElementById(`card-${url.replace(/[^a-zA-Z0-9]/g, '_')}`);
                 if (card) {
                     const statusSpan = card.querySelector('.image-status');
-                    if (destination) {
+                    if (section) {
                         statusSpan.textContent = '✓ Asignada';
-                        statusSpan.className = 'image-status status-saved';
+                        statusSpan.className = 'image-status status-assigned';
                     } else {
                         statusSpan.textContent = '⏳ Pendiente';
                         statusSpan.className = 'image-status status-pending';
@@ -619,7 +442,7 @@
             container.innerHTML = '';
             
             urls.forEach(url => {
-                const data = classification[url] || { name: '', destination: '' };
+                const data = classification[url] || { name: '', section: '' };
                 const urlSafe = url.replace(/[^a-zA-Z0-9]/g, '_');
                 
                 const card = document.createElement('div');
@@ -627,16 +450,16 @@
                 card.id = `card-${urlSafe}`;
                 
                 card.innerHTML = `
-                    <img class="image-preview" src="${url}" alt="Imagen" onerror="this.src='https://via.placeholder.com/280x180?text=Error+de+carga'">
+                    <img class="image-preview" src="${url}" alt="Imagen" onerror="this.src='https://via.placeholder.com/300x180?text=Error+de+carga'">
                     <div class="image-info">
-                        <div class="image-url">${url.substring(url.lastIndexOf('/') + 1)}</div>
+                        <div class="image-filename">${url.substring(url.lastIndexOf('/') + 1)}</div>
                         <input type="text" class="image-name-input" value="${escapeHtml(data.name)}" placeholder="Nombre descriptivo" onchange="updateImageName('${escapeJs(url)}', this.value)">
-                        <select class="image-select" onchange="updateDestination('${escapeJs(url)}', this.value)">
-                            <option value="">-- Seleccionar cabaña --</option>
-                            ${destinations.map(d => `<option value="${d.value}" ${data.destination === d.value ? 'selected' : ''}>${d.label}</option>`).join('')}
+                        <select class="image-section" onchange="updateSection('${escapeJs(url)}', this.value)">
+                            <option value="">-- Seleccionar sección --</option>
+                            ${sections.map(s => `<option value="${s.value}" ${data.section === s.value ? 'selected' : ''}>${s.label}</option>`).join('')}
                         </select>
-                        <div class="image-status ${data.destination ? 'status-saved' : 'status-pending'}">
-                            ${data.destination ? '✓ Asignada' : '⏳ Pendiente'}
+                        <div class="image-status ${data.section ? 'status-assigned' : 'status-pending'}">
+                            ${data.section ? '✓ Asignada' : '⏳ Pendiente'}
                         </div>
                     </div>
                 `;
@@ -645,17 +468,102 @@
             });
         }
         
-        function showModal(title, message) {
-            document.getElementById('modal-title').textContent = title;
-            document.getElementById('modal-message').textContent = message;
-            document.getElementById('result-modal').classList.add('active');
+        // Generar el código para Firebase
+        function generateFirebaseCode() {
+            const result = {
+                index: {},
+                cabins: {
+                    "cabin-1": {},
+                    "cabin-2": {},
+                    "cabin-3": {}
+                },
+                common: {}
+            };
+            
+            for (const [url, data] of Object.entries(classification)) {
+                if (!data.section) continue;
+                
+                const section = data.section;
+                const name = data.name;
+                
+                if (section.startsWith('index_')) {
+                    // Portadas del index
+                    const cabinKey = section.replace('index_', '');
+                    result.index[cabinKey] = { name, url };
+                } 
+                else if (section.startsWith('cabin1_')) {
+                    const space = section.replace('cabin1_', '');
+                    if (!result.cabins["cabin-1"][space]) result.cabins["cabin-1"][space] = [];
+                    result.cabins["cabin-1"][space].push({ name, url });
+                }
+                else if (section.startsWith('cabin2_')) {
+                    const space = section.replace('cabin2_', '');
+                    if (!result.cabins["cabin-2"][space]) result.cabins["cabin-2"][space] = [];
+                    result.cabins["cabin-2"][space].push({ name, url });
+                }
+                else if (section.startsWith('cabin3_')) {
+                    const space = section.replace('cabin3_', '');
+                    if (!result.cabins["cabin-3"][space]) result.cabins["cabin-3"][space] = [];
+                    result.cabins["cabin-3"][space].push({ name, url });
+                }
+                else if (section.startsWith('common_')) {
+                    const space = section.replace('common_', '');
+                    if (!result.common[space]) result.common[space] = [];
+                    result.common[space].push({ name, url });
+                }
+            }
+            
+            return result;
+        }
+        
+        function generateAndExport() {
+            const data = generateFirebaseCode();
+            const jsonString = JSON.stringify(data, null, 2);
+            
+            const modal = document.getElementById('export-modal');
+            const pre = document.getElementById('export-data');
+            pre.textContent = jsonString;
+            modal.classList.add('active');
+        }
+        
+        function copyToClipboardExport() {
+            const pre = document.getElementById('export-data');
+            const text = pre.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('✅ Código copiado al portapapeles');
+            }).catch(() => {
+                alert('❌ No se pudo copiar, selecciona manualmente');
+            });
+        }
+        
+        function copyToClipboard() {
+            const data = generateFirebaseCode();
+            const text = JSON.stringify(data, null, 2);
+            navigator.clipboard.writeText(text).then(() => {
+                alert('✅ JSON copiado al portapapeles');
+            });
+        }
+        
+        function resetAll() {
+            if (confirm('⚠️ ¿Reiniciar toda la clasificación? Se perderán todos los cambios locales.')) {
+                classification = {};
+                urls.forEach((url, index) => {
+                    const defaultName = url.substring(url.lastIndexOf('/') + 1).replace(/\.(jpg|jpeg|png)$/i, '');
+                    classification[url] = {
+                        name: defaultName,
+                        section: ""
+                    };
+                });
+                saveData();
+                renderImages();
+                alert('✅ Todo reiniciado');
+            }
         }
         
         function closeModal() {
-            document.getElementById('result-modal').classList.remove('active');
+            document.getElementById('export-modal').classList.remove('active');
         }
         
-        // Helpers
         function escapeHtml(str) {
             if (!str) return '';
             return str.replace(/[&<>]/g, function(m) {
@@ -670,26 +578,18 @@
             return str.replace(/'/g, "\\'");
         }
         
-        // ============================================
-        // INICIALIZACIÓN
-        // ============================================
-        
-        loadLocalData();
-        checkConnection();
+        // Inicializar
+        loadData();
         renderImages();
         
-        // Cargar datos desde Firebase automáticamente al inicio
-        setTimeout(() => {
-            loadFromFirebase();
-        }, 1000);
-        
-        // Exponer funciones globales
+        // Exponer funciones
         window.updateImageName = updateImageName;
-        window.updateDestination = updateDestination;
-        window.saveAllToFirebase = saveAllToFirebase;
-        window.loadFromFirebase = loadFromFirebase;
-        window.clearLocal = clearLocal;
+        window.updateSection = updateSection;
+        window.generateAndExport = generateAndExport;
+        window.copyToClipboard = copyToClipboard;
+        window.resetAll = resetAll;
         window.closeModal = closeModal;
+        window.copyToClipboardExport = copyToClipboardExport;
     </script>
 </body>
 </html>
