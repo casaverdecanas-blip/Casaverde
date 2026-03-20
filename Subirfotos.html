@@ -1,15 +1,117 @@
-// PRUEBA MÍNIMA - Subir UNA foto
-async function testUploadSingle() {
-    const file = filesList[0];
-    const fileName = `${customNames[0]}.${file.name.split('.').pop()}`;
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Subir Fotos a Firebase</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 20px auto; padding: 20px; }
+        .preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+        .preview-card { border: 1px solid #ddd; padding: 10px; border-radius: 8px; }
+        .preview-card img { width: 100%; height: 150px; object-fit: cover; }
+        button { background: #2d5a27; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+        .status { background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }
+    </style>
     
-    try {
-        console.log('Intentando subir:', fileName);
-        const storageRef = storage.ref(`test/${fileName}`);
-        const snapshot = await storageRef.put(file);
-        const url = await snapshot.ref.getDownloadURL();
-        console.log('✅ ÉXITO! URL:', url);
-    } catch (error) {
-        console.error('❌ ERROR COMPLETO:', error);
-    }
-}
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+</head>
+<body>
+    <h1>📤 Subir Fotos - Cabaña 1</h1>
+    
+    <input type="file" id="file-input" multiple accept="image/*" onchange="previewImages()">
+    <button onclick="uploadAll()">Subir Fotos</button>
+    
+    <div class="progress-bar" style="width:100%; height:20px; background:#eee; margin:10px 0;">
+        <div id="progress-fill" style="height:100%; background:#2d5a27; width:0%;"></div>
+    </div>
+    
+    <div id="preview-container" class="preview-grid"></div>
+    <div id="status" class="status"></div>
+
+    <script>
+        // CONFIGURACIÓN CORREGIDA - usando el ID del proyecto
+        const firebaseConfig = {
+            apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
+            authDomain: "casaverdecanas-199.firebaseapp.com", // CAMBIADO
+            databaseURL: "https://casaverdecanas-199-default-rtdb.firebaseio.com",
+            projectId: "casaverdecanas-199",
+            storageBucket: "casaverdecanas-199.firebasestorage.app", // VERIFICA
+            messagingSenderId: "417825635316",
+            appId: "1:417825635316:web:ff7f4fe52edcab43d8d7a1"
+        };
+
+        // Inicializar
+        firebase.initializeApp(firebaseConfig);
+        const storage = firebase.storage();
+        const db = firebase.database();
+
+        let filesList = [];
+        let customNames = {};
+
+        function previewImages() {
+            const input = document.getElementById('file-input');
+            filesList = Array.from(input.files);
+            const previewContainer = document.getElementById('preview-container');
+            previewContainer.innerHTML = '';
+            
+            filesList.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const card = document.createElement('div');
+                    card.className = 'preview-card';
+                    card.innerHTML = `
+                        <img src="${e.target.result}">
+                        <input type="text" 
+                               value="${file.name.split('.')[0]}"
+                               onchange="updateName(${index}, this.value)">
+                    `;
+                    previewContainer.appendChild(card);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function updateName(index, newName) {
+            customNames[index] = newName;
+        }
+
+        async function uploadAll() {
+            const statusDiv = document.getElementById('status');
+            const progressFill = document.getElementById('progress-fill');
+            
+            statusDiv.innerHTML = 'Iniciando...';
+            
+            for (let i = 0; i < filesList.length; i++) {
+                const file = filesList[i];
+                const ext = file.name.split('.').pop();
+                const name = customNames[i] || `foto-${i+1}`;
+                const fileName = `${name}.${ext}`;
+                
+                statusDiv.innerHTML = `Subiendo ${fileName}...`;
+                
+                try {
+                    // Subir a Storage
+                    const storageRef = storage.ref(`fotos/cabin-1/${fileName}`);
+                    const snapshot = await storageRef.put(file);
+                    
+                    // Obtener URL
+                    const url = await snapshot.ref.getDownloadURL();
+                    
+                    // Guardar en Database
+                    await db.ref(`fotos/cabin-1/${name}`).set(url);
+                    
+                    statusDiv.innerHTML = `✅ ${fileName} subida`;
+                    
+                } catch (error) {
+                    statusDiv.innerHTML = `❌ Error: ${error.message}`;
+                    console.error(error);
+                }
+                
+                progressFill.style.width = `${((i+1)/filesList.length)*100}%`;
+            }
+            
+            statusDiv.innerHTML += '\n🎉 Proceso completado';
+        }
+    </script>
+</body>
+</html>
