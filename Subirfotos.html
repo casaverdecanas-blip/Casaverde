@@ -1,117 +1,613 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <title>Subir Fotos a Firebase</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administrador de Fotos - CasaVerdeCanas</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 20px auto; padding: 20px; }
-        .preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
-        .preview-card { border: 1px solid #ddd; padding: 10px; border-radius: 8px; }
-        .preview-card img { width: 100%; height: 150px; object-fit: cover; }
-        button { background: #2d5a27; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
-        .status { background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }
-    </style>
-    
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-</head>
-<body>
-    <h1>📤 Subir Fotos - Cabaña 1</h1>
-    
-    <input type="file" id="file-input" multiple accept="image/*" onchange="previewImages()">
-    <button onclick="uploadAll()">Subir Fotos</button>
-    
-    <div class="progress-bar" style="width:100%; height:20px; background:#eee; margin:10px 0;">
-        <div id="progress-fill" style="height:100%; background:#2d5a27; width:0%;"></div>
-    </div>
-    
-    <div id="preview-container" class="preview-grid"></div>
-    <div id="status" class="status"></div>
-
-    <script>
-        // CONFIGURACIÓN CORREGIDA - usando el ID del proyecto
-        const firebaseConfig = {
-            apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
-            authDomain: "casaverdecanas-199.firebaseapp.com", // CAMBIADO
-            databaseURL: "https://casaverdecanas-199-default-rtdb.firebaseio.com",
-            projectId: "casaverdecanas-199",
-            storageBucket: "casaverdecanas-199.firebasestorage.app", // VERIFICA
-            messagingSenderId: "417825635316",
-            appId: "1:417825635316:web:ff7f4fe52edcab43d8d7a1"
-        };
-
-        // Inicializar
-        firebase.initializeApp(firebaseConfig);
-        const storage = firebase.storage();
-        const db = firebase.database();
-
-        let filesList = [];
-        let customNames = {};
-
-        function previewImages() {
-            const input = document.getElementById('file-input');
-            filesList = Array.from(input.files);
-            const previewContainer = document.getElementById('preview-container');
-            previewContainer.innerHTML = '';
-            
-            filesList.forEach((file, index) => {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const card = document.createElement('div');
-                    card.className = 'preview-card';
-                    card.innerHTML = `
-                        <img src="${e.target.result}">
-                        <input type="text" 
-                               value="${file.name.split('.')[0]}"
-                               onchange="updateName(${index}, this.value)">
-                    `;
-                    previewContainer.appendChild(card);
-                };
-                reader.readAsDataURL(file);
-            });
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-
-        function updateName(index, newName) {
-            customNames[index] = newName;
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f4f0;
+            padding: 20px;
         }
-
-        async function uploadAll() {
-            const statusDiv = document.getElementById('status');
-            const progressFill = document.getElementById('progress-fill');
-            
-            statusDiv.innerHTML = 'Iniciando...';
-            
-            for (let i = 0; i < filesList.length; i++) {
-                const file = filesList[i];
-                const ext = file.name.split('.').pop();
-                const name = customNames[i] || `foto-${i+1}`;
-                const fileName = `${name}.${ext}`;
-                
-                statusDiv.innerHTML = `Subiendo ${fileName}...`;
-                
-                try {
-                    // Subir a Storage
-                    const storageRef = storage.ref(`fotos/cabin-1/${fileName}`);
-                    const snapshot = await storageRef.put(file);
-                    
-                    // Obtener URL
-                    const url = await snapshot.ref.getDownloadURL();
-                    
-                    // Guardar en Database
-                    await db.ref(`fotos/cabin-1/${name}`).set(url);
-                    
-                    statusDiv.innerHTML = `✅ ${fileName} subida`;
-                    
-                } catch (error) {
-                    statusDiv.innerHTML = `❌ Error: ${error.message}`;
-                    console.error(error);
-                }
-                
-                progressFill.style.width = `${((i+1)/filesList.length)*100}%`;
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: #2d5a27;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .tab-btn {
+            background: #e0e0e0;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        
+        .tab-btn.active {
+            background: #2d5a27;
+            color: white;
+        }
+        
+        .tab-btn:hover:not(.active) {
+            background: #c0c0c0;
+        }
+        
+        /* Paneles */
+        .tab-panel {
+            display: none;
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .tab-panel.active {
+            display: block;
+        }
+        
+        /* Formulario de imágenes */
+        .image-form {
+            margin-bottom: 20px;
+        }
+        
+        .image-row {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .image-row input[type="text"] {
+            flex: 2;
+            min-width: 250px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .image-row input[name="descripcion"] {
+            flex: 1;
+            min-width: 150px;
+        }
+        
+        .image-row .preview {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        
+        .image-row button {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .image-row button:hover {
+            background: #c0392b;
+        }
+        
+        .add-btn {
+            background: #2d5a27;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        
+        .add-btn:hover {
+            background: #1e3f1a;
+        }
+        
+        /* Área de código generado */
+        .code-output {
+            margin-top: 30px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+        }
+        
+        .code-output pre {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .copy-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        .copy-btn:hover {
+            background: #2980b9;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2d5a27;
+            margin: 20px 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #2d5a27;
+        }
+        
+        .info-box {
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2d5a27;
+        }
+        
+        .info-box p {
+            margin: 5px 0;
+        }
+        
+        .badge {
+            background: #2d5a27;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+        
+        @media (max-width: 768px) {
+            .image-row {
+                flex-direction: column;
+                align-items: stretch;
             }
             
-            statusDiv.innerHTML += '\n🎉 Proceso completado';
+            .image-row .preview {
+                width: 100%;
+                height: 150px;
+            }
         }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏡 Administrador de Fotos - CasaVerdeCanas</h1>
+        
+        <!-- Tabs para seleccionar cabaña -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="cabin1">🏠 Cabaña 1 - Vista al Bosque</button>
+            <button class="tab-btn" data-tab="cabin2">🏠 Cabaña 2 - Loft en Canasvieiras</button>
+            <button class="tab-btn" data-tab="cabin3">🏠 Cabaña 3 - Familiar Premium</button>
+            <button class="tab-btn" data-tab="index">📄 Página Principal</button>
+        </div>
+        
+        <!-- Panel Cabaña 1 -->
+        <div id="cabin1" class="tab-panel active">
+            <div class="info-box">
+                <p><strong>📸 Instrucciones:</strong> Pega las URLs de tus imágenes de Postimg.cc, escribe una descripción y haz clic en "Agregar".</p>
+                <p><strong>✨ Consejo:</strong> Para la foto principal, usa "Principal" como descripción. El orden se mantiene como lo agregues.</p>
+            </div>
+            
+            <div class="section-title">🖼️ Galería de la Cabaña 1</div>
+            <div id="cabin1-images" class="image-form"></div>
+            <button class="add-btn" onclick="addImageRow('cabin1')">+ Agregar nueva imagen</button>
+            
+            <div class="section-title">📋 Código Generado</div>
+            <div class="code-output">
+                <pre id="cabin1-code">// Aquí aparecerá el código para la página de la Cabaña 1</pre>
+                <button class="copy-btn" onclick="copyToClipboard('cabin1-code')">📋 Copiar código</button>
+            </div>
+        </div>
+        
+        <!-- Panel Cabaña 2 -->
+        <div id="cabin2" class="tab-panel">
+            <div class="info-box">
+                <p><strong>📸 Instrucciones:</strong> Pega las URLs de tus imágenes de Postimg.cc, escribe una descripción y haz clic en "Agregar".</p>
+            </div>
+            
+            <div class="section-title">🖼️ Galería de la Cabaña 2 (Loft)</div>
+            <div id="cabin2-images" class="image-form"></div>
+            <button class="add-btn" onclick="addImageRow('cabin2')">+ Agregar nueva imagen</button>
+            
+            <div class="section-title">📋 Código Generado</div>
+            <div class="code-output">
+                <pre id="cabin2-code">// Aquí aparecerá el código para la página de la Cabaña 2</pre>
+                <button class="copy-btn" onclick="copyToClipboard('cabin2-code')">📋 Copiar código</button>
+            </div>
+        </div>
+        
+        <!-- Panel Cabaña 3 -->
+        <div id="cabin3" class="tab-panel">
+            <div class="info-box">
+                <p><strong>📸 Instrucciones:</strong> Pega las URLs de tus imágenes de Postimg.cc, escribe una descripción y haz clic en "Agregar".</p>
+            </div>
+            
+            <div class="section-title">🖼️ Galería de la Cabaña 3 (Familiar Premium)</div>
+            <div id="cabin3-images" class="image-form"></div>
+            <button class="add-btn" onclick="addImageRow('cabin3')">+ Agregar nueva imagen</button>
+            
+            <div class="section-title">📋 Código Generado</div>
+            <div class="code-output">
+                <pre id="cabin3-code">// Aquí aparecerá el código para la página de la Cabaña 3</pre>
+                <button class="copy-btn" onclick="copyToClipboard('cabin3-code')">📋 Copiar código</button>
+            </div>
+        </div>
+        
+        <!-- Panel Página Principal -->
+        <div id="index" class="tab-panel">
+            <div class="info-box">
+                <p><strong>📸 Instrucciones:</strong> Aquí puedes agregar las fotos de portada para cada cabaña (las que aparecen en la página principal).</p>
+            </div>
+            
+            <div class="section-title">🏠 Fotos de Portada para la Página Principal</div>
+            
+            <div class="section-title" style="margin-top: 15px;">Cabaña 1 - Vista al Bosque</div>
+            <div id="index-cabin1" class="image-form"></div>
+            
+            <div class="section-title">Cabaña 2 - Loft en Canasvieiras</div>
+            <div id="index-cabin2" class="image-form"></div>
+            
+            <div class="section-title">Cabaña 3 - Familiar Premium</div>
+            <div id="index-cabin3" class="image-form"></div>
+            
+            <div class="section-title">📋 Código Generado</div>
+            <div class="code-output">
+                <pre id="index-code">// Aquí aparecerá el código para la página principal</pre>
+                <button class="copy-btn" onclick="copyToClipboard('index-code')">📋 Copiar código</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Datos por defecto (con ejemplos)
+        const defaultImages = {
+            cabin1: [],
+            cabin2: [],
+            cabin3: [],
+            indexCabin1: [],
+            indexCabin2: [],
+            indexCabin3: []
+        };
+        
+        // Cargar datos guardados
+        function loadData() {
+            try {
+                const saved = localStorage.getItem('casaverde_fotos');
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    for (let key in data) {
+                        if (defaultImages.hasOwnProperty(key)) {
+                            defaultImages[key] = data[key];
+                        }
+                    }
+                }
+            } catch(e) {}
+            
+            renderAll();
+        }
+        
+        // Guardar datos
+        function saveData() {
+            localStorage.setItem('casaverde_fotos', JSON.stringify(defaultImages));
+        }
+        
+        // Agregar fila de imagen
+        function addImageRow(cabin, initialUrl = '', initialDesc = '') {
+            defaultImages[cabin].push({ url: initialUrl, desc: initialDesc });
+            saveData();
+            renderCabin(cabin);
+        }
+        
+        // Eliminar imagen
+        function deleteImage(cabin, index) {
+            defaultImages[cabin].splice(index, 1);
+            saveData();
+            renderCabin(cabin);
+        }
+        
+        // Actualizar URL de imagen
+        function updateImageUrl(cabin, index, url) {
+            if (defaultImages[cabin][index]) {
+                defaultImages[cabin][index].url = url;
+                saveData();
+                updatePreview(cabin, index, url);
+                renderCode(cabin);
+            }
+        }
+        
+        // Actualizar descripción
+        function updateImageDesc(cabin, index, desc) {
+            if (defaultImages[cabin][index]) {
+                defaultImages[cabin][index].desc = desc;
+                saveData();
+                renderCode(cabin);
+            }
+        }
+        
+        // Actualizar vista previa
+        function updatePreview(cabin, index, url) {
+            const preview = document.getElementById(`preview-${cabin}-${index}`);
+            if (preview && url) {
+                preview.src = url;
+                preview.onerror = () => { preview.src = 'https://via.placeholder.com/80x80?text=Error'; };
+            }
+        }
+        
+        // Renderizar una cabaña específica
+        function renderCabin(cabin) {
+            const container = document.getElementById(`${cabin}-images`);
+            if (!container) return;
+            
+            const images = defaultImages[cabin] || [];
+            container.innerHTML = '';
+            
+            images.forEach((img, index) => {
+                const row = document.createElement('div');
+                row.className = 'image-row';
+                row.innerHTML = `
+                    <img id="preview-${cabin}-${index}" class="preview" src="${img.url || 'https://via.placeholder.com/80x80?text=URL'}" onerror="this.src='https://via.placeholder.com/80x80?text=Error'">
+                    <input type="text" 
+                           placeholder="URL de la imagen (Postimg.cc)" 
+                           value="${escapeHtml(img.url)}"
+                           onchange="updateImageUrl('${cabin}', ${index}, this.value)">
+                    <input type="text" 
+                           name="descripcion"
+                           placeholder="Descripción (ej: Cocina principal, Dormitorio, etc.)" 
+                           value="${escapeHtml(img.desc)}"
+                           onchange="updateImageDesc('${cabin}', ${index}, this.value)">
+                    <button onclick="deleteImage('${cabin}', ${index})">🗑️ Eliminar</button>
+                `;
+                container.appendChild(row);
+            });
+            
+            renderCode(cabin);
+        }
+        
+        // Renderizar todos
+        function renderAll() {
+            renderCabin('cabin1');
+            renderCabin('cabin2');
+            renderCabin('cabin3');
+            renderCabin('indexCabin1');
+            renderCabin('indexCabin2');
+            renderCabin('indexCabin3');
+        }
+        
+        // Escapar HTML
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+        
+        // Generar código HTML para una cabaña
+        function generateCabinHTML(cabinId, cabinName, images) {
+            if (!images || images.length === 0) return '// No hay imágenes agregadas aún';
+            
+            const mainPhoto = images[0]?.url || '';
+            const mainDesc = images[0]?.desc || 'Foto principal';
+            
+            const galleryHTML = images.map((img, idx) => `
+            <div class="gallery-item" onclick="changeMainPhoto('${img.url}')">
+                <img src="${img.url}" alt="${escapeHtml(img.desc)}">
+                <span class="gallery-caption">${escapeHtml(img.desc)}</span>
+            </div>`).join('\n');
+            
+            return `<!-- CÓDIGO PARA ${cabinName} -->
+<!-- ========================================== -->
+<!-- COPIAR ESTE CÓDIGO EN /cabanas/cabana-${cabinId.split('-')[1]}.html -->
+<!-- ========================================== -->
+
+<!-- En la sección de la foto principal, reemplazar la imagen por: -->
+<img id="main-photo" class="main-photo" src="${mainPhoto}" alt="${escapeHtml(mainDesc)}">
+
+<!-- En la sección de galería, agregar este HTML: -->
+<div class="gallery">
+    ${galleryHTML}
+</div>
+
+<!-- Agregar este CSS para la galería (si no está) -->
+<style>
+    .gallery {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 15px;
+        margin: 30px 0;
+    }
+    .gallery-item {
+        cursor: pointer;
+        border-radius: 8px;
+        overflow: hidden;
+        transition: transform 0.3s;
+        text-align: center;
+    }
+    .gallery-item:hover {
+        transform: scale(1.05);
+    }
+    .gallery-item img {
+        width: 100%;
+        height: 120px;
+        object-fit: cover;
+    }
+    .gallery-caption {
+        display: block;
+        font-size: 12px;
+        padding: 5px;
+        background: #f5f5f5;
+        color: #666;
+    }
+</style>
+
+<!-- Agregar esta función JavaScript si no está -->
+<script>
+    function changeMainPhoto(url) {
+        document.getElementById('main-photo').src = url;
+    }
+</script>`;
+        }
+        
+        // Generar código para página principal
+        function generateIndexHTML(cabin1Img, cabin2Img, cabin3Img) {
+            const cabin1 = cabin1Img[0] || { url: '', desc: 'Cabaña Vista al Bosque' };
+            const cabin2 = cabin2Img[0] || { url: '', desc: 'Loft en Canasvieiras' };
+            const cabin3 = cabin3Img[0] || { url: '', desc: 'Cabaña Familiar Premium' };
+            
+            return `<!-- CÓDIGO PARA LA PÁGINA PRINCIPAL (index.html) -->
+<!-- ========================================== -->
+<!-- Reemplaza las imágenes de las cards con estas URLs -->
+
+<div class="cabins-grid">
+    <!-- Cabaña 1 -->
+    <a href="cabanas/cabana-1.html" class="cabin-card">
+        <img src="${cabin1.url || 'https://via.placeholder.com/400x250?text=Cabaña+1'}" alt="${escapeHtml(cabin1.desc)}">
+        <div class="cabin-content">
+            <h3>Cabaña Vista al Bosque</h3>
+            <p>Rodeada de árboles nativos, ideal para parejas.</p>
+            <span class="btn">Ver disponibilidad</span>
+        </div>
+    </a>
+    
+    <!-- Cabaña 2 -->
+    <a href="cabanas/cabana-2.html" class="cabin-card">
+        <img src="${cabin2.url || 'https://via.placeholder.com/400x250?text=Loft'}" alt="${escapeHtml(cabin2.desc)}">
+        <div class="cabin-content">
+            <h3>Loft en Canasvieiras</h3>
+            <p>Moderno, a 3 cuadras de la playa.</p>
+            <span class="btn">Ver disponibilidad</span>
+        </div>
+    </a>
+    
+    <!-- Cabaña 3 -->
+    <a href="cabanas/cabana-3.html" class="cabin-card">
+        <img src="${cabin3.url || 'https://via.placeholder.com/400x250?text=Cabaña+3'}" alt="${escapeHtml(cabin3.desc)}">
+        <div class="cabin-content">
+            <h3>Cabaña Familiar Premium</h3>
+            <p>Ideal para familias, con zona de juegos.</p>
+            <span class="btn">Ver disponibilidad</span>
+        </div>
+    </a>
+</div>`;
+        }
+        
+        // Renderizar código generado
+        function renderCode(cabin) {
+            const codeElement = document.getElementById(`${cabin}-code`);
+            if (!codeElement) return;
+            
+            if (cabin === 'index') {
+                codeElement.textContent = generateIndexHTML(defaultImages.indexCabin1, defaultImages.indexCabin2, defaultImages.indexCabin3);
+            } else if (cabin.startsWith('index')) {
+                // No hacer nada, ya se maneja en index
+            } else {
+                const cabinNames = {
+                    cabin1: 'Cabaña 1 - Vista al Bosque',
+                    cabin2: 'Cabaña 2 - Loft en Canasvieiras',
+                    cabin3: 'Cabaña 3 - Familiar Premium'
+                };
+                codeElement.textContent = generateCabinHTML(cabin, cabinNames[cabin], defaultImages[cabin]);
+            }
+        }
+        
+        function renderAllCode() {
+            renderCode('cabin1');
+            renderCode('cabin2');
+            renderCode('cabin3');
+            renderCode('index');
+        }
+        
+        // Copiar al portapapeles
+        function copyToClipboard(elementId) {
+            const pre = document.getElementById(elementId);
+            const text = pre.textContent;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = '✅ ¡Copiado!';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                }, 2000);
+            }).catch(() => {
+                alert('No se pudo copiar. Selecciona manualmente.');
+            });
+        }
+        
+        // Configurar tabs
+        function setupTabs() {
+            const tabs = document.querySelectorAll('.tab-btn');
+            tabs.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tabId = btn.dataset.tab;
+                    // Desactivar todos
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+                    // Activar seleccionado
+                    btn.classList.add('active');
+                    document.getElementById(tabId).classList.add('active');
+                    // Renderizar código del tab activo
+                    if (tabId === 'index') {
+                        renderCode('index');
+                    } else {
+                        renderCode(tabId);
+                    }
+                });
+            });
+        }
+        
+        // Inicializar
+        loadData();
+        setupTabs();
+        
+        // Agregar filas por defecto para página principal
+        if (defaultImages.indexCabin1.length === 0) addImageRow('indexCabin1');
+        if (defaultImages.indexCabin2.length === 0) addImageRow('indexCabin2');
+        if (defaultImages.indexCabin3.length === 0) addImageRow('indexCabin3');
+        
+        renderAllCode();
     </script>
 </body>
 </html>
