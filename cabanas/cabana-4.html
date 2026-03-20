@@ -210,4 +210,122 @@
         }
         
         function toggleAdmin() {
-            const pwd = prompt
+            const pwd = prompt("Contraseña admin:");
+            if (pwd === "Casaverde-199") {
+                editMode = !editMode;
+                localStorage.setItem('admin', editMode);
+                document.body.classList.toggle('admin-mode', editMode);
+                alert(editMode ? "Modo admin activado" : "Modo admin desactivado");
+            }
+        }
+        
+        // Inicializar calendario
+        function initCalendar() {
+            const calendarEl = document.getElementById('calendar');
+            
+            db.ref('reservas/' + CABIN_ID).on('value', (snapshot) => {
+                const reservas = snapshot.val() || {};
+                
+                const events = Object.keys(reservas).map(key => ({
+                    id: key,
+                    title: reservas[key].guest || 'Reservado',
+                    start: reservas[key].start,
+                    end: reservas[key].end,
+                    color: '#e74c3c',
+                    allDay: true
+                }));
+                
+                if (calendar) {
+                    calendar.removeAllEvents();
+                    calendar.addEventSource(events);
+                } else {
+                    calendar = new FullCalendar.Calendar(calendarEl, {
+                        initialView: 'dayGridMonth',
+                        locale: currentLang,
+                        events: events,
+                        height: 'auto',
+                        headerToolbar: {
+                            left: 'prev,next today',
+                            center: 'title',
+                            right: 'dayGridMonth'
+                        },
+                        dateClick: function(info) {
+                            if (editMode) {
+                                selectedDate = info.dateStr;
+                                document.getElementById('booking-start').value = info.dateStr;
+                                document.getElementById('booking-end').value = info.dateStr;
+                                document.getElementById('booking-modal').classList.remove('hidden');
+                            }
+                        },
+                        eventClick: function(info) {
+                            if (editMode) {
+                                if (confirm('¿Eliminar esta reserva?')) {
+                                    db.ref('reservas/' + CABIN_ID + '/' + info.event.id).remove();
+                                }
+                            }
+                        }
+                    });
+                    
+                    calendar.render();
+                }
+            });
+        }
+        
+        function saveBooking() {
+            const guest = document.getElementById('guest-name').value;
+            const start = document.getElementById('booking-start').value;
+            const end = document.getElementById('booking-end').value;
+            
+            if (guest && start && end) {
+                db.ref('reservas/' + CABIN_ID).push({
+                    guest: guest,
+                    start: start,
+                    end: end
+                });
+                closeModal();
+                document.getElementById('guest-name').value = '';
+            }
+        }
+        
+        function closeModal() {
+            document.getElementById('booking-modal').classList.add('hidden');
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            changeLanguage(currentLang);
+            
+            if (editMode) {
+                document.body.classList.add('admin-mode');
+            }
+            
+            // Cargar foto principal
+            db.ref('fotos/' + CABIN_ID).limitToFirst(1).once('value', (snapshot) => {
+                const fotos = snapshot.val();
+                if (fotos) {
+                    const primeraFoto = Object.values(fotos)[0];
+                    if (primeraFoto) {
+                        document.getElementById('main-photo').src = primeraFoto;
+                    }
+                }
+            });
+            
+            // Inicializar calendario
+            initCalendar();
+            
+            // Configurar WhatsApp
+            document.getElementById('whatsapp-link').addEventListener('click', (e) => {
+                e.preventDefault();
+                const cabinName = translations[currentLang].name;
+                const msg = `Hola! Quiero reservar ${cabinName}`;
+                window.open(`https://wa.me/5548999999999?text=${encodeURIComponent(msg)}`, '_blank');
+            });
+        });
+        
+        // Exponer funciones globales
+        window.changeLanguage = changeLanguage;
+        window.toggleAdmin = toggleAdmin;
+        window.saveBooking = saveBooking;
+        window.closeModal = closeModal;
+    </script>
+</body>
+</html>
