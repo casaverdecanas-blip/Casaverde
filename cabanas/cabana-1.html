@@ -5,36 +5,80 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cabaña Vista al Bosque - CasaVerdeCanas</title>
     
+    <!-- FullCalendar CSS -->
     <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/main.min.css' rel='stylesheet' />
     
     <style>
-        /* Mismos estilos que en cabana-2.html que ya funciona */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', sans-serif; background: #f9f9f9; color: #333; }
         header { background: #2d5a27; color: white; padding: 20px; text-align: center; position: relative; }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
         .back-link { margin: 20px 0; }
         .back-link a { color: #2d5a27; text-decoration: none; font-size: 1.1rem; }
-        .back-link a:hover { text-decoration: underline; }
         .cabin-title { text-align: center; margin: 30px 0; color: #2d5a27; font-size: 2.5rem; }
         .main-photo { width: 100%; height: 500px; object-fit: cover; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
         .description { font-size: 1.2rem; line-height: 1.6; margin: 30px 0; color: #555; }
         
-        .gallery {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
+        /* Slider Gallery */
+        .gallery-slider-container {
+            position: relative;
             margin: 30px 0;
+            border-radius: 12px;
+            overflow: hidden;
         }
-        .gallery img {
+        .gallery-track {
+            display: flex;
+            transition: transform 0.5s ease;
+        }
+        .gallery-slide {
+            flex: 0 0 100%;
+        }
+        .gallery-slide img {
             width: 100%;
-            height: 150px;
+            height: 400px;
             object-fit: cover;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: transform 0.3s;
         }
-        .gallery img:hover { transform: scale(1.05); }
+        .gallery-caption {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            z-index: 10;
+        }
+        .gallery-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0,0,0,0.5);
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2rem;
+            z-index: 10;
+        }
+        .gallery-prev { left: 15px; }
+        .gallery-next { right: 15px; }
+        .gallery-dots {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .gallery-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ccc;
+            cursor: pointer;
+        }
+        .gallery-dot.active { background: #2d5a27; width: 20px; border-radius: 5px; }
         
         .features-grid {
             display: grid;
@@ -58,14 +102,13 @@
             border-radius: 12px;
             margin: 30px 0;
         }
-        .shared-spaces h3 { color: #2d5a27; margin-bottom: 15px; }
         
         .testimonials-section {
             margin: 40px 0;
         }
         .testimonials-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 20px;
             margin-top: 20px;
         }
@@ -74,6 +117,18 @@
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .testimonial-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .testimonial-avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            object-fit: cover;
         }
         .rating { color: #f39c12; margin-bottom: 10px; }
         
@@ -106,7 +161,6 @@
             border-radius: 20px;
             cursor: pointer;
             font-weight: bold;
-            transition: all 0.3s;
         }
         .lang-btn:hover { background: white; color: #2d5a27; }
         
@@ -186,7 +240,7 @@
         }
         
         @media (max-width: 768px) {
-            .gallery { grid-template-columns: repeat(2, 1fr); }
+            .gallery-slide img { height: 250px; }
             .main-photo { height: 300px; }
         }
     </style>
@@ -194,7 +248,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 </head>
-<body>
+<body data-cabin="cabin-1">
     <header>
         <div class="lang-picker">
             <button class="lang-btn" onclick="changeLanguage('es')">🇪🇸 ES</button>
@@ -211,22 +265,18 @@
         
         <h1 class="cabin-title" id="cabin-name">Cabaña Vista al Bosque</h1>
         
-        <!-- Foto principal -->
-        <img id="main-photo" class="main-photo" src="https://a0.muscache.com/im/pictures/hosting/Hosting-U3RheVN1cHBseUxpc3Rpbmc6MTMzNzI3NjEwMzkxMTM1ODkxNw==/original/8f9c6df1-5a3a-460e-8824-f48904a52a69.jpeg" alt="Cabaña Vista al Bosque">
+        <!-- Slider de fotos (cargado dinámicamente desde Firebase) -->
+        <div class="gallery-slider-container" id="gallery-container">
+            <div class="gallery-track" id="gallery-track"></div>
+            <button class="gallery-btn gallery-prev" onclick="prevSlide()">‹</button>
+            <button class="gallery-btn gallery-next" onclick="nextSlide()">›</button>
+            <div class="gallery-dots" id="gallery-dots"></div>
+        </div>
         
         <!-- Descripción -->
         <p id="cabin-description" class="description">
             Rodeada de árboles nativos, esta cabaña ofrece paz y conexión con la naturaleza. Espaciosa, ventilada y luminosa, con terraza independiente. A solo tres cuadras del mar, en una zona residencial tranquila. Ideal para parejas o grupos pequeños que buscan desconectarse.
         </p>
-        
-        <!-- Galería de fotos (del anuncio) -->
-        <h2>Galería</h2>
-        <div class="gallery">
-            <img src="https://a0.muscache.com/im/pictures/hosting/Hosting-U3RheVN1cHBseUxpc3Rpbmc6MTMzNzI3NjEwMzkxMTM1ODkxNw==/original/8f9c6df1-5a3a-460e-8824-f48904a52a69.jpeg" onclick="changeMainPhoto(this.src)">
-            <img src="https://a0.muscache.com/im/pictures/hosting/Hosting-U3RheVN1cHBseUxpc3Rpbmc6MTMzNzI3NjEwMzkxMTM1ODkxNw==/original/3d4341ea-5006-4ab0-87c6-34ce8f5eaa53.jpeg" onclick="changeMainPhoto(this.src)">
-            <img src="https://a0.muscache.com/im/pictures/hosting/Hosting-U3RheVN1cHBseUxpc3Rpbmc6MTMzNzI3NjEwMzkxMTM1ODkxNw==/original/6e7f16d7-ae78-4301-a896-dc9f31be4871.jpeg" onclick="changeMainPhoto(this.src)">
-            <img src="https://a0.muscache.com/im/pictures/hosting/Hosting-U3RheVN1cHBseUxpc3Rpbmc6MTMzNzI3NjEwMzkxMTM1ODkxNw==/original/4a955915-c36d-4d4f-9e41-db00ce7e2ab7.jpeg" onclick="changeMainPhoto(this.src)">
-        </div>
         
         <!-- Características -->
         <div class="features-grid">
@@ -236,7 +286,7 @@
             <div class="feature-card"><div class="icon">🛶</div><h3>Kayak</h3><p>Para usar en la playa</p></div>
         </div>
         
-        <!-- Espacio común (igual para todas) -->
+        <!-- Espacio común -->
         <div class="shared-spaces">
             <h3>🌳 Espacios comunes bajo las cabañas</h3>
             <p>Zona de juego y descanso techada con asador, mesa, sillas, hamacas, living, TV, juegos de mesa y piscina. Entorno verde, sombreado y fresco. WiFi y lavadero de uso compartido.</p>
@@ -245,18 +295,7 @@
         <!-- Testimonios específicos de esta cabaña -->
         <div class="testimonials-section">
             <h3>Lo que dicen nuestros huéspedes</h3>
-            <div class="testimonials-grid">
-                <div class="testimonial-card">
-                    <div class="rating">⭐⭐⭐⭐⭐</div>
-                    <p>"Un lugar mágico, rodeado de naturaleza. La cabaña muy cómoda y el espacio común increíble."</p>
-                    <p><strong>- Ana</strong></p>
-                </div>
-                <div class="testimonial-card">
-                    <div class="rating">⭐⭐⭐⭐⭐</div>
-                    <p>"Excelente ubicación, cerca de la playa. La anfitriona Florencia siempre atenta."</p>
-                    <p><strong>- Carlos</strong></p>
-                </div>
-            </div>
+            <div id="testimonials-container" class="testimonials-grid"></div>
         </div>
         
         <!-- Leyenda calendario -->
@@ -291,13 +330,16 @@
     <div class="admin-corner" onclick="toggleAdmin()">⚙️</div>
 
     <footer>
-        <p>© 2026 CasaVerdeCanas - Cabaña Vista al Bosque</p>
+        <p>© 2026 CasaVerdeCanas - Cabaña Vista al Bosque | 📞 +55 48 99118-1246</p>
     </footer>
 
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
     <script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js"></script>
     
     <script>
+        // ============================================
+        // CONFIGURACIÓN FIREBASE
+        // ============================================
         const firebaseConfig = {
             apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
             authDomain: "casaverdecanas-199.firebaseapp.com",
@@ -312,18 +354,57 @@
         const db = firebase.database();
         
         const CABIN_ID = 'cabin-1';
+        const CABIN_NAME = 'Cabaña Vista al Bosque';
         const AIRBNB_ICAL_URL = 'https://www.airbnb.com/calendar/ical/1337276103911358917.ics';
         
         let currentLang = localStorage.getItem('lang') || 'es';
         let editMode = localStorage.getItem('admin') === 'true';
         let calendar = null;
+        let galleryPhotos = [];
+        let galleryIndex = 0;
+        let galleryInterval = null;
         
+        // ============================================
+        // TRADUCCIONES
+        // ============================================
         const translations = {
-            es: { name: "Cabaña Vista al Bosque", desc: "Rodeada de árboles nativos, esta cabaña ofrece paz y conexión con la naturaleza. Espaciosa, ventilada y luminosa, con terraza independiente. A solo tres cuadras del mar, en una zona residencial tranquila. Ideal para parejas o grupos pequeños que buscan desconectarse." },
-            pt: { name: "Cabana Vista da Mata", desc: "Cercada por árvores nativas, esta cabana oferece paz e conexão com a natureza. Espaçosa, ventilada e iluminada, com terraço independente. A apenas três quadras do mar, em uma área residencial tranquila. Ideal para casais ou pequenos grupos que buscam se desconectar." },
-            en: { name: "Forest View Cabin", desc: "Surrounded by native trees, this cabin offers peace and connection with nature. Spacious, airy and bright, with an independent terrace. Just three blocks from the sea, in a quiet residential area. Ideal for couples or small groups looking to disconnect." }
+            es: {
+                name: "Cabaña Vista al Bosque",
+                desc: "Rodeada de árboles nativos, esta cabaña ofrece paz y conexión con la naturaleza. Espaciosa, ventilada y luminosa, con terraza independiente. A solo tres cuadras del mar, en una zona residencial tranquila. Ideal para parejas o grupos pequeños que buscan desconectarse."
+            },
+            pt: {
+                name: "Cabana Vista da Mata",
+                desc: "Cercada por árvores nativas, esta cabana oferece paz e conexão com a natureza. Espaçosa, ventilada e iluminada, com terraço independente. A apenas três quadras do mar, em uma área residencial tranquila. Ideal para casais ou pequenos grupos que buscam se desconectar."
+            },
+            en: {
+                name: "Forest View Cabin",
+                desc: "Surrounded by native trees, this cabin offers peace and connection with nature. Spacious, airy and bright, with an independent terrace. Just three blocks from the sea, in a quiet residential area. Ideal for couples or small groups looking to disconnect."
+            }
         };
         
+        // ============================================
+        // TESTIMONIOS REALES (filtrados por esta cabaña)
+        // ============================================
+        const testimonials = [
+            {
+                name: "María",
+                avatar: "https://a0.muscache.com/im/pictures/user/8f9c6df1-5a3a-460e-8824-f48904a52a69.jpg",
+                date: "Febrero 2026",
+                rating: 5,
+                text: "Un lugar mágico, rodeado de naturaleza. La cabaña muy cómoda y el espacio común increíble para compartir en familia. ¡Volveremos!"
+            },
+            {
+                name: "Laura",
+                avatar: "https://a0.muscache.com/im/pictures/user/4a955915-c36d-4d4f-9e41-db00ce7e2ab7.jpg",
+                date: "Noviembre 2025",
+                rating: 5,
+                text: "Muy lindo lugar, cerca de todo. La cabaña está bien equipada y el espacio común con hamacas es un gran plus. Atención cálida y personalizada."
+            }
+        ];
+        
+        // ============================================
+        // FUNCIONES DE IDIOMA
+        // ============================================
         function changeLanguage(lang) {
             currentLang = lang;
             localStorage.setItem('lang', lang);
@@ -332,6 +413,9 @@
             if (calendar) calendar.setOption('locale', lang);
         }
         
+        // ============================================
+        // FUNCIONES DE ADMIN
+        // ============================================
         function toggleAdmin() {
             const pwd = prompt("Contraseña admin:");
             if (pwd === "Casaverde-199") {
@@ -342,10 +426,119 @@
             }
         }
         
-        window.changeMainPhoto = function(src) {
-            document.getElementById('main-photo').src = src;
-        };
+        // ============================================
+        // GALERÍA SLIDER
+        // ============================================
+        async function loadGallery() {
+            try {
+                const snapshot = await db.ref(`fotos/${CABIN_ID}`).once('value');
+                const categories = snapshot.val() || {};
+                
+                // Recolectar todas las fotos de todas las categorías
+                let allPhotos = [];
+                for (const catData of Object.values(categories)) {
+                    if (catData.photos && Array.isArray(catData.photos)) {
+                        allPhotos = allPhotos.concat(catData.photos);
+                    }
+                }
+                
+                galleryPhotos = allPhotos;
+                
+                if (galleryPhotos.length === 0) {
+                    document.getElementById('gallery-track').innerHTML = '<div class="gallery-slide"><img src="https://via.placeholder.com/1200x400?text=Sin+fotos" alt="Sin fotos"></div>';
+                    return;
+                }
+                
+                renderGallery();
+                startGalleryAutoSlide();
+                
+                const container = document.getElementById('gallery-container');
+                container.addEventListener('mouseenter', () => stopGalleryAutoSlide());
+                container.addEventListener('mouseleave', () => startGalleryAutoSlide());
+                
+            } catch (error) {
+                console.error('Error loading gallery:', error);
+            }
+        }
         
+        function renderGallery() {
+            const track = document.getElementById('gallery-track');
+            const dotsContainer = document.getElementById('gallery-dots');
+            
+            track.innerHTML = '';
+            dotsContainer.innerHTML = '';
+            
+            galleryPhotos.forEach((photo, idx) => {
+                const slide = document.createElement('div');
+                slide.className = 'gallery-slide';
+                slide.innerHTML = `<img src="${photo.url}" alt="${photo.desc}" onclick="openModal('${photo.url}')">`;
+                track.appendChild(slide);
+                
+                const dot = document.createElement('div');
+                dot.className = 'gallery-dot';
+                dot.onclick = () => goToSlide(idx);
+                dotsContainer.appendChild(dot);
+            });
+            
+            updateGalleryDots();
+            updateGalleryTrack();
+        }
+        
+        function updateGalleryTrack() {
+            const track = document.getElementById('gallery-track');
+            if (track) {
+                track.style.transform = `translateX(-${galleryIndex * 100}%)`;
+            }
+            updateGalleryDots();
+        }
+        
+        function updateGalleryDots() {
+            const dots = document.querySelectorAll('.gallery-dot');
+            dots.forEach((dot, i) => {
+                dot.classList.toggle('active', i === galleryIndex);
+            });
+        }
+        
+        function prevSlide() {
+            stopGalleryAutoSlide();
+            galleryIndex = (galleryIndex - 1 + galleryPhotos.length) % galleryPhotos.length;
+            updateGalleryTrack();
+            startGalleryAutoSlide();
+        }
+        
+        function nextSlide() {
+            stopGalleryAutoSlide();
+            galleryIndex = (galleryIndex + 1) % galleryPhotos.length;
+            updateGalleryTrack();
+            startGalleryAutoSlide();
+        }
+        
+        function goToSlide(index) {
+            stopGalleryAutoSlide();
+            galleryIndex = index;
+            updateGalleryTrack();
+            startGalleryAutoSlide();
+        }
+        
+        function startGalleryAutoSlide() {
+            if (galleryInterval) clearInterval(galleryInterval);
+            if (galleryPhotos.length <= 1) return;
+            galleryInterval = setInterval(() => {
+                galleryIndex = (galleryIndex + 1) % galleryPhotos.length;
+                updateGalleryTrack();
+            }, 4500);
+        }
+        
+        function stopGalleryAutoSlide() {
+            if (galleryInterval) {
+                clearInterval(galleryInterval);
+                galleryInterval = null;
+            }
+        }
+        
+        // ============================================
+        // CALENDARIO DE RESERVAS
+        // ============================================
         async function importAirbnbCalendar() {
             console.log(`🔄 Importando calendario Airbnb para ${CABIN_ID}...`);
             try {
@@ -463,26 +656,69 @@
             document.getElementById('booking-modal').classList.add('hidden');
         }
         
+        // ============================================
+        // TESTIMONIOS
+        // ============================================
+        function renderTestimonials() {
+            const container = document.getElementById('testimonials-container');
+            if (!container) return;
+            
+            container.innerHTML = testimonials.map(t => `
+                <div class="testimonial-card">
+                    <div class="testimonial-header">
+                        <img class="testimonial-avatar" src="${t.avatar}" alt="${t.name}" onerror="this.src='https://a0.muscache.com/defaults/user_pic-50x50.png?v=3'">
+                        <div>
+                            <strong>${t.name}</strong>
+                            <div style="font-size: 0.75rem; color: #888;">${t.date}</div>
+                        </div>
+                    </div>
+                    <div class="rating">${'★'.repeat(t.rating)}</div>
+                    <p>"${t.text}"</p>
+                </div>
+            `).join('');
+        }
+        
+        // ============================================
+        // MODAL PARA IMAGEN
+        // ============================================
+        function openModal(url) {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:2000;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+            modal.innerHTML = `<img src="${url}" style="max-width:90%;max-height:90%;border-radius:8px;">`;
+            modal.onclick = () => modal.remove();
+            document.body.appendChild(modal);
+        }
+        
+        // ============================================
+        // INICIALIZACIÓN
+        // ============================================
         document.addEventListener('DOMContentLoaded', () => {
             changeLanguage(currentLang);
             if (editMode) document.body.classList.add('admin-mode');
             
+            loadGallery();
             initCalendar();
+            renderTestimonials();
             importAirbnbCalendar();
             setInterval(importAirbnbCalendar, 3 * 60 * 60 * 1000);
             
             document.getElementById('whatsapp-link').addEventListener('click', (e) => {
                 e.preventDefault();
                 const cabinName = translations[currentLang].name;
-                const msg = `Hola! Quiero reservar ${cabinName}`;
-                window.open(`https://wa.me/5548999999999?text=${encodeURIComponent(msg)}`, '_blank');
+                const msg = `Hola! Quiero reservar ${cabinName} para las siguientes fechas:`;
+                window.open(`https://wa.me/5548991181246?text=${encodeURIComponent(msg)}`, '_blank');
             });
         });
         
+        // Exponer funciones globales
         window.changeLanguage = changeLanguage;
         window.toggleAdmin = toggleAdmin;
         window.saveBooking = saveBooking;
         window.closeModal = closeModal;
+        window.prevSlide = prevSlide;
+        window.nextSlide = nextSlide;
+        window.openModal = openModal;
     </script>
 </body>
 </html>
