@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Firebase Upload</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+</head>
+<body>
+    <h1>Test Upload</h1>
+    <input type="file" id="fileInput" accept="image/*">
+    <button onclick="testUpload()">Subir Una Foto</button>
+    <div id="status"></div>
+
+    <script>
+        // Configuración (¡VERIFICA QUE SEA CORRECTA!)
+        const firebaseConfig = {
+            apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
+            authDomain: "casaverdecanas-199.firebaseapp.com",
+            projectId: "casaverdecanas-199",
+            storageBucket: "casaverdecanas-199.firebasestorage.app" // 👈 VERIFICA ESTO
+        };
+
+        // Inicializar
+        firebase.initializeApp(firebaseConfig);
+        const storage = firebase.storage();
+
+        async function testUpload() {
+            const file = document.getElementById('fileInput').files[0];
+            if (!file) {
+                document.getElementById('status').innerText = '❌ Selecciona un archivo';
+                return;
+            }
+
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerText = '📤 Subiendo...';
+            
+            try {
+                const storageRef = storage.ref(`test/${file.name}`);
+                
+                // Subir con timeout de 10 segundos
+                const uploadPromise = storageRef.put(file);
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Timeout después de 10 segundos')), 10000)
+                );
+                
+                const snapshot = await Promise.race([uploadPromise, timeoutPromise]);
+                
+                const url = await snapshot.ref.getDownloadURL();
+                statusDiv.innerText = `✅ Éxito! URL: ${url}`;
+                
+            } catch (error) {
+                statusDiv.innerText = `❌ Error: ${error.message}`;
+                console.error('Error completo:', error);
+            }
+        }
+    </script>
+</body>
+</html>
