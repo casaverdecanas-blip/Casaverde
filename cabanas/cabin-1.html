@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cabaña Vista al Bosque - CasaVerdeCanas</title>
     
+    <!-- FullCalendar CSS -->
     <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/main.min.css' rel='stylesheet' />
     
     <style>
@@ -16,6 +17,23 @@
         .back-link a { color: #2d5a27; text-decoration: none; font-size: 1rem; }
         .cabin-title { text-align: center; margin: 20px 0; color: #2d5a27; font-size: 2rem; }
         .description { font-size: 1.1rem; line-height: 1.5; margin: 20px 0; color: #555; }
+        
+        /* Airbnb Link */
+        .airbnb-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #ff5a5f;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 30px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin: 10px 0;
+            transition: background 0.3s;
+        }
+        .airbnb-link:hover { background: #e04e54; }
         
         /* Slider por categoría */
         .category-section {
@@ -248,6 +266,13 @@
         
         <h1 class="cabin-title" id="cabin-name">Cabaña Vista al Bosque</h1>
         
+        <!-- Link a Airbnb -->
+        <div style="text-align: center;">
+            <a href="https://www.airbnb.com/rooms/1337276103911358917" target="_blank" class="airbnb-link" rel="noopener">
+                🔗 Ver en Airbnb
+            </a>
+        </div>
+        
         <p id="cabin-description" class="description">
             Rodeada de árboles nativos, esta cabaña ofrece paz y conexión con la naturaleza. Espaciosa, ventilada y luminosa, con terraza independiente. A solo tres cuadras del mar, en una zona residencial tranquila.
         </p>
@@ -297,13 +322,16 @@
 
     <footer>
         <p>© 2026 CasaVerdeCanas - Cabaña Vista al Bosque | 📞 +55 48 99118-1246</p>
+        <p><a href="https://www.airbnb.com/rooms/1337276103911358917" target="_blank" style="color: #ffa07a;">Ver en Airbnb</a></p>
     </footer>
 
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
     <script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js"></script>
     
     <script>
-        // Firebase Config
+        // ============================================
+        // CONFIGURACIÓN FIREBASE
+        // ============================================
         const firebaseConfig = {
             apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
             authDomain: "casaverdecanas-199.firebaseapp.com",
@@ -317,6 +345,7 @@
         const db = firebase.database();
         
         const CABIN_ID = 'cabin-1';
+        const AIRBNB_URL = 'https://www.airbnb.com/rooms/1337276103911358917';
         const AIRBNB_ICAL_URL = 'https://www.airbnb.com/calendar/ical/1337276103911358917.ics';
         
         let currentLang = localStorage.getItem('lang') || 'es';
@@ -329,9 +358,18 @@
         
         // Traducciones
         const translations = {
-            es: { name: "Cabaña Vista al Bosque", desc: "Rodeada de árboles nativos, esta cabaña ofrece paz y conexión con la naturaleza. Espaciosa, ventilada y luminosa, con terraza independiente. A solo tres cuadras del mar." },
-            pt: { name: "Cabana Vista da Mata", desc: "Cercada por árvores nativas, esta cabana oferece paz e conexão com a natureza. Espaçosa, ventilada e iluminada, com terraço independente. A apenas três quadras do mar." },
-            en: { name: "Forest View Cabin", desc: "Surrounded by native trees, this cabin offers peace and connection with nature. Spacious, airy and bright, with an independent terrace. Just three blocks from the sea." }
+            es: { 
+                name: "Cabaña Vista al Bosque", 
+                desc: "Rodeada de árboles nativos, esta cabaña ofrece paz y conexión con la naturaleza. Espaciosa, ventilada y luminosa, con terraza independiente. A solo tres cuadras del mar, en una zona residencial tranquila." 
+            },
+            pt: { 
+                name: "Cabana Vista da Mata", 
+                desc: "Cercada por árvores nativas, esta cabana oferece paz e conexão com a natureza. Espaçosa, ventilada e iluminada, com terraço independente. A apenas três quadras do mar, em uma área residencial tranquila." 
+            },
+            en: { 
+                name: "Forest View Cabin", 
+                desc: "Surrounded by native trees, this cabin offers peace and connection with nature. Spacious, airy and bright, with an independent terrace. Just three blocks from the sea, in a quiet residential area." 
+            }
         };
         
         function changeLanguage(lang) {
@@ -352,11 +390,13 @@
             }
         }
         
-        // Slider functions
-        function initSlider(sliderId, photos, categoryName) {
+        // ============================================
+        // SLIDER FUNCTIONS
+        // ============================================
+        function initSlider(sliderId, photos) {
             const track = document.getElementById(`track-${sliderId}`);
             const dotsContainer = document.getElementById(`dots-${sliderId}`);
-            if (!track) return;
+            if (!track || !photos.length) return;
             
             track.innerHTML = '';
             dotsContainer.innerHTML = '';
@@ -440,13 +480,23 @@
             document.body.appendChild(modal);
         }
         
-        // Cargar categorías desde Firebase
+        // ============================================
+        // CARGAR CATEGORÍAS DESDE FIREBASE
+        // ============================================
         async function loadCategories() {
+            const container = document.getElementById('categories-container');
+            container.innerHTML = '<div style="text-align:center; padding:20px;">Cargando fotos...</div>';
+            
             try {
                 const snapshot = await db.ref(`apartments/${CABIN_ID}/categories`).once('value');
                 const categories = snapshot.val() || {};
-                const container = document.getElementById('categories-container');
+                
                 container.innerHTML = '';
+                
+                if (Object.keys(categories).length === 0) {
+                    container.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">No hay fotos disponibles aún</div>';
+                    return;
+                }
                 
                 for (const [catId, catData] of Object.entries(categories)) {
                     const photos = catData.photos || [];
@@ -466,14 +516,22 @@
                         </div>
                     `;
                     container.appendChild(section);
-                    initSlider(sliderId, photos, catData.name);
+                    initSlider(sliderId, photos);
                 }
+                
+                if (container.innerHTML === '') {
+                    container.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">No hay fotos disponibles aún</div>';
+                }
+                
             } catch (error) {
                 console.error('Error loading categories:', error);
+                container.innerHTML = '<div style="text-align:center; padding:20px; color:#e74c3c;">Error al cargar fotos</div>';
             }
         }
         
-        // Calendario
+        // ============================================
+        // CALENDARIO
+        // ============================================
         async function importAirbnbCalendar() {
             console.log(`🔄 Importando calendario Airbnb para ${CABIN_ID}...`);
             try {
@@ -484,10 +542,14 @@
                 const comp = new ICAL.Component(jcalData);
                 const vevents = comp.getAllSubcomponents('vevent');
                 console.log(`📅 Encontrados ${vevents.length} eventos en Airbnb`);
+                
                 const snapshot = await db.ref(`reservas/${CABIN_ID}`).once('value');
                 const existingReservas = snapshot.val() || {};
                 const existingKeys = new Set();
-                Object.entries(existingReservas).forEach(([key, reserva]) => { if (reserva.source === 'airbnb') existingKeys.add(`${reserva.start}_${reserva.end}`); });
+                Object.entries(existingReservas).forEach(([key, reserva]) => { 
+                    if (reserva.source === 'airbnb') existingKeys.add(`${reserva.start}_${reserva.end}`); 
+                });
+                
                 let nuevasReservas = 0;
                 for (const vevent of vevents) {
                     const event = new ICAL.Event(vevent);
@@ -499,8 +561,13 @@
                     const end = endAdjusted.toISOString().split('T')[0];
                     const eventKey = `${start}_${end}`;
                     if (existingKeys.has(eventKey)) continue;
+                    
                     let guestName = 'Airbnb';
-                    if (event.summary) { guestName = event.summary.replace(/Reservado:|Reserved:|Réservé:/i, '').trim(); if (guestName.length > 25) guestName = guestName.substring(0, 25) + '...'; if (guestName === '') guestName = 'Airbnb'; }
+                    if (event.summary) { 
+                        guestName = event.summary.replace(/Reservado:|Reserved:|Réservé:/i, '').trim(); 
+                        if (guestName.length > 25) guestName = guestName.substring(0, 25) + '...'; 
+                        if (guestName === '') guestName = 'Airbnb'; 
+                    }
                     await db.ref(`reservas/${CABIN_ID}`).push({ guest: guestName, start, end, source: 'airbnb', importedAt: new Date().toISOString() });
                     nuevasReservas++;
                 }
@@ -513,15 +580,59 @@
             const calendarEl = document.getElementById('calendar');
             db.ref('reservas/' + CABIN_ID).on('value', (snapshot) => {
                 const reservas = snapshot.val() || {};
-                const events = Object.keys(reservas).map(key => ({ id: key, title: reservas[key].guest || 'Reservado', start: reservas[key].start, end: reservas[key].end, color: reservas[key].source === 'airbnb' ? '#FF9800' : '#e74c3c', allDay: true }));
-                if (calendar) { calendar.removeAllEvents(); calendar.addEventSource(events); }
-                else { calendar = new FullCalendar.Calendar(calendarEl, { initialView: 'dayGridMonth', locale: currentLang, events: events, height: 'auto', dateClick: function(info) { if (editMode) { document.getElementById('booking-start').value = info.dateStr; document.getElementById('booking-end').value = info.dateStr; document.getElementById('booking-modal').classList.remove('hidden'); } }, eventClick: function(info) { if (editMode && confirm('¿Eliminar reserva?')) { db.ref('reservas/' + CABIN_ID + '/' + info.event.id).remove(); } } }); calendar.render(); }
+                const events = Object.keys(reservas).map(key => ({ 
+                    id: key, 
+                    title: reservas[key].guest || 'Reservado', 
+                    start: reservas[key].start, 
+                    end: reservas[key].end, 
+                    color: reservas[key].source === 'airbnb' ? '#FF9800' : '#e74c3c', 
+                    allDay: true 
+                }));
+                if (calendar) { 
+                    calendar.removeAllEvents(); 
+                    calendar.addEventSource(events); 
+                } else { 
+                    calendar = new FullCalendar.Calendar(calendarEl, { 
+                        initialView: 'dayGridMonth', 
+                        locale: currentLang, 
+                        events: events, 
+                        height: 'auto', 
+                        dateClick: function(info) { 
+                            if (editMode) { 
+                                document.getElementById('booking-start').value = info.dateStr; 
+                                document.getElementById('booking-end').value = info.dateStr; 
+                                document.getElementById('booking-modal').classList.remove('hidden'); 
+                            } 
+                        }, 
+                        eventClick: function(info) { 
+                            if (editMode && confirm('¿Eliminar reserva?')) { 
+                                db.ref('reservas/' + CABIN_ID + '/' + info.event.id).remove(); 
+                            } 
+                        } 
+                    }); 
+                    calendar.render(); 
+                }
             });
         }
         
-        function saveBooking() { const guest = document.getElementById('guest-name').value.trim(); const start = document.getElementById('booking-start').value; const end = document.getElementById('booking-end').value; if (guest && start && end) { db.ref('reservas/' + CABIN_ID).push({ guest, start, end, source: 'manual' }); closeModal(); document.getElementById('guest-name').value = ''; } }
-        function closeModal() { document.getElementById('booking-modal').classList.add('hidden'); }
+        function saveBooking() { 
+            const guest = document.getElementById('guest-name').value.trim(); 
+            const start = document.getElementById('booking-start').value; 
+            const end = document.getElementById('booking-end').value; 
+            if (guest && start && end) { 
+                db.ref('reservas/' + CABIN_ID).push({ guest, start, end, source: 'manual' }); 
+                closeModal(); 
+                document.getElementById('guest-name').value = ''; 
+            } 
+        }
         
+        function closeModal() { 
+            document.getElementById('booking-modal').classList.add('hidden'); 
+        }
+        
+        // ============================================
+        // INICIALIZACIÓN
+        // ============================================
         document.addEventListener('DOMContentLoaded', () => {
             changeLanguage(currentLang);
             if (editMode) document.body.classList.add('admin-mode');
@@ -529,7 +640,12 @@
             initCalendar();
             importAirbnbCalendar();
             setInterval(importAirbnbCalendar, 3 * 60 * 60 * 1000);
-            document.getElementById('whatsapp-link').addEventListener('click', (e) => { e.preventDefault(); const cabinName = translations[currentLang].name; const msg = `Hola! Quiero reservar ${cabinName}`; window.open(`https://wa.me/5548991181246?text=${encodeURIComponent(msg)}`, '_blank'); });
+            document.getElementById('whatsapp-link').addEventListener('click', (e) => { 
+                e.preventDefault(); 
+                const cabinName = translations[currentLang].name; 
+                const msg = `Hola! Quiero reservar ${cabinName}`; 
+                window.open(`https://wa.me/5548991181246?text=${encodeURIComponent(msg)}`, '_blank'); 
+            });
         });
         
         window.changeLanguage = changeLanguage;
