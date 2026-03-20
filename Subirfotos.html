@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Subir Fotos a Firebase Storage</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; }
+        .cabin-section { background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 10px; }
+        button { background: #2d5a27; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+        .status { background: white; padding: 10px; margin: 10px 0; border-radius: 5px; max-height: 300px; overflow-y: auto; font-family: monospace; }
+        input[type="file"] { margin: 10px 0; }
+    </style>
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+</head>
+<body>
+    <h1>📤 Subir Fotos a Firebase Storage</h1>
+    
+    <div class="cabin-section">
+        <h2>🏠 Cabaña 1 - Vista al Bosque</h2>
+        <p>Selecciona las 25 fotos (puedes elegir múltiples a la vez)</p>
+        <input type="file" id="cabin1-files" multiple accept="image/*">
+        <button onclick="uploadCabin1()">Subir fotos Cabaña 1</button>
+        <div id="status-cabin1" class="status">Esperando archivos...</div>
+    </div>
+
+    <script>
+        // CONFIGURACIÓN FIREBASE (TUS DATOS)
+        const firebaseConfig = {
+            apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
+            authDomain: "casaverdecanas-199.firebaseapp.com",
+            databaseURL: "https://casaverdecanas-199-default-rtdb.firebaseio.com",
+            projectId: "casaverdecanas-199",
+            storageBucket: "casaverdecanas-199.firebasestorage.app", // ¡VERIFICA ESTO!
+            messagingSenderId: "417825635316",
+            appId: "1:417825635316:web:ff7f4fe52edcab43d8d7a1"
+        };
+
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const storage = firebase.storage();
+        const db = firebase.database();
+
+        // Función para subir fotos de Cabaña 1
+        async function uploadCabin1() {
+            const files = document.getElementById('cabin1-files').files;
+            const statusDiv = document.getElementById('status-cabin1');
+            
+            if (files.length === 0) {
+                statusDiv.innerHTML = '❌ No seleccionaste archivos';
+                return;
+            }
+
+            statusDiv.innerHTML = `📤 Subiendo ${files.length} archivos...\n`;
+            
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const fileName = file.name; // Ej: c1cocina1.jpg
+                
+                statusDiv.innerHTML += `\n📤 Procesando: ${fileName}...`;
+                
+                try {
+                    // 1. Crear referencia en Storage [citation:1][citation:2]
+                    const storageRef = storage.ref(`fotos/cabin-1/${fileName}`);
+                    
+                    // 2. Subir archivo [citation:1]
+                    const snapshot = await storageRef.put(file);
+                    
+                    // 3. Obtener URL de descarga
+                    const downloadURL = await snapshot.ref.getDownloadURL();
+                    
+                    // 4. Guardar referencia en Realtime Database (el nombre SIN extensión como key)
+                    const photoKey = fileName.replace('.jpg', '').replace('.jpeg', '').replace('.png', '');
+                    await db.ref(`fotos/cabin-1/${photoKey}`).set(downloadURL);
+                    
+                    statusDiv.innerHTML += ` ✅ Listo\n`;
+                    successCount++;
+                    
+                } catch (error) {
+                    statusDiv.innerHTML += ` ❌ Error: ${error.message}\n`;
+                    errorCount++;
+                }
+            }
+            
+            statusDiv.innerHTML += `\n🎉 COMPLETADO: ${successCount} exitosas, ${errorCount} fallidas\n`;
+            
+            if (successCount === files.length) {
+                statusDiv.innerHTML += `\n✅ ¡TODAS LAS FOTOS SUBIDAS CORRECTAMENTE!`;
+            }
+        }
+    </script>
+</body>
+</html>
