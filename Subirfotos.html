@@ -1,39 +1,121 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Subir Fotos a Firebase Storage</title>
+    <title>Subir Fotos a Firebase - Con Vista Previa</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; }
-        .cabin-section { background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 10px; }
-        button { background: #2d5a27; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
-        .status { background: white; padding: 10px; margin: 10px 0; border-radius: 5px; max-height: 300px; overflow-y: auto; font-family: monospace; }
-        input[type="file"] { margin: 10px 0; }
+        body { font-family: 'Segoe UI', sans-serif; max-width: 1200px; margin: 20px auto; padding: 20px; background: #f5f5f5; }
+        h1 { color: #2d5a27; }
+        
+        .upload-area { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        
+        .file-input-area { display: flex; gap: 20px; align-items: center; margin-bottom: 20px; }
+        
+        button { background: #2d5a27; color: white; padding: 12px 24px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #1e3f1a; }
+        
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .preview-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        
+        .preview-card img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        
+        .preview-card input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        
+        .preview-card .filename-hint {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .status {
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .success { color: #2d5a27; font-weight: bold; }
+        .error { color: #c62828; font-weight: bold; }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: #2d5a27;
+            width: 0%;
+            transition: width 0.3s;
+        }
     </style>
     
-    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 </head>
 <body>
-    <h1>📤 Subir Fotos a Firebase Storage</h1>
+    <h1>📸 Subir Fotos - Cabaña 1 (Vista al Bosque)</h1>
     
-    <div class="cabin-section">
-        <h2>🏠 Cabaña 1 - Vista al Bosque</h2>
-        <p>Selecciona las 25 fotos (puedes elegir múltiples a la vez)</p>
-        <input type="file" id="cabin1-files" multiple accept="image/*">
-        <button onclick="uploadCabin1()">Subir fotos Cabaña 1</button>
-        <div id="status-cabin1" class="status">Esperando archivos...</div>
+    <div class="upload-area">
+        <div class="file-input-area">
+            <input type="file" id="file-input" multiple accept="image/*" onchange="previewImages()">
+            <button onclick="uploadAll()">🚀 Subir Todas las Fotos</button>
+        </div>
+        
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        
+        <div id="preview-container" class="preview-grid">
+            <!-- Aquí aparecerán las vistas previas -->
+        </div>
+        
+        <div id="status" class="status">
+            📌 Selecciona las imágenes para empezar
+        </div>
     </div>
 
     <script>
-        // CONFIGURACIÓN FIREBASE (TUS DATOS)
+        // Configuración Firebase (¡VERIFICA QUE SEA EL PROYECTO CORRECTO!)
         const firebaseConfig = {
             apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
             authDomain: "casaverdecanas-199.firebaseapp.com",
             databaseURL: "https://casaverdecanas-199-default-rtdb.firebaseio.com",
             projectId: "casaverdecanas-199",
-            storageBucket: "casaverdecanas-199.firebasestorage.app", // ¡VERIFICA ESTO!
+            storageBucket: "casaverdecanas-199.firebasestorage.app",
             messagingSenderId: "417825635316",
             appId: "1:417825635316:web:ff7f4fe52edcab43d8d7a1"
         };
@@ -43,54 +125,118 @@
         const storage = firebase.storage();
         const db = firebase.database();
 
-        // Función para subir fotos de Cabaña 1
-        async function uploadCabin1() {
-            const files = document.getElementById('cabin1-files').files;
-            const statusDiv = document.getElementById('status-cabin1');
-            
-            if (files.length === 0) {
-                statusDiv.innerHTML = '❌ No seleccionaste archivos';
-                return;
-            }
+        let filesList = [];
+        let customNames = {};
 
-            statusDiv.innerHTML = `📤 Subiendo ${files.length} archivos...\n`;
+        // Función para previsualizar imágenes
+        function previewImages() {
+            const input = document.getElementById('file-input');
+            filesList = Array.from(input.files);
+            
+            const previewContainer = document.getElementById('preview-container');
+            previewContainer.innerHTML = '';
+            
+            customNames = {};
+            
+            filesList.forEach((file, index) => {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    const card = document.createElement('div');
+                    card.className = 'preview-card';
+                    card.id = `preview-${index}`;
+                    
+                    // Sugerir nombre basado en el archivo original
+                    const originalName = file.name.split('.')[0];
+                    const extension = file.name.split('.').pop();
+                    
+                    card.innerHTML = `
+                        <img src="${e.target.result}" alt="Vista previa">
+                        <input type="text" 
+                               id="name-${index}"
+                               value="${originalName}"
+                               placeholder="Nombre (sin extensión)"
+                               onchange="updateName(${index}, this.value)">
+                        <div class="filename-hint">
+                            📁 Se guardará como: <span id="fullname-${index}">${originalName}.${extension}</span>
+                        </div>
+                    `;
+                    
+                    previewContainer.appendChild(card);
+                    
+                    // Guardar nombre inicial
+                    customNames[index] = originalName;
+                };
+                
+                reader.readAsDataURL(file);
+            });
+            
+            document.getElementById('status').innerHTML = `📋 ${filesList.length} imágenes seleccionadas. Revisa los nombres antes de subir.`;
+        }
+
+        // Función para actualizar nombres personalizados
+        function updateName(index, newName) {
+            const file = filesList[index];
+            const extension = file.name.split('.').pop();
+            
+            // Limpiar el nombre (solo letras, números y guiones)
+            const cleanName = newName.replace(/[^a-zA-Z0-9_-]/g, '');
+            
+            customNames[index] = cleanName;
+            
+            // Actualizar vista previa del nombre completo
+            document.getElementById(`fullname-${index}`).innerText = `${cleanName}.${extension}`;
+        }
+
+        // Función para subir todas las imágenes
+        async function uploadAll() {
+            const statusDiv = document.getElementById('status');
+            const progressFill = document.getElementById('progress-fill');
             
             let successCount = 0;
             let errorCount = 0;
-
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                const fileName = file.name; // Ej: c1cocina1.jpg
+            
+            statusDiv.innerHTML = '🚀 Iniciando subida...\n';
+            progressFill.style.width = '0%';
+            
+            for (let i = 0; i < filesList.length; i++) {
+                const file = filesList[i];
+                const extension = file.name.split('.').pop();
+                const customName = customNames[i] || `foto-${i+1}`;
+                const fileName = `${customName}.${extension}`;
                 
-                statusDiv.innerHTML += `\n📤 Procesando: ${fileName}...`;
+                statusDiv.innerHTML += `\n📤 (${i+1}/${filesList.length}) ${fileName}...`;
                 
                 try {
-                    // 1. Crear referencia en Storage [citation:1][citation:2]
+                    // Referencia en Storage
                     const storageRef = storage.ref(`fotos/cabin-1/${fileName}`);
                     
-                    // 2. Subir archivo [citation:1]
+                    // Subir archivo
                     const snapshot = await storageRef.put(file);
                     
-                    // 3. Obtener URL de descarga
+                    // Obtener URL
                     const downloadURL = await snapshot.ref.getDownloadURL();
                     
-                    // 4. Guardar referencia en Realtime Database (el nombre SIN extensión como key)
-                    const photoKey = fileName.replace('.jpg', '').replace('.jpeg', '').replace('.png', '');
-                    await db.ref(`fotos/cabin-1/${photoKey}`).set(downloadURL);
+                    // Guardar en Realtime Database (usando el nombre sin extensión como key)
+                    await db.ref(`fotos/cabin-1/${customName}`).set(downloadURL);
                     
-                    statusDiv.innerHTML += ` ✅ Listo\n`;
+                    statusDiv.innerHTML += ` ✅`;
                     successCount++;
                     
+                    // Actualizar barra de progreso
+                    const progress = ((i + 1) / filesList.length) * 100;
+                    progressFill.style.width = `${progress}%`;
+                    
                 } catch (error) {
-                    statusDiv.innerHTML += ` ❌ Error: ${error.message}\n`;
+                    statusDiv.innerHTML += ` ❌ Error: ${error.message}`;
                     errorCount++;
                 }
             }
             
-            statusDiv.innerHTML += `\n🎉 COMPLETADO: ${successCount} exitosas, ${errorCount} fallidas\n`;
+            statusDiv.innerHTML += `\n\n🎉 COMPLETADO: ${successCount} subidas correctamente, ${errorCount} fallidas`;
             
-            if (successCount === files.length) {
-                statusDiv.innerHTML += `\n✅ ¡TODAS LAS FOTOS SUBIDAS CORRECTAMENTE!`;
+            if (successCount === filesList.length) {
+                statusDiv.innerHTML += `\n✅ ¡TODAS LAS FOTOS SUBIDAS CON ÉXITO!`;
             }
         }
     </script>
