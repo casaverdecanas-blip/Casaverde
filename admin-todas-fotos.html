@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Admin CasaVerdeCanas - Todas las fotos precargadas</title>
+    <title>Admin CasaVerdeCanas - Edición Completa</title>
     <style>
         * {
             margin: 0;
@@ -125,6 +125,16 @@
             font-size: 1.2rem;
         }
 
+        .section-header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .section-header-actions button {
+            padding: 5px 12px;
+            font-size: 12px;
+        }
+
         .section-content {
             display: none;
             padding: 20px;
@@ -154,11 +164,37 @@
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid #e0e0e0;
+            gap: 10px;
+            flex-wrap: wrap;
         }
 
         .category-title {
             font-weight: bold;
             color: #2d5a27;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+        }
+
+        .category-title input {
+            font-weight: bold;
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            width: auto;
+            min-width: 150px;
+        }
+
+        .delete-category-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
         }
 
         .photos-list {
@@ -206,6 +242,33 @@
             font-size: 11px;
         }
 
+        .add-category-form {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .add-category-form input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .add-category-form button {
+            background: #2d5a27;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
         .modal {
             display: none;
             position: fixed;
@@ -234,6 +297,10 @@
             .categories-grid {
                 grid-template-columns: 1fr;
             }
+            .category-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
         }
     </style>
 
@@ -243,20 +310,30 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📸 Admin CasaVerdeCanas - Edición de Fotos</h1>
-            <p>Todas las fotos ya están precargadas. Edita descripciones y revisa categorías.</p>
+            <h1>📸 Admin CasaVerdeCanas - Edición Completa</h1>
+            <p>Edita fotos, descripciones, categorías y apartamentos. Todo se guarda en Firebase.</p>
             <div class="stats" id="stats"></div>
         </div>
 
         <div class="action-bar">
             <button class="btn btn-primary" onclick="saveToFirebase()">💾 GUARDAR EN FIREBASE</button>
             <button class="btn btn-secondary" onclick="loadFromFirebase()">📥 RECARGAR DESDE FIREBASE</button>
-            <button class="btn btn-warning" onclick="resetToOriginal()">🔄 RESTABLECER DATOS ORIGINALES</button>
+            <button class="btn btn-warning" onclick="resetToOriginal()">🔄 RESTABLECER ORIGINAL</button>
         </div>
 
-        <div id="status" class="status">✅ Datos precargados listos. Edita y guarda en Firebase.</div>
+        <div id="status" class="status">✅ Datos precargados listos. Edita categorías y guarda.</div>
 
         <div id="apartments-container"></div>
+
+        <!-- Formulario para nuevo apartamento -->
+        <div style="background: white; border-radius: 12px; padding: 20px; margin-top: 20px;">
+            <h3 style="color: #2d5a27; margin-bottom: 15px;">➕ Agregar nuevo apartamento</h3>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <input type="text" id="new-apartment-name" placeholder="Nombre (ej: Cabaña 4 - Suite)" style="flex:2; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                <input type="text" id="new-apartment-icon" placeholder="Icono (ej: 🏢, 🌟)" style="flex:1; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                <button class="btn btn-success" onclick="addNewApartment()">+ Agregar Apartamento</button>
+            </div>
+        </div>
     </div>
 
     <div id="image-modal" class="modal" onclick="closeModal()">
@@ -266,7 +343,6 @@
     <script>
         // ============================================
         // DATOS COMPLETOS CON TODAS LAS FOTOS PRECARGADAS
-        // Basado en tu clasificación JSON + espacios comunes
         // ============================================
         const originalData = {
             common: {
@@ -415,9 +491,7 @@
         let siteData = JSON.parse(JSON.stringify(originalData));
         let currentOpenSections = { common: true, "cabin-1": true, "cabin-2": true, "cabin-3": true };
 
-        // ============================================
-        // CONFIGURACIÓN FIREBASE
-        // ============================================
+        // Configuración Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
             authDomain: "casaverdecanas-199.firebaseapp.com",
@@ -432,7 +506,7 @@
         const db = firebase.database();
 
         // ============================================
-        // RENDERIZADO
+        // RENDERIZADO PRINCIPAL
         // ============================================
         function renderAll() {
             const container = document.getElementById('apartments-container');
@@ -455,10 +529,19 @@
             section.innerHTML = `
                 <div class="section-header" onclick="toggleSection('${apId}')">
                     <h2>${apData.icon} ${apData.name}</h2>
+                    <div class="section-header-actions" onclick="event.stopPropagation()">
+                        <button class="btn btn-warning" style="padding:5px 10px; font-size:12px;" onclick="editApartmentName('${apId}')">✏️ Renombrar</button>
+                        ${apId !== 'common' ? `<button class="btn btn-danger" style="padding:5px 10px; font-size:12px; background:#e74c3c; color:white;" onclick="deleteApartment('${apId}')">🗑️ Eliminar</button>` : ''}
+                    </div>
                     <span style="font-size:1.2rem;">${isOpen ? '▲' : '▼'}</span>
                 </div>
                 <div id="content-${apId}" class="section-content ${isOpen ? 'open' : ''}">
                     <div class="categories-grid" id="grid-${apId}"></div>
+                    <div class="add-category-form">
+                        <input type="text" id="new-cat-name-${apId}" placeholder="Nombre nueva categoría (ej: Cocina, Dormitorio...)" style="flex:2;">
+                        <input type="text" id="new-cat-icon-${apId}" placeholder="Icono (ej: 🍳, 🛏️)" style="flex:1;">
+                        <button onclick="addCategory('${apId}')">+ Agregar Categoría</button>
+                    </div>
                 </div>
             `;
             container.appendChild(section);
@@ -475,8 +558,10 @@
                 card.className = 'category-card';
                 card.innerHTML = `
                     <div class="category-header">
-                        <span class="category-title">${catData.name}</span>
-                        <span style="font-size:11px; color:#888;">📷 ${catData.photos?.length || 0}</span>
+                        <div class="category-title">
+                            <input type="text" value="${escapeHtml(catData.name)}" onchange="updateCategoryName('${apId}', '${catId}', this.value)" style="width:auto;">
+                        </div>
+                        <button class="delete-category-btn" onclick="deleteCategory('${apId}', '${catId}')">🗑️ Eliminar categoría</button>
                     </div>
                     <div class="photos-list" id="photos-${apId}-${catId}"></div>
                 `;
@@ -503,11 +588,111 @@
             }
         }
 
+        // ============================================
+        // OPERACIONES DE APARTAMENTOS
+        // ============================================
+        function addNewApartment() {
+            const nameInput = document.getElementById('new-apartment-name');
+            const iconInput = document.getElementById('new-apartment-icon');
+            const name = nameInput.value.trim();
+            const icon = iconInput.value.trim() || '🏠';
+            
+            if (!name) {
+                alert('Ingresa un nombre para el apartamento');
+                return;
+            }
+            
+            const apId = 'apartment_' + Date.now();
+            siteData.apartments[apId] = {
+                name: `${icon} ${name}`,
+                icon: icon,
+                categories: {}
+            };
+            
+            nameInput.value = '';
+            iconInput.value = '';
+            renderAll();
+            updateStatus(`✅ Apartamento "${name}" agregado. Guarda los cambios.`);
+        }
+
+        function editApartmentName(apId) {
+            const currentName = siteData.apartments[apId].name;
+            const newName = prompt('Nuevo nombre para el apartamento:', currentName);
+            if (newName && newName.trim()) {
+                // Mantener el icono
+                const icon = siteData.apartments[apId].icon;
+                siteData.apartments[apId].name = `${icon} ${newName.trim()}`;
+                renderAll();
+                updateStatus('Nombre actualizado. Guarda los cambios.');
+            }
+        }
+
+        function deleteApartment(apId) {
+            if (confirm('¿Eliminar este apartamento y TODAS sus fotos? Esta acción es irreversible.')) {
+                delete siteData.apartments[apId];
+                renderAll();
+                updateStatus('Apartamento eliminado. Guarda los cambios.');
+            }
+        }
+
+        // ============================================
+        // OPERACIONES DE CATEGORÍAS
+        // ============================================
+        function addCategory(apId) {
+            const nameInput = document.getElementById(`new-cat-name-${apId}`);
+            const iconInput = document.getElementById(`new-cat-icon-${apId}`);
+            const name = nameInput.value.trim();
+            const icon = iconInput.value.trim() || '📷';
+            
+            if (!name) {
+                alert('Ingresa un nombre para la categoría');
+                return;
+            }
+            
+            const catId = name.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + Date.now();
+            const target = apId === 'common' ? siteData.common : siteData.apartments[apId];
+            
+            target.categories[catId] = {
+                name: `${icon} ${name}`,
+                photos: []
+            };
+            
+            nameInput.value = '';
+            iconInput.value = '';
+            renderCategories(apId, target.categories);
+            updateStatus(`✅ Categoría "${name}" agregada. Guarda los cambios.`);
+        }
+
+        function updateCategoryName(apId, catId, newName) {
+            const target = apId === 'common' ? siteData.common : siteData.apartments[apId];
+            if (target.categories[catId]) {
+                // Mantener el icono si existe
+                const oldName = target.categories[catId].name;
+                const iconMatch = oldName.match(/^[^\w]+/);
+                const icon = iconMatch ? iconMatch[0] : '📷';
+                target.categories[catId].name = `${icon} ${newName}`;
+                renderCategories(apId, target.categories);
+                updateStatus('Categoría renombrada. Guarda los cambios.');
+            }
+        }
+
+        function deleteCategory(apId, catId) {
+            if (confirm('¿Eliminar esta categoría y TODAS sus fotos?')) {
+                const target = apId === 'common' ? siteData.common : siteData.apartments[apId];
+                delete target.categories[catId];
+                renderCategories(apId, target.categories);
+                updateStatus('Categoría eliminada. Guarda los cambios.');
+            }
+        }
+
+        // ============================================
+        // OPERACIONES DE FOTOS
+        // ============================================
         function updatePhotoDesc(apId, catId, photoIndex, newDesc) {
             const target = apId === 'common' ? siteData.common : siteData.apartments[apId];
             if (target.categories[catId] && target.categories[catId].photos[photoIndex]) {
                 target.categories[catId].photos[photoIndex].desc = newDesc;
-                updateStatus('📝 Descripción actualizada. Guarda los cambios en Firebase.');
+                updateStatus('📝 Descripción actualizada. Guarda los cambios.');
             }
         }
 
@@ -516,7 +701,45 @@
                 const target = apId === 'common' ? siteData.common : siteData.apartments[apId];
                 target.categories[catId].photos.splice(photoIndex, 1);
                 renderCategories(apId, target.categories);
-                updateStatus('🗑️ Foto eliminada. Guarda los cambios en Firebase.');
+                updateStatus('🗑️ Foto eliminada. Guarda los cambios.');
+            }
+        }
+
+        // ============================================
+        // FIREBASE Y UTILIDADES
+        // ============================================
+        async function saveToFirebase() {
+            updateStatus('💾 Guardando en Firebase...');
+            try {
+                await db.ref('siteData').set(siteData);
+                updateStatus('✅ ¡Todos los datos guardados correctamente en Firebase!');
+            } catch (error) {
+                updateStatus('❌ Error al guardar: ' + error.message);
+            }
+        }
+
+        async function loadFromFirebase() {
+            updateStatus('📥 Cargando desde Firebase...');
+            try {
+                const snapshot = await db.ref('siteData').once('value');
+                const data = snapshot.val();
+                if (data) {
+                    siteData = data;
+                    renderAll();
+                    updateStatus('✅ Datos cargados desde Firebase');
+                } else {
+                    updateStatus('⚠️ No hay datos en Firebase. Usa "Guardar" para subirlos.');
+                }
+            } catch (error) {
+                updateStatus('❌ Error: ' + error.message);
+            }
+        }
+
+        function resetToOriginal() {
+            if (confirm('¿Restablecer a los datos originales? Perderás cambios no guardados.')) {
+                siteData = JSON.parse(JSON.stringify(originalData));
+                renderAll();
+                updateStatus('🔄 Datos restablecidos a versión original.');
             }
         }
 
@@ -557,47 +780,9 @@
             statusDiv.innerHTML = msg;
             setTimeout(() => {
                 if (statusDiv.innerHTML === msg) {
-                    statusDiv.innerHTML = '✅ Listo. Edita descripciones y guarda en Firebase.';
+                    statusDiv.innerHTML = '✅ Listo. Edita y guarda en Firebase.';
                 }
             }, 3000);
-        }
-
-        // ============================================
-        // FIREBASE OPERACIONES
-        // ============================================
-        async function saveToFirebase() {
-            updateStatus('💾 Guardando en Firebase...');
-            try {
-                await db.ref('siteData').set(siteData);
-                updateStatus('✅ ¡Todos los datos guardados correctamente en Firebase!');
-            } catch (error) {
-                updateStatus('❌ Error al guardar: ' + error.message);
-            }
-        }
-
-        async function loadFromFirebase() {
-            updateStatus('📥 Cargando desde Firebase...');
-            try {
-                const snapshot = await db.ref('siteData').once('value');
-                const data = snapshot.val();
-                if (data) {
-                    siteData = data;
-                    renderAll();
-                    updateStatus('✅ Datos cargados desde Firebase');
-                } else {
-                    updateStatus('⚠️ No hay datos en Firebase. Usa "Guardar" para subirlos.');
-                }
-            } catch (error) {
-                updateStatus('❌ Error: ' + error.message);
-            }
-        }
-
-        function resetToOriginal() {
-            if (confirm('¿Restablecer a los datos originales? Perderás cambios no guardados.')) {
-                siteData = JSON.parse(JSON.stringify(originalData));
-                renderAll();
-                updateStatus('🔄 Datos restablecidos a versión original.');
-            }
         }
 
         function escapeHtml(str) {
@@ -621,11 +806,17 @@
             document.getElementById('image-modal').classList.remove('active');
         }
 
-        // Exponer funciones
+        // Exponer funciones globales
         window.saveToFirebase = saveToFirebase;
         window.loadFromFirebase = loadFromFirebase;
         window.resetToOriginal = resetToOriginal;
         window.toggleSection = toggleSection;
+        window.addNewApartment = addNewApartment;
+        window.editApartmentName = editApartmentName;
+        window.deleteApartment = deleteApartment;
+        window.addCategory = addCategory;
+        window.updateCategoryName = updateCategoryName;
+        window.deleteCategory = deleteCategory;
         window.updatePhotoDesc = updatePhotoDesc;
         window.deletePhoto = deletePhoto;
         window.openModal = openModal;
