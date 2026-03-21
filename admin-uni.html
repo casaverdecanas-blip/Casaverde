@@ -42,6 +42,18 @@
         .form-group input, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
         .form-group textarea { min-height: 120px; resize: vertical; font-family: inherit; }
         
+        /* Estilo para el campo iframe */
+        .iframe-input { font-family: monospace; font-size: 11px; }
+        .iframe-preview { 
+            background: #f5f5f5; 
+            padding: 10px; 
+            border-radius: 8px; 
+            margin-top: 8px;
+            font-size: 10px;
+            color: #666;
+            word-break: break-all;
+        }
+        
         .category-item { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
         .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
         .category-order { display: flex; align-items: center; gap: 5px; }
@@ -88,7 +100,7 @@
         <div id="admin-panel" style="display: none;">
             <div class="header">
                 <h1>📸 Admin Unificado - CasaVerdeCanas</h1>
-                <p>Gestión de fotos y textos de cabañas y espacios comunes</p>
+                <p>Gestión de fotos, textos, enlaces de Airbnb y calendarios</p>
                 <div class="stats" id="stats"></div>
             </div>
             
@@ -127,7 +139,7 @@
         const ADMIN_PASSWORD = 'CasaVerde2026';
         
         // ============================================
-        // ESTRUCTURA POR DEFECTO
+        // ESTRUCTURA POR DEFECTO CON LINKS
         // ============================================
         const defaultSiteData = {
             apartments: {
@@ -135,18 +147,24 @@
                     name: "🌲 Cabaña 1 - Vista al Bosque",
                     icon: "🌲",
                     description: "Rodeada de árboles nativos, esta cabaña ofrece paz y conexión con la naturaleza. Espaciosa, ventilada y luminosa, con terraza independiente. A solo tres cuadras del mar.",
+                    airbnb_url: "https://www.airbnb.com/rooms/1337276103911358917",
+                    google_calendar_iframe: '<iframe src="https://calendar.google.com/calendar/embed?src=h5a1h0a8dg9rl0oufvq19hn05r4gbubg%40import.calendar.google.com&ctz=America%2FSao_Paulo" style="border: 0" width="100%" height="550" frameborder="0" scrolling="no"></iframe>',
                     categories: {}
                 },
                 "cabin-2": {
                     name: "🏢 Loft en Canasvieiras",
                     icon: "🏢",
                     description: "A 3 cuadras de la playa y 7 del centro, en la zona del trapiche, residencial, linda y tranquila. Loft recientemente renovado con cocina equipada básica, living comedor y baño en la parte baja, y camas en el entrepiso. Balcón terraza con mesa y sillas.",
+                    airbnb_url: "https://es.airbnb.com/rooms/1110346888721141996",
+                    google_calendar_iframe: '<iframe src="https://calendar.google.com/calendar/embed?src=8i3hl5ppqi6al50kf7casj5n5vl9sp1j%40import.calendar.google.com&ctz=America%2FSao_Paulo" style="border: 0" width="100%" height="550" frameborder="0" scrolling="no"></iframe>',
                     categories: {}
                 },
                 "cabin-3": {
                     name: "👨‍👩‍👧‍👦 Cabaña 3 - Familiar Premium",
                     icon: "👨‍👩‍👧‍👦",
                     description: "Amplia cabaña con todas las comodidades para familias con niños. Zona de juegos, espacio exterior y parrilla. Ideal para 4 personas. Entre el 10% de los alojamientos mejor calificados en Airbnb.",
+                    airbnb_url: "https://es.airbnb.com/rooms/1230287544066345753",
+                    google_calendar_iframe: '<iframe src="https://calendar.google.com/calendar/embed?src=60n7foetdu2qvsn16mi7is8j6i4ugm66%40import.calendar.google.com&ctz=America%2FSao_Paulo" style="border: 0" width="100%" height="550" frameborder="0" scrolling="no"></iframe>',
                     categories: {}
                 }
             },
@@ -374,6 +392,17 @@
                     <textarea id="${apId}-desc">${escapeHtml(ap.description || '')}</textarea>
                 </div>
                 
+                <div class="form-group">
+                    <label>🔗 Enlace de Airbnb</label>
+                    <input type="url" id="${apId}-airbnb-url" value="${escapeHtml(ap.airbnb_url || '')}" placeholder="https://www.airbnb.com/rooms/...">
+                </div>
+                
+                <div class="form-group">
+                    <label>📅 Código iframe de Google Calendar</label>
+                    <textarea id="${apId}-calendar-iframe" class="iframe-input" rows="3" placeholder='<iframe src="https://calendar.google.com/calendar/embed?src=..."></iframe>'>${escapeHtml(ap.google_calendar_iframe || '')}</textarea>
+                    <div class="iframe-preview">ℹ️ Copia el código iframe completo desde Google Calendar (Configuración → Integrar calendario)</div>
+                </div>
+                
                 <h3 style="color:#2d5a27; margin:20px 0 10px;">📸 Categorías y Fotos</h3>
                 <div id="${apId}-categories-container"></div>
                 
@@ -389,6 +418,14 @@
             };
             panel.querySelector(`#${apId}-desc`).onchange = (e) => {
                 siteData.apartments[apId].description = e.target.value;
+            };
+            panel.querySelector(`#${apId}-airbnb-url`).onchange = (e) => {
+                siteData.apartments[apId].airbnb_url = e.target.value;
+                updateStatus('Enlace Airbnb actualizado.');
+            };
+            panel.querySelector(`#${apId}-calendar-iframe`).onchange = (e) => {
+                siteData.apartments[apId].google_calendar_iframe = e.target.value;
+                updateStatus('Código de calendario actualizado.');
             };
             
             const categories = ap.categories || {};
