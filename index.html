@@ -15,7 +15,7 @@
             text-align: center;
             position: relative;
         }
-        .hero h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .hero h1 { font-size: 2.5rem; margin-bottom: 0.5rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
         .hero .subtitle { font-size: 1.1rem; margin-bottom: 20px; opacity: 0.95; }
         
         .lang-picker {
@@ -35,8 +35,10 @@
             cursor: pointer;
             font-weight: bold;
             font-size: 0.8rem;
+            transition: all 0.3s;
         }
         .lang-btn:hover { background: white; color: #2d5a27; }
+        .lang-btn.active { background: white; color: #2d5a27; }
         
         .trust-badges {
             display: flex;
@@ -60,6 +62,7 @@
             font-size: 1.8rem;
             color: #2d5a27;
             margin-bottom: 30px;
+            position: relative;
         }
         section h2:after {
             content: '';
@@ -68,15 +71,14 @@
             height: 3px;
             background: #f39c12;
             margin: 10px auto 0;
+            border-radius: 2px;
         }
         
-        /* Grid de cabañas */
         .cabins-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 30px;
+            gap: 25px;
         }
-        
         .cabin-card {
             background: white;
             border-radius: 20px;
@@ -149,9 +151,7 @@
             font-size: 0.9rem;
             transition: background 0.3s;
         }
-        .btn:hover {
-            background: #1e3f1a;
-        }
+        .btn:hover { background: #1e3f1a; }
         
         /* Espacios comunes - sliders */
         .category-section {
@@ -213,9 +213,7 @@
             font-size: 1rem;
             z-index: 10;
         }
-        .slider-btn:hover {
-            background: rgba(0,0,0,0.8);
-        }
+        .slider-btn:hover { background: rgba(0,0,0,0.8); }
         .slider-prev { left: 10px; }
         .slider-next { right: 10px; }
         .slider-dots {
@@ -232,11 +230,7 @@
             cursor: pointer;
             transition: all 0.3s;
         }
-        .dot.active {
-            background: #2d5a27;
-            width: 20px;
-            border-radius: 4px;
-        }
+        .dot.active { background: #2d5a27; width: 20px; border-radius: 4px; }
         
         .whatsapp-float {
             position: fixed;
@@ -252,10 +246,7 @@
             box-shadow: 0 4px 12px rgba(37,211,102,0.4);
             z-index: 100;
         }
-        .whatsapp-float img {
-            width: 30px;
-            height: 30px;
-        }
+        .whatsapp-float img { width: 30px; height: 30px; }
         
         footer {
             background: #1e3f1a;
@@ -280,30 +271,30 @@
 <body>
     <header class="hero">
         <div class="lang-picker">
-            <button class="lang-btn" onclick="changeLanguage('es')">🇪🇸 ES</button>
-            <button class="lang-btn" onclick="changeLanguage('pt')">🇧🇷 PT</button>
-            <button class="lang-btn" onclick="changeLanguage('en')">🇺🇸 EN</button>
+            <button class="lang-btn" data-lang="es" onclick="changeLanguage('es')">🇪🇸 ES</button>
+            <button class="lang-btn" data-lang="pt" onclick="changeLanguage('pt')">🇧🇷 PT</button>
+            <button class="lang-btn" data-lang="en" onclick="changeLanguage('en')">🇺🇸 EN</button>
         </div>
         <h1 id="site-title">CasaVerdeCanas</h1>
         <p id="site-subtitle" class="subtitle">Tu refugio familiar en Canasvieiras, Florianópolis</p>
         <div class="trust-badges">
-            <span>🏖️ A 3 cuadras de la playa</span>
-            <span>🅿️ Estacionamiento gratis</span>
-            <span>🏊‍♀️ Piscina compartida</span>
-            <span>🔥 Asador y parrilla</span>
+            <span id="badge-beach">🏖️ A 3 cuadras de la playa</span>
+            <span id="badge-parking">🅿️ Estacionamiento gratis</span>
+            <span id="badge-pool">🏊‍♀️ Piscina compartida</span>
+            <span id="badge-bbq">🔥 Asador y parrilla</span>
         </div>
     </header>
 
     <main class="container">
         <section>
-            <h2 data-i18n="cabins_title">Nuestras Cabañas</h2>
+            <h2 id="cabins-title">Nuestras Cabañas</h2>
             <div id="cabins-container" class="cabins-grid">
                 <div class="loading">Cargando cabañas...</div>
             </div>
         </section>
 
         <section>
-            <h2 data-i18n="common_title">Espacios Compartidos</h2>
+            <h2 id="common-title">Espacios Compartidos</h2>
             <div id="common-container"></div>
         </section>
     </main>
@@ -313,7 +304,7 @@
     </a>
 
     <footer>
-        <p>© 2026 CasaVerdeCanas - Posada familiar en Canasvieiras, Florianópolis</p>
+        <p>© 2026 CasaVerdeCanas - <span id="footer-text">Posada familiar en Canasvieiras, Florianópolis</span></p>
         <p>📞 +55 48 99118-1246 | ✉️ contacto@casaverdecanas.com.br</p>
     </footer>
 
@@ -334,34 +325,82 @@
         const db = firebase.database();
 
         // ============================================
-        // TRADUCCIONES
+        // TRADUCCIONES DEL INDEX (textos fijos)
         // ============================================
-        const TRANSLATIONS = {
-            es: { cabins_title: "Nuestras Cabañas", common_title: "Espacios Compartidos" },
-            pt: { cabins_title: "Nossas Cabanas", common_title: "Espaços Compartilhados" },
-            en: { cabins_title: "Our Cabins", common_title: "Shared Spaces" }
+        const INDEX_TRANSLATIONS = {
+            es: {
+                siteTitle: "CasaVerdeCanas",
+                siteSubtitle: "Tu refugio familiar en Canasvieiras, Florianópolis",
+                badgeBeach: "🏖️ A 3 cuadras de la playa",
+                badgeParking: "🅿️ Estacionamiento gratis",
+                badgePool: "🏊‍♀️ Piscina compartida",
+                badgeBBQ: "🔥 Asador y parrilla",
+                cabinsTitle: "Nuestras Cabañas",
+                commonTitle: "Espacios Compartidos",
+                footerText: "Posada familiar en Canasvieiras, Florianópolis",
+                viewAvailability: "Ver disponibilidad"
+            },
+            pt: {
+                siteTitle: "CasaVerdeCanas",
+                siteSubtitle: "Seu refúgio familiar em Canasvieiras, Florianópolis",
+                badgeBeach: "🏖️ A 3 quadras da praia",
+                badgeParking: "🅿️ Estacionamento grátis",
+                badgePool: "🏊‍♀️ Piscina compartilhada",
+                badgeBBQ: "🔥 Churrasqueira",
+                cabinsTitle: "Nossas Cabanas",
+                commonTitle: "Espaços Compartilhados",
+                footerText: "Pousada familiar em Canasvieiras, Florianópolis",
+                viewAvailability: "Ver disponibilidade"
+            },
+            en: {
+                siteTitle: "CasaVerdeCanas",
+                siteSubtitle: "Your family refuge in Canasvieiras, Florianópolis",
+                badgeBeach: "🏖️ 3 blocks from the beach",
+                badgeParking: "🅿️ Free parking",
+                badgePool: "🏊‍♀️ Shared pool",
+                badgeBBQ: "🔥 BBQ area",
+                cabinsTitle: "Our Cabins",
+                commonTitle: "Shared Spaces",
+                footerText: "Family inn in Canasvieiras, Florianópolis",
+                viewAvailability: "View availability"
+            }
         };
         
         let currentLang = localStorage.getItem('lang') || 'es';
+        let siteData = null;
         
-        function changeLanguage(lang) {
-            currentLang = lang;
-            localStorage.setItem('lang', lang);
-            document.getElementById('site-title').textContent = 'CasaVerdeCanas';
-            document.getElementById('site-subtitle').textContent = lang === 'es' ? 'Tu refugio familiar en Canasvieiras, Florianópolis' : (lang === 'pt' ? 'Seu refúgio familiar em Canasvieiras, Florianópolis' : 'Your family refuge in Canasvieiras, Florianópolis');
-            document.querySelectorAll('[data-i18n]').forEach(el => {
-                const key = el.getAttribute('data-i18n');
-                if (TRANSLATIONS[lang][key]) el.textContent = TRANSLATIONS[lang][key];
-            });
+        // ============================================
+        // FUNCIÓN PARA OBTENER TEXTO SEGÚN IDIOMA
+        // ============================================
+        function getText(obj) {
+            if (!obj) return '';
+            if (typeof obj === 'string') return obj;
+            return obj[currentLang] || obj.es || '';
         }
-
+        
+        // ============================================
+        // ACTUALIZAR TEXTOS FIJOS DEL INDEX
+        // ============================================
+        function updateFixedTexts() {
+            const t = INDEX_TRANSLATIONS[currentLang];
+            document.getElementById('site-title').textContent = t.siteTitle;
+            document.getElementById('site-subtitle').textContent = t.siteSubtitle;
+            document.getElementById('badge-beach').textContent = t.badgeBeach;
+            document.getElementById('badge-parking').textContent = t.badgeParking;
+            document.getElementById('badge-pool').textContent = t.badgePool;
+            document.getElementById('badge-bbq').textContent = t.badgeBBQ;
+            document.getElementById('cabins-title').textContent = t.cabinsTitle;
+            document.getElementById('common-title').textContent = t.commonTitle;
+            document.getElementById('footer-text').textContent = t.footerText;
+        }
+        
         // ============================================
         // SLIDERS PARA ESPACIOS COMUNES
         // ============================================
         let commonSliders = {};
         let commonAutoIntervals = {};
 
-        function initCommonSlider(sliderId, photos, containerId) {
+        function initCommonSlider(sliderId, photos) {
             const track = document.getElementById(`track-${sliderId}`);
             const dotsContainer = document.getElementById(`dots-${sliderId}`);
             if (!track) return;
@@ -372,7 +411,8 @@
             photos.forEach((photo, idx) => {
                 const slide = document.createElement('div');
                 slide.className = 'slider-slide';
-                slide.innerHTML = `<img src="${photo.url}" alt="${photo.desc}" onclick="openModal('${photo.url}')"><div class="slider-caption">${photo.desc}</div>`;
+                const desc = getText(photo.desc);
+                slide.innerHTML = `<img src="${photo.url}" alt="${desc}" onclick="openModal('${photo.url}')"><div class="slider-caption">${desc}</div>`;
                 track.appendChild(slide);
                 
                 const dot = document.createElement('div');
@@ -386,7 +426,7 @@
             
             if (photos.length > 1) {
                 startCommonAutoSlide(sliderId);
-                const container = document.getElementById(containerId);
+                const container = document.getElementById(`slider-container-${sliderId}`);
                 if (container) {
                     container.addEventListener('mouseenter', () => pauseCommonAutoSlide(sliderId));
                     container.addEventListener('mouseleave', () => startCommonAutoSlide(sliderId));
@@ -439,18 +479,17 @@
             updateCommonSlider(sliderId);
             startCommonAutoSlide(sliderId);
         }
-
+        
         // ============================================
         // SLIDERS PARA CABAÑAS (con desvanecimiento)
         // ============================================
         let cabinSliders = {};
         let cabinAutoIntervals = {};
 
-        function initCabinSlider(cabinId, photos, cabinName, cabinDescription) {
+        function initCabinSlider(cabinId, photos) {
             const container = document.getElementById(`cabin-slider-${cabinId}`);
             if (!container || photos.length === 0) return;
             
-            // Crear estructura de slider
             container.innerHTML = `
                 <div class="cabin-slider-images" id="cabin-images-${cabinId}">
                     ${photos.map((photo, idx) => `
@@ -462,16 +501,15 @@
                 </div>
             `;
             
-            // Guardar estado
-            cabinSliders[cabinId] = {
-                currentIndex: 0,
-                total: photos.length,
-                interval: null
-            };
+            cabinSliders[cabinId] = { currentIndex: 0, total: photos.length };
             
-            // Iniciar rotación si hay más de 1 foto
             if (photos.length > 1) {
                 startCabinAutoSlide(cabinId);
+                const card = document.getElementById(`cabin-card-${cabinId}`);
+                if (card) {
+                    card.addEventListener('mouseenter', () => stopCabinAutoSlide(cabinId));
+                    card.addEventListener('mouseleave', () => startCabinAutoSlide(cabinId));
+                }
             }
         }
         
@@ -479,19 +517,14 @@
             if (cabinAutoIntervals[cabinId]) clearInterval(cabinAutoIntervals[cabinId]);
             if (!cabinSliders[cabinId] || cabinSliders[cabinId].total <= 1) return;
             
-            // Tiempo base 4 segundos + retraso aleatorio para desincronizar (0-1.5 segundos)
             const delay = 4000 + (Math.random() * 1500);
-            
             cabinAutoIntervals[cabinId] = setInterval(() => {
                 if (!cabinSliders[cabinId]) return;
                 const current = cabinSliders[cabinId].currentIndex;
                 const next = (current + 1) % cabinSliders[cabinId].total;
-                
-                // Cambiar la imagen activa
                 const slides = document.querySelectorAll(`#cabin-images-${cabinId} .cabin-slide`);
                 slides[current].classList.remove('active');
                 slides[next].classList.add('active');
-                
                 cabinSliders[cabinId].currentIndex = next;
             }, delay);
         }
@@ -503,79 +536,55 @@
             }
         }
         
-        // Pausar al pasar el mouse
-        function setupCabinHover(cabinId) {
-            const card = document.getElementById(`cabin-card-${cabinId}`);
-            if (card) {
-                card.addEventListener('mouseenter', () => stopCabinAutoSlide(cabinId));
-                card.addEventListener('mouseleave', () => startCabinAutoSlide(cabinId));
-            }
-        }
-        
         // ============================================
         // CARGAR DATOS DESDE FIREBASE
         // ============================================
         async function loadData() {
             try {
                 const snapshot = await db.ref('siteData').once('value');
-                const data = snapshot.val() || {};
+                siteData = snapshot.val() || {};
                 
-                const apartments = data.apartments || {};
-                const common = data.common || { categories: {} };
+                const apartments = siteData.apartments || {};
+                const common = siteData.common || { categories: {} };
                 
                 // ============================================
-                // CABAÑAS (con slider de desvanecimiento)
+                // CABAÑAS
                 // ============================================
                 const cabinsContainer = document.getElementById('cabins-container');
                 cabinsContainer.innerHTML = '';
                 
-                // Recolectar todas las fotos de cada cabaña
-                const cabinsWithPhotos = {};
+                const order = ['cabin-1', 'cabin-2', 'cabin-3'];
                 
-                for (const [apId, apData] of Object.entries(apartments)) {
-                    const allPhotos = [];
-                    const categories = apData.categories || {};
+                for (const cabinId of order) {
+                    const cabin = apartments[cabinId];
+                    if (!cabin) continue;
                     
+                    // Recolectar todas las fotos de todas las categorías
+                    const allPhotos = [];
+                    const categories = cabin.categories || {};
                     for (const catData of Object.values(categories)) {
                         if (catData.photos && Array.isArray(catData.photos)) {
                             allPhotos.push(...catData.photos);
                         }
                     }
                     
-                    cabinsWithPhotos[apId] = {
-                        name: apData.name || apId,
-                        description: apData.description || 'Espacio acogedor en Canasvieiras',
-                        photos: allPhotos
-                    };
-                }
-                
-                // Orden de cabañas (cabin-1, cabin-2, cabin-3)
-                const order = ['cabin-1', 'cabin-2', 'cabin-3'];
-                
-                for (const apId of order) {
-                    const cabin = cabinsWithPhotos[apId];
-                    if (!cabin) continue;
-                    
                     const card = document.createElement('div');
                     card.className = 'cabin-card';
-                    card.id = `cabin-card-${apId}`;
+                    card.id = `cabin-card-${cabinId}`;
                     card.innerHTML = `
-                        <div class="cabin-slider" id="cabin-slider-${apId}"></div>
+                        <div class="cabin-slider" id="cabin-slider-${cabinId}"></div>
                         <div class="cabin-content">
-                            <h3>${cabin.name}</h3>
-                            <p>${cabin.description}</p>
-                            <a href="cabanas/${apId}.html" class="btn">Ver disponibilidad</a>
+                            <h3>${getText(cabin.name)}</h3>
+                            <p>${getText(cabin.description)}</p>
+                            <a href="cabanas/${cabinId}.html" class="btn">${INDEX_TRANSLATIONS[currentLang].viewAvailability}</a>
                         </div>
                     `;
                     cabinsContainer.appendChild(card);
                     
-                    // Inicializar slider con todas las fotos
-                    if (cabin.photos.length > 0) {
-                        initCabinSlider(apId, cabin.photos, cabin.name, cabin.description);
-                        setupCabinHover(apId);
+                    if (allPhotos.length > 0) {
+                        initCabinSlider(cabinId, allPhotos);
                     } else {
-                        // Foto por defecto
-                        const sliderDiv = document.getElementById(`cabin-slider-${apId}`);
+                        const sliderDiv = document.getElementById(`cabin-slider-${cabinId}`);
                         if (sliderDiv) {
                             sliderDiv.innerHTML = `
                                 <div class="cabin-slider-images">
@@ -592,7 +601,10 @@
                 const commonContainer = document.getElementById('common-container');
                 commonContainer.innerHTML = '';
                 
-                for (const [catId, catData] of Object.entries(common.categories)) {
+                const commonCategories = common.categories || {};
+                const sortedCategories = Object.entries(commonCategories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
+                
+                for (const [catId, catData] of sortedCategories) {
                     const photos = catData.photos || [];
                     if (photos.length === 0) continue;
                     
@@ -601,7 +613,7 @@
                     section.className = 'category-section';
                     section.id = `slider-container-${sliderId}`;
                     section.innerHTML = `
-                        <h3>${catData.name}</h3>
+                        <h3>${getText(catData.name)}</h3>
                         <div class="slider-container">
                             <button class="slider-btn slider-prev" onclick="prevCommonSlide('${sliderId}')">‹</button>
                             <div class="slider-track" id="track-${sliderId}"></div>
@@ -610,7 +622,7 @@
                         </div>
                     `;
                     commonContainer.appendChild(section);
-                    initCommonSlider(sliderId, photos, `slider-container-${sliderId}`);
+                    initCommonSlider(sliderId, photos);
                 }
                 
                 if (cabinsContainer.innerHTML === '') {
@@ -626,6 +638,9 @@
             }
         }
         
+        // ============================================
+        // MODAL PARA IMÁGENES
+        // ============================================
         function openModal(url) {
             const modal = document.createElement('div');
             modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:2000;display:flex;align-items:center;justify-content:center;cursor:pointer;';
@@ -635,13 +650,44 @@
         }
         
         // ============================================
+        // CAMBIAR IDIOMA
+        // ============================================
+        function changeLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('lang', lang);
+            document.documentElement.lang = lang;
+            
+            // Actualizar textos fijos
+            updateFixedTexts();
+            
+            // Recargar datos completos (para actualizar textos dinámicos)
+            loadData();
+            
+            // Actualizar clase activa en botones
+            document.querySelectorAll('.lang-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.getAttribute('data-lang') === lang) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+        
+        // ============================================
         // INICIALIZACIÓN
         // ============================================
         document.addEventListener('DOMContentLoaded', () => {
-            changeLanguage(currentLang);
+            updateFixedTexts();
             loadData();
+            
+            // Marcar botón activo
+            document.querySelectorAll('.lang-btn').forEach(btn => {
+                if (btn.getAttribute('data-lang') === currentLang) {
+                    btn.classList.add('active');
+                }
+            });
         });
         
+        // Exponer funciones globales
         window.changeLanguage = changeLanguage;
         window.prevCommonSlide = prevCommonSlide;
         window.nextCommonSlide = nextCommonSlide;
