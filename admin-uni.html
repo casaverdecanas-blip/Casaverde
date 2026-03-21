@@ -40,9 +40,35 @@
         .form-group { margin-bottom: 20px; }
         .form-group label { display: block; font-weight: bold; color: #2d5a27; margin-bottom: 8px; }
         .form-group input, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
-        .form-group textarea { min-height: 120px; resize: vertical; font-family: inherit; }
+        .form-group textarea { min-height: 100px; resize: vertical; font-family: inherit; }
         
-        /* Estilo para el campo iframe */
+        /* Campos de idioma */
+        .lang-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        .lang-field {
+            flex: 1;
+            min-width: 200px;
+        }
+        .lang-field label {
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        .lang-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+        .lang-es { background: #f39c12; color: white; }
+        .lang-pt { background: #27ae60; color: white; }
+        .lang-en { background: #3498db; color: white; }
+        
         .iframe-input { font-family: monospace; font-size: 11px; }
         .iframe-preview { 
             background: #f5f5f5; 
@@ -58,8 +84,10 @@
         .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
         .category-order { display: flex; align-items: center; gap: 5px; }
         .category-order input { width: 60px; padding: 5px; text-align: center; border: 1px solid #ddd; border-radius: 4px; }
-        .category-name { flex: 1; }
-        .category-name input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .category-name { flex: 2; }
+        .category-name .lang-row { margin-bottom: 0; gap: 8px; }
+        .category-name .lang-field { min-width: 120px; }
+        .category-name input { padding: 6px; font-size: 12px; }
         .category-actions { display: flex; gap: 8px; }
         
         .photos-list { margin-top: 15px; }
@@ -69,8 +97,10 @@
         .photo-item img { width: 60px; height: 60px; object-fit: cover; border-radius: 6px; cursor: pointer; }
         .photo-url { flex: 2; min-width: 200px; }
         .photo-url input { width: 100%; padding: 6px; font-size: 11px; border: 1px solid #ddd; border-radius: 4px; }
-        .photo-desc { flex: 1; min-width: 150px; }
-        .photo-desc input { width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; }
+        .photo-desc { flex: 1; min-width: 200px; }
+        .photo-desc .lang-row { gap: 5px; margin-bottom: 0; }
+        .photo-desc .lang-field { min-width: 60px; }
+        .photo-desc input { padding: 4px; font-size: 10px; }
         .photo-actions button { padding: 5px 8px; font-size: 11px; }
         
         .add-photo-btn { background: #e8f5e9; border: 1px dashed #2d5a27; padding: 8px; text-align: center; cursor: pointer; border-radius: 8px; margin-top: 10px; color: #2d5a27; }
@@ -82,7 +112,7 @@
         .modal.active { display: flex; }
         .modal img { max-width: 90%; max-height: 90%; border-radius: 8px; }
         
-        @media (max-width: 768px) { .photo-item { flex-direction: column; align-items: stretch; } .photo-order, .photo-url, .photo-desc { width: 100%; } }
+        @media (max-width: 768px) { .photo-item { flex-direction: column; align-items: stretch; } .photo-order, .photo-url, .photo-desc { width: 100%; } .lang-row { flex-direction: column; } }
     </style>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
@@ -100,7 +130,7 @@
         <div id="admin-panel" style="display: none;">
             <div class="header">
                 <h1>📸 Admin Unificado - CasaVerdeCanas</h1>
-                <p>Gestión de fotos, textos, enlaces de Airbnb y calendarios</p>
+                <p>Gestión multi-idioma (Español, Português, English)</p>
                 <div class="stats" id="stats"></div>
             </div>
             
@@ -139,47 +169,62 @@
         const ADMIN_PASSWORD = 'CasaVerde2026';
         
         // ============================================
-        // ESTRUCTURA POR DEFECTO CON LINKS
+        // ESTRUCTURA POR DEFECTO CON TRES IDIOMAS
         // ============================================
         const defaultSiteData = {
             apartments: {
                 "cabin-1": {
-                    name: "🌲 Cabaña 1 - Vista al Bosque",
                     icon: "🌲",
-                    description: "Rodeada de árboles nativos, esta cabaña ofrece paz y conexión con la naturaleza. Espaciosa, ventilada y luminosa, con terraza independiente. A solo tres cuadras del mar.",
+                    name: { es: "🌲 Cabaña 1 - Vista al Bosque", pt: "🌲 Cabana 1 - Vista da Mata", en: "🌲 Cabin 1 - Forest View" },
+                    description: { 
+                        es: "Rodeada de árboles nativos, esta cabaña ofrece paz y conexión con la naturaleza. Espaciosa, ventilada y luminosa, con terraza independiente. A solo tres cuadras del mar.",
+                        pt: "Cercada por árvores nativas, esta cabana oferece paz e conexão com a natureza. Espaçosa, ventilada e iluminada, com terraço independente. A apenas três quadras do mar.",
+                        en: "Surrounded by native trees, this cabin offers peace and connection with nature. Spacious, airy and bright, with an independent terrace. Just three blocks from the sea."
+                    },
                     airbnb_url: "https://www.airbnb.com/rooms/1337276103911358917",
                     google_calendar_iframe: '<iframe src="https://calendar.google.com/calendar/embed?src=h5a1h0a8dg9rl0oufvq19hn05r4gbubg%40import.calendar.google.com&ctz=America%2FSao_Paulo" style="border: 0" width="100%" height="550" frameborder="0" scrolling="no"></iframe>',
                     categories: {}
                 },
                 "cabin-2": {
-                    name: "🏢 Loft en Canasvieiras",
                     icon: "🏢",
-                    description: "A 3 cuadras de la playa y 7 del centro, en la zona del trapiche, residencial, linda y tranquila. Loft recientemente renovado con cocina equipada básica, living comedor y baño en la parte baja, y camas en el entrepiso. Balcón terraza con mesa y sillas.",
+                    name: { es: "🏢 Loft en Canasvieiras", pt: "🏢 Loft em Canasvieiras", en: "🏢 Loft in Canasvieiras" },
+                    description: {
+                        es: "A 3 cuadras de la playa y 7 del centro, en la zona del trapiche, residencial, linda y tranquila. Loft recientemente renovado con cocina equipada básica, living comedor y baño en la parte baja, y camas en el entrepiso. Balcón terraza con mesa y sillas.",
+                        pt: "A 3 quadras da praia e 7 do centro, na zona do trapiche, residencial, linda e tranquila. Loft recentemente renovado com cozinha equipada básica, sala de estar e banheiro na parte inferior, e camas no mezanino. Varanda com mesa e cadeiras.",
+                        en: "3 blocks from the beach and 7 from the center, in the trapiche area, residential, nice and quiet. Recently renovated loft with basic equipped kitchen, living room and bathroom downstairs, and beds in the mezzanine. Balcony terrace with table and chairs."
+                    },
                     airbnb_url: "https://es.airbnb.com/rooms/1110346888721141996",
                     google_calendar_iframe: '<iframe src="https://calendar.google.com/calendar/embed?src=8i3hl5ppqi6al50kf7casj5n5vl9sp1j%40import.calendar.google.com&ctz=America%2FSao_Paulo" style="border: 0" width="100%" height="550" frameborder="0" scrolling="no"></iframe>',
                     categories: {}
                 },
                 "cabin-3": {
-                    name: "👨‍👩‍👧‍👦 Cabaña 3 - Familiar Premium",
                     icon: "👨‍👩‍👧‍👦",
-                    description: "Amplia cabaña con todas las comodidades para familias con niños. Zona de juegos, espacio exterior y parrilla. Ideal para 4 personas. Entre el 10% de los alojamientos mejor calificados en Airbnb.",
+                    name: { es: "👨‍👩‍👧‍👦 Cabaña 3 - Familiar Premium", pt: "👨‍👩‍👧‍👦 Cabana 3 - Familiar Premium", en: "👨‍👩‍👧‍👦 Cabin 3 - Family Premium" },
+                    description: {
+                        es: "Amplia cabaña con todas las comodidades para familias con niños. Zona de juegos, espacio exterior y parrilla. Ideal para 4 personas. Entre el 10% de los alojamientos mejor calificados en Airbnb.",
+                        pt: "Ampla cabana com todas as comodidades para famílias com crianças. Área de lazer, espaço externo e churrasqueira. Ideal para 4 pessoas. Entre os 10% dos alojamentos mais bem avaliados no Airbnb.",
+                        en: "Spacious cabin with all comforts for families with children. Play area, outdoor space and BBQ. Ideal for 4 people. Among the top 10% of best-rated accommodations on Airbnb."
+                    },
                     airbnb_url: "https://es.airbnb.com/rooms/1230287544066345753",
                     google_calendar_iframe: '<iframe src="https://calendar.google.com/calendar/embed?src=60n7foetdu2qvsn16mi7is8j6i4ugm66%40import.calendar.google.com&ctz=America%2FSao_Paulo" style="border: 0" width="100%" height="550" frameborder="0" scrolling="no"></iframe>',
                     categories: {}
                 }
             },
             common: {
-                name: "🏡 Espacios Comunes",
                 icon: "🏡",
-                description: "Zona techada con asador, mesa, sillas, hamacas, living, TV, juegos de mesa y piscina. Entorno verde y fresco. WiFi y lavadero compartido.",
+                description: {
+                    es: "Zona techada con asador, mesa, sillas, hamacas, living, TV, juegos de mesa y piscina. Entorno verde y fresco. WiFi y lavadero compartido.",
+                    pt: "Área coberta com churrasqueira, mesa, cadeiras, redes, sala, TV, jogos de tabuleiro e piscina. Ambiente verde e fresco. WiFi e lavanderia compartilhados.",
+                    en: "Covered area with BBQ, table, chairs, hammocks, living room, TV, board games and pool. Green and fresh environment. Shared WiFi and laundry."
+                },
                 categories: {
-                    "entrada": { name: "🚪 Entrada Principal", order: 1, photos: [] },
-                    "living": { name: "🛋️ Living Común", order: 2, photos: [] },
-                    "juegos": { name: "🎮 Sala de Juegos", order: 3, photos: [] },
-                    "barbacoa": { name: "🔥 Asador / Barbacoa", order: 4, photos: [] },
-                    "piscina": { name: "🏊‍♀️ Piscina", order: 5, photos: [] },
-                    "parque": { name: "🌳 Parque Exterior", order: 6, photos: [] },
-                    "hamacas": { name: "🌿 Hamacas y Descanso", order: 7, photos: [] }
+                    "entrada": { name: { es: "🚪 Entrada Principal", pt: "🚪 Entrada Principal", en: "🚪 Main Entrance" }, order: 1, photos: [] },
+                    "living": { name: { es: "🛋️ Living Común", pt: "🛋️ Sala Comum", en: "🛋️ Common Living Room" }, order: 2, photos: [] },
+                    "juegos": { name: { es: "🎮 Sala de Juegos", pt: "🎮 Sala de Jogos", en: "🎮 Game Room" }, order: 3, photos: [] },
+                    "barbacoa": { name: { es: "🔥 Asador / Barbacoa", pt: "🔥 Churrasqueira", en: "🔥 BBQ" }, order: 4, photos: [] },
+                    "piscina": { name: { es: "🏊‍♀️ Piscina", pt: "🏊‍♀️ Piscina", en: "🏊‍♀️ Swimming Pool" }, order: 5, photos: [] },
+                    "parque": { name: { es: "🌳 Parque Exterior", pt: "🌳 Parque Exterior", en: "🌳 Outdoor Park" }, order: 6, photos: [] },
+                    "hamacas": { name: { es: "🌿 Hamacas y Descanso", pt: "🌿 Redes e Descanso", en: "🌿 Hammocks" }, order: 7, photos: [] }
                 }
             }
         };
@@ -249,24 +294,25 @@
                 const snapshot = await db.ref('siteData').once('value');
                 const data = snapshot.val();
                 if (data && Object.keys(data).length > 0) {
-                    siteData = {
-                        apartments: { ...defaultSiteData.apartments, ...(data.apartments || {}) },
-                        common: { ...defaultSiteData.common, ...(data.common || {}) }
-                    };
-                    for (const apId of Object.keys(siteData.apartments)) {
-                        if (!siteData.apartments[apId].categories) siteData.apartments[apId].categories = {};
+                    siteData = JSON.parse(JSON.stringify(defaultSiteData));
+                    if (data.apartments) {
+                        for (const [id, ap] of Object.entries(data.apartments)) {
+                            if (siteData.apartments[id]) {
+                                siteData.apartments[id] = { ...siteData.apartments[id], ...ap };
+                            }
+                        }
                     }
-                    if (!siteData.common.categories) siteData.common.categories = {};
+                    if (data.common) {
+                        siteData.common = { ...siteData.common, ...data.common };
+                    }
                     updateStatus('✅ Datos cargados correctamente');
                 } else {
-                    siteData = JSON.parse(JSON.stringify(defaultSiteData));
                     updateStatus('⚠️ No hay datos en Firebase. Usando valores por defecto.');
                 }
                 renderAll();
             } catch (error) {
                 console.error(error);
                 updateStatus('❌ Error: ' + error.message, true);
-                siteData = JSON.parse(JSON.stringify(defaultSiteData));
                 renderAll();
             }
         }
@@ -305,7 +351,7 @@
                 for (const [id, ap] of Object.entries(siteData.apartments)) {
                     const tab = document.createElement('button');
                     tab.className = `tab-btn ${currentTab === id ? 'active' : ''}`;
-                    tab.textContent = ap.name || id;
+                    tab.textContent = ap.name?.es || id;
                     tab.onclick = () => switchTab(id);
                     tabsContainer.appendChild(tab);
                 }
@@ -347,7 +393,11 @@
                 
                 <div class="form-group">
                     <label>📝 Descripción general</label>
-                    <textarea id="common-desc">${escapeHtml(siteData.common.description || '')}</textarea>
+                    <div class="lang-row">
+                        <div class="lang-field"><label>🇪🇸 Español</label><textarea id="common-desc-es" rows="3">${escapeHtml(siteData.common.description?.es || '')}</textarea></div>
+                        <div class="lang-field"><label>🇧🇷 Português</label><textarea id="common-desc-pt" rows="3">${escapeHtml(siteData.common.description?.pt || '')}</textarea></div>
+                        <div class="lang-field"><label>🇺🇸 English</label><textarea id="common-desc-en" rows="3">${escapeHtml(siteData.common.description?.en || '')}</textarea></div>
+                    </div>
                 </div>
                 
                 <div id="common-categories-container"></div>
@@ -357,11 +407,12 @@
                 </div>
             `;
             
-            const descTextarea = panel.querySelector('#common-desc');
-            descTextarea.onchange = (e) => {
-                siteData.common.description = e.target.value;
-                updateStatus('Descripción actualizada. Guarda los cambios.');
-            };
+            const descEs = panel.querySelector('#common-desc-es');
+            const descPt = panel.querySelector('#common-desc-pt');
+            const descEn = panel.querySelector('#common-desc-en');
+            descEs.onchange = () => { siteData.common.description.es = descEs.value; updateStatus('Descripción actualizada.'); };
+            descPt.onchange = () => { siteData.common.description.pt = descPt.value; };
+            descEn.onchange = () => { siteData.common.description.en = descEn.value; };
             
             const categories = siteData.common.categories || {};
             const sortedCategories = Object.entries(categories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
@@ -380,16 +431,24 @@
             panel.className = 'panel';
             panel.id = `panel-${apId}`;
             panel.innerHTML = `
-                <h2 style="color:#2d5a27; margin-bottom:20px;">${ap.icon || '🏠'} ${ap.name || apId}</h2>
+                <h2 style="color:#2d5a27; margin-bottom:20px;">${ap.icon || '🏠'} ${ap.name?.es || apId}</h2>
                 
                 <div class="form-group">
                     <label>📝 Nombre / Título</label>
-                    <input type="text" id="${apId}-name" value="${escapeHtml(ap.name || '')}">
+                    <div class="lang-row">
+                        <div class="lang-field"><label>🇪🇸 Español</label><input type="text" id="${apId}-name-es" value="${escapeHtml(ap.name?.es || '')}"></div>
+                        <div class="lang-field"><label>🇧🇷 Português</label><input type="text" id="${apId}-name-pt" value="${escapeHtml(ap.name?.pt || '')}"></div>
+                        <div class="lang-field"><label>🇺🇸 English</label><input type="text" id="${apId}-name-en" value="${escapeHtml(ap.name?.en || '')}"></div>
+                    </div>
                 </div>
                 
                 <div class="form-group">
                     <label>📝 Descripción (texto largo)</label>
-                    <textarea id="${apId}-desc">${escapeHtml(ap.description || '')}</textarea>
+                    <div class="lang-row">
+                        <div class="lang-field"><label>🇪🇸 Español</label><textarea id="${apId}-desc-es" rows="4">${escapeHtml(ap.description?.es || '')}</textarea></div>
+                        <div class="lang-field"><label>🇧🇷 Português</label><textarea id="${apId}-desc-pt" rows="4">${escapeHtml(ap.description?.pt || '')}</textarea></div>
+                        <div class="lang-field"><label>🇺🇸 English</label><textarea id="${apId}-desc-en" rows="4">${escapeHtml(ap.description?.en || '')}</textarea></div>
+                    </div>
                 </div>
                 
                 <div class="form-group">
@@ -400,7 +459,7 @@
                 <div class="form-group">
                     <label>📅 Código iframe de Google Calendar</label>
                     <textarea id="${apId}-calendar-iframe" class="iframe-input" rows="3" placeholder='<iframe src="https://calendar.google.com/calendar/embed?src=..."></iframe>'>${escapeHtml(ap.google_calendar_iframe || '')}</textarea>
-                    <div class="iframe-preview">ℹ️ Copia el código iframe completo desde Google Calendar (Configuración → Integrar calendario)</div>
+                    <div class="iframe-preview">ℹ️ Copia el código iframe completo desde Google Calendar</div>
                 </div>
                 
                 <h3 style="color:#2d5a27; margin:20px 0 10px;">📸 Categorías y Fotos</h3>
@@ -411,22 +470,14 @@
                 </div>
             `;
             
-            panel.querySelector(`#${apId}-name`).onchange = (e) => {
-                siteData.apartments[apId].name = e.target.value;
-                renderTabs();
-                updateStatus('Cambio guardado localmente. Recuerda GUARDAR en Firebase.');
-            };
-            panel.querySelector(`#${apId}-desc`).onchange = (e) => {
-                siteData.apartments[apId].description = e.target.value;
-            };
-            panel.querySelector(`#${apId}-airbnb-url`).onchange = (e) => {
-                siteData.apartments[apId].airbnb_url = e.target.value;
-                updateStatus('Enlace Airbnb actualizado.');
-            };
-            panel.querySelector(`#${apId}-calendar-iframe`).onchange = (e) => {
-                siteData.apartments[apId].google_calendar_iframe = e.target.value;
-                updateStatus('Código de calendario actualizado.');
-            };
+            panel.querySelector(`#${apId}-name-es`).onchange = (e) => { if (!siteData.apartments[apId].name) siteData.apartments[apId].name = {}; siteData.apartments[apId].name.es = e.target.value; renderTabs(); updateStatus('Cambio guardado.'); };
+            panel.querySelector(`#${apId}-name-pt`).onchange = (e) => { if (!siteData.apartments[apId].name) siteData.apartments[apId].name = {}; siteData.apartments[apId].name.pt = e.target.value; renderTabs(); };
+            panel.querySelector(`#${apId}-name-en`).onchange = (e) => { if (!siteData.apartments[apId].name) siteData.apartments[apId].name = {}; siteData.apartments[apId].name.en = e.target.value; renderTabs(); };
+            panel.querySelector(`#${apId}-desc-es`).onchange = (e) => { if (!siteData.apartments[apId].description) siteData.apartments[apId].description = {}; siteData.apartments[apId].description.es = e.target.value; };
+            panel.querySelector(`#${apId}-desc-pt`).onchange = (e) => { if (!siteData.apartments[apId].description) siteData.apartments[apId].description = {}; siteData.apartments[apId].description.pt = e.target.value; };
+            panel.querySelector(`#${apId}-desc-en`).onchange = (e) => { if (!siteData.apartments[apId].description) siteData.apartments[apId].description = {}; siteData.apartments[apId].description.en = e.target.value; };
+            panel.querySelector(`#${apId}-airbnb-url`).onchange = (e) => { siteData.apartments[apId].airbnb_url = e.target.value; };
+            panel.querySelector(`#${apId}-calendar-iframe`).onchange = (e) => { siteData.apartments[apId].google_calendar_iframe = e.target.value; };
             
             const categories = ap.categories || {};
             const sortedCategories = Object.entries(categories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
@@ -455,7 +506,11 @@
                         <input type="number" value="${catData.order || 0}" min="0" max="100" style="width:60px;" onchange="updateCategoryOrder('${owner}', '${catId}', this.value)">
                     </div>
                     <div class="category-name">
-                        <input type="text" value="${escapeHtml(catData.name || '')}" placeholder="Nombre categoría" onchange="updateCategoryName('${owner}', '${catId}', this.value)">
+                        <div class="lang-row">
+                            <div class="lang-field"><input type="text" placeholder="Español" value="${escapeHtml(catData.name?.es || '')}" onchange="updateCategoryName('${owner}', '${catId}', 'es', this.value)"></div>
+                            <div class="lang-field"><input type="text" placeholder="Português" value="${escapeHtml(catData.name?.pt || '')}" onchange="updateCategoryName('${owner}', '${catId}', 'pt', this.value)"></div>
+                            <div class="lang-field"><input type="text" placeholder="English" value="${escapeHtml(catData.name?.en || '')}" onchange="updateCategoryName('${owner}', '${catId}', 'en', this.value)"></div>
+                        </div>
                     </div>
                     <div class="category-actions">
                         <button class="btn btn-danger" style="padding:5px 10px;" onclick="deleteCategory('${owner}', '${catId}')">🗑️ Eliminar</button>
@@ -484,7 +539,11 @@
                             <input type="text" value="${escapeHtml(photo.url)}" placeholder="URL de la imagen" onchange="updatePhotoUrl('${owner}', '${catId}', ${idx}, this.value)">
                         </div>
                         <div class="photo-desc">
-                            <input type="text" value="${escapeHtml(photo.desc || '')}" placeholder="Descripción" onchange="updatePhotoDesc('${owner}', '${catId}', ${idx}, this.value)">
+                            <div class="lang-row">
+                                <div class="lang-field"><input type="text" placeholder="ES" value="${escapeHtml(photo.desc?.es || '')}" onchange="updatePhotoDesc('${owner}', '${catId}', ${idx}, 'es', this.value)"></div>
+                                <div class="lang-field"><input type="text" placeholder="PT" value="${escapeHtml(photo.desc?.pt || '')}" onchange="updatePhotoDesc('${owner}', '${catId}', ${idx}, 'pt', this.value)"></div>
+                                <div class="lang-field"><input type="text" placeholder="EN" value="${escapeHtml(photo.desc?.en || '')}" onchange="updatePhotoDesc('${owner}', '${catId}', ${idx}, 'en', this.value)"></div>
+                            </div>
                         </div>
                         <div class="photo-actions">
                             <button class="btn btn-danger" style="padding:5px 8px;" onclick="deletePhoto('${owner}', '${catId}', ${idx})">🗑️</button>
@@ -506,7 +565,7 @@
             if (!target.categories) target.categories = {};
             const currentCount = Object.keys(target.categories).length;
             target.categories[newId] = {
-                name: "📷 Nueva categoría",
+                name: { es: "📷 Nueva categoría", pt: "📷 Nova categoria", en: "📷 New category" },
                 order: currentCount + 1,
                 photos: []
             };
@@ -514,9 +573,7 @@
             updateStatus('Categoría agregada. Guarda los cambios.');
         };
         
-        window.addCommonCategory = function() {
-            addCategory('common');
-        };
+        window.addCommonCategory = function() { addCategory('common'); };
         
         window.updateCategoryOrder = function(owner, catId, newOrder) {
             const target = owner === 'common' ? siteData.common : siteData.apartments[owner];
@@ -527,10 +584,11 @@
             }
         };
         
-        window.updateCategoryName = function(owner, catId, newName) {
+        window.updateCategoryName = function(owner, catId, lang, newName) {
             const target = owner === 'common' ? siteData.common : siteData.apartments[owner];
             if (target.categories[catId]) {
-                target.categories[catId].name = newName;
+                if (!target.categories[catId].name) target.categories[catId].name = {};
+                target.categories[catId].name[lang] = newName;
             }
         };
         
@@ -555,7 +613,7 @@
                 const newOrder = category.photos.length;
                 category.photos.push({
                     url: url,
-                    desc: `Foto ${newOrder + 1}`,
+                    desc: { es: `Foto ${newOrder + 1}`, pt: `Foto ${newOrder + 1}`, en: `Photo ${newOrder + 1}` },
                     order: newOrder
                 });
                 renderPanels();
@@ -582,11 +640,12 @@
             }
         };
         
-        window.updatePhotoDesc = function(owner, catId, photoIndex, newDesc) {
+        window.updatePhotoDesc = function(owner, catId, photoIndex, lang, newDesc) {
             const target = owner === 'common' ? siteData.common : siteData.apartments[owner];
             const category = target.categories[catId];
             if (category.photos[photoIndex]) {
-                category.photos[photoIndex].desc = newDesc;
+                if (!category.photos[photoIndex].desc) category.photos[photoIndex].desc = {};
+                category.photos[photoIndex].desc[lang] = newDesc;
             }
         };
         
