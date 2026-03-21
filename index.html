@@ -70,39 +70,93 @@
             margin: 10px auto 0;
         }
         
+        /* Grid de cabañas */
         .cabins-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 25px;
+            gap: 30px;
         }
+        
         .cabin-card {
             background: white;
-            border-radius: 16px;
+            border-radius: 20px;
             overflow: hidden;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
             text-decoration: none;
             color: #333;
-            transition: transform 0.3s;
+            transition: transform 0.3s, box-shadow 0.3s;
+            display: flex;
+            flex-direction: column;
         }
-        .cabin-card:hover { transform: translateY(-5px); }
-        .cabin-img { width: 100%; height: 220px; object-fit: cover; }
-        .cabin-content { padding: 20px; text-align: center; }
-        .cabin-content h3 { color: #2d5a27; margin-bottom: 8px; }
-        .cabin-content p { color: #666; font-size: 0.9rem; margin-bottom: 15px; }
+        .cabin-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* Slider de fotos para cada cabaña */
+        .cabin-slider {
+            position: relative;
+            width: 100%;
+            height: 260px;
+            overflow: hidden;
+            background: #f0f0f0;
+        }
+        .cabin-slider-images {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        .cabin-slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            transition: opacity 0.8s ease-in-out;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        .cabin-slide.active {
+            opacity: 1;
+            z-index: 1;
+        }
+        
+        .cabin-content {
+            padding: 20px;
+            text-align: center;
+        }
+        .cabin-content h3 {
+            color: #2d5a27;
+            font-size: 1.4rem;
+            margin-bottom: 8px;
+        }
+        .cabin-content p {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+            line-height: 1.4;
+        }
         .btn {
             display: inline-block;
             background: #2d5a27;
             color: white;
-            padding: 8px 20px;
-            border-radius: 30px;
+            padding: 8px 24px;
+            border-radius: 40px;
             text-decoration: none;
             font-weight: bold;
             font-size: 0.9rem;
+            transition: background 0.3s;
+        }
+        .btn:hover {
+            background: #1e3f1a;
         }
         
+        /* Espacios comunes - sliders */
         .category-section {
             background: #e8f5e9;
-            border-radius: 16px;
+            border-radius: 20px;
             padding: 20px;
             margin-bottom: 25px;
         }
@@ -159,6 +213,9 @@
             font-size: 1rem;
             z-index: 10;
         }
+        .slider-btn:hover {
+            background: rgba(0,0,0,0.8);
+        }
         .slider-prev { left: 10px; }
         .slider-next { right: 10px; }
         .slider-dots {
@@ -173,8 +230,13 @@
             border-radius: 50%;
             background: #ccc;
             cursor: pointer;
+            transition: all 0.3s;
         }
-        .dot.active { background: #2d5a27; width: 20px; border-radius: 4px; }
+        .dot.active {
+            background: #2d5a27;
+            width: 20px;
+            border-radius: 4px;
+        }
         
         .whatsapp-float {
             position: fixed;
@@ -190,7 +252,10 @@
             box-shadow: 0 4px 12px rgba(37,211,102,0.4);
             z-index: 100;
         }
-        .whatsapp-float img { width: 30px; height: 30px; }
+        .whatsapp-float img {
+            width: 30px;
+            height: 30px;
+        }
         
         footer {
             background: #1e3f1a;
@@ -204,6 +269,7 @@
             .hero h1 { font-size: 1.8rem; }
             .lang-picker { position: static; justify-content: center; margin-bottom: 15px; }
             .slider-container { height: 220px; }
+            .cabin-slider { height: 220px; }
             .cabins-grid { grid-template-columns: 1fr; }
         }
     </style>
@@ -290,12 +356,12 @@
         }
 
         // ============================================
-        // SLIDERS
+        // SLIDERS PARA ESPACIOS COMUNES
         // ============================================
-        let sliders = {};
-        let autoIntervals = {};
+        let commonSliders = {};
+        let commonAutoIntervals = {};
 
-        function initSlider(sliderId, photos, containerId) {
+        function initCommonSlider(sliderId, photos, containerId) {
             const track = document.getElementById(`track-${sliderId}`);
             const dotsContainer = document.getElementById(`dots-${sliderId}`);
             if (!track) return;
@@ -311,79 +377,143 @@
                 
                 const dot = document.createElement('div');
                 dot.className = 'dot';
-                dot.onclick = () => goToSlide(sliderId, idx);
+                dot.onclick = () => goToCommonSlide(sliderId, idx);
                 dotsContainer.appendChild(dot);
             });
             
-            sliders[sliderId] = { currentIndex: 0, total: photos.length };
-            updateSlider(sliderId);
+            commonSliders[sliderId] = { currentIndex: 0, total: photos.length };
+            updateCommonSlider(sliderId);
             
             if (photos.length > 1) {
-                startAutoSlide(sliderId);
+                startCommonAutoSlide(sliderId);
                 const container = document.getElementById(containerId);
                 if (container) {
-                    container.addEventListener('mouseenter', () => pauseAutoSlide(sliderId));
-                    container.addEventListener('mouseleave', () => startAutoSlide(sliderId));
+                    container.addEventListener('mouseenter', () => pauseCommonAutoSlide(sliderId));
+                    container.addEventListener('mouseleave', () => startCommonAutoSlide(sliderId));
                 }
             }
         }
         
-        function updateSlider(sliderId) {
+        function updateCommonSlider(sliderId) {
             const track = document.getElementById(`track-${sliderId}`);
             const dots = document.querySelectorAll(`#dots-${sliderId} .dot`);
             if (!track) return;
-            const index = sliders[sliderId].currentIndex;
+            const index = commonSliders[sliderId].currentIndex;
             track.style.transform = `translateX(-${index * 100}%)`;
             dots.forEach((dot, i) => dot.classList.toggle('active', i === index));
         }
         
-        function startAutoSlide(sliderId) {
-            if (autoIntervals[sliderId]) clearInterval(autoIntervals[sliderId]);
-            if (sliders[sliderId]?.total <= 1) return;
-            autoIntervals[sliderId] = setInterval(() => {
-                if (!sliders[sliderId]) return;
-                let newIndex = sliders[sliderId].currentIndex + 1;
-                if (newIndex >= sliders[sliderId].total) newIndex = 0;
-                sliders[sliderId].currentIndex = newIndex;
-                updateSlider(sliderId);
-            }, 4500 + Math.random() * 1500);
+        function startCommonAutoSlide(sliderId) {
+            if (commonAutoIntervals[sliderId]) clearInterval(commonAutoIntervals[sliderId]);
+            if (commonSliders[sliderId]?.total <= 1) return;
+            commonAutoIntervals[sliderId] = setInterval(() => {
+                if (!commonSliders[sliderId]) return;
+                let newIndex = commonSliders[sliderId].currentIndex + 1;
+                if (newIndex >= commonSliders[sliderId].total) newIndex = 0;
+                commonSliders[sliderId].currentIndex = newIndex;
+                updateCommonSlider(sliderId);
+            }, 5000);
         }
         
-        function pauseAutoSlide(sliderId) {
-            if (autoIntervals[sliderId]) { clearInterval(autoIntervals[sliderId]); autoIntervals[sliderId] = null; }
+        function pauseCommonAutoSlide(sliderId) {
+            if (commonAutoIntervals[sliderId]) { clearInterval(commonAutoIntervals[sliderId]); commonAutoIntervals[sliderId] = null; }
         }
         
-        function prevSlide(sliderId) {
-            pauseAutoSlide(sliderId);
-            sliders[sliderId].currentIndex = (sliders[sliderId].currentIndex - 1 + sliders[sliderId].total) % sliders[sliderId].total;
-            updateSlider(sliderId);
-            startAutoSlide(sliderId);
+        function prevCommonSlide(sliderId) {
+            pauseCommonAutoSlide(sliderId);
+            commonSliders[sliderId].currentIndex = (commonSliders[sliderId].currentIndex - 1 + commonSliders[sliderId].total) % commonSliders[sliderId].total;
+            updateCommonSlider(sliderId);
+            startCommonAutoSlide(sliderId);
         }
         
-        function nextSlide(sliderId) {
-            pauseAutoSlide(sliderId);
-            sliders[sliderId].currentIndex = (sliders[sliderId].currentIndex + 1) % sliders[sliderId].total;
-            updateSlider(sliderId);
-            startAutoSlide(sliderId);
+        function nextCommonSlide(sliderId) {
+            pauseCommonAutoSlide(sliderId);
+            commonSliders[sliderId].currentIndex = (commonSliders[sliderId].currentIndex + 1) % commonSliders[sliderId].total;
+            updateCommonSlider(sliderId);
+            startCommonAutoSlide(sliderId);
         }
         
-        function goToSlide(sliderId, index) {
-            pauseAutoSlide(sliderId);
-            sliders[sliderId].currentIndex = index;
-            updateSlider(sliderId);
-            startAutoSlide(sliderId);
+        function goToCommonSlide(sliderId, index) {
+            pauseCommonAutoSlide(sliderId);
+            commonSliders[sliderId].currentIndex = index;
+            updateCommonSlider(sliderId);
+            startCommonAutoSlide(sliderId);
+        }
+
+        // ============================================
+        // SLIDERS PARA CABAÑAS (con desvanecimiento)
+        // ============================================
+        let cabinSliders = {};
+        let cabinAutoIntervals = {};
+
+        function initCabinSlider(cabinId, photos, cabinName, cabinDescription) {
+            const container = document.getElementById(`cabin-slider-${cabinId}`);
+            if (!container || photos.length === 0) return;
+            
+            // Crear estructura de slider
+            container.innerHTML = `
+                <div class="cabin-slider-images" id="cabin-images-${cabinId}">
+                    ${photos.map((photo, idx) => `
+                        <div class="cabin-slide ${idx === 0 ? 'active' : ''}" 
+                             style="background-image: url('${photo.url}');"
+                             onclick="openModal('${photo.url}')">
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            // Guardar estado
+            cabinSliders[cabinId] = {
+                currentIndex: 0,
+                total: photos.length,
+                interval: null
+            };
+            
+            // Iniciar rotación si hay más de 1 foto
+            if (photos.length > 1) {
+                startCabinAutoSlide(cabinId);
+            }
         }
         
-        function openModal(url) {
-            const modal = document.createElement('div');
-            modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:2000;display:flex;align-items:center;justify-content:center;cursor:pointer;';
-            modal.innerHTML = `<img src="${url}" style="max-width:90%;max-height:90%;border-radius:8px;">`;
-            modal.onclick = () => modal.remove();
-            document.body.appendChild(modal);
+        function startCabinAutoSlide(cabinId) {
+            if (cabinAutoIntervals[cabinId]) clearInterval(cabinAutoIntervals[cabinId]);
+            if (!cabinSliders[cabinId] || cabinSliders[cabinId].total <= 1) return;
+            
+            // Tiempo base 4 segundos + retraso aleatorio para desincronizar (0-1.5 segundos)
+            const delay = 4000 + (Math.random() * 1500);
+            
+            cabinAutoIntervals[cabinId] = setInterval(() => {
+                if (!cabinSliders[cabinId]) return;
+                const current = cabinSliders[cabinId].currentIndex;
+                const next = (current + 1) % cabinSliders[cabinId].total;
+                
+                // Cambiar la imagen activa
+                const slides = document.querySelectorAll(`#cabin-images-${cabinId} .cabin-slide`);
+                slides[current].classList.remove('active');
+                slides[next].classList.add('active');
+                
+                cabinSliders[cabinId].currentIndex = next;
+            }, delay);
+        }
+        
+        function stopCabinAutoSlide(cabinId) {
+            if (cabinAutoIntervals[cabinId]) {
+                clearInterval(cabinAutoIntervals[cabinId]);
+                cabinAutoIntervals[cabinId] = null;
+            }
+        }
+        
+        // Pausar al pasar el mouse
+        function setupCabinHover(cabinId) {
+            const card = document.getElementById(`cabin-card-${cabinId}`);
+            if (card) {
+                card.addEventListener('mouseenter', () => stopCabinAutoSlide(cabinId));
+                card.addEventListener('mouseleave', () => startCabinAutoSlide(cabinId));
+            }
         }
         
         // ============================================
-        // CARGA DE DATOS
+        // CARGAR DATOS DESDE FIREBASE
         // ============================================
         async function loadData() {
             try {
@@ -393,33 +523,72 @@
                 const apartments = data.apartments || {};
                 const common = data.common || { categories: {} };
                 
+                // ============================================
+                // CABAÑAS (con slider de desvanecimiento)
+                // ============================================
                 const cabinsContainer = document.getElementById('cabins-container');
                 cabinsContainer.innerHTML = '';
                 
+                // Recolectar todas las fotos de cada cabaña
+                const cabinsWithPhotos = {};
+                
                 for (const [apId, apData] of Object.entries(apartments)) {
-                    let coverPhoto = '';
+                    const allPhotos = [];
                     const categories = apData.categories || {};
+                    
                     for (const catData of Object.values(categories)) {
-                        if (catData.photos && catData.photos.length > 0) {
-                            coverPhoto = catData.photos[0].url;
-                            break;
+                        if (catData.photos && Array.isArray(catData.photos)) {
+                            allPhotos.push(...catData.photos);
                         }
                     }
                     
-                    const card = document.createElement('a');
-                    card.href = `cabanas/${apId}.html`;
+                    cabinsWithPhotos[apId] = {
+                        name: apData.name || apId,
+                        description: apData.description || 'Espacio acogedor en Canasvieiras',
+                        photos: allPhotos
+                    };
+                }
+                
+                // Orden de cabañas (cabin-1, cabin-2, cabin-3)
+                const order = ['cabin-1', 'cabin-2', 'cabin-3'];
+                
+                for (const apId of order) {
+                    const cabin = cabinsWithPhotos[apId];
+                    if (!cabin) continue;
+                    
+                    const card = document.createElement('div');
                     card.className = 'cabin-card';
+                    card.id = `cabin-card-${apId}`;
                     card.innerHTML = `
-                        <img class="cabin-img" src="${coverPhoto || 'https://via.placeholder.com/400x250?text=Sin+fotos'}" alt="${apData.name}">
+                        <div class="cabin-slider" id="cabin-slider-${apId}"></div>
                         <div class="cabin-content">
-                            <h3>${apData.name}</h3>
-                            <p>${apData.description || 'Espacio acogedor en Canasvieiras'}</p>
-                            <span class="btn">Ver disponibilidad</span>
+                            <h3>${cabin.name}</h3>
+                            <p>${cabin.description}</p>
+                            <a href="cabanas/${apId}.html" class="btn">Ver disponibilidad</a>
                         </div>
                     `;
                     cabinsContainer.appendChild(card);
+                    
+                    // Inicializar slider con todas las fotos
+                    if (cabin.photos.length > 0) {
+                        initCabinSlider(apId, cabin.photos, cabin.name, cabin.description);
+                        setupCabinHover(apId);
+                    } else {
+                        // Foto por defecto
+                        const sliderDiv = document.getElementById(`cabin-slider-${apId}`);
+                        if (sliderDiv) {
+                            sliderDiv.innerHTML = `
+                                <div class="cabin-slider-images">
+                                    <div class="cabin-slide active" style="background-image: url('https://via.placeholder.com/400x260?text=Sin+fotos');"></div>
+                                </div>
+                            `;
+                        }
+                    }
                 }
                 
+                // ============================================
+                // ESPACIOS COMUNES
+                // ============================================
                 const commonContainer = document.getElementById('common-container');
                 commonContainer.innerHTML = '';
                 
@@ -434,14 +603,14 @@
                     section.innerHTML = `
                         <h3>${catData.name}</h3>
                         <div class="slider-container">
-                            <button class="slider-btn slider-prev" onclick="prevSlide('${sliderId}')">‹</button>
+                            <button class="slider-btn slider-prev" onclick="prevCommonSlide('${sliderId}')">‹</button>
                             <div class="slider-track" id="track-${sliderId}"></div>
-                            <button class="slider-btn slider-next" onclick="nextSlide('${sliderId}')">›</button>
+                            <button class="slider-btn slider-next" onclick="nextCommonSlide('${sliderId}')">›</button>
                             <div class="slider-dots" id="dots-${sliderId}"></div>
                         </div>
                     `;
                     commonContainer.appendChild(section);
-                    initSlider(sliderId, photos, `slider-container-${sliderId}`);
+                    initCommonSlider(sliderId, photos, `slider-container-${sliderId}`);
                 }
                 
                 if (cabinsContainer.innerHTML === '') {
@@ -457,14 +626,25 @@
             }
         }
         
+        function openModal(url) {
+            const modal = document.createElement('div');
+            modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:2000;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+            modal.innerHTML = `<img src="${url}" style="max-width:90%;max-height:90%;border-radius:8px;">`;
+            modal.onclick = () => modal.remove();
+            document.body.appendChild(modal);
+        }
+        
+        // ============================================
+        // INICIALIZACIÓN
+        // ============================================
         document.addEventListener('DOMContentLoaded', () => {
             changeLanguage(currentLang);
             loadData();
         });
         
         window.changeLanguage = changeLanguage;
-        window.prevSlide = prevSlide;
-        window.nextSlide = nextSlide;
+        window.prevCommonSlide = prevCommonSlide;
+        window.nextCommonSlide = nextCommonSlide;
         window.openModal = openModal;
     </script>
 </body>
