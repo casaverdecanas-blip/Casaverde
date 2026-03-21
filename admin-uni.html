@@ -127,7 +127,7 @@
         const ADMIN_PASSWORD = 'CasaVerde2026';
         
         // ============================================
-        // ESTRUCTURA CORRECTA (apartments - como espera el index)
+        // ESTRUCTURA POR DEFECTO
         // ============================================
         const defaultSiteData = {
             apartments: {
@@ -237,12 +237,10 @@
                 const snapshot = await db.ref('siteData').once('value');
                 const data = snapshot.val();
                 if (data && Object.keys(data).length > 0) {
-                    // Combinar manteniendo estructura
                     siteData = {
                         apartments: { ...defaultSiteData.apartments, ...(data.apartments || {}) },
                         common: { ...defaultSiteData.common, ...(data.common || {}) }
                     };
-                    // Asegurar categories en cada apartamento
                     for (const apId of Object.keys(siteData.apartments)) {
                         if (!siteData.apartments[apId].categories) siteData.apartments[apId].categories = {};
                     }
@@ -414,17 +412,21 @@
             };
             panel.querySelector(`#${apId}-ical-url`).onchange = (e) => {
                 siteData.apartments[apId].ical_url = e.target.value;
-                updateStatus('URL de calendario actualizada. La sincronización usará esta nueva URL.');
+                updateStatus('URL de calendario actualizada.');
             };
             
             const categories = ap.categories || {};
             const sortedCategories = Object.entries(categories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
             
             const container = panel.querySelector(`#${apId}-categories-container`);
-            sortedCategories.forEach(([catId, catData]) => {
-                const catDiv = renderCategory(apId, catId, catData);
-                container.appendChild(catDiv);
-            });
+            if (sortedCategories.length === 0) {
+                container.innerHTML = '<div style="padding:20px; text-align:center; color:#999;">📭 No hay categorías. Haz clic en "+ Agregar Categoría"</div>';
+            } else {
+                sortedCategories.forEach(([catId, catData]) => {
+                    const catDiv = renderCategory(apId, catId, catData);
+                    container.appendChild(catDiv);
+                });
+            }
             
             return panel;
         }
