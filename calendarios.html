@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test de Calendario iCal - CasaVerdeCanas</title>
+    
+    <!-- FullCalendar CSS y JS -->
+    <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/main.min.css' rel='stylesheet' />
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
+    
+    <!-- iCal.js para parsear archivos iCal -->
+    <script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js"></script>
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f0f4f0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #2d5a27;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .test-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-panel h2 {
+            color: #2d5a27;
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+        }
+        .url-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .url-input input {
+            flex: 3;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .url-input button {
+            padding: 10px 20px;
+            background: #2d5a27;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .preset-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .preset-btn {
+            padding: 8px 16px;
+            background: #e0e0e0;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .preset-btn:hover {
+            background: #2d5a27;
+            color: white;
+        }
+        .log-area {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            border-bottom: 1px solid #333;
+            padding: 3px 0;
+        }
+        .log-error { color: #f48771; }
+        .log-success { color: #6a9955; }
+        .log-info { color: #9cdcfe; }
+        .calendar-container {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        #calendar {
+            min-height: 500px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Test de Calendario iCal - Airbnb</h1>
+        
+        <div class="test-panel">
+            <h2>📅 Configuración de iCal</h2>
+            
+            <div class="preset-buttons">
+                <button class="preset-btn" onclick="setPreset('cabin1')">Cabaña 1</button>
+                <button class="preset-btn" onclick="setPreset('cabin2')">Cabaña 2</button>
+                <button class="preset-btn" onclick="setPreset('cabin3')">Cabaña 3</button>
+                <button class="preset-btn" onclick="clearLog()">Limpiar Log</button>
+            </div>
+            
+            <div class="url-input">
+                <input type="text" id="ical-url" placeholder="https://www.airbnb.com/calendar/ical/XXXXXXXX.ics" value="https://www.airbnb.com/calendar/ical/1337276103911358917.ics">
+                <button onclick="testDirectFetch()">🌐 Probar URL Directa</button>
+                <button onclick="testWithProxy()">🔄 Probar con Proxy</button>
+                <button onclick="loadCalendar()">📅 Cargar Calendario</button>
+            </div>
+        </div>
+        
+        <div class="test-panel">
+            <h2>📋 Log de Diagnóstico</h2>
+            <div id="log-area" class="log-area">
+                <div class="log-entry log-info">🚀 Iniciando test de calendario...</div>
+            </div>
+        </div>
+        
+        <div class="test-panel">
+            <h2>📆 Calendario Resultado</h2>
+            <div id="status" class="status info">Esperando acción...</div>
+            <div id="calendar" class="calendar-container"></div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // CONFIGURACIÓN
+        // ============================================
+        let calendar = null;
+        
+        // URLs predefinidas
+        const PRESETS = {
+            cabin1: 'https://www.airbnb.com/calendar/ical/1337276103911358917.ics',
+            cabin2: 'https://www.airbnb.com/calendar/ical/1110346888721141996.ics',
+            cabin3: 'https://www.airbnb.com/calendar/ical/1230287544066345753.ics'
+        };
+        
+        // Proxies para probar
+        const PROXIES = [
+            { name: 'allorigins', url: 'https://api.allorigins.win/raw?url=' },
+            { name: 'corsproxy', url: 'https://corsproxy.io/?' },
+            { name: 'cors-anywhere', url: 'https://cors-anywhere.herokuapp.com/' },
+            { name: 'thingproxy', url: 'https://thingproxy.freeboard.io/fetch/' }
+        ];
+        
+        // ============================================
+        // FUNCIONES DE LOG
+        // ============================================
+        function addLog(message, type = 'info') {
+            const logArea = document.getElementById('log-area');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logArea.appendChild(entry);
+            entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+        
+        function clearLog() {
+            const logArea = document.getElementById('log-area');
+            logArea.innerHTML = '<div class="log-entry log-info">🚀 Log limpiado. Iniciando nuevo test...</div>';
+        }
+        
+        function setStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+        
+        function setPreset(preset) {
+            const urlInput = document.getElementById('ical-url');
+            urlInput.value = PRESETS[preset];
+            addLog(`📌 Preseleccionado: ${preset.toUpperCase()} - ${PRESETS[preset]}`, 'info');
+        }
+        
+        // ============================================
+        // TEST DIRECTO (sin proxy)
+        // ============================================
+        async function testDirectFetch() {
+            const url = document.getElementById('ical-url').value.trim();
+            if (!url) {
+                addLog('❌ Ingresa una URL de iCal', 'error');
+                return;
+            }
+            
+            addLog(`🌐 Probando fetch directo a: ${url}`, 'info');
+            setStatus('Probando fetch directo...', 'info');
+            
+            try {
+                const response = await fetch(url);
+                addLog(`📡 Status HTTP: ${response.status} ${response.statusText}`, 'info');
+                
+                const text = await response.text();
+                addLog(`📄 Respuesta recibida, longitud: ${text.length} caracteres`, 'info');
+                addLog(`📄 Primeros 200 caracteres: ${text.substring(0, 200)}`, 'info');
+                
+                if (text.includes('BEGIN:VCALENDAR')) {
+                    addLog('✅ ¡ES UN iCal VÁLIDO!', 'success');
+                    setStatus('✅ El enlace iCal es válido', 'success');
+                    return text;
+                } else if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+                    addLog('❌ La respuesta es HTML. Airbnb puede estar bloqueando el acceso directo.', 'error');
+                    setStatus('❌ Error: La respuesta es HTML. Prueba con proxy.', 'error');
+                } else {
+                    addLog('⚠️ Respuesta no reconocida', 'error');
+                }
+                return null;
+            } catch (error) {
+                addLog(`❌ Error en fetch directo: ${error.message}`, 'error');
+                setStatus(`❌ Error: ${error.message}`, 'error');
+                return null;
+            }
+        }
+        
+        // ============================================
+        // TEST CON PROXY
+        // ============================================
+        async function testWithProxy() {
+            const url = document.getElementById('ical-url').value.trim();
+            if (!url) {
+                addLog('❌ Ingresa una URL de iCal', 'error');
+                return;
+            }
+            
+            addLog(`🔄 Probando con proxies para: ${url}`, 'info');
+            setStatus('Probando con proxies...', 'info');
+            
+            for (const proxy of PROXIES) {
+                addLog(`📡 Probando proxy: ${proxy.name}`, 'info');
+                try {
+                    const fullUrl = proxy.url + encodeURIComponent(url);
+                    const response = await fetch(fullUrl);
+                    const text = await response.text();
+                    
+                    addLog(`   Status: ${response.status}`, 'info');
+                    
+                    if (text.includes('BEGIN:VCALENDAR') && !text.includes('<!DOCTYPE')) {
+                        addLog(`✅ ¡PROXY ${proxy.name.toUpperCase()} FUNCIONA!`, 'success');
+                        addLog(`   Primeros 200 caracteres: ${text.substring(0, 200)}`, 'info');
+                        setStatus(`✅ Proxy ${proxy.name} funciona correctamente`, 'success');
+                        return text;
+                    } else {
+                        addLog(`   ⚠️ Proxy ${proxy.name} devolvió respuesta no iCal`, 'error');
+                    }
+                } catch (error) {
+                    addLog(`   ❌ Proxy ${proxy.name} falló: ${error.message}`, 'error');
+                }
+            }
+            
+            addLog('❌ TODOS LOS PROXIES FALLARON', 'error');
+            setStatus('❌ No se pudo obtener el iCal con ningún proxy', 'error');
+            return null;
+        }
+        
+        // ============================================
+        // PARSEAR ICAL Y CARGAR CALENDARIO
+        // ============================================
+        async function loadCalendar() {
+            const url = document.getElementById('ical-url').value.trim();
+            if (!url) {
+                addLog('❌ Ingresa una URL de iCal', 'error');
+                return;
+            }
+            
+            addLog(`📅 Iniciando carga de calendario para: ${url}`, 'info');
+            setStatus('Cargando calendario...', 'info');
+            
+            // Primero probar con proxy
+            let icalData = await testWithProxy();
+            
+            // Si el proxy falló, probar directo
+            if (!icalData) {
+                addLog('🔄 Proxy falló, probando fetch directo...', 'info');
+                icalData = await testDirectFetch();
+            }
+            
+            if (!icalData) {
+                addLog('❌ No se pudo obtener datos del iCal', 'error');
+                setStatus('❌ No se pudo cargar el calendario', 'error');
+                return;
+            }
+            
+            // Parsear iCal
+            try {
+                addLog('🔍 Parseando iCal con ical.js...', 'info');
+                const jcalData = ICAL.parse(icalData);
+                const comp = new ICAL.Component(jcalData);
+                const vevents = comp.getAllSubcomponents('vevent');
+                
+                addLog(`📅 Eventos encontrados: ${vevents.length}`, 'success');
+                
+                // Convertir eventos a formato FullCalendar
+                const events = [];
+                for (const vevent of vevents) {
+                    const event = new ICAL.Event(vevent);
+                    const startDate = event.startDate.toJSDate();
+                    const endDate = event.endDate.toJSDate();
+                    
+                    // Ajustar fecha fin (Airbnb usa fecha fin exclusiva)
+                    const endAdjusted = new Date(endDate);
+                    endAdjusted.setDate(endAdjusted.getDate() - 1);
+                    
+                    const start = startDate.toISOString().split('T')[0];
+                    const end = endAdjusted.toISOString().split('T')[0];
+                    
+                    let title = 'Reserva Airbnb';
+                    if (event.summary) {
+                        title = event.summary.replace(/Reservado:|Reserved:|Réservé:/i, '').trim();
+                        if (title.length > 30) title = title.substring(0, 30) + '...';
+                    }
+                    
+                    events.push({
+                        title: title,
+                        start: start,
+                        end: end,
+                        color: '#FF9800',
+                        allDay: true
+                    });
+                    
+                    addLog(`   📍 Evento: ${title} (${start} a ${end})`, 'info');
+                }
+                
+                // Renderizar calendario
+                if (calendar) {
+                    calendar.destroy();
+                }
+                
+                const calendarEl = document.getElementById('calendar');
+                calendar = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    locale: 'es',
+                    events: events,
+                    height: 'auto',
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth'
+                    },
+                    buttonText: {
+                        today: 'Hoy',
+                        month: 'Mes'
+                    }
+                });
+                
+                calendar.render();
+                
+                if (events.length === 0) {
+                    addLog('⚠️ No se encontraron eventos en el calendario. Puede que no haya reservas.', 'info');
+                    setStatus('⚠️ Calendario cargado sin eventos (sin reservas)', 'info');
+                } else {
+                    addLog(`✅ Calendario cargado con ${events.length} eventos`, 'success');
+                    setStatus(`✅ Calendario cargado correctamente con ${events.length} reservas`, 'success');
+                }
+                
+            } catch (error) {
+                addLog(`❌ Error parseando iCal: ${error.message}`, 'error');
+                setStatus(`❌ Error al parsear: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+        
+        // ============================================
+        // INICIALIZACIÓN
+        // ============================================
+        document.addEventListener('DOMContentLoaded', () => {
+            addLog('🚀 Herramienta de test de iCal lista', 'success');
+            addLog('📌 Usa los botones para probar las URLs de las cabañas', 'info');
+        });
+    </script>
+</body>
+</html>
