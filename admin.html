@@ -1,626 +1,549 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Admin Unificado - CasaVerdeCanas</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', sans-serif; background: #f0f4f0; padding: 20px; }
-        .container { max-width: 1400px; margin: 0 auto; }
-        
-        /* Header */
-        .header { background: #2d5a27; color: white; padding: 20px; border-radius: 12px; margin-bottom: 25px; text-align: center; }
-        .header h1 { margin-bottom: 5px; }
-        .stats { display: flex; gap: 15px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
-        .stat-badge { background: rgba(255,255,255,0.2); padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; }
-        
-        /* Acciones */
-        .action-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
-        .btn { padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
-        .btn-primary { background: #2d5a27; color: white; }
-        .btn-primary:hover { background: #1e3f1a; }
-        .btn-success { background: #27ae60; color: white; }
-        .btn-secondary { background: #3498db; color: white; }
-        .btn-warning { background: #e67e22; color: white; }
-        .btn-danger { background: #e74c3c; color: white; }
-        .status { background: #d4edda; padding: 12px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
-        
-        /* Login */
-        .login-container { max-width: 400px; margin: 100px auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); text-align: center; }
-        .login-container h2 { color: #2d5a27; margin-bottom: 20px; }
-        .login-container input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; }
-        .login-container button { width: 100%; padding: 12px; background: #2d5a27; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
-        .error-msg { color: #e74c3c; margin-top: 10px; }
-        
-        /* Tabs de navegación */
-        .tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
-        .tab-btn { background: #e0e0e0; border: none; padding: 12px 24px; border-radius: 30px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
-        .tab-btn.active { background: #2d5a27; color: white; }
-        
-        /* Panel de edición */
-        .panel { display: none; background: white; border-radius: 16px; padding: 25px; margin-bottom: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .panel.active { display: block; }
-        
-        /* Formularios */
-        .form-group { margin-bottom: 20px; }
-        .form-group label { display: block; font-weight: bold; color: #2d5a27; margin-bottom: 8px; }
-        .form-group input, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
-        .form-group textarea { min-height: 100px; resize: vertical; }
-        
-        /* Categorías */
-        .category-item { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
-        .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
-        .category-order { display: flex; align-items: center; gap: 5px; }
-        .category-order input { width: 60px; padding: 5px; text-align: center; }
-        .category-name { flex: 1; }
-        .category-name input { width: 100%; padding: 8px; }
-        .category-actions { display: flex; gap: 8px; }
-        
-        /* Fotos dentro de categorías */
-        .photos-list { margin-top: 15px; }
-        .photo-item { display: flex; align-items: center; gap: 12px; padding: 10px; background: white; border-radius: 8px; margin-bottom: 8px; border: 1px solid #eee; }
-        .photo-item img { width: 60px; height: 60px; object-fit: cover; border-radius: 6px; cursor: pointer; }
-        .photo-order { width: 50px; }
-        .photo-order input { width: 50px; padding: 5px; text-align: center; }
-        .photo-url { flex: 2; }
-        .photo-url input { width: 100%; padding: 6px; font-size: 11px; }
-        .photo-desc { flex: 1; }
-        .photo-desc input { width: 100%; padding: 6px; }
-        .photo-actions button { padding: 5px 8px; font-size: 11px; }
-        
-        .add-photo-btn { background: #e8f5e9; border: 1px dashed #2d5a27; padding: 8px; text-align: center; cursor: pointer; border-radius: 8px; margin-top: 10px; color: #2d5a27; }
-        
-        /* Calendario */
-        .ical-url { font-family: monospace; background: #f5f5f5; padding: 10px; border-radius: 8px; word-break: break-all; margin-bottom: 15px; }
-        
-        .logout-btn { position: fixed; bottom: 20px; right: 20px; background: #e74c3c; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; z-index: 100; }
-        
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; align-items: center; justify-content: center; cursor: pointer; }
-        .modal.active { display: flex; }
-        .modal img { max-width: 90%; max-height: 90%; border-radius: 8px; }
-        
-        @media (max-width: 768px) { .photo-item { flex-wrap: wrap; } .photo-order, .photo-url, .photo-desc { width: 100%; } }
-    </style>
-    
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-</head>
-<body>
-    <div class="container">
-        <!-- Login -->
-        <div id="login-container" class="login-container">
-            <h2>🔐 Acceso Administrador</h2>
-            <input type="password" id="admin-password" placeholder="Contraseña" autocomplete="off">
-            <button onclick="verificarPassword()">Ingresar</button>
-            <div id="login-error" class="error-msg"></div>
-        </div>
-        
-        <!-- Panel Admin -->
-        <div id="admin-panel" style="display: none;">
-            <div class="header">
-                <h1>📸 Admin Unificado - CasaVerdeCanas</h1>
-                <p>Edita textos, fotos, categorías y calendarios</p>
-                <div class="stats" id="stats"></div>
-            </div>
-            
-            <div class="action-bar">
-                <button class="btn btn-primary" onclick="saveAllToFirebase()">💾 GUARDAR TODO</button>
-                <button class="btn btn-secondary" onclick="loadFromFirebase()">📥 RECARGAR</button>
-            </div>
-            
-            <div id="status" class="status">✅ Listo</div>
-            
-            <!-- Tabs de navegación -->
-            <div class="tabs" id="tabs-container"></div>
-            
-            <!-- Panel de edición -->
-            <div id="panels-container"></div>
-        </div>
-    </div>
-    
-    <button id="logout-btn" class="logout-btn" onclick="logout()" style="display: none;">🔒 Cerrar sesión</button>
-    <div id="image-modal" class="modal" onclick="closeModal()"><img id="modal-img" src=""></div>
+// ============================================
+// CONFIGURACIÓN FIREBASE
+// ============================================
+const firebaseConfig = {
+    apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
+    authDomain: "casaverdecanas-199.firebaseapp.com",
+    databaseURL: "https://casaverdecanas-199-default-rtdb.firebaseio.com",
+    projectId: "casaverdecanas-199",
+    storageBucket: "casaverdecanas-199.firebasestorage.app",
+    messagingSenderId: "417825635316",
+    appId: "1:417825635316:web:ff7f4fe52edcab43d8d7a1"
+};
 
-    <script>
-        // ============================================
-        // CONFIGURACIÓN
-        // ============================================
-        const firebaseConfig = {
-            apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
-            authDomain: "casaverdecanas-199.firebaseapp.com",
-            databaseURL: "https://casaverdecanas-199-default-rtdb.firebaseio.com",
-            projectId: "casaverdecanas-199",
-            storageBucket: "casaverdecanas-199.firebasestorage.app",
-            messagingSenderId: "417825635316",
-            appId: "1:417825635316:web:ff7f4fe52edcab43d8d7a1"
-        };
-        
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-        
-        const ADMIN_PASSWORD = 'CasaVerde2026';
-        
-        // Datos completos del sitio
-        let siteData = {
-            cabins: {
-                "cabin-1": {
-                    name: "🌲 Cabaña 1 - Vista al Bosque",
-                    icon: "🌲",
-                    description: "Rodeada de árboles nativos, esta cabaña ofrece paz y conexión con la naturaleza. Espaciosa, ventilada y luminosa, con terraza independiente. A solo tres cuadras del mar.",
-                    airbnb_url: "https://www.airbnb.com/rooms/1337276103911358917",
-                    ical_url: "https://www.airbnb.com/calendar/ical/1337276103911358917.ics",
-                    categories: {}
-                },
-                "cabin-2": {
-                    name: "🏢 Loft en Canasvieiras",
-                    icon: "🏢",
-                    description: "A 3 cuadras de la playa y 7 del centro, en la zona del trapiche, residencial, linda y tranquila. Loft recientemente renovado con cocina equipada básica, living comedor y baño en la parte baja, y camas en el entrepiso. Balcón terraza con mesa y sillas.",
-                    airbnb_url: "https://es.airbnb.com/rooms/1110346888721141996",
-                    ical_url: "https://www.airbnb.com/calendar/ical/1110346888721141996.ics",
-                    categories: {}
-                },
-                "cabin-3": {
-                    name: "👨‍👩‍👧‍👦 Cabaña 3 - Familiar Premium",
-                    icon: "👨‍👩‍👧‍👦",
-                    description: "Amplia cabaña con todas las comodidades para familias con niños. Zona de juegos, espacio exterior y parrilla. Ideal para 4 personas. Entre el 10% de los alojamientos mejor calificados en Airbnb.",
-                    airbnb_url: "https://es.airbnb.com/rooms/1230287544066345753",
-                    ical_url: "https://www.airbnb.com/calendar/ical/1230287544066345753.ics",
-                    categories: {}
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+const ADMIN_PASSWORD = 'CasaVerde2026';
+
+// Datos por defecto (estructura segura)
+const defaultSiteData = {
+    cabins: {
+        "cabin-1": {
+            name: "🌲 Cabaña 1 - Vista al Bosque",
+            icon: "🌲",
+            description: "Rodeada de árboles nativos, esta cabaña ofrece paz y conexión con la naturaleza. Espaciosa, ventilada y luminosa, con terraza independiente. A solo tres cuadras del mar.",
+            airbnb_url: "https://www.airbnb.com/rooms/1337276103911358917",
+            ical_url: "https://www.airbnb.com/calendar/ical/1337276103911358917.ics",
+            categories: {}
+        },
+        "cabin-2": {
+            name: "🏢 Loft en Canasvieiras",
+            icon: "🏢",
+            description: "A 3 cuadras de la playa y 7 del centro, en la zona del trapiche, residencial, linda y tranquila. Loft recientemente renovado con cocina equipada básica, living comedor y baño en la parte baja, y camas en el entrepiso. Balcón terraza con mesa y sillas.",
+            airbnb_url: "https://es.airbnb.com/rooms/1110346888721141996",
+            ical_url: "https://www.airbnb.com/calendar/ical/1110346888721141996.ics",
+            categories: {}
+        },
+        "cabin-3": {
+            name: "👨‍👩‍👧‍👦 Cabaña 3 - Familiar Premium",
+            icon: "👨‍👩‍👧‍👦",
+            description: "Amplia cabaña con todas las comodidades para familias con niños. Zona de juegos, espacio exterior y parrilla. Ideal para 4 personas. Entre el 10% de los alojamientos mejor calificados en Airbnb.",
+            airbnb_url: "https://es.airbnb.com/rooms/1230287544066345753",
+            ical_url: "https://www.airbnb.com/calendar/ical/1230287544066345753.ics",
+            categories: {}
+        }
+    },
+    common: {
+        name: "🏡 Espacios Comunes",
+        icon: "🏡",
+        description: "Zona techada con asador, mesa, sillas, hamacas, living, TV, juegos de mesa y piscina. Entorno verde y fresco. WiFi y lavadero compartido.",
+        categories: {
+            "entrada": { name: "🚪 Entrada Principal", order: 1, photos: [] },
+            "living": { name: "🛋️ Living Común", order: 2, photos: [] },
+            "juegos": { name: "🎮 Sala de Juegos", order: 3, photos: [] },
+            "barbacoa": { name: "🔥 Asador / Barbacoa", order: 4, photos: [] },
+            "piscina": { name: "🏊‍♀️ Piscina", order: 5, photos: [] },
+            "parque": { name: "🌳 Parque Exterior", order: 6, photos: [] },
+            "hamacas": { name: "🌿 Hamacas y Descanso", order: 7, photos: [] }
+        }
+    }
+};
+
+let siteData = JSON.parse(JSON.stringify(defaultSiteData));
+let currentTab = 'cabin-1';
+let inactivityTimeout = null;
+
+// ============================================
+// AUTENTICACIÓN
+// ============================================
+function resetInactivityTimer() {
+    if (inactivityTimeout) clearTimeout(inactivityTimeout);
+    inactivityTimeout = setTimeout(() => {
+        if (localStorage.getItem('admin_auth') === 'true') {
+            alert('🔒 Sesión cerrada por inactividad');
+            logout();
+        }
+    }, 30 * 60 * 1000);
+}
+
+function setupActivityListeners() {
+    const events = ['mousemove', 'click', 'keypress', 'scroll', 'touchstart'];
+    events.forEach(event => document.addEventListener(event, resetInactivityTimer));
+}
+
+function verificarPassword() {
+    const pwd = document.getElementById('admin-password').value;
+    if (pwd === ADMIN_PASSWORD) {
+        localStorage.setItem('admin_auth', 'true');
+        localStorage.setItem('admin_expires', Date.now() + 8 * 60 * 60 * 1000);
+        mostrarAdmin();
+        resetInactivityTimer();
+        setupActivityListeners();
+    } else {
+        document.getElementById('login-error').textContent = '❌ Contraseña incorrecta';
+    }
+}
+
+function mostrarAdmin() {
+    document.getElementById('login-container').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'block';
+    document.getElementById('logout-btn').style.display = 'block';
+    loadFromFirebase();
+}
+
+function logout() {
+    localStorage.removeItem('admin_auth');
+    localStorage.removeItem('admin_expires');
+    location.reload();
+}
+
+(function() {
+    const auth = localStorage.getItem('admin_auth');
+    const expires = localStorage.getItem('admin_expires');
+    if (auth === 'true' && expires && Date.now() < parseInt(expires)) {
+        mostrarAdmin();
+    }
+})();
+
+// ============================================
+// FIREBASE OPERACIONES
+// ============================================
+async function loadFromFirebase() {
+    updateStatus('📥 Cargando desde Firebase...');
+    try {
+        const snapshot = await db.ref('siteData').once('value');
+        const data = snapshot.val();
+        if (data && Object.keys(data).length > 0) {
+            // Combinar con datos por defecto para asegurar estructura
+            siteData = {
+                cabins: { ...defaultSiteData.cabins, ...(data.cabins || {}) },
+                common: { ...defaultSiteData.common, ...(data.common || {}) }
+            };
+            // Asegurar que cada cabaña tenga categories
+            for (const cabinId of Object.keys(siteData.cabins)) {
+                if (!siteData.cabins[cabinId].categories) {
+                    siteData.cabins[cabinId].categories = {};
                 }
-            },
-            common: {
-                name: "🏡 Espacios Comunes",
-                icon: "🏡",
-                description: "Zona techada con asador, mesa, sillas, hamacas, living, TV, juegos de mesa y piscina. Entorno verde y fresco. WiFi y lavadero compartido.",
-                categories: {
-                    "entrada": { name: "🚪 Entrada Principal", order: 1, photos: [] },
-                    "living": { name: "🛋️ Living Común", order: 2, photos: [] },
-                    "juegos": { name: "🎮 Sala de Juegos", order: 3, photos: [] },
-                    "barbacoa": { name: "🔥 Asador / Barbacoa", order: 4, photos: [] },
-                    "piscina": { name: "🏊‍♀️ Piscina", order: 5, photos: [] },
-                    "parque": { name: "🌳 Parque Exterior", order: 6, photos: [] },
-                    "hamacas": { name: "🌿 Hamacas y Descanso", order: 7, photos: [] }
-                }
             }
-        };
-        
-        let currentTab = 'cabin-1';
-        let inactivityTimeout = null;
-        
-        // ============================================
-        // AUTENTICACIÓN
-        // ============================================
-        function resetInactivityTimer() {
-            if (inactivityTimeout) clearTimeout(inactivityTimeout);
-            inactivityTimeout = setTimeout(() => {
-                if (localStorage.getItem('admin_auth') === 'true') {
-                    alert('🔒 Sesión cerrada por inactividad');
-                    logout();
-                }
-            }, 30 * 60 * 1000);
+            if (!siteData.common.categories) siteData.common.categories = {};
+            updateStatus('✅ Datos cargados correctamente');
+        } else {
+            siteData = JSON.parse(JSON.stringify(defaultSiteData));
+            updateStatus('⚠️ No hay datos en Firebase. Usando valores por defecto.');
         }
-        
-        function setupActivityListeners() {
-            const events = ['mousemove', 'click', 'keypress', 'scroll', 'touchstart'];
-            events.forEach(event => document.addEventListener(event, resetInactivityTimer));
+        renderAll();
+    } catch (error) {
+        console.error(error);
+        updateStatus('❌ Error al cargar: ' + error.message, true);
+        siteData = JSON.parse(JSON.stringify(defaultSiteData));
+        renderAll();
+    }
+}
+
+async function saveAllToFirebase() {
+    updateStatus('💾 Guardando en Firebase...');
+    try {
+        await db.ref('siteData').set(siteData);
+        updateStatus('✅ ¡Todos los datos guardados correctamente!');
+    } catch (error) {
+        updateStatus('❌ Error: ' + error.message, true);
+    }
+}
+
+// ============================================
+// RENDERIZADO
+// ============================================
+function renderAll() {
+    renderTabs();
+    renderPanels();
+    updateStats();
+}
+
+function renderTabs() {
+    const tabsContainer = document.getElementById('tabs-container');
+    if (!tabsContainer) return;
+    tabsContainer.innerHTML = '';
+    
+    // Espacios Comunes
+    const commonTab = document.createElement('button');
+    commonTab.className = `tab-btn ${currentTab === 'common' ? 'active' : ''}`;
+    commonTab.textContent = '🏡 Espacios Comunes';
+    commonTab.onclick = () => switchTab('common');
+    tabsContainer.appendChild(commonTab);
+    
+    // Cabañas
+    if (siteData.cabins) {
+        for (const [id, cabin] of Object.entries(siteData.cabins)) {
+            const tab = document.createElement('button');
+            tab.className = `tab-btn ${currentTab === id ? 'active' : ''}`;
+            tab.textContent = cabin.name || id;
+            tab.onclick = () => switchTab(id);
+            tabsContainer.appendChild(tab);
         }
-        
-        function verificarPassword() {
-            const pwd = document.getElementById('admin-password').value;
-            if (pwd === ADMIN_PASSWORD) {
-                localStorage.setItem('admin_auth', 'true');
-                localStorage.setItem('admin_expires', Date.now() + 8 * 60 * 60 * 1000);
-                mostrarAdmin();
-                resetInactivityTimer();
-                setupActivityListeners();
-            } else {
-                document.getElementById('login-error').textContent = '❌ Contraseña incorrecta';
-            }
+    }
+}
+
+function switchTab(tabId) {
+    currentTab = tabId;
+    renderTabs();
+    renderPanels();
+}
+
+function renderPanels() {
+    const panelsContainer = document.getElementById('panels-container');
+    if (!panelsContainer) return;
+    panelsContainer.innerHTML = '';
+    
+    // Panel de Espacios Comunes
+    const commonPanel = renderCommonPanel();
+    panelsContainer.appendChild(commonPanel);
+    
+    // Paneles de cabañas
+    if (siteData.cabins) {
+        for (const [id, cabin] of Object.entries(siteData.cabins)) {
+            const panel = renderCabinPanel(id, cabin);
+            panelsContainer.appendChild(panel);
         }
+    }
+    
+    // Mostrar solo el panel activo
+    document.querySelectorAll('.panel').forEach(panel => {
+        panel.classList.toggle('active', panel.id === `panel-${currentTab}`);
+    });
+}
+
+function renderCommonPanel() {
+    const panel = document.createElement('div');
+    panel.className = 'panel';
+    panel.id = 'panel-common';
+    panel.innerHTML = `
+        <h2 style="color:#2d5a27; margin-bottom:20px;">🏡 Espacios Comunes</h2>
         
-        function mostrarAdmin() {
-            document.getElementById('login-container').style.display = 'none';
-            document.getElementById('admin-panel').style.display = 'block';
-            document.getElementById('logout-btn').style.display = 'block';
-            loadFromFirebase();
-        }
+        <div class="form-group">
+            <label>📝 Descripción general</label>
+            <textarea id="common-desc">${escapeHtml(siteData.common.description || '')}</textarea>
+        </div>
         
-        function logout() {
-            localStorage.removeItem('admin_auth');
-            localStorage.removeItem('admin_expires');
-            location.reload();
-        }
+        <div id="common-categories-container"></div>
         
-        (function() {
-            const auth = localStorage.getItem('admin_auth');
-            const expires = localStorage.getItem('admin_expires');
-            if (auth === 'true' && expires && Date.now() < parseInt(expires)) {
-                mostrarAdmin();
-            }
-        })();
+        <div class="add-category" style="margin-top:20px;">
+            <button class="btn btn-primary" onclick="addCommonCategory()">+ Agregar Categoría</button>
+        </div>
+    `;
+    
+    // Guardar descripción
+    const descTextarea = panel.querySelector('#common-desc');
+    descTextarea.onchange = (e) => {
+        siteData.common.description = e.target.value;
+        updateStatus('Descripción actualizada. Guarda los cambios.');
+    };
+    
+    // Renderizar categorías ordenadas
+    const categories = siteData.common.categories || {};
+    const sortedCategories = Object.entries(categories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
+    
+    const container = panel.querySelector('#common-categories-container');
+    sortedCategories.forEach(([catId, catData]) => {
+        const catDiv = renderCategory('common', catId, catData);
+        container.appendChild(catDiv);
+    });
+    
+    return panel;
+}
+
+function renderCabinPanel(cabinId, cabin) {
+    const panel = document.createElement('div');
+    panel.className = 'panel';
+    panel.id = `panel-${cabinId}`;
+    panel.innerHTML = `
+        <h2 style="color:#2d5a27; margin-bottom:20px;">${cabin.icon || '🏠'} ${cabin.name || cabinId}</h2>
         
-        // ============================================
-        // FIREBASE OPERACIONES
-        // ============================================
-        async function loadFromFirebase() {
-            updateStatus('📥 Cargando desde Firebase...');
-            try {
-                const snapshot = await db.ref('siteData').once('value');
-                const data = snapshot.val();
-                if (data) {
-                    siteData = data;
-                }
-                renderAll();
-                updateStatus('✅ Datos cargados correctamente');
-            } catch (error) {
-                updateStatus('❌ Error: ' + error.message, true);
-                renderAll();
-            }
-        }
+        <div class="form-group">
+            <label>📝 Nombre / Título</label>
+            <input type="text" id="${cabinId}-name" value="${escapeHtml(cabin.name || '')}">
+        </div>
         
-        async function saveAllToFirebase() {
-            updateStatus('💾 Guardando en Firebase...');
-            try {
-                await db.ref('siteData').set(siteData);
-                updateStatus('✅ ¡Todos los datos guardados correctamente!');
-            } catch (error) {
-                updateStatus('❌ Error: ' + error.message, true);
-            }
-        }
+        <div class="form-group">
+            <label>📝 Descripción</label>
+            <textarea id="${cabinId}-desc">${escapeHtml(cabin.description || '')}</textarea>
+        </div>
         
-        // ============================================
-        // RENDERIZADO
-        // ============================================
-        function renderAll() {
-            renderTabs();
-            renderPanels();
-            updateStats();
-        }
+        <div class="form-group">
+            <label>🔗 Enlace Airbnb</label>
+            <input type="url" id="${cabinId}-airbnb-url" value="${escapeHtml(cabin.airbnb_url || '')}">
+        </div>
         
-        function renderTabs() {
-            const tabsContainer = document.getElementById('tabs-container');
-            tabsContainer.innerHTML = '';
-            
-            // Espacios Comunes
-            const commonTab = document.createElement('button');
-            commonTab.className = `tab-btn ${currentTab === 'common' ? 'active' : ''}`;
-            commonTab.textContent = '🏡 Espacios Comunes';
-            commonTab.onclick = () => switchTab('common');
-            tabsContainer.appendChild(commonTab);
-            
-            // Cabañas
-            for (const [id, cabin] of Object.entries(siteData.cabins)) {
-                const tab = document.createElement('button');
-                tab.className = `tab-btn ${currentTab === id ? 'active' : ''}`;
-                tab.textContent = cabin.name;
-                tab.onclick = () => switchTab(id);
-                tabsContainer.appendChild(tab);
-            }
-        }
+        <div class="form-group">
+            <label>📅 Calendario iCal (Airbnb)</label>
+            <input type="url" id="${cabinId}-ical-url" value="${escapeHtml(cabin.ical_url || '')}" placeholder="https://www.airbnb.com/calendar/ical/...ics">
+            <small>Usa esta URL para sincronizar reservas de Airbnb</small>
+        </div>
         
-        function switchTab(tabId) {
-            currentTab = tabId;
-            renderTabs();
-            renderPanels();
-        }
+        <h3 style="color:#2d5a27; margin:20px 0 10px;">📸 Categorías y Fotos</h3>
+        <div id="${cabinId}-categories-container"></div>
         
-        function renderPanels() {
-            const panelsContainer = document.getElementById('panels-container');
-            panelsContainer.innerHTML = '';
-            
-            // Panel de Espacios Comunes
-            const commonPanel = renderCommonPanel();
-            panelsContainer.appendChild(commonPanel);
-            
-            // Paneles de cabañas
-            for (const [id, cabin] of Object.entries(siteData.cabins)) {
-                const panel = renderCabinPanel(id, cabin);
-                panelsContainer.appendChild(panel);
-            }
-            
-            // Mostrar solo el panel activo
-            document.querySelectorAll('.panel').forEach(panel => {
-                panel.classList.toggle('active', panel.id === `panel-${currentTab}`);
-            });
-        }
-        
-        function renderCommonPanel() {
-            const panel = document.createElement('div');
-            panel.className = 'panel';
-            panel.id = 'panel-common';
-            panel.innerHTML = `
-                <h2 style="color:#2d5a27; margin-bottom:20px;">🏡 Espacios Comunes</h2>
-                
-                <div class="form-group">
-                    <label>📝 Descripción general</label>
-                    <textarea id="common-desc">${escapeHtml(siteData.common.description || '')}</textarea>
+        <div class="add-category" style="margin-top:20px;">
+            <button class="btn btn-primary" onclick="addCategory('${cabinId}')">+ Agregar Categoría</button>
+        </div>
+    `;
+    
+    // Guardar cambios automáticamente
+    panel.querySelector(`#${cabinId}-name`).onchange = (e) => {
+        siteData.cabins[cabinId].name = e.target.value;
+        renderTabs();
+        updateStatus('Cambio guardado localmente. Recuerda GUARDAR en Firebase.');
+    };
+    panel.querySelector(`#${cabinId}-desc`).onchange = (e) => {
+        siteData.cabins[cabinId].description = e.target.value;
+    };
+    panel.querySelector(`#${cabinId}-airbnb-url`).onchange = (e) => {
+        siteData.cabins[cabinId].airbnb_url = e.target.value;
+    };
+    panel.querySelector(`#${cabinId}-ical-url`).onchange = (e) => {
+        siteData.cabins[cabinId].ical_url = e.target.value;
+        updateStatus('URL de calendario actualizada. La sincronización usará esta nueva URL.');
+    };
+    
+    // Renderizar categorías ordenadas
+    const categories = cabin.categories || {};
+    const sortedCategories = Object.entries(categories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
+    
+    const container = panel.querySelector(`#${cabinId}-categories-container`);
+    sortedCategories.forEach(([catId, catData]) => {
+        const catDiv = renderCategory(cabinId, catId, catData);
+        container.appendChild(catDiv);
+    });
+    
+    return panel;
+}
+
+function renderCategory(owner, catId, catData) {
+    const div = document.createElement('div');
+    div.className = 'category-item';
+    div.id = `cat-${owner}-${catId}`;
+    div.innerHTML = `
+        <div class="category-header">
+            <div class="category-order">
+                <span>📌 Orden:</span>
+                <input type="number" value="${catData.order || 0}" min="0" max="100" style="width:60px;" onchange="updateCategoryOrder('${owner}', '${catId}', this.value)">
+            </div>
+            <div class="category-name">
+                <input type="text" value="${escapeHtml(catData.name || '')}" placeholder="Nombre categoría" onchange="updateCategoryName('${owner}', '${catId}', this.value)">
+            </div>
+            <div class="category-actions">
+                <button class="btn btn-danger" style="padding:5px 10px;" onclick="deleteCategory('${owner}', '${catId}')">🗑️ Eliminar</button>
+            </div>
+        </div>
+        <div class="photos-list" id="photos-${owner}-${catId}"></div>
+        <div class="add-photo-btn" onclick="addPhoto('${owner}', '${catId}')">+ Agregar foto</div>
+    `;
+    
+    // Renderizar fotos ordenadas
+    const photos = catData.photos || [];
+    const sortedPhotos = [...photos].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const photosContainer = div.querySelector(`.photos-list`);
+    
+    if (sortedPhotos.length === 0) {
+        photosContainer.innerHTML = '<div style="padding:20px; text-align:center; color:#999;">📭 Sin fotos en esta categoría</div>';
+    } else {
+        sortedPhotos.forEach((photo, idx) => {
+            const photoDiv = document.createElement('div');
+            photoDiv.className = 'photo-item';
+            photoDiv.innerHTML = `
+                <div class="photo-order">
+                    <input type="number" value="${photo.order || idx}" min="0" max="100" style="width:50px;" onchange="updatePhotoOrder('${owner}', '${catId}', ${idx}, this.value)">
                 </div>
-                
-                <div id="common-categories-container"></div>
-                
-                <div class="add-category" style="margin-top:20px;">
-                    <button class="btn btn-primary" onclick="addCommonCategory()">+ Agregar Categoría</button>
+                <img src="${escapeHtml(photo.url)}" onclick="openModal('${escapeHtml(photo.url)}')" onerror="this.src='https://via.placeholder.com/60x60?text=Error'">
+                <div class="photo-url">
+                    <input type="text" value="${escapeHtml(photo.url)}" placeholder="URL de la imagen" onchange="updatePhotoUrl('${owner}', '${catId}', ${idx}, this.value)">
+                </div>
+                <div class="photo-desc">
+                    <input type="text" value="${escapeHtml(photo.desc || '')}" placeholder="Descripción" onchange="updatePhotoDesc('${owner}', '${catId}', ${idx}, this.value)">
+                </div>
+                <div class="photo-actions">
+                    <button class="btn btn-danger" style="padding:5px 8px;" onclick="deletePhoto('${owner}', '${catId}', ${idx})">🗑️</button>
                 </div>
             `;
-            
-            // Renderizar categorías ordenadas
-            const categories = siteData.common.categories || {};
-            const sortedCategories = Object.entries(categories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
-            
-            const container = panel.querySelector('#common-categories-container');
-            sortedCategories.forEach(([catId, catData]) => {
-                const catDiv = renderCategory('common', catId, catData);
-                container.appendChild(catDiv);
-            });
-            
-            return panel;
+            photosContainer.appendChild(photoDiv);
+        });
+    }
+    
+    return div;
+}
+
+// ============================================
+// OPERACIONES DE CATEGORÍAS
+// ============================================
+window.addCategory = function(owner) {
+    const newId = 'cat_' + Date.now();
+    const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
+    if (!target.categories) target.categories = {};
+    const currentCount = Object.keys(target.categories).length;
+    target.categories[newId] = {
+        name: "📷 Nueva categoría",
+        order: currentCount + 1,
+        photos: []
+    };
+    renderPanels();
+    updateStatus('Categoría agregada. Guarda los cambios.');
+};
+
+window.addCommonCategory = function() {
+    addCategory('common');
+};
+
+window.updateCategoryOrder = function(owner, catId, newOrder) {
+    const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
+    if (target.categories[catId]) {
+        target.categories[catId].order = parseInt(newOrder) || 0;
+        renderPanels();
+        updateStatus('Orden actualizado. Guarda los cambios.');
+    }
+};
+
+window.updateCategoryName = function(owner, catId, newName) {
+    const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
+    if (target.categories[catId]) {
+        target.categories[catId].name = newName;
+    }
+};
+
+window.deleteCategory = function(owner, catId) {
+    if (confirm('¿Eliminar esta categoría y TODAS sus fotos?')) {
+        const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
+        delete target.categories[catId];
+        renderPanels();
+        updateStatus('Categoría eliminada. Guarda los cambios.');
+    }
+};
+
+// ============================================
+// OPERACIONES DE FOTOS
+// ============================================
+window.addPhoto = function(owner, catId) {
+    const url = prompt('Ingresa la URL de la imagen (Postimg, etc.):');
+    if (url) {
+        const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
+        const category = target.categories[catId];
+        if (!category.photos) category.photos = [];
+        category.photos.push({
+            url: url,
+            desc: `Foto ${category.photos.length + 1}`,
+            order: category.photos.length
+        });
+        renderPanels();
+        updateStatus('Foto agregada. Guarda los cambios.');
+    }
+};
+
+window.updatePhotoOrder = function(owner, catId, photoIndex, newOrder) {
+    const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
+    const category = target.categories[catId];
+    if (category.photos[photoIndex]) {
+        category.photos[photoIndex].order = parseInt(newOrder) || 0;
+        category.photos.sort((a, b) => (a.order || 0) - (b.order || 0));
+        renderPanels();
+        updateStatus('Orden actualizado. Guarda los cambios.');
+    }
+};
+
+window.updatePhotoUrl = function(owner, catId, photoIndex, newUrl) {
+    const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
+    const category = target.categories[catId];
+    if (category.photos[photoIndex]) {
+        category.photos[photoIndex].url = newUrl;
+    }
+};
+
+window.updatePhotoDesc = function(owner, catId, photoIndex, newDesc) {
+    const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
+    const category = target.categories[catId];
+    if (category.photos[photoIndex]) {
+        category.photos[photoIndex].desc = newDesc;
+    }
+};
+
+window.deletePhoto = function(owner, catId, photoIndex) {
+    if (confirm('¿Eliminar esta foto?')) {
+        const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
+        const category = target.categories[catId];
+        category.photos.splice(photoIndex, 1);
+        renderPanels();
+        updateStatus('Foto eliminada. Guarda los cambios.');
+    }
+};
+
+// ============================================
+// UTILIDADES
+// ============================================
+function updateStatus(msg, isError = false) {
+    const statusDiv = document.getElementById('status');
+    if (!statusDiv) return;
+    statusDiv.innerHTML = msg;
+    statusDiv.style.background = isError ? '#f8d7da' : '#d4edda';
+    setTimeout(() => {
+        if (document.getElementById('status')?.innerHTML === msg) {
+            document.getElementById('status').innerHTML = '✅ Listo. Recuerda GUARDAR los cambios.';
+            if (statusDiv) statusDiv.style.background = '#d4edda';
         }
-        
-        function renderCabinPanel(cabinId, cabin) {
-            const panel = document.createElement('div');
-            panel.className = 'panel';
-            panel.id = `panel-${cabinId}`;
-            panel.innerHTML = `
-                <h2 style="color:#2d5a27; margin-bottom:20px;">${cabin.icon} ${cabin.name}</h2>
-                
-                <div class="form-group">
-                    <label>📝 Nombre / Título</label>
-                    <input type="text" id="${cabinId}-name" value="${escapeHtml(cabin.name)}">
-                </div>
-                
-                <div class="form-group">
-                    <label>📝 Descripción</label>
-                    <textarea id="${cabinId}-desc">${escapeHtml(cabin.description || '')}</textarea>
-                </div>
-                
-                <div class="form-group">
-                    <label>🔗 Enlace Airbnb</label>
-                    <input type="url" id="${cabinId}-airbnb-url" value="${escapeHtml(cabin.airbnb_url || '')}">
-                </div>
-                
-                <div class="form-group">
-                    <label>📅 Calendario iCal (Airbnb)</label>
-                    <input type="url" id="${cabinId}-ical-url" value="${escapeHtml(cabin.ical_url || '')}" placeholder="https://www.airbnb.com/calendar/ical/...ics">
-                    <small>Usa esta URL para sincronizar reservas de Airbnb</small>
-                </div>
-                
-                <h3 style="color:#2d5a27; margin:20px 0 10px;">📸 Categorías y Fotos</h3>
-                <div id="${cabinId}-categories-container"></div>
-                
-                <div class="add-category" style="margin-top:20px;">
-                    <button class="btn btn-primary" onclick="addCategory('${cabinId}')">+ Agregar Categoría</button>
-                </div>
-            `;
-            
-            // Guardar cambios automáticamente al editar
-            panel.querySelector(`#${cabinId}-name`).onchange = (e) => {
-                siteData.cabins[cabinId].name = e.target.value;
-                updateStatus('Cambio guardado localmente. Recuerda GUARDAR en Firebase.');
-            };
-            panel.querySelector(`#${cabinId}-desc`).onchange = (e) => {
-                siteData.cabins[cabinId].description = e.target.value;
-            };
-            panel.querySelector(`#${cabinId}-airbnb-url`).onchange = (e) => {
-                siteData.cabins[cabinId].airbnb_url = e.target.value;
-            };
-            panel.querySelector(`#${cabinId}-ical-url`).onchange = (e) => {
-                siteData.cabins[cabinId].ical_url = e.target.value;
-                updateStatus('URL de calendario actualizada. La sincronización usará esta nueva URL.');
-            };
-            
-            // Renderizar categorías ordenadas
-            const categories = cabin.categories || {};
-            const sortedCategories = Object.entries(categories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
-            
-            const container = panel.querySelector(`#${cabinId}-categories-container`);
-            sortedCategories.forEach(([catId, catData]) => {
-                const catDiv = renderCategory(cabinId, catId, catData);
-                container.appendChild(catDiv);
-            });
-            
-            return panel;
+    }, 3000);
+}
+
+function updateStats() {
+    let totalPhotos = 0, totalCategories = 0;
+    if (siteData.common?.categories) {
+        for (const cat of Object.values(siteData.common.categories)) {
+            totalCategories++;
+            totalPhotos += cat.photos?.length || 0;
         }
-        
-        function renderCategory(owner, catId, catData) {
-            const div = document.createElement('div');
-            div.className = 'category-item';
-            div.id = `cat-${owner}-${catId}`;
-            div.innerHTML = `
-                <div class="category-header">
-                    <div class="category-order">
-                        <span>📌 Orden:</span>
-                        <input type="number" value="${catData.order || 0}" min="0" max="100" style="width:60px;" onchange="updateCategoryOrder('${owner}', '${catId}', this.value)">
-                    </div>
-                    <div class="category-name">
-                        <input type="text" value="${escapeHtml(catData.name)}" placeholder="Nombre categoría" onchange="updateCategoryName('${owner}', '${catId}', this.value)">
-                    </div>
-                    <div class="category-actions">
-                        <button class="btn btn-danger" style="padding:5px 10px;" onclick="deleteCategory('${owner}', '${catId}')">🗑️ Eliminar</button>
-                    </div>
-                </div>
-                <div class="photos-list" id="photos-${owner}-${catId}"></div>
-                <div class="add-photo-btn" onclick="addPhoto('${owner}', '${catId}')">+ Agregar foto</div>
-            `;
-            
-            // Renderizar fotos ordenadas
-            const photos = catData.photos || [];
-            const sortedPhotos = [...photos].sort((a, b) => (a.order || 0) - (b.order || 0));
-            const photosContainer = div.querySelector(`.photos-list`);
-            
-            sortedPhotos.forEach((photo, idx) => {
-                const photoDiv = document.createElement('div');
-                photoDiv.className = 'photo-item';
-                photoDiv.innerHTML = `
-                    <div class="photo-order">
-                        <input type="number" value="${photo.order || idx}" min="0" max="100" style="width:50px;" onchange="updatePhotoOrder('${owner}', '${catId}', ${idx}, this.value)">
-                    </div>
-                    <img src="${escapeHtml(photo.url)}" onclick="openModal('${escapeHtml(photo.url)}')" onerror="this.src='https://via.placeholder.com/60x60?text=Error'">
-                    <div class="photo-url">
-                        <input type="text" value="${escapeHtml(photo.url)}" placeholder="URL de la imagen" onchange="updatePhotoUrl('${owner}', '${catId}', ${idx}, this.value)">
-                    </div>
-                    <div class="photo-desc">
-                        <input type="text" value="${escapeHtml(photo.desc || '')}" placeholder="Descripción" onchange="updatePhotoDesc('${owner}', '${catId}', ${idx}, this.value)">
-                    </div>
-                    <div class="photo-actions">
-                        <button class="btn btn-danger" style="padding:5px 8px;" onclick="deletePhoto('${owner}', '${catId}', ${idx})">🗑️</button>
-                    </div>
-                `;
-                photosContainer.appendChild(photoDiv);
-            });
-            
-            if (photos.length === 0) {
-                photosContainer.innerHTML = '<div style="padding:20px; text-align:center; color:#999;">📭 Sin fotos en esta categoría</div>';
-            }
-            
-            return div;
-        }
-        
-        // ============================================
-        // OPERACIONES DE CATEGORÍAS
-        // ============================================
-        window.addCategory = function(owner) {
-            const newId = 'cat_' + Date.now();
-            const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
-            if (!target.categories) target.categories = {};
-            target.categories[newId] = {
-                name: "📷 Nueva categoría",
-                order: Object.keys(target.categories).length + 1,
-                photos: []
-            };
-            renderPanels();
-            updateStatus('Categoría agregada. Guarda los cambios.');
-        };
-        
-        window.addCommonCategory = function() {
-            addCategory('common');
-        };
-        
-        window.updateCategoryOrder = function(owner, catId, newOrder) {
-            const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
-            if (target.categories[catId]) {
-                target.categories[catId].order = parseInt(newOrder) || 0;
-                renderPanels();
-                updateStatus('Orden actualizado. Guarda los cambios.');
-            }
-        };
-        
-        window.updateCategoryName = function(owner, catId, newName) {
-            const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
-            if (target.categories[catId]) {
-                target.categories[catId].name = newName;
-            }
-        };
-        
-        window.deleteCategory = function(owner, catId) {
-            if (confirm('¿Eliminar esta categoría y TODAS sus fotos?')) {
-                const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
-                delete target.categories[catId];
-                renderPanels();
-                updateStatus('Categoría eliminada. Guarda los cambios.');
-            }
-        };
-        
-        // ============================================
-        // OPERACIONES DE FOTOS
-        // ============================================
-        window.addPhoto = function(owner, catId) {
-            const url = prompt('Ingresa la URL de la imagen (Postimg, etc.):');
-            if (url) {
-                const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
-                const category = target.categories[catId];
-                if (!category.photos) category.photos = [];
-                category.photos.push({
-                    url: url,
-                    desc: `Foto ${category.photos.length + 1}`,
-                    order: category.photos.length
-                });
-                renderPanels();
-                updateStatus('Foto agregada. Guarda los cambios.');
-            }
-        };
-        
-        window.updatePhotoOrder = function(owner, catId, photoIndex, newOrder) {
-            const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
-            const category = target.categories[catId];
-            if (category.photos[photoIndex]) {
-                category.photos[photoIndex].order = parseInt(newOrder) || 0;
-                // Reordenar
-                category.photos.sort((a, b) => (a.order || 0) - (b.order || 0));
-                renderPanels();
-                updateStatus('Orden actualizado. Guarda los cambios.');
-            }
-        };
-        
-        window.updatePhotoUrl = function(owner, catId, photoIndex, newUrl) {
-            const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
-            const category = target.categories[catId];
-            if (category.photos[photoIndex]) {
-                category.photos[photoIndex].url = newUrl;
-            }
-        };
-        
-        window.updatePhotoDesc = function(owner, catId, photoIndex, newDesc) {
-            const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
-            const category = target.categories[catId];
-            if (category.photos[photoIndex]) {
-                category.photos[photoIndex].desc = newDesc;
-            }
-        };
-        
-        window.deletePhoto = function(owner, catId, photoIndex) {
-            if (confirm('¿Eliminar esta foto?')) {
-                const target = owner === 'common' ? siteData.common : siteData.cabins[owner];
-                const category = target.categories[catId];
-                category.photos.splice(photoIndex, 1);
-                renderPanels();
-                updateStatus('Foto eliminada. Guarda los cambios.');
-            }
-        };
-        
-        // ============================================
-        // UTILIDADES
-        // ============================================
-        function updateStatus(msg, isError = false) {
-            const statusDiv = document.getElementById('status');
-            statusDiv.innerHTML = msg;
-            statusDiv.style.background = isError ? '#f8d7da' : '#d4edda';
-            setTimeout(() => {
-                if (document.getElementById('status').innerHTML === msg) {
-                    document.getElementById('status').innerHTML = '✅ Listo. Recuerda GUARDAR los cambios.';
-                    statusDiv.style.background = '#d4edda';
-                }
-            }, 3000);
-        }
-        
-        function updateStats() {
-            let totalPhotos = 0, totalCategories = 0;
-            for (const cat of Object.values(siteData.common.categories || {})) {
-                totalCategories++;
-                totalPhotos += cat.photos?.length || 0;
-            }
-            for (const cabin of Object.values(siteData.cabins)) {
-                for (const cat of Object.values(cabin.categories || {})) {
+    }
+    if (siteData.cabins) {
+        for (const cabin of Object.values(siteData.cabins)) {
+            if (cabin.categories) {
+                for (const cat of Object.values(cabin.categories)) {
                     totalCategories++;
                     totalPhotos += cat.photos?.length || 0;
                 }
             }
-            document.getElementById('stats').innerHTML = `
-                <span class="stat-badge">🏠 ${Object.keys(siteData.cabins).length} cabañas</span>
-                <span class="stat-badge">🏷️ ${totalCategories} categorías</span>
-                <span class="stat-badge">📸 ${totalPhotos} fotos</span>
-            `;
         }
-        
-        function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m)); }
-        function openModal(url) { document.getElementById('modal-img').src = url; document.getElementById('image-modal').classList.add('active'); }
-        function closeModal() { document.getElementById('image-modal').classList.remove('active'); }
-        
-        window.saveAllToFirebase = saveAllToFirebase;
-        window.loadFromFirebase = loadFromFirebase;
-        window.logout = logout;
-        window.openModal = openModal;
-        window.closeModal = closeModal;
-    </script>
-</body>
-</html>
+    }
+    const statsDiv = document.getElementById('stats');
+    if (statsDiv) {
+        statsDiv.innerHTML = `
+            <span class="stat-badge">🏠 ${Object.keys(siteData.cabins || {}).length} cabañas</span>
+            <span class="stat-badge">🏷️ ${totalCategories} categorías</span>
+            <span class="stat-badge">📸 ${totalPhotos} fotos</span>
+        `;
+    }
+}
+
+function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m)); }
+function openModal(url) { 
+    const modal = document.getElementById('image-modal');
+    const img = document.getElementById('modal-img');
+    if (modal && img) {
+        img.src = url;
+        modal.classList.add('active');
+    }
+}
+function closeModal() { 
+    const modal = document.getElementById('image-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+window.saveAllToFirebase = saveAllToFirebase;
+window.loadFromFirebase = loadFromFirebase;
+window.logout = logout;
+window.openModal = openModal;
+window.closeModal = closeModal;
