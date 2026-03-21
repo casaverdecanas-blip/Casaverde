@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Calendario - Google Calendar</title>
+    
+    <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/main.min.css' rel='stylesheet' />
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
+    <script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f0f4f0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #2d5a27;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .info-box {
+            background: #e8f5e9;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .step-box {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .step-box h3 {
+            color: #2d5a27;
+            margin-bottom: 10px;
+        }
+        .step-box ol {
+            margin-left: 20px;
+            line-height: 1.6;
+        }
+        .step-box input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .step-box button {
+            background: #2d5a27;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .step-box button:hover {
+            background: #1e3f1a;
+        }
+        .calendar-container {
+            background: white;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        #calendar {
+            min-height: 500px;
+        }
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .status-success { background: #d4edda; color: #155724; border-left: 4px solid #28a745; }
+        .status-error { background: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
+        .status-info { background: #d1ecf1; color: #0c5460; border-left: 4px solid #17a2b8; }
+        .log-area {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .log-entry { margin: 3px 0; }
+        .log-success { color: #6a9955; }
+        .log-error { color: #f48771; }
+        .log-info { color: #9cdcfe; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📅 Test de Calendario con Google Calendar</h1>
+        
+        <div class="info-box">
+            <p>✅ <strong>Solución comprobada:</strong> Airbnb bloquea el acceso directo. La única forma confiable es usar Google Calendar como puente.</p>
+            <p>Sigue los pasos para configurar tu calendario:</p>
+        </div>
+        
+        <div class="step-box">
+            <h3>📌 PASO 1: Obtén tu enlace iCal de Airbnb</h3>
+            <ol>
+                <li>Ve a Airbnb → Calendario → Disponibilidad</li>
+                <li>Haz clic en "Conéctate a una web externa"</li>
+                <li>Copia el enlace que termina en <code>.ics</code></li>
+            </ol>
+            <input type="text" id="airbnb-url" placeholder="Pega aquí el enlace iCal de Airbnb" style="font-size: 12px;">
+        </div>
+        
+        <div class="step-box">
+            <h3>📌 PASO 2: Importa a Google Calendar</h3>
+            <ol>
+                <li>Abre <a href="https://calendar.google.com" target="_blank">Google Calendar</a></li>
+                <li>En "Otros calendarios", haz clic en <strong>"+" → "Desde URL"</strong></li>
+                <li>Pega el enlace de Airbnb y haz clic en "Añadir calendario"</li>
+                <li>Espera unos minutos a que Google sincronice las reservas</li>
+            </ol>
+            <button onclick="importarAGuardarPaso1()">✅ Ya importé a Google Calendar</button>
+        </div>
+        
+        <div id="paso3" class="step-box" style="display: none;">
+            <h3>📌 PASO 3: Obtén el enlace público de Google Calendar</h3>
+            <ol>
+                <li>En Google Calendar, ve a "Configuración" del calendario que importaste</li>
+                <li>En "Acceso de los usuarios", marca <strong>"Poner a disposición del público"</strong></li>
+                <li>En "Integrar calendario", copia el enlace que termina en <code>.ics</code></li>
+            </ol>
+            <input type="text" id="google-url" placeholder="Pega aquí el enlace de Google Calendar (.ics)" style="font-size: 12px;">
+            <button onclick="cargarCalendario()">📅 Cargar Calendario</button>
+        </div>
+        
+        <div id="status" class="status status-info">⏳ Esperando acción...</div>
+        
+        <div class="calendar-container">
+            <div id="calendar"></div>
+        </div>
+        
+        <div id="log-area" class="log-area">
+            <div class="log-entry log-info">🚀 Herramienta lista. Sigue los pasos...</div>
+        </div>
+    </div>
+
+    <script>
+        let calendar = null;
+        
+        function addLog(message, type = 'info') {
+            const logArea = document.getElementById('log-area');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logArea.appendChild(entry);
+            entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            console.log(message);
+        }
+        
+        function setStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status status-${type}`;
+        }
+        
+        function importarAGuardarPaso1() {
+            const airbnbUrl = document.getElementById('airbnb-url').value;
+            if (!airbnbUrl) {
+                setStatus('⚠️ Primero pega el enlace de Airbnb en el Paso 1', 'error');
+                return;
+            }
+            addLog(`📌 Enlace de Airbnb guardado: ${airbnbUrl.substring(0, 80)}...`, 'success');
+            addLog('✅ Ahora ve a Google Calendar y sigue el Paso 2', 'info');
+            document.getElementById('paso3').style.display = 'block';
+            setStatus('✅ Enlace guardado. Completa el Paso 3 con el enlace de Google Calendar', 'success');
+        }
+        
+        async function cargarCalendario() {
+            const googleUrl = document.getElementById('google-url').value;
+            
+            if (!googleUrl) {
+                setStatus('❌ Ingresa el enlace de Google Calendar', 'error');
+                return;
+            }
+            
+            addLog(`📡 Intentando cargar: ${googleUrl.substring(0, 80)}...`, 'info');
+            setStatus('📥 Cargando calendario...', 'info');
+            
+            try {
+                // Usar proxy para obtener el iCal (Google Calendar no tiene CORS)
+                const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                const response = await fetch(proxyUrl + encodeURIComponent(googleUrl));
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const icalData = await response.text();
+                addLog(`📄 Datos recibidos, longitud: ${icalData.length} caracteres`, 'success');
+                
+                if (!icalData.includes('BEGIN:VCALENDAR')) {
+                    throw new Error('No es un archivo iCal válido');
+                }
+                
+                // Parsear iCal
+                const jcalData = ICAL.parse(icalData);
+                const comp = new ICAL.Component(jcalData);
+                const vevents = comp.getAllSubcomponents('vevent');
+                
+                addLog(`📅 Eventos encontrados: ${vevents.length}`, 'success');
+                
+                const events = [];
+                for (const vevent of vevents) {
+                    const event = new ICAL.Event(vevent);
+                    const startDate = event.startDate.toJSDate();
+                    const endDate = event.endDate.toJSDate();
+                    
+                    const endAdjusted = new Date(endDate);
+                    endAdjusted.setDate(endAdjusted.getDate() - 1);
+                    
+                    const start = startDate.toISOString().split('T')[0];
+                    const end = endAdjusted.toISOString().split('T')[0];
+                    
+                    let title = 'Reserva';
+                    if (event.summary) {
+                        title = event.summary.substring(0, 35);
+                        if (title.includes('Reservado')) title = title.replace('Reservado:', '').trim();
+                    }
+                    
+                    events.push({
+                        title: title || 'Reserva',
+                        start: start,
+                        end: end,
+                        color: '#FF9800',
+                        allDay: true
+                    });
+                    
+                    addLog(`   📍 ${title} (${start} → ${end})`, 'info');
+                }
+                
+                // Renderizar calendario
+                if (calendar) {
+                    calendar.destroy();
+                }
+                
+                const calendarEl = document.getElementById('calendar');
+                calendar = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    locale: 'es',
+                    events: events,
+                    height: 'auto',
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth'
+                    },
+                    buttonText: {
+                        today: 'Hoy',
+                        month: 'Mes'
+                    }
+                });
+                
+                calendar.render();
+                
+                if (events.length === 0) {
+                    setStatus('⚠️ Calendario cargado sin eventos. ¿Hay reservas en Airbnb?', 'info');
+                    addLog('⚠️ No hay eventos en el calendario', 'info');
+                } else {
+                    setStatus(`✅ Calendario cargado con ${events.length} reservas`, 'success');
+                    addLog(`✅ ¡Calendario funcionando! Se muestran ${events.length} reservas`, 'success');
+                }
+                
+            } catch (error) {
+                console.error(error);
+                setStatus(`❌ Error: ${error.message}`, 'error');
+                addLog(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Inicializar calendario vacío
+        document.addEventListener('DOMContentLoaded', () => {
+            const calendarEl = document.getElementById('calendar');
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'es',
+                events: [],
+                height: 'auto'
+            });
+            calendar.render();
+        });
+    </script>
+</body>
+</html>
