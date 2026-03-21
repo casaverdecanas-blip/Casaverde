@@ -8,7 +8,7 @@
     <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/main.min.css' rel='stylesheet' />
     
     <style>
-        /* ========== ESTILOS COMPLETOS (igual para todas) ========== */
+        /* ========== ESTILOS COMPLETOS ========== */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', sans-serif; background: #f9f9f9; color: #333; }
         header { background: #2d5a27; color: white; padding: 20px; text-align: center; position: relative; }
@@ -156,13 +156,33 @@
 
     <script>
         // ============================================
+        // CONFIGURACIÓN FIREBASE (CORREGIDA)
+        // ============================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
+            authDomain: "casaverdecanas-199.firebaseapp.com",
+            databaseURL: "https://casaverdecanas-199-default-rtdb.firebaseio.com",
+            projectId: "casaverdecanas-199",
+            storageBucket: "casaverdecanas-199.firebasestorage.app",
+            messagingSenderId: "417825635316",
+            appId: "1:417825635316:web:ff7f4fe52edcab43d8d7a1"
+        };
+
+        // Inicializar Firebase SOLO UNA VEZ
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+            console.log('✅ Firebase inicializado');
+        }
+        const db = firebase.database();
+        
+        // ============================================
         // CONFIGURACIÓN ESPECÍFICA DE CABAÑA 1
         // ============================================
         const CABIN_ID = 'cabin-1';
         const AIRBNB_ICAL_URL = 'https://www.airbnb.com/calendar/ical/1337276103911358917.ics';
         
         // ============================================
-        // TRADUCCIONES COMPLETAS
+        // TRADUCCIONES
         // ============================================
         const TRANSLATIONS = {
             es: {
@@ -179,8 +199,6 @@
                 checkOut: "Salida",
                 save: "Guardar",
                 cancel: "Cancelar",
-                adminMode: "Modo admin activado",
-                adminModeOff: "Modo admin desactivado",
                 features: {
                     guests: "huéspedes",
                     bedrooms: "hab",
@@ -205,8 +223,6 @@
                 checkOut: "Saída",
                 save: "Salvar",
                 cancel: "Cancelar",
-                adminMode: "Modo admin ativado",
-                adminModeOff: "Modo admin desativado",
                 features: {
                     guests: "hóspedes",
                     bedrooms: "quarto",
@@ -231,8 +247,6 @@
                 checkOut: "Check-out",
                 save: "Save",
                 cancel: "Cancel",
-                adminMode: "Admin mode activated",
-                adminModeOff: "Admin mode deactivated",
                 features: {
                     guests: "guests",
                     bedrooms: "bedrooms",
@@ -295,7 +309,7 @@
         }
         
         // ============================================
-        // SLIDERS POR CATEGORÍA (con orden)
+        // SLIDERS POR CATEGORÍA
         // ============================================
         let sliders = {};
         let autoIntervals = {};
@@ -441,22 +455,32 @@
             container.innerHTML = '<div style="text-align:center; padding:40px;">Cargando fotos...</div>';
             
             try {
-                const snapshot = await db.ref(`siteData/apartments/${CABIN_ID}/categories`).once('value');
-                const categories = snapshot.val() || {};
+                // Intentar varias rutas posibles
+                let categories = null;
+                
+                // Ruta principal: siteData/apartments/cabin-X/categories
+                let snapshot = await db.ref(`siteData/apartments/${CABIN_ID}/categories`).once('value');
+                categories = snapshot.val();
+                
+                console.log(`📂 Categorías encontradas para ${CABIN_ID}:`, categories);
                 
                 container.innerHTML = '';
                 
-                const sortedCategories = Object.entries(categories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
-                
-                if (sortedCategories.length === 0) {
+                if (!categories || Object.keys(categories).length === 0) {
                     container.innerHTML = '<div style="text-align:center; padding:40px; color:#888;">No hay fotos disponibles aún</div>';
                     return;
                 }
                 
+                // Ordenar categorías por orden
+                const sortedCategories = Object.entries(categories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
+                
                 for (const [catId, catData] of sortedCategories) {
                     const photos = catData.photos || [];
                     const sortedPhotos = [...photos].sort((a, b) => (a.order || 0) - (b.order || 0));
+                    
                     if (sortedPhotos.length === 0) continue;
+                    
+                    console.log(`📸 Categoría "${catData.name}": ${sortedPhotos.length} fotos`);
                     
                     const sliderId = `${CABIN_ID}_${catId}`;
                     const section = document.createElement('div');
@@ -475,17 +499,18 @@
                     initSlider(sliderId, sortedPhotos);
                 }
                 
-                if (container.innerHTML === '') {
+                if (container.innerHTML === '' || container.innerHTML === '<div style="text-align:center; padding:40px;">Cargando fotos...</div>') {
                     container.innerHTML = '<div style="text-align:center; padding:40px; color:#888;">No hay fotos disponibles aún</div>';
                 }
+                
             } catch (error) {
-                console.error('Error loading categories:', error);
+                console.error('❌ Error loading categories:', error);
                 container.innerHTML = '<div style="text-align:center; padding:40px; color:#e74c3c;">Error al cargar fotos</div>';
             }
         }
         
         // ============================================
-        // CALENDARIO CON PROXY
+        // CALENDARIO
         // ============================================
         let calendar = null;
         let editMode = false;
@@ -505,6 +530,7 @@
                     const text = await response.text();
                     if (text.includes('BEGIN:VCALENDAR') && !text.includes('<!DOCTYPE')) {
                         icalData = text;
+                        console.log(`✅ Proxy funcionando: ${proxy}`);
                         break;
                     }
                 } catch(e) { console.log(`Proxy ${proxy} falló`); }
