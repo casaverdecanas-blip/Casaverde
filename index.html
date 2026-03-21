@@ -8,7 +8,6 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', sans-serif; background: #f9f9f9; color: #333; }
         
-        /* Header Hero */
         .hero {
             background: linear-gradient(135deg, rgba(45,90,39,0.92), rgba(45,90,39,0.88));
             color: white;
@@ -71,7 +70,6 @@
             margin: 10px auto 0;
         }
         
-        /* Grid de cabañas */
         .cabins-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -102,7 +100,6 @@
             font-size: 0.9rem;
         }
         
-        /* Slider por categoría */
         .category-section {
             background: #e8f5e9;
             border-radius: 16px;
@@ -232,7 +229,6 @@
     </header>
 
     <main class="container">
-        <!-- Cabañas -->
         <section>
             <h2 data-i18n="cabins_title">Nuestras Cabañas</h2>
             <div id="cabins-container" class="cabins-grid">
@@ -240,7 +236,6 @@
             </div>
         </section>
 
-        <!-- Espacios Comunes (sliders por categoría) -->
         <section>
             <h2 data-i18n="common_title">Espacios Compartidos</h2>
             <div id="common-container"></div>
@@ -257,7 +252,6 @@
     </footer>
 
     <script>
-        // Firebase Config
         const firebaseConfig = {
             apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
             authDomain: "casaverdecanas-199.firebaseapp.com",
@@ -270,7 +264,6 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        // Traducciones
         const translations = {
             es: { cabins_title: "Nuestras Cabañas", common_title: "Espacios Compartidos" },
             pt: { cabins_title: "Nossas Cabanas", common_title: "Espaços Compartilhados" },
@@ -289,7 +282,6 @@
             });
         }
 
-        // Sliders management
         let sliders = {};
         let autoIntervals = {};
 
@@ -380,19 +372,20 @@
             document.body.appendChild(modal);
         }
         
-        // Cargar datos desde Firebase
         async function loadData() {
             try {
-                const snapshot = await db.ref('/').once('value');
+                // Leer desde siteData (estructura correcta)
+                const snapshot = await db.ref('siteData').once('value');
                 const data = snapshot.val() || {};
                 
-                // Renderizar cabañas
                 const apartments = data.apartments || {};
+                const common = data.common || { categories: {} };
+                
+                // Renderizar cabañas
                 const cabinsContainer = document.getElementById('cabins-container');
                 cabinsContainer.innerHTML = '';
                 
                 for (const [apId, apData] of Object.entries(apartments)) {
-                    // Buscar la primera foto de la primera categoría como portada
                     let coverPhoto = '';
                     const categories = apData.categories || {};
                     for (const catData of Object.values(categories)) {
@@ -416,8 +409,7 @@
                     cabinsContainer.appendChild(card);
                 }
                 
-                // Renderizar espacios comunes (sliders por categoría)
-                const common = data.common || { categories: {} };
+                // Renderizar espacios comunes
                 const commonContainer = document.getElementById('common-container');
                 commonContainer.innerHTML = '';
                 
@@ -442,13 +434,19 @@
                     initSlider(sliderId, photos, `slider-container-${sliderId}`);
                 }
                 
+                if (cabinsContainer.innerHTML === '') {
+                    cabinsContainer.innerHTML = '<div class="loading">No hay cabañas cargadas</div>';
+                }
+                if (commonContainer.innerHTML === '') {
+                    commonContainer.innerHTML = '<div class="loading">No hay espacios comunes cargados</div>';
+                }
+                
             } catch (error) {
                 console.error('Error loading data:', error);
                 document.getElementById('cabins-container').innerHTML = '<div class="loading">Error al cargar datos</div>';
             }
         }
         
-        // Inicializar
         document.addEventListener('DOMContentLoaded', () => {
             changeLanguage(currentLang);
             loadData();
