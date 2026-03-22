@@ -51,7 +51,7 @@
         <span class="update-badge" id="last-update-badge">Última actualización: ---</span>
     </div>
     <div class="calendar-container">
-        <div id="calendar"><div style="text-align:center; padding:50px; color:#666;">Cargando calendario...</div></div>
+        <div id="calendar"></div>
     </div>
     <div class="legend">
         <div class="legend-item"><div class="legend-color cabin1"></div><span>🏠 Cabaña 1 - Vista al Bosque</span></div>
@@ -87,7 +87,7 @@
         try {
             if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
             db = firebase.database();
-        } catch(e) { console.warn("Firebase init error",e); }
+        } catch(e) { console.warn("Firebase init error",e); mostrarError("Firebase no se pudo inicializar. Las reservas manuales no estarán disponibles."); }
 
         const GOOGLE_ICAL_URLS = {
             cabin1: 'https://calendar.google.com/calendar/ical/h5a1h0a8dg9rl0oufvq19hn05r4gbubg%40import.calendar.google.com/public/basic.ics',
@@ -96,13 +96,13 @@
         };
         const CABIN_COLORS = { 'Cabaña 1': '#ff5a5f', 'Cabaña 2': '#e74c3c', 'Cabaña 3': '#3498db' };
         let calendar = null;
-        let allEvents = [];
 
         function mostrarError(msg) {
             const banner = document.getElementById('error-banner');
             if(banner) { banner.style.display = 'block'; banner.innerHTML += `<div>⚠️ ${msg}</div>`; }
             console.error(msg);
         }
+
         function updateTimestamp() {
             const now = new Date();
             const formatted = now.toLocaleString('es-AR', { timeZone: 'America/Sao_Paulo' });
@@ -115,6 +115,7 @@
             const badge = document.getElementById('last-update-badge');
             if(badge) badge.textContent = last ? `Última actualización: ${last}` : `Última actualización: ---`;
         }
+
         async function getManualReservations() {
             if(!db) return [];
             const events = [];
@@ -141,6 +142,7 @@
             }
             return events;
         }
+
         async function fetchGoogleCalendar(url, cabinName) {
             if(!url) return [];
             try {
@@ -181,23 +183,27 @@
                 return [];
             }
         }
+
         async function cargarTodos() {
-            const calendarDiv = document.getElementById('calendar');
-            if(calendarDiv) calendarDiv.innerHTML = '<div style="text-align:center; padding:50px; color:#666;">Cargando calendario...</div>';
+            // Mostrar un mensaje de carga en el calendario
+            const calendarEl = document.getElementById('calendar');
+            if(calendarEl && !calendar) {
+                calendarEl.innerHTML = '<div style="text-align:center; padding:50px; color:#666;">Cargando calendario...</div>';
+            }
             const [c1,c2,c3,manual] = await Promise.all([
                 fetchGoogleCalendar(GOOGLE_ICAL_URLS.cabin1,'Cabaña 1'),
                 fetchGoogleCalendar(GOOGLE_ICAL_URLS.cabin2,'Cabaña 2'),
                 fetchGoogleCalendar(GOOGLE_ICAL_URLS.cabin3,'Cabaña 3'),
                 getManualReservations()
             ]);
-            allEvents = [...c1,...c2,...c3,...manual];
-            if(calendarDiv) {
-                if(allEvents.length===0) calendarDiv.innerHTML = '<div style="text-align:center; padding:50px; color:#888;">📭 No hay reservas para mostrar</div>';
-                else if(calendar) {
+            const allEvents = [...c1,...c2,...c3,...manual];
+            if(calendarEl) {
+                if(calendar) {
                     calendar.removeAllEvents();
                     calendar.addEventSource(allEvents);
                 } else {
-                    calendar = new FullCalendar.Calendar(calendarDiv, {
+                    // Crear el calendario con eventos (aunque esté vacío)
+                    calendar = new FullCalendar.Calendar(calendarEl, {
                         initialView: 'dayGridMonth',
                         locale: 'es',
                         events: allEvents,
@@ -211,6 +217,7 @@
             }
             updateTimestamp();
         }
+
         window.recargarCalendario = async function() {
             const btn = event?.target;
             if(btn) { btn.textContent = '🔄 Actualizando...'; btn.disabled = true; }
@@ -223,7 +230,12 @@
                 setTimeout(() => { banner.innerHTML = orig; mostrarUltimaActualizacion(); }, 3000);
             }
         };
-        document.addEventListener('DOMContentLoaded', () => { cargarTodos(); mostrarUltimaActualizacion(); setInterval(cargarTodos, 6*60*60*1000); });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            cargarTodos();
+            mostrarUltimaActualizacion();
+            setInterval(cargarTodos, 6*60*60*1000);
+        });
     })();
 </script>
 </body>
