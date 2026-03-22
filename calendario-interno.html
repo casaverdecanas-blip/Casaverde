@@ -3,299 +3,200 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Control - Calendario Unificado | CasaVerdeCanas</title>
+    <title>Test iCal - CasaVerdeCanas</title>
     
-    <!-- FullCalendar CSS -->
+    <!-- FullCalendar -->
     <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/main.min.css' rel='stylesheet' />
-    <!-- FullCalendar JS -->
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
-    <!-- iCal.js para parsear Airbnb -->
+    <!-- iCal.js para parsear -->
     <script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js"></script>
-    <!-- Firebase -->
+    <!-- Firebase (para reservas manuales) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Segoe UI', sans-serif;
             background: #e8f5e9;
             padding: 20px;
         }
-        
         .container {
             max-width: 1300px;
             margin: 0 auto;
         }
-        
         .header {
-            background: linear-gradient(135deg, #2d5a27 0%, #1e3f1a 100%);
+            background: #2d5a27;
             color: white;
-            padding: 25px;
-            border-radius: 20px;
-            margin-bottom: 25px;
-            text-align: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-        
-        .header h1 {
-            margin-bottom: 8px;
-            font-size: 1.8rem;
-        }
-        
-        .header p {
-            opacity: 0.9;
-            font-size: 0.95rem;
-        }
-        
-        .status-bar {
-            background: #f5f5f5;
-            padding: 12px 20px;
-            border-radius: 12px;
+            padding: 20px;
+            border-radius: 16px;
             margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-            font-size: 0.85rem;
-        }
-        
-        .status-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .status-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-        }
-        
-        .status-dot.airbnb { background: #FF9800; }
-        .status-dot.manual { background: #9b59b6; }
-        .status-dot.syncing { background: #3498db; animation: pulse 1.5s infinite; }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        
-        .refresh-btn {
-            background: #2d5a27;
-            color: white;
-            border: none;
-            padding: 6px 15px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 0.8rem;
-        }
-        
-        .refresh-btn:hover {
-            background: #1e3f1a;
-        }
-        
-        .calendar-container {
-            background: white;
-            border-radius: 20px;
-            padding: 20px;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-        }
-        
-        #calendar {
-            min-height: 600px;
-        }
-        
-        .loading-overlay {
             text-align: center;
-            padding: 50px;
-            color: #666;
         }
-        
-        .legend {
-            margin-top: 20px;
-            padding: 18px;
+        .header h1 { margin-bottom: 5px; }
+        .test-panel {
             background: white;
             border-radius: 16px;
-            display: flex;
-            justify-content: center;
-            gap: 35px;
-            flex-wrap: wrap;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-        
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 0.9rem;
-            font-weight: 500;
-            padding: 6px 15px;
-            background: #f8f9fa;
-            border-radius: 30px;
-        }
-        
-        .legend-color {
-            width: 18px;
-            height: 18px;
-            border-radius: 4px;
-        }
-        
-        .legend-color.cabin1 { background: #FF9800; }
-        .legend-color.cabin2 { background: #e74c3c; }
-        .legend-color.cabin3 { background: #3498db; }
-        .legend-color.manual { background: #9b59b6; }
-        
-        .info-box {
-            margin-top: 20px;
-            padding: 18px 22px;
-            background: #e3f2fd;
-            border-radius: 16px;
-            border-left: 5px solid #2d5a27;
-            font-size: 0.85rem;
-        }
-        
-        .actions {
-            display: flex;
-            gap: 12px;
-            justify-content: center;
-            margin: 20px 0;
-            flex-wrap: wrap;
-        }
-        
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 30px;
-            font-weight: bold;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.3s;
-        }
-        
-        .btn-primary {
-            background: #2d5a27;
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background: #1e3f1a;
-            transform: translateY(-2px);
-        }
-        
-        footer {
-            text-align: center;
-            margin-top: 30px;
             padding: 20px;
-            color: #666;
-            font-size: 0.75rem;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        
-        .debug-log {
-            margin-top: 20px;
+        .test-panel h3 {
+            color: #2d5a27;
+            margin-bottom: 15px;
+        }
+        .url-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .url-input input {
+            flex: 3;
             padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-family: monospace;
+        }
+        .url-input button {
+            padding: 10px 20px;
+            background: #2d5a27;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .preset-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .preset-btn {
+            padding: 8px 16px;
+            background: #e0e0e0;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+        .preset-btn:hover {
+            background: #2d5a27;
+            color: white;
+        }
+        .log-area {
             background: #1e1e1e;
             color: #0f0;
             font-family: monospace;
-            font-size: 11px;
+            font-size: 12px;
+            padding: 15px;
             border-radius: 8px;
-            max-height: 150px;
+            max-height: 200px;
             overflow-y: auto;
-            display: none;
+            margin-bottom: 20px;
         }
-        
+        .log-entry {
+            margin: 3px 0;
+            border-bottom: 1px solid #333;
+        }
+        .log-success { color: #6a9955; }
+        .log-error { color: #f48771; }
+        .log-info { color: #9cdcfe; }
+        .calendar-container {
+            background: white;
+            border-radius: 16px;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        #calendar {
+            min-height: 500px;
+        }
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 25px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+        }
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+        .legend-color.airbnb { background: #ff5a5f; }
+        .legend-color.blocked { background: #9e9e9e; }
+        .legend-color.manual { background: #9c27b0; }
+        .status {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 0.85rem;
+        }
+        button {
+            cursor: pointer;
+        }
         @media (max-width: 768px) {
-            body { padding: 10px; }
-            .header h1 { font-size: 1.3rem; }
+            .url-input { flex-direction: column; }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>📅 Panel de Control Unificado</h1>
-            <p>CasaVerdeCanas - Ocupación de las 3 cabañas</p>
+            <h1>🧪 Test iCal - Integración Nativa</h1>
+            <p>Prueba de sincronización directa con Airbnb usando proxy</p>
         </div>
         
-        <div class="status-bar">
-            <div class="status-item">
-                <div class="status-dot airbnb"></div>
-                <span>Airbnb (actualización cada 3h)</span>
+        <div class="test-panel">
+            <h3>📡 Configuración de iCal</h3>
+            
+            <div class="preset-buttons">
+                <button class="preset-btn" onclick="setPreset('cabin1')">🏠 Cabaña 1</button>
+                <button class="preset-btn" onclick="setPreset('cabin2')">🏢 Cabaña 2</button>
+                <button class="preset-btn" onclick="setPreset('cabin3')">👨‍👩‍👧‍👦 Cabaña 3</button>
+                <button class="preset-btn" onclick="setPreset('all')">📅 Mostrar todas</button>
+                <button class="preset-btn" onclick="clearLog()">🗑️ Limpiar Log</button>
             </div>
-            <div class="status-item">
-                <div class="status-dot manual"></div>
-                <span>Reservas directas</span>
-            </div>
-            <div class="status-item">
-                <div class="status-dot syncing"></div>
-                <span id="sync-status">Iniciando...</span>
-            </div>
-            <button class="refresh-btn" onclick="syncAllCalendars()">🔄 Sincronizar ahora</button>
-        </div>
-        
-        <div class="calendar-container">
-            <div id="calendar">
-                <div class="loading-overlay">📅 Cargando calendario...</div>
+            
+            <div class="url-input">
+                <input type="text" id="ical-url" placeholder="URL del iCal de Airbnb" value="https://www.airbnb.com/calendar/ical/1337276103911358917.ics">
+                <button onclick="testDirectFetch()">🌐 Probar URL Directa</button>
+                <button onclick="testWithProxy()">🔄 Probar con Proxy</button>
+                <button onclick="loadCalendar()">📅 Cargar Calendario</button>
             </div>
         </div>
         
-        <div class="legend">
-            <div class="legend-item">
-                <div class="legend-color cabin1"></div>
-                <span>🏠 Cabaña 1 - Vista al Bosque</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color cabin2"></div>
-                <span>🏢 Cabaña 2 - Loft en Canasvieiras</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color cabin3"></div>
-                <span>👨‍👩‍👧‍👦 Cabaña 3 - Familiar Premium</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color manual"></div>
-                <span>📝 Reservas directas (manuales)</span>
+        <div class="test-panel">
+            <h3>📋 Log de Diagnóstico</h3>
+            <div id="log-area" class="log-area">
+                <div class="log-entry log-info">🚀 Página de test lista. Usa los botones para probar.</div>
             </div>
         </div>
         
-        <div class="actions">
-            <a href="admin-unificado.html" class="btn btn-primary">
-                🖼️ Administrar Fotos y Reservas
-            </a>
-            <button onclick="syncAllCalendars()" class="btn" style="background: #3498db; color: white;">
-                🔄 Forzar sincronización
-            </button>
+        <div class="test-panel">
+            <h3>📆 Calendario Resultado</h3>
+            <div id="status" class="status">⏳ Esperando acción...</div>
+            <div class="legend">
+                <div class="legend-item"><div class="legend-color airbnb"></div><span>Reservas Airbnb</span></div>
+                <div class="legend-item"><div class="legend-color blocked"></div><span>Bloqueos / No disponible</span></div>
+                <div class="legend-item"><div class="legend-color manual"></div><span>Reservas manuales (Firebase)</span></div>
+            </div>
+            <div class="calendar-container">
+                <div id="calendar"></div>
+            </div>
         </div>
-        
-        <div class="info-box">
-            <strong>📌 Información del panel</strong>
-            <ul style="margin-left: 20px; margin-top: 8px;">
-                <li>✅ <strong>Reservas Airbnb</strong> - Se sincronizan cada 3 horas. Cada cabaña tiene su color.</li>
-                <li>✅ <strong>Reservas directas</strong> - Se agregan desde el Admin Unificado y aparecen en morado.</li>
-                <li>✅ <strong>Actualización en tiempo real</strong> - Las reservas manuales se ven instantáneamente.</li>
-                <li>✅ <strong>Vista unificada</strong> - Todas las ocupaciones de las 3 cabañas en un solo calendario.</li>
-            </ul>
-        </div>
-        
-        <div id="debug-log" class="debug-log"></div>
-        
-        <footer>
-            <p>🔒 Panel de uso interno de CasaVerdeCanas | 📧 casaverdecanas@gmail.com | 📞 +55 48 99118-1246</p>
-        </footer>
     </div>
 
     <script>
         // ============================================
-        // CONFIGURACIÓN FIREBASE
+        // CONFIGURACIÓN FIREBASE (para reservas manuales)
         // ============================================
         const firebaseConfig = {
             apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
@@ -311,77 +212,141 @@
         const db = firebase.database();
         
         // ============================================
-        // CONFIGURACIÓN DE CABAÑAS
+        // URLs DE AIRBNB
         // ============================================
-        const cabins = {
-            'cabin-1': {
-                name: 'Cabaña 1 - Vista al Bosque',
-                color: '#FF9800',
-                ical_url: 'https://www.airbnb.com/calendar/ical/1337276103911358917.ics'
-            },
-            'cabin-2': {
-                name: 'Cabaña 2 - Loft en Canasvieiras',
-                color: '#e74c3c',
-                ical_url: 'https://www.airbnb.com/calendar/ical/1110346888721141996.ics'
-            },
-            'cabin-3': {
-                name: 'Cabaña 3 - Familiar Premium',
-                color: '#3498db',
-                ical_url: 'https://www.airbnb.com/calendar/ical/1230287544066345753.ics'
-            }
+        const AIRBNB_URLS = {
+            cabin1: 'https://www.airbnb.com/calendar/ical/1337276103911358917.ics',
+            cabin2: 'https://www.airbnb.com/calendar/ical/1110346888721141996.ics',
+            cabin3: 'https://www.airbnb.com/calendar/ical/1230287544066345753.ics'
         };
         
-        let calendar = null;
-        let allEvents = [];
+        // Proxies para probar
+        const PROXIES = [
+            { name: 'allorigins', url: 'https://api.allorigins.win/raw?url=' },
+            { name: 'corsproxy', url: 'https://corsproxy.io/?' },
+            { name: 'cors-anywhere', url: 'https://cors-anywhere.herokuapp.com/' },
+            { name: 'thingproxy', url: 'https://thingproxy.freeboard.io/fetch/' }
+        ];
         
-        // Función para agregar logs de depuración
-        function addDebugLog(message, type = 'info') {
-            const debugDiv = document.getElementById('debug-log');
-            if (debugDiv) {
-                const time = new Date().toLocaleTimeString();
-                const colors = { info: '#0f0', error: '#f00', warning: '#ff0' };
-                debugDiv.style.display = 'block';
-                debugDiv.innerHTML += `<div style="color: ${colors[type] || '#0f0'}">[${time}] ${message}</div>`;
-                debugDiv.scrollTop = debugDiv.scrollHeight;
+        let calendar = null;
+        let currentEvents = [];
+        
+        // ============================================
+        // FUNCIONES DE LOG
+        // ============================================
+        function addLog(message, type = 'info') {
+            const logArea = document.getElementById('log-area');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logArea.appendChild(entry);
+            entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+        
+        function clearLog() {
+            const logArea = document.getElementById('log-area');
+            logArea.innerHTML = '<div class="log-entry log-info">🗑️ Log limpiado. Iniciando nuevo test...</div>';
+        }
+        
+        function setStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.style.background = type === 'error' ? '#f8d7da' : (type === 'success' ? '#d4edda' : '#e3f2fd');
+        }
+        
+        function setPreset(preset) {
+            const urlInput = document.getElementById('ical-url');
+            if (preset === 'all') {
+                urlInput.value = 'ALL_CABINS';
+                addLog('📌 Modo "Todas las cabañas" seleccionado. Se cargarán las 3.', 'success');
+            } else {
+                urlInput.value = AIRBNB_URLS[preset];
+                addLog(`📌 Preseleccionado: ${preset.toUpperCase()} - ${AIRBNB_URLS[preset]}`, 'info');
             }
-            console.log(message);
         }
         
         // ============================================
-        // IMPORTAR CALENDARIO DE AIRBNB
+        // TEST DIRECTO
         // ============================================
-        async function importAirbnbCalendar(cabinId, cabinData) {
-            addDebugLog(`🔄 Importando ${cabinData.name}...`);
+        async function testDirectFetch() {
+            const url = document.getElementById('ical-url').value.trim();
+            if (!url || url === 'ALL_CABINS') {
+                addLog('❌ Ingresa una URL específica o usa el modo "Todas las cabañas" con el botón de cargar', 'error');
+                return;
+            }
             
-            const proxies = [
-                'https://api.allorigins.win/raw?url=',
-                'https://corsproxy.io/?',
-                'https://cors-anywhere.herokuapp.com/'
-            ];
+            addLog(`🌐 Probando fetch directo a: ${url}`, 'info');
+            setStatus('Probando fetch directo...', 'info');
             
-            let icalData = null;
-            for (const proxy of proxies) {
+            try {
+                const response = await fetch(url);
+                addLog(`📡 Status HTTP: ${response.status}`, 'info');
+                
+                const text = await response.text();
+                addLog(`📄 Respuesta recibida, longitud: ${text.length} caracteres`, 'info');
+                
+                if (text.includes('BEGIN:VCALENDAR')) {
+                    addLog('✅ ¡ES UN iCal VÁLIDO!', 'success');
+                    setStatus('✅ El enlace iCal es válido', 'success');
+                    return text;
+                } else if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+                    addLog('❌ La respuesta es HTML. Airbnb bloquea el acceso directo.', 'error');
+                    setStatus('❌ Error: La respuesta es HTML. Prueba con proxy.', 'error');
+                } else {
+                    addLog('⚠️ Respuesta no reconocida', 'error');
+                }
+                return null;
+            } catch (error) {
+                addLog(`❌ Error en fetch directo: ${error.message}`, 'error');
+                setStatus(`❌ Error: ${error.message}`, 'error');
+                return null;
+            }
+        }
+        
+        // ============================================
+        // TEST CON PROXY
+        // ============================================
+        async function testWithProxy() {
+            const url = document.getElementById('ical-url').value.trim();
+            if (!url || url === 'ALL_CABINS') {
+                addLog('❌ Ingresa una URL específica', 'error');
+                return;
+            }
+            
+            addLog(`🔄 Probando con proxies para: ${url}`, 'info');
+            setStatus('Probando con proxies...', 'info');
+            
+            for (const proxy of PROXIES) {
+                addLog(`📡 Probando proxy: ${proxy.name}`, 'info');
                 try {
-                    addDebugLog(`📡 Probando proxy: ${proxy}`);
-                    const response = await fetch(proxy + encodeURIComponent(cabinData.ical_url));
+                    const fullUrl = proxy.url + encodeURIComponent(url);
+                    const response = await fetch(fullUrl);
                     const text = await response.text();
+                    
+                    addLog(`   Status: ${response.status}`, 'info');
+                    
                     if (text.includes('BEGIN:VCALENDAR') && !text.includes('<!DOCTYPE')) {
-                        icalData = text;
-                        addDebugLog(`✅ Proxy funcionó: ${proxy}`);
-                        break;
+                        addLog(`✅ ¡PROXY ${proxy.name.toUpperCase()} FUNCIONA!`, 'success');
+                        setStatus(`✅ Proxy ${proxy.name} funciona correctamente`, 'success');
+                        return text;
                     } else {
-                        addDebugLog(`⚠️ Proxy devolvió HTML, probando siguiente...`);
+                        addLog(`   ⚠️ Proxy ${proxy.name} devolvió respuesta no iCal`, 'error');
                     }
-                } catch(e) {
-                    addDebugLog(`❌ Proxy falló: ${e.message}`);
+                } catch (error) {
+                    addLog(`   ❌ Proxy ${proxy.name} falló: ${error.message}`, 'error');
                 }
             }
             
-            if (!icalData) {
-                addDebugLog(`⚠️ No se pudo obtener calendario para ${cabinData.name}`, 'warning');
-                return [];
-            }
-            
+            addLog('❌ TODOS LOS PROXIES FALLARON', 'error');
+            setStatus('❌ No se pudo obtener el iCal con ningún proxy', 'error');
+            return null;
+        }
+        
+        // ============================================
+        // PARSEAR ICAL A EVENTOS
+        // ============================================
+        function parseICalToEvents(icalData, cabinName, cabinColor) {
             try {
                 const jcalData = ICAL.parse(icalData);
                 const comp = new ICAL.Component(jcalData);
@@ -398,62 +363,77 @@
                     const start = startDate.toISOString().split('T')[0];
                     const end = endAdjusted.toISOString().split('T')[0];
                     
-                    let title = `${cabinData.name}`;
+                    // Detectar si es bloqueo (summary contiene "blocked" o similar)
+                    let eventType = 'booking';
+                    let title = `${cabinName} - Reserva`;
+                    
                     if (event.summary) {
-                        const guest = event.summary.replace(/Reservado:|Reserved:|Réservé:/i, '').trim();
-                        if (guest && guest !== '') title = `${cabinData.name} - ${guest}`;
+                        const summaryLower = event.summary.toLowerCase();
+                        if (summaryLower.includes('blocked') || summaryLower.includes('bloqueado')) {
+                            eventType = 'blocked';
+                            title = `${cabinName} - Bloqueado`;
+                        } else {
+                            const guest = event.summary.replace(/Reservado:|Reserved:|Réservé:/i, '').trim();
+                            if (guest && guest !== '') title = `${cabinName} - ${guest}`;
+                        }
                     }
                     
+                    const color = eventType === 'blocked' ? '#9e9e9e' : cabinColor;
+                    
                     events.push({
-                        id: `${cabinId}_airbnb_${start}_${end}`,
+                        id: `${cabinName}_${start}_${end}`,
                         title: title,
                         start: start,
                         end: end,
-                        color: cabinData.color,
+                        color: color,
                         textColor: 'white',
-                        allDay: true
+                        allDay: true,
+                        extendedProps: {
+                            type: eventType,
+                            summary: event.summary
+                        }
                     });
                 }
                 
-                addDebugLog(`📅 ${cabinData.name}: ${events.length} reservas encontradas`);
                 return events;
-                
             } catch (error) {
-                addDebugLog(`❌ Error parseando ${cabinData.name}: ${error.message}`, 'error');
+                addLog(`❌ Error parseando iCal: ${error.message}`, 'error');
                 return [];
             }
         }
         
         // ============================================
-        // OBTENER RESERVAS MANUALES DESDE FIREBASE
+        // OBTENER RESERVAS MANUALES DE FIREBASE
         // ============================================
         async function getManualReservations() {
             const events = [];
-            addDebugLog(`📥 Obteniendo reservas manuales desde Firebase...`);
+            const cabins = ['cabin-1', 'cabin-2', 'cabin-3'];
+            const cabinNames = {
+                'cabin-1': 'Cabaña 1',
+                'cabin-2': 'Cabaña 2',
+                'cabin-3': 'Cabaña 3'
+            };
             
-            for (const [cabinId, cabinData] of Object.entries(cabins)) {
+            for (const cabinId of cabins) {
                 try {
                     const snapshot = await db.ref(`reservas/${cabinId}`).once('value');
                     const reservas = snapshot.val() || {};
                     
-                    let count = 0;
                     for (const [id, reserva] of Object.entries(reservas)) {
-                        if (reserva.source === 'manual' || reserva.source === undefined) {
+                        if (reserva.source === 'manual') {
                             events.push({
                                 id: `${cabinId}_manual_${id}`,
-                                title: `${cabinData.name} - ${reserva.guest || 'Reserva directa'}`,
+                                title: `${cabinNames[cabinId]} - ${reserva.guest || 'Reserva directa'}`,
                                 start: reserva.start,
                                 end: reserva.end,
-                                color: '#9b59b6',
+                                color: '#9c27b0',
                                 textColor: 'white',
                                 allDay: true
                             });
-                            count++;
                         }
                     }
-                    addDebugLog(`📝 ${cabinData.name}: ${count} reservas manuales`);
                 } catch (error) {
-                    addDebugLog(`❌ Error cargando reservas manuales de ${cabinId}: ${error.message}`, 'error');
+                    addLog(`❌ Error cargando reservas manuales: ${error.message}`, 'error');
                 }
             }
             
@@ -461,75 +441,83 @@
         }
         
         // ============================================
-        // SINCRONIZAR TODOS LOS CALENDARIOS
+        // CARGAR CALENDARIO
         // ============================================
-        async function syncAllCalendars() {
-            const statusSpan = document.getElementById('sync-status');
-            statusSpan.innerHTML = '🔄 Sincronizando...';
-            statusSpan.style.color = '#3498db';
-            addDebugLog('🚀 Iniciando sincronización completa...');
+        async function loadCalendar() {
+            const urlInput = document.getElementById('ical-url');
+            const url = urlInput.value.trim();
+            const isAllCabins = (url === 'ALL_CABINS');
             
-            let allAirbnbEvents = [];
+            addLog('📅 Iniciando carga de calendario...', 'info');
+            setStatus('Cargando calendario...', 'info');
             
-            // Importar Airbnb de todas las cabañas
-            for (const [cabinId, cabinData] of Object.entries(cabins)) {
-                const events = await importAirbnbCalendar(cabinId, cabinData);
-                allAirbnbEvents = [...allAirbnbEvents, ...events];
-            }
+            let allEvents = [];
             
-            // Obtener reservas manuales
-            const manualEvents = await getManualReservations();
-            
-            // Combinar eventos
-            allEvents = [...allAirbnbEvents, ...manualEvents];
-            
-            addDebugLog(`📊 Total: ${allEvents.length} eventos (Airbnb: ${allAirbnbEvents.length}, Manuales: ${manualEvents.length})`);
-            
-            // Actualizar calendario
-            if (calendar) {
-                calendar.removeAllEvents();
-                calendar.addEventSource(allEvents);
-                addDebugLog(`✅ Calendario actualizado con ${allEvents.length} eventos`);
-            } else {
-                addDebugLog(`⚠️ Calendario no inicializado aún`, 'warning');
-            }
-            
-            const totalEvents = allEvents.length;
-            const airbnbCount = allAirbnbEvents.length;
-            const manualCount = manualEvents.length;
-            
-            statusSpan.innerHTML = `✅ ${totalEvents} reservas (${airbnbCount} Airbnb, ${manualCount} directas)`;
-            statusSpan.style.color = '#2d5a27';
-            
-            setTimeout(() => {
-                if (statusSpan.innerHTML.includes('reservas')) {
-                    statusSpan.innerHTML = '📅 Calendario actualizado';
-                    setTimeout(() => {
-                        if (statusSpan.innerHTML === '📅 Calendario actualizado') {
-                            statusSpan.innerHTML = 'Sincronizado';
-                        }
-                    }, 2000);
+            if (isAllCabins) {
+                addLog('🔄 Modo "Todas las cabañas" - cargando las 3...', 'info');
+                
+                const cabins = [
+                    { id: 'cabin1', name: 'Cabaña 1', url: AIRBNB_URLS.cabin1, color: '#ff5a5f' },
+                    { id: 'cabin2', name: 'Cabaña 2', url: AIRBNB_URLS.cabin2, color: '#ff5a5f' },
+                    { id: 'cabin3', name: 'Cabaña 3', url: AIRBNB_URLS.cabin3, color: '#ff5a5f' }
+                ];
+                
+                for (const cabin of cabins) {
+                    addLog(`📡 Procesando ${cabin.name}...`, 'info');
+                    let icalData = null;
+                    
+                    // Intentar con proxy
+                    for (const proxy of PROXIES) {
+                        try {
+                            const response = await fetch(proxy.url + encodeURIComponent(cabin.url));
+                            const text = await response.text();
+                            if (text.includes('BEGIN:VCALENDAR')) {
+                                icalData = text;
+                                addLog(`✅ ${cabin.name} - Proxy ${proxy.name} funcionó`, 'success');
+                                break;
+                            }
+                        } catch(e) {}
+                    }
+                    
+                    if (icalData) {
+                        const events = parseICalToEvents(icalData, cabin.name, cabin.color);
+                        allEvents = [...allEvents, ...events];
+                        addLog(`📅 ${cabin.name}: ${events.length} eventos encontrados`, 'success');
+                    } else {
+                        addLog(`⚠️ ${cabin.name}: No se pudo obtener el calendario`, 'warning');
+                    }
                 }
-            }, 3000);
+            } else {
+                // Probar con proxy para una sola cabaña
+                let icalData = await testWithProxy();
+                if (!icalData) {
+                    icalData = await testDirectFetch();
+                }
+                
+                if (icalData) {
+                    const cabinName = url.includes('133727') ? 'Cabaña 1' : (url.includes('111034') ? 'Cabaña 2' : 'Cabaña 3');
+                    const events = parseICalToEvents(icalData, cabinName, '#ff5a5f');
+                    allEvents = [...allEvents, ...events];
+                    addLog(`📅 Eventos encontrados: ${events.length}`, 'success');
+                } else {
+                    addLog('❌ No se pudo obtener datos del iCal', 'error');
+                    setStatus('❌ No se pudo cargar el calendario', 'error');
+                    return;
+                }
+            }
             
-            return allEvents;
-        }
-        
-        // ============================================
-        // INICIALIZAR CALENDARIO
-        // ============================================
-        async function initCalendar() {
+            // Agregar reservas manuales
+            const manualEvents = await getManualReservations();
+            allEvents = [...allEvents, ...manualEvents];
+            addLog(`📝 Reservas manuales: ${manualEvents.length}`, 'info');
+            addLog(`📊 Total eventos: ${allEvents.length}`, 'success');
+            
+            // Renderizar calendario
+            if (calendar) {
+                calendar.destroy();
+            }
+            
             const calendarEl = document.getElementById('calendar');
-            
-            // Limpiar el loading
-            calendarEl.innerHTML = '';
-            
-            addDebugLog('📅 Inicializando calendario...');
-            
-            // Cargar eventos iniciales
-            await syncAllCalendars();
-            
-            // Crear calendario
             calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
                 locale: 'es',
@@ -546,49 +534,37 @@
                     week: 'Semana'
                 },
                 eventDidMount: function(info) {
-                    // Añadir tooltip
                     info.el.setAttribute('title', info.event.title);
                 }
             });
             
             calendar.render();
-            addDebugLog('✅ Calendario renderizado correctamente');
-        }
-        
-        // ============================================
-        // CONFIGURAR ACTUALIZACIÓN AUTOMÁTICA
-        // ============================================
-        function setupAutoSync() {
-            addDebugLog('🔄 Configurando actualización automática...');
             
-            // Escuchar cambios en reservas manuales (tiempo real)
-            for (const cabinId of Object.keys(cabins)) {
-                db.ref(`reservas/${cabinId}`).on('value', () => {
-                    addDebugLog(`🔄 Cambio detectado en ${cabinId}, actualizando...`);
-                    syncAllCalendars();
-                });
+            if (allEvents.length === 0) {
+                setStatus('⚠️ Calendario cargado sin eventos', 'info');
+            } else {
+                setStatus(`✅ Calendario cargado con ${allEvents.length} eventos`, 'success');
             }
-            
-            // Actualizar desde Airbnb cada 3 horas
-            setInterval(() => {
-                addDebugLog('⏰ Actualización programada de Airbnb...');
-                syncAllCalendars();
-            }, 3 * 60 * 60 * 1000);
-            
-            addDebugLog('✅ Actualización automática configurada');
         }
         
-        // ============================================
-        // INICIALIZACIÓN
-        // ============================================
-        document.addEventListener('DOMContentLoaded', async () => {
-            addDebugLog('🚀 Página cargada, iniciando panel de control...');
-            await initCalendar();
-            setupAutoSync();
+        // Inicializar calendario vacío
+        document.addEventListener('DOMContentLoaded', () => {
+            const calendarEl = document.getElementById('calendar');
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'es',
+                events: [],
+                height: 'auto'
+            });
+            calendar.render();
         });
         
-        // Exponer función global para botón
-        window.syncAllCalendars = syncAllCalendars;
+        // Exponer funciones
+        window.setPreset = setPreset;
+        window.testDirectFetch = testDirectFetch;
+        window.testWithProxy = testWithProxy;
+        window.loadCalendar = loadCalendar;
+        window.clearLog = clearLog;
     </script>
 </body>
 </html>
