@@ -136,6 +136,13 @@
 
     <script>
         const CORRECT_PASSWORD = "CasaVerde2026";
+        
+        // ============================================
+        // TOKEN SECRETO PARA PROTEGER LA FUNCIÓN SERVERLESS
+        // DEBE COINCIDIR CON EL TOKEN EN fetch-ical.js
+        // ============================================
+        const SECRET_TOKEN = 'CasaVerde2026SecureToken';
+        
         const firebaseConfig = {
             apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
             authDomain: "casaverdecanas-199.firebaseapp.com",
@@ -160,8 +167,8 @@
         let eventsByCabin = {1:[], 2:[], 3:[]};
         let guestData = {};
         let cabinNames = {1: 'Cabaña 1', 2: 'Cabaña 2', 3: 'Cabaña 3'};
-        let isRefreshing = false;      // ← CONTROL PARA EVITAR RECARGAS MÚLTIPLES
-        let refreshTimeout = null;     // ← DEBOUNCE PARA BOTÓN
+        let isRefreshing = false;
+        let refreshTimeout = null;
 
         function checkPassword() {
             const input = document.getElementById('passwordInput').value;
@@ -196,15 +203,37 @@
             } catch(e) { console.warn(e); }
         }
 
+        // ============================================
+        // FETCH CON TOKEN DE SEGURIDAD
+        // ============================================
         async function fetchICalWithProxy(url) {
-            const proxyUrl = 'https://casaverdecanas.netlify.app/.netlify/functions/fetch-ical?url=' + encodeURIComponent(url);
+            // Agregar el token a la URL para autenticación contra bots
+            const proxyUrl = `https://casaverdecanas.netlify.app/.netlify/functions/fetch-ical?key=${SECRET_TOKEN}&url=${encodeURIComponent(url)}`;
+            
             try {
                 const res = await fetch(proxyUrl);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                
+                // Si la función devuelve 401, significa token inválido o acceso denegado
+                if (res.status === 401) {
+                    console.error('Error de autenticación: Token inválido o acceso denegado');
+                    const errorData = await res.json();
+                    throw new Error(errorData.error || 'No autorizado');
+                }
+                
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}`);
+                }
+                
                 const text = await res.text();
-                if (!text.includes('BEGIN:VCALENDAR')) throw new Error('No es iCal');
+                if (!text.includes('BEGIN:VCALENDAR')) {
+                    throw new Error('No es iCal válido');
+                }
                 return text;
-            } catch(e) { console.error(e); return null; }
+                
+            } catch(e) { 
+                console.error('Error en fetchICalWithProxy:', e.message); 
+                return null; 
+            }
         }
 
         async function loadCabinEvents(cabinNumber, cabinUrl) {
@@ -363,7 +392,6 @@
         // REFRESH CON PROTECCIONES
         // ============================================
         async function refreshAll() {
-            // Evitar múltiples actualizaciones simultáneas
             if (isRefreshing) {
                 const statusDiv = document.getElementById('status');
                 statusDiv.innerHTML = '⏳ Ya hay una actualización en curso...';
@@ -406,7 +434,6 @@
             }
         }
 
-        // DEBOUNCE para el botón: espera 300ms antes de ejecutar
         function debouncedRefresh() {
             if (refreshTimeout) clearTimeout(refreshTimeout);
             refreshTimeout = setTimeout(() => refreshAll(), 300);
@@ -416,7 +443,6 @@
             await loadCabinNames();
             await loadAllEvents();
             loadGuestData();
-            // Botón con debounce
             document.getElementById('refreshDataBtn').onclick = debouncedRefresh;
         }
     </script>
