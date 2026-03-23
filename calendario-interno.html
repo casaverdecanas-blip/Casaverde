@@ -5,19 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panel de Planificación - CasaVerdeCanas</title>
     
-    <!-- FullCalendar -->
     <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/main.min.css' rel='stylesheet' />
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
-    
-    <!-- iCal.js -->
     <script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js"></script>
-    
-    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
     
     <style>
-        /* (Estilos iguales a la versión anterior, sin cambios) */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', system-ui, sans-serif; background: #eef3ee; padding: 24px; }
         .container { max-width: 1400px; margin: 0 auto; }
@@ -80,21 +74,9 @@
             <div class="table-wrapper">
                 <table id="managementTable">
                     <thead>
-                        <tr>
-                            <th>Cabaña</th>
-                            <th>Fecha entrada</th>
-                            <th>Fecha salida</th>
-                            <th>Hora check‑in</th>
-                            <th>Personas</th>
-                            <th>Observaciones</th>
-                            <th>Nombre</th>
-                            <th>Teléfono</th>
-                            <th>WhatsApp</th>
-                        </tr>
+                        <tr><th>Cabaña</th><th>Fecha entrada</th><th>Fecha salida</th><th>Hora check‑in</th><th>Personas</th><th>Observaciones</th><th>Nombre</th><th>Teléfono</th><th>WhatsApp</th></tr>
                     </thead>
-                    <tbody id="managementTableBody">
-                        <tr><td colspan="9">Cargando reservas...</td></tr>
-                    </tbody>
+                    <tbody id="managementTableBody"><tr><td colspan="9">Cargando reservas...</td></tr></tbody>
                 </table>
             </div>
         </div>
@@ -110,9 +92,7 @@
     </div>
 
     <script>
-        // ==================== CONFIGURACIÓN ====================
         const CORRECT_PASSWORD = "CasaVerde2026";
-        
         const firebaseConfig = {
             apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
             authDomain: "casaverdecanas-199.firebaseapp.com",
@@ -122,11 +102,9 @@
             messagingSenderId: "417825635316",
             appId: "1:417825635316:web:ff7f4fe52edcab43d8d7a1"
         };
-        
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
-        
-        // URLs de Airbnb (originales con parámetros que funcionaron)
+
         const AIRBNB_URLS = {
             1: 'https://www.airbnb.com/calendar/ical/1337276103911358917.ics?t=dae43f43820441b886a5167ef71c8533&locale=es-419',
             2: 'https://www.airbnb.com/calendar/ical/1110346888721141996.ics?t=a51528fdc71c427ba5a3ca4b75c368a1&locale=es-419',
@@ -136,11 +114,11 @@
         const CABIN_ROW_CLASS = {1: 'row-cabin1', 2: 'row-cabin2', 3: 'row-cabin3'};
         
         let calendar = null;
-        let eventsByCabin = {1:[], 2:[], 3:[]};      // eventos base (sin nombre de huésped)
-        let guestData = {};                          // datos extra guardados en Firebase
-        let cabinNames = {1: 'Cabaña 1', 2: 'Cabaña 2', 3: 'Cabaña 3'}; // se llenarán desde siteData
-        
-        // ==================== AUTENTICACIÓN ====================
+        let eventsByCabin = {1:[], 2:[], 3:[]};
+        let guestData = {};
+        let cabinNames = {1: 'Cabaña 1', 2: 'Cabaña 2', 3: 'Cabaña 3'};
+
+        // Autenticación
         function checkPassword() {
             const input = document.getElementById('passwordInput').value;
             if (input === CORRECT_PASSWORD) {
@@ -152,242 +130,180 @@
                 document.getElementById('loginError').innerText = 'Contraseña incorrecta';
             }
         }
-        
         if (sessionStorage.getItem('auth') === 'true') {
             document.getElementById('loginOverlay').style.display = 'none';
             document.getElementById('app').style.display = 'block';
             init();
         }
-        
-        // ==================== CARGAR NOMBRES DE CABAÑAS DESDE Firebase ====================
+
+        // Cargar nombres de cabañas desde siteData
         async function loadCabinNames() {
             try {
-                const snapshot = await db.ref('siteData/apartments').once('value');
-                const apartments = snapshot.val() || {};
-                for (let i = 1; i <= 3; i++) {
-                    const cabinId = `cabin-${i}`;
-                    const cabin = apartments[cabinId];
-                    if (cabin && cabin.name && cabin.name.es) {
-                        cabinNames[i] = cabin.name.es;
-                    } else {
-                        cabinNames[i] = `Cabaña ${i}`;
-                    }
+                const snap = await db.ref('siteData/apartments').once('value');
+                const apts = snap.val() || {};
+                for (let i=1; i<=3; i++) {
+                    const c = apts[`cabin-${i}`];
+                    if (c && c.name && c.name.es) cabinNames[i] = c.name.es;
+                    else cabinNames[i] = `Cabaña ${i}`;
                 }
-                // Actualizar leyenda
                 document.getElementById('cabin1Name').textContent = cabinNames[1];
                 document.getElementById('cabin2Name').textContent = cabinNames[2];
                 document.getElementById('cabin3Name').textContent = cabinNames[3];
-            } catch (e) {
-                console.warn("No se pudieron cargar nombres de cabañas:", e);
-            }
+            } catch(e) { console.warn(e); }
         }
-        
-        // ==================== FUNCIONES iCal ====================
-        async function fetchICalWithProxy(airbnbUrl) {
-            const functionUrl = 'https://casaverdecanas.netlify.app/.netlify/functions/fetch-ical';
-            const fullUrl = `${functionUrl}?url=${encodeURIComponent(airbnbUrl)}`;
+
+        // Proxy para iCal
+        async function fetchICalWithProxy(url) {
+            const proxyUrl = 'https://casaverdecanas.netlify.app/.netlify/functions/fetch-ical?url=' + encodeURIComponent(url);
             try {
-                const res = await fetch(fullUrl);
+                const res = await fetch(proxyUrl);
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const text = await res.text();
                 if (!text.includes('BEGIN:VCALENDAR')) throw new Error('No es iCal');
                 return text;
-            } catch (e) {
-                console.error(e);
-                return null;
-            }
+            } catch(e) { console.error(e); return null; }
         }
-        
+
         async function loadCabinEvents(cabinNumber, cabinUrl) {
             const statusDiv = document.getElementById('status');
             statusDiv.innerHTML = `🔄 Cargando ${cabinNames[cabinNumber]}...`;
             statusDiv.className = 'status info';
             try {
-                const icalData = await fetchICalWithProxy(cabinUrl);
-                if (!icalData) throw new Error('No se pudo obtener iCal');
-                const jcalData = ICAL.parse(icalData);
-                const comp = new ICAL.Component(jcalData);
+                const ical = await fetchICalWithProxy(cabinUrl);
+                if (!ical) throw new Error('Sin iCal');
+                const jcal = ICAL.parse(ical);
+                const comp = new ICAL.Component(jcal);
                 const vevents = comp.getAllSubcomponents('vevent');
                 const cabinEvents = [];
-                for (const vevent of vevents) {
-                    const event = new ICAL.Event(vevent);
-                    const summary = event.summary || '';
-                    if (summary.includes('Not available') || summary.includes('blocked')) continue;
-                    const startDate = event.startDate.toJSDate();
-                    const endDate = event.endDate.toJSDate();
-                    const endAdjusted = new Date(endDate);
-                    endAdjusted.setDate(endAdjusted.getDate() - 1);
-                    const start = startDate.toISOString().split('T')[0];
-                    const end = endAdjusted.toISOString().split('T')[0];
-                    // Título base con nombre de la cabaña (más tarde se añadirá el huésped si existe)
+                for (const ve of vevents) {
+                    const ev = new ICAL.Event(ve);
+                    if (ev.summary && (ev.summary.includes('Not available') || ev.summary.includes('blocked'))) continue;
+                    const start = ev.startDate.toJSDate();
+                    const end = ev.endDate.toJSDate();
+                    const endAdj = new Date(end);
+                    endAdj.setDate(endAdj.getDate()-1);
+                    const startStr = start.toISOString().slice(0,10);
+                    const endStr = endAdj.toISOString().slice(0,10);
+                    // Título base (solo nombre de la cabaña, luego se reemplazará por el nombre del huésped)
                     let title = cabinNames[cabinNumber];
-                    if (event.summary) {
-                        let clean = event.summary.replace(/Reservado:|Reserved:|Réservé:/i, '').trim();
+                    if (ev.summary) {
+                        let clean = ev.summary.replace(/Reservado:|Reserved:|Réservé:/i,'').trim();
                         if (clean) title = `${cabinNames[cabinNumber]} - ${clean.substring(0,20)}`;
                     }
                     cabinEvents.push({
-                        id: `${cabinNumber}|${start}|${end}`,
+                        id: `${cabinNumber}|${startStr}|${endStr}`,
                         title: title,
-                        start: start,
-                        end: end,
+                        start: startStr,
+                        end: endStr,
                         color: CABIN_COLORS[cabinNumber],
                         allDay: true,
-                        extendedProps: { cabin: cabinNumber, startDate: start, endDate: end }
+                        extendedProps: { cabin: cabinNumber, startDate: startStr, endDate: endStr }
                     });
                 }
                 eventsByCabin[cabinNumber] = cabinEvents;
                 statusDiv.innerHTML = `✅ ${cabinNames[cabinNumber]}: ${cabinEvents.length} reservas`;
                 statusDiv.className = 'status success';
-                setTimeout(() => statusDiv.innerHTML = `📅 Calendario listo`, 2000);
+                setTimeout(() => statusDiv.innerHTML = '📅 Calendario listo', 2000);
                 return cabinEvents;
-            } catch (e) {
-                console.error(e);
+            } catch(e) {
                 statusDiv.innerHTML = `❌ Error en ${cabinNames[cabinNumber]}`;
                 statusDiv.className = 'status error';
                 return [];
             }
         }
-        
-        // ==================== DATOS DE HUÉSPEDES ====================
-        function loadGuestData() {
-            db.ref('reservasExtra').on('value', (snapshot) => {
-                guestData = snapshot.val() || {};
-                updateCalendarTitles();       // actualizar títulos del calendario con nombres
-                buildTable();                // reconstruir tabla
-            });
-        }
-        
-        // Actualizar títulos de eventos del calendario con los nombres cargados
+
+        // Actualizar títulos del calendario con el nombre del huésped (solo nombre)
         function updateCalendarTitles() {
             if (!calendar) return;
             const allEvents = calendar.getEvents();
-            for (const event of allEvents) {
-                const cabin = event.extendedProps.cabin;
-                const start = event.startStr;
-                const end = event.endStr;
+            for (const ev of allEvents) {
+                const cabin = ev.extendedProps.cabin;
+                const start = ev.startStr;
+                const end = ev.endStr;
                 const key = `${cabin}|${start}|${end}`;
                 const extra = guestData[key] || {};
-                const guestName = extra.nombre ? ` - ${extra.nombre}` : '';
-                // Título base: nombre de la cabaña (desde Firebase)
-                let baseTitle = cabinNames[cabin];
-                // Si hay un nombre de huésped, se agrega
-                if (extra.nombre) {
-                    baseTitle = `${cabinNames[cabin]} - ${extra.nombre}`;
+                if (extra.nombre && extra.nombre.trim() !== '') {
+                    ev.setProp('title', extra.nombre.trim());
+                } else {
+                    ev.setProp('title', 'Reserva pendiente');
                 }
-                event.setProp('title', baseTitle);
             }
         }
-        
-        // Construir la tabla con los datos combinados
+
+        // Escuchar datos de huéspedes
+        function loadGuestData() {
+            db.ref('reservasExtra').on('value', (snap) => {
+                guestData = snap.val() || {};
+                updateCalendarTitles();
+                buildTable();
+            });
+        }
+
         function buildTable() {
             const tbody = document.getElementById('managementTableBody');
             if (!tbody) return;
-            
-            const today = new Date().toISOString().split('T')[0];
+            const today = new Date().toISOString().slice(0,10);
             let reservas = [];
-            for (let cabin = 1; cabin <= 3; cabin++) {
-                for (const ev of eventsByCabin[cabin]) {
+            for (let c=1; c<=3; c++) {
+                for (const ev of eventsByCabin[c]) {
                     if (ev.start < today) continue;
                     const key = ev.id;
                     const extra = guestData[key] || {};
-                    reservas.push({
-                        cabin,
-                        start: ev.start,
-                        end: ev.end,
-                        key,
-                        ...extra
-                    });
+                    reservas.push({ cabin:c, start:ev.start, end:ev.end, key, ...extra });
                 }
             }
-            reservas.sort((a,b) => new Date(a.start) - new Date(b.start));
-            
-            if (reservas.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9">No hay reservas futuras</td></tr>';
-                return;
-            }
-            
+            reservas.sort((a,b)=>new Date(a.start)-new Date(b.start));
+            if (reservas.length===0) { tbody.innerHTML='<tr><td colspan="9">No hay reservas futuras</td></tr>'; return; }
             tbody.innerHTML = '';
             for (const r of reservas) {
                 const row = tbody.insertRow();
-                row.className = CABIN_ROW_CLASS[r.cabin] || '';
-                
+                row.className = CABIN_ROW_CLASS[r.cabin];
                 row.insertCell(0).innerText = cabinNames[r.cabin];
                 row.insertCell(1).innerText = r.start;
                 row.insertCell(2).innerText = r.end;
-                
-                // Hora check‑in
                 const horaCell = row.insertCell(3);
-                const horaInput = document.createElement('input');
-                horaInput.type = 'time';
-                horaInput.value = r.horaLlegada || '';
-                horaInput.addEventListener('change', (function(k) {
-                    return function(e) { saveField(k, 'horaLlegada', e.target.value); };
-                })(r.key));
-                horaCell.appendChild(horaInput);
-                
-                // Personas
-                const personasCell = row.insertCell(4);
-                const personasInput = document.createElement('input');
-                personasInput.type = 'number';
-                personasInput.min = 1;
-                personasInput.value = r.personas || '';
-                personasInput.addEventListener('change', (function(k) {
-                    return function(e) { saveField(k, 'personas', e.target.value); };
-                })(r.key));
-                personasCell.appendChild(personasInput);
-                
-                // Observaciones
+                const horaInp = document.createElement('input');
+                horaInp.type = 'time';
+                horaInp.value = r.horaLlegada || '';
+                horaInp.onchange = (function(k){ return function(e){ saveField(k,'horaLlegada',e.target.value); }; })(r.key);
+                horaCell.appendChild(horaInp);
+                const persCell = row.insertCell(4);
+                const persInp = document.createElement('input');
+                persInp.type = 'number';
+                persInp.value = r.personas || '';
+                persInp.onchange = (function(k){ return function(e){ saveField(k,'personas',e.target.value); }; })(r.key);
+                persCell.appendChild(persInp);
                 const obsCell = row.insertCell(5);
-                const obsInput = document.createElement('input');
-                obsInput.type = 'text';
-                obsInput.value = r.observaciones || '';
-                obsInput.addEventListener('change', (function(k) {
-                    return function(e) { saveField(k, 'observaciones', e.target.value); };
-                })(r.key));
-                obsCell.appendChild(obsInput);
-                
-                // Nombre (al cambiar, actualizar calendario)
-                const nombreCell = row.insertCell(6);
-                const nombreInput = document.createElement('input');
-                nombreInput.type = 'text';
-                nombreInput.value = r.nombre || '';
-                nombreInput.addEventListener('change', (function(k) {
-                    return function(e) { 
-                        saveField(k, 'nombre', e.target.value);
-                        updateCalendarTitles(); // actualizar inmediatamente
-                    };
-                })(r.key));
-                nombreCell.appendChild(nombreInput);
-                
-                // Teléfono
-                const telefonoCell = row.insertCell(7);
-                const telefonoInput = document.createElement('input');
-                telefonoInput.type = 'tel';
-                telefonoInput.value = r.telefono || '';
-                telefonoInput.addEventListener('change', (function(k) {
-                    return function(e) { saveField(k, 'telefono', e.target.value); };
-                })(r.key));
-                telefonoCell.appendChild(telefonoInput);
-                
-                // WhatsApp link (sin texto predefinido)
+                const obsInp = document.createElement('input');
+                obsInp.value = r.observaciones || '';
+                obsInp.onchange = (function(k){ return function(e){ saveField(k,'observaciones',e.target.value); }; })(r.key);
+                obsCell.appendChild(obsInp);
+                const nomCell = row.insertCell(6);
+                const nomInp = document.createElement('input');
+                nomInp.value = r.nombre || '';
+                nomInp.onchange = (function(k){ return function(e){ saveField(k,'nombre',e.target.value); updateCalendarTitles(); }; })(r.key);
+                nomCell.appendChild(nomInp);
+                const telCell = row.insertCell(7);
+                const telInp = document.createElement('input');
+                telInp.value = r.telefono || '';
+                telInp.onchange = (function(k){ return function(e){ saveField(k,'telefono',e.target.value); }; })(r.key);
+                telCell.appendChild(telInp);
                 const waCell = row.insertCell(8);
-                const phoneNumber = r.telefono ? r.telefono.replace(/\D/g, '') : '';
+                const phone = r.telefono ? r.telefono.replace(/\D/g,'') : '';
                 const waLink = document.createElement('a');
-                waLink.href = phoneNumber ? `https://wa.me/${phoneNumber}` : '#';
+                waLink.href = phone ? `https://wa.me/${phone}` : '#';
                 waLink.target = '_blank';
                 waLink.className = 'whatsapp-link';
                 waLink.textContent = '📲 WhatsApp';
-                if (!phoneNumber) waLink.style.opacity = '0.5';
+                if (!phone) waLink.style.opacity = '0.5';
                 waCell.appendChild(waLink);
             }
         }
-        
+
         function saveField(key, field, value) {
-            const updates = {};
-            updates[`reservasExtra/${key}/${field}`] = value;
-            db.ref().update(updates);
+            db.ref(`reservasExtra/${key}/${field}`).set(value);
         }
-        
+
         async function loadAllEvents() {
             await Promise.all([
                 loadCabinEvents(1, AIRBNB_URLS[1]),
@@ -399,33 +315,24 @@
                 calendar.removeAllEvents();
                 calendar.addEventSource(allEvents);
             } else {
-                const calendarEl = document.getElementById('calendar');
-                calendar = new FullCalendar.Calendar(calendarEl, {
+                const el = document.getElementById('calendar');
+                calendar = new FullCalendar.Calendar(el, {
                     initialView: 'dayGridMonth',
                     locale: 'es',
                     events: allEvents,
                     height: 'auto',
-                    headerToolbar: {
-                        left: 'prev,next today',
-                        center: 'title',
-                        right: 'dayGridMonth,dayGridWeek'
-                    },
-                    buttonText: {
-                        today: 'Hoy',
-                        month: 'Mes',
-                        week: 'Semana'
-                    },
-                    eventDidMount: (info) => info.el.setAttribute('title', info.event.title)
+                    headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,dayGridWeek' },
+                    buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana' }
                 });
                 calendar.render();
             }
-            updateCalendarTitles(); // aplicar nombres después de cargar eventos
+            updateCalendarTitles();
         }
-        
+
         async function refreshAll() {
-            if (confirm('¿Actualizar todos los datos? Se recargará el calendario y la tabla.')) {
+            if (confirm('¿Actualizar todos los datos?')) {
                 const statusDiv = document.getElementById('status');
-                statusDiv.innerHTML = '🔄 Actualizando calendario...';
+                statusDiv.innerHTML = '🔄 Actualizando...';
                 statusDiv.className = 'status info';
                 await loadAllEvents();
                 buildTable();
@@ -434,15 +341,13 @@
                 setTimeout(() => statusDiv.innerHTML = '📅 Calendario listo', 2000);
             }
         }
-        
+
         async function init() {
-            await loadCabinNames();        // cargar nombres de cabañas desde siteData
-            await loadAllEvents();          // cargar eventos de Airbnb
-            loadGuestData();               // escuchar cambios en datos de huéspedes
+            await loadCabinNames();
+            await loadAllEvents();
+            loadGuestData();
             document.getElementById('refreshDataBtn').onclick = refreshAll;
         }
-        
-        window.refreshAll = refreshAll;
     </script>
 </body>
 </html>
