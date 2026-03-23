@@ -48,7 +48,61 @@
         #managementTable input { width:100%; padding:6px 8px; border:1px solid #d0dcd0; border-radius:12px; background:white; font-size:0.8rem; }
         .whatsapp-link { display:inline-block; background:#25d366; color:white; padding:5px 12px; border-radius:30px; text-decoration:none; font-size:0.75rem; font-weight:bold; text-align:center; white-space:nowrap; }
         .whatsapp-link:hover { background:#1ebe5d; }
-        @media (max-width:768px) { body { padding:12px; } #managementTable th, #managementTable td { padding:8px 6px; font-size:0.75rem; } .whatsapp-link { font-size:0.7rem; padding:3px 8px; } }
+        
+        /* ============================================
+           ESTILOS PARA BARRAS MÁS DELGADAS Y APILADAS
+           ============================================ */
+        
+        /* Reducir altura de cada evento/barra */
+        .fc-daygrid-event {
+            height: 18px !important;
+            line-height: 16px !important;
+            font-size: 0.65rem !important;
+            margin-bottom: 2px !important;
+            border-radius: 3px !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            padding: 0 4px !important;
+        }
+        
+        /* Contenedor de eventos del día: apilamiento vertical compacto */
+        .fc-daygrid-day-events {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 1px !important;
+            max-height: none !important;
+            overflow-y: visible !important;
+        }
+        
+        /* Cada evento individual */
+        .fc-daygrid-event-harness {
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+        }
+        
+        /* Celda del día: altura automática pero compacta */
+        .fc-daygrid-day-frame {
+            min-height: 45px !important;
+            height: auto !important;
+        }
+        
+        /* El contenedor de eventos dentro de la celda */
+        .fc-daygrid-day-events {
+            min-height: 20px !important;
+        }
+        
+        @media (max-width:768px) { 
+            body { padding:12px; } 
+            #managementTable th, #managementTable td { padding:8px 6px; font-size:0.75rem; } 
+            .whatsapp-link { font-size:0.7rem; padding:3px 8px; }
+            /* En móvil, barras un poco más altas para mejor touch */
+            .fc-daygrid-event {
+                height: 22px !important;
+                line-height: 20px !important;
+                font-size: 0.7rem !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -120,20 +174,6 @@
         let isLoading = false;
 
         // ============================================
-        // FUNCIÓN PARA GENERAR ID ESTABLE
-        // ============================================
-        function generateStableId(cabinNumber, startStr, endStr, originalTitle) {
-            // Crear un hash simple del título original para diferenciar reservas en mismas fechas
-            let hash = '';
-            if (originalTitle && originalTitle.trim()) {
-                // Tomar los primeros 20 caracteres del título, limpiar caracteres especiales
-                let cleanTitle = originalTitle.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '');
-                if (cleanTitle) hash = '|' + cleanTitle;
-            }
-            return `${cabinNumber}|${startStr}|${endStr}${hash}`;
-        }
-
-        // ============================================
         // AUTENTICACIÓN
         // ============================================
         function checkPassword() {
@@ -190,7 +230,7 @@
         }
 
         // ============================================
-        // CARGAR EVENTOS DE UNA CABAÑA
+        // CARGAR EVENTOS DE UNA CABAÑA (ID ESTABLE)
         // ============================================
         async function loadCabinEvents(cabinNumber, cabinUrl) {
             try {
@@ -217,27 +257,29 @@
                     const startStr = start.toISOString().slice(0,10);
                     const endStr = endAdj.toISOString().slice(0,10);
                     
-                    // Título original
-                    let originalTitle = cabinNames[cabinNumber];
+                    // ID ESTABLE: mismo formato que siempre funcionó
+                    const stableId = `${cabinNumber}|${startStr}|${endStr}`;
+                    
+                    // Título base
+                    let title = cabinNames[cabinNumber];
                     if (ev.summary) {
                         let clean = ev.summary.replace(/Reservado:|Reserved:|Réservé:/i,'').trim();
-                        if (clean) originalTitle = `${cabinNames[cabinNumber]} - ${clean.substring(0,30)}`;
+                        if (clean) title = clean.substring(0, 30);
                     }
-                    
-                    const stableId = generateStableId(cabinNumber, startStr, endStr, originalTitle);
                     
                     cabinEvents.push({
                         id: stableId,
-                        title: originalTitle,
+                        title: title,
                         start: startStr,
                         end: endStr,
                         color: CABIN_COLORS[cabinNumber],
+                        backgroundColor: CABIN_COLORS[cabinNumber],
+                        borderColor: CABIN_COLORS[cabinNumber],
                         allDay: true,
                         extendedProps: { 
                             cabin: cabinNumber, 
                             startDate: startStr, 
-                            endDate: endStr,
-                            originalTitle: originalTitle
+                            endDate: endStr
                         }
                     });
                 }
@@ -250,7 +292,7 @@
         }
 
         // ============================================
-        // ACTUALIZAR TÍTULOS DEL CALENDARIO CON NOMBRES GUARDADOS
+        // ACTUALIZAR TÍTULOS CON NOMBRES GUARDADOS
         // ============================================
         function updateCalendarTitles() {
             if (!calendar) return;
@@ -258,14 +300,11 @@
             for (const ev of allEvents) {
                 const evId = ev.id;
                 const extra = guestData[evId] || {};
-                const originalTitle = ev.extendedProps.originalTitle;
                 
                 if (extra.nombre && extra.nombre.trim() !== '') {
                     ev.setProp('title', extra.nombre.trim());
-                } else if (originalTitle) {
-                    ev.setProp('title', originalTitle);
-                } else {
-                    ev.setProp('title', 'Reserva pendiente');
+                } else if (ev.extendedProps.originalTitle) {
+                    ev.setProp('title', ev.extendedProps.originalTitle);
                 }
             }
         }
@@ -282,22 +321,17 @@
             statusDiv.className = 'status info';
             
             try {
-                // Cargar nuevos eventos de todas las cabañas
                 const newEventsArrays = await Promise.all([
                     loadCabinEvents(1, AIRBNB_URLS[1]),
                     loadCabinEvents(2, AIRBNB_URLS[2]),
                     loadCabinEvents(3, AIRBNB_URLS[3])
                 ]);
                 const newEvents = newEventsArrays.flat();
-                
-                // Crear mapa de nuevos eventos por ID
                 const newEventMap = new Map(newEvents.map(ev => [ev.id, ev]));
                 
-                // Obtener eventos actuales del calendario
                 const existingEvents = calendar.getEvents();
-                const existingEventMap = new Map(existingEvents.map(ev => [ev.id, ev]));
                 
-                // Eliminar eventos que ya no existen en los nuevos datos
+                // Eliminar eventos que ya no existen
                 for (const ev of existingEvents) {
                     if (!newEventMap.has(ev.id)) {
                         ev.remove();
@@ -310,23 +344,15 @@
                     if (!existingEv) {
                         calendar.addEvent(newEv);
                     } else {
-                        // Actualizar solo lo que cambió (fechas, título original)
-                        if (existingEv.startStr !== newEv.start) {
-                            existingEv.setStart(newEv.start);
-                        }
-                        if (existingEv.endStr !== newEv.end) {
-                            existingEv.setEnd(newEv.end);
-                        }
-                        if (existingEv.extendedProps.originalTitle !== newEv.extendedProps.originalTitle) {
-                            existingEv.setExtendedProp('originalTitle', newEv.extendedProps.originalTitle);
-                        }
+                        // Actualizar solo lo necesario
+                        if (existingEv.startStr !== newEv.start) existingEv.setStart(newEv.start);
+                        if (existingEv.endStr !== newEv.end) existingEv.setEnd(newEv.end);
+                        existingEv.setProp('backgroundColor', newEv.color);
+                        existingEv.setProp('borderColor', newEv.color);
                     }
                 }
                 
-                // Actualizar títulos con nombres guardados
                 updateCalendarTitles();
-                
-                // Reconstruir tabla
                 buildTable();
                 
                 statusDiv.innerHTML = '✅ Calendario actualizado correctamente';
@@ -357,7 +383,6 @@
             const today = new Date().toISOString().slice(0,10);
             let reservas = [];
             
-            // Recopilar reservas de todos los eventos del calendario
             if (calendar) {
                 const events = calendar.getEvents();
                 for (const ev of events) {
@@ -459,36 +484,38 @@
         async function init() {
             await loadCabinNames();
             
-            // Crear calendario vacío
             const el = document.getElementById('calendar');
             calendar = new FullCalendar.Calendar(el, {
                 initialView: 'dayGridMonth',
                 locale: 'es',
                 height: 'auto',
+                displayEventTime: false,
+                eventDisplay: 'block',
+                eventOverlap: true,
+                dayMaxEvents: false,
                 headerToolbar: { 
                     left: 'prev,next today', 
                     center: 'title', 
                     right: 'dayGridMonth,dayGridWeek' 
                 },
-                buttonText: { 
-                    today: 'Hoy', 
-                    month: 'Mes', 
-                    week: 'Semana' 
-                },
-                eventClick: function(info) {
-                    // Al hacer clic en un evento, mostrar los datos en consola
-                    console.log('Evento:', info.event.id, info.event.extendedProps);
+                buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana' },
+                eventDidMount: function(info) {
+                    // Añadir tooltip con información completa
+                    let cabinNum = info.event.extendedProps.cabin;
+                    let cabinNameText = cabinNames[cabinNum] || `Cabaña ${cabinNum}`;
+                    let guestName = info.event.title;
+                    if (guestName && guestName !== cabinNameText && !guestName.includes('pendiente')) {
+                        info.el.setAttribute('title', `${cabinNameText} - ${guestName}`);
+                    } else {
+                        info.el.setAttribute('title', cabinNameText);
+                    }
                 }
             });
             calendar.render();
             
-            // Cargar eventos iniciales
             await refreshCalendarIntelligently();
-            
-            // Escuchar cambios en reservasExtra
             loadGuestData();
             
-            // Configurar botón de actualización
             document.getElementById('refreshDataBtn').onclick = () => refreshCalendarIntelligently();
         }
     </script>
