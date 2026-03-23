@@ -50,9 +50,7 @@
         .whatsapp-link { display:inline-block; background:#25d366; color:white; padding:5px 12px; border-radius:30px; text-decoration:none; font-size:0.75rem; font-weight:bold; text-align:center; white-space:nowrap; }
         .whatsapp-link:hover { background:#1ebe5d; }
         
-        /* ============================================
-           BARRAS DELGADAS Y APILAMIENTO VERTICAL
-           ============================================ */
+        /* Barras delgadas y apilamiento */
         .fc-daygrid-event {
             height: 18px !important;
             line-height: 16px !important;
@@ -117,9 +115,8 @@
             <div class="table-wrapper">
                 <table id="managementTable">
                     <thead>
-                        <tr><th>Cabaña</th><th>Fecha entrada</th><th>Fecha salida</th><th>Hora check‑in</th><th>Personas</th><th>Observaciones</th><th>Nombre</th><th>Teléfono</th><th>WhatsApp</th> </tr>
-                    </thead>
-                    <tbody id="managementTableBody"> <tr><td colspan="9">Cargando reservas...</td></tr> </tbody>
+                        <tr><th>Cabaña</th><th>Fecha entrada</th><th>Fecha salida</th><th>Hora check‑in</th><th>Personas</th><th>Observaciones</th><th>Nombre</th><th>Teléfono</th><th>WhatsApp</th>   </thead>
+                    <tbody id="managementTableBody">   <td colspan="9">Cargando reservas...   </tbody>
                 </table>
             </div>
         </div>
@@ -138,11 +135,39 @@
         const CORRECT_PASSWORD = "CasaVerde2026";
         
         // ============================================
-        // TOKEN SECRETO PARA PROTEGER LA FUNCIÓN SERVERLESS
-        // DEBE COINCIDIR CON EL TOKEN EN fetch-ical.js
+        // AUTENTICACIÓN POR SESIÓN
         // ============================================
-        const SECRET_TOKEN = 'CasaVerde2026SecureToken';
+        let sessionToken = null;
         
+        // Generar un token de sesión aleatorio
+        function generateSessionToken() {
+            return 'sess_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        }
+        
+        function checkPassword() {
+            const input = document.getElementById('passwordInput').value;
+            if (input === CORRECT_PASSWORD) {
+                // Generar token de sesión único para esta sesión
+                sessionToken = generateSessionToken();
+                sessionStorage.setItem('auth', 'true');
+                sessionStorage.setItem('sessionToken', sessionToken);
+                document.getElementById('loginOverlay').style.display = 'none';
+                document.getElementById('app').style.display = 'block';
+                init();
+            } else {
+                document.getElementById('loginError').innerText = 'Contraseña incorrecta';
+            }
+        }
+        
+        // Verificar sesión al cargar
+        if (sessionStorage.getItem('auth') === 'true') {
+            sessionToken = sessionStorage.getItem('sessionToken');
+            document.getElementById('loginOverlay').style.display = 'none';
+            document.getElementById('app').style.display = 'block';
+            init();
+        }
+        
+        // Configuración Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
             authDomain: "casaverdecanas-199.firebaseapp.com",
@@ -170,24 +195,6 @@
         let isRefreshing = false;
         let refreshTimeout = null;
 
-        function checkPassword() {
-            const input = document.getElementById('passwordInput').value;
-            if (input === CORRECT_PASSWORD) {
-                sessionStorage.setItem('auth', 'true');
-                document.getElementById('loginOverlay').style.display = 'none';
-                document.getElementById('app').style.display = 'block';
-                init();
-            } else {
-                document.getElementById('loginError').innerText = 'Contraseña incorrecta';
-            }
-        }
-        
-        if (sessionStorage.getItem('auth') === 'true') {
-            document.getElementById('loginOverlay').style.display = 'none';
-            document.getElementById('app').style.display = 'block';
-            init();
-        }
-
         async function loadCabinNames() {
             try {
                 const snap = await db.ref('siteData/apartments').once('value');
@@ -204,20 +211,30 @@
         }
 
         // ============================================
-        // FETCH CON TOKEN DE SEGURIDAD
+        // FETCH CON TOKEN DE SESIÓN EN CABECERA
         // ============================================
         async function fetchICalWithProxy(url) {
-            // Agregar el token a la URL para autenticación contra bots
-            const proxyUrl = `https://casaverdecanas.netlify.app/.netlify/functions/fetch-ical?key=${SECRET_TOKEN}&url=${encodeURIComponent(url)}`;
+            if (!sessionToken) {
+                console.error('No hay sesión activa');
+                return null;
+            }
+            
+            const proxyUrl = `https://casaverdecanas.netlify.app/.netlify/functions/fetch-ical?url=${encodeURIComponent(url)}`;
             
             try {
-                const res = await fetch(proxyUrl);
+                const res = await fetch(proxyUrl, {
+                    headers: {
+                        'X-Session-Token': sessionToken
+                    }
+                });
                 
-                // Si la función devuelve 401, significa token inválido o acceso denegado
                 if (res.status === 401) {
-                    console.error('Error de autenticación: Token inválido o acceso denegado');
-                    const errorData = await res.json();
-                    throw new Error(errorData.error || 'No autorizado');
+                    console.error('Sesión expirada o inválida');
+                    sessionStorage.removeItem('auth');
+                    sessionStorage.removeItem('sessionToken');
+                    alert('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.');
+                    location.reload();
+                    return null;
                 }
                 
                 if (!res.ok) {
@@ -388,9 +405,6 @@
             updateCalendarTitles();
         }
 
-        // ============================================
-        // REFRESH CON PROTECCIONES
-        // ============================================
         async function refreshAll() {
             if (isRefreshing) {
                 const statusDiv = document.getElementById('status');
