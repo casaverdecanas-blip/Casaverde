@@ -1,0 +1,204 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba: Calendario con 4 reservas superpuestas</title>
+    <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/main.min.css' rel='stylesheet' />
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #eef3ee; padding: 24px; }
+        .container { max-width: 1300px; margin: 0 auto; display: flex; gap: 24px; flex-wrap: wrap; }
+        .calendar-wrapper { flex: 3; min-width: 300px; background: white; padding: 20px; border-radius: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .debug-panel { flex: 1; min-width: 280px; background: #f8f9fa; padding: 20px; border-radius: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: monospace; font-size: 12px; overflow-y: auto; max-height: 80vh; }
+        h2 { color: #2d5a27; margin-bottom: 16px; font-size: 1.2rem; }
+        .debug-panel h3 { color: #2d5a27; margin: 12px 0 8px; font-size: 1rem; }
+        .event-log { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+        .event-log-item { padding: 6px; border-bottom: 1px solid #eee; font-size: 11px; }
+        .event-log-item strong { color: #2d5a27; }
+        .legend { display: flex; gap: 16px; margin-top: 20px; flex-wrap: wrap; justify-content: center; }
+        .legend-color { width: 20px; height: 14px; border-radius: 3px; display: inline-block; margin-right: 6px; }
+        
+        /* Barras delgadas y apiladas */
+        .fc-daygrid-event {
+            height: 18px !important;
+            line-height: 16px !important;
+            font-size: 0.65rem !important;
+            margin-bottom: 2px !important;
+            border-radius: 3px !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            padding: 0 4px !important;
+        }
+        .fc-daygrid-day-events {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 1px !important;
+            max-height: none !important;
+            overflow-y: visible !important;
+        }
+        .fc-daygrid-event-harness {
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+        }
+        .fc-daygrid-day-frame {
+            min-height: 45px !important;
+            height: auto !important;
+        }
+        .fc-daygrid-day-events {
+            min-height: 20px !important;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="calendar-wrapper">
+        <h2>📅 Calendario de Prueba (4 cabañas)</h2>
+        <div id="calendar"></div>
+        <div class="legend">
+            <div><span class="legend-color" style="background:#FF6B6B;"></span> Cabaña 1 - Vista al Bosque</div>
+            <div><span class="legend-color" style="background:#4D96FF;"></span> Cabaña 2 - Loft</div>
+            <div><span class="legend-color" style="background:#B0B0B0;"></span> Cabaña 3 - Familiar Premium</div>
+            <div><span class="legend-color" style="background:#FFB347;"></span> Cabaña 4 - Suite (extra)</div>
+        </div>
+    </div>
+    
+    <div class="debug-panel">
+        <h3>🔍 Datos de cada reserva (texto)</h3>
+        <div id="debug-info">
+            <div class="event-log">Cargando eventos...</div>
+        </div>
+        <p style="margin-top: 16px; font-size: 11px; color: #666;">✅ Cada reserva tiene: ID, título, fechas, cabaña</p>
+    </div>
+</div>
+
+<script>
+    // Definición de cabañas
+    const cabins = {
+        1: { name: "Cabaña 1 - Vista al Bosque", color: "#FF6B6B" },
+        2: { name: "Cabaña 2 - Loft", color: "#4D96FF" },
+        3: { name: "Cabaña 3 - Familiar Premium", color: "#B0B0B0" },
+        4: { name: "Cabaña 4 - Suite", color: "#FFB347" }
+    };
+    
+    // DATOS DE PRUEBA - Simulando lo que vendría del iCal
+    // El problema original: Cabaña 1 ocupa 27-28, Cabaña 2 y 3 empiezan el 28
+    const mockReservas = [
+        // Cabaña 1: reserva del 27 al 29 (check-in 27, check-out 29) → en calendario se ve 27 y 28
+        { cabin: 1, title: "Juan Pérez", start: "2026-03-27", end: "2026-03-29", originalId: "1|2026-03-27|2026-03-28" },
+        // Cabaña 2: reserva que empieza el 28 (check-in 28, check-out 30) → se ve 28 y 29
+        { cabin: 2, title: "María García", start: "2026-03-28", end: "2026-03-30", originalId: "2|2026-03-28|2026-03-29" },
+        // Cabaña 3: reserva que empieza el 28 (check-in 28, check-out 31) → se ve 28, 29, 30
+        { cabin: 3, title: "Carlos López", start: "2026-03-28", end: "2026-03-31", originalId: "3|2026-03-28|2026-03-30" },
+        // Cabaña 4: reserva extra para probar apilamiento de 4 barras el día 28
+        { cabin: 4, title: "Laura Fernández", start: "2026-03-28", end: "2026-03-29", originalId: "4|2026-03-28|2026-03-28" }
+    ];
+    
+    // Convertir a eventos de FullCalendar
+    function buildEvents() {
+        return mockReservas.map(res => {
+            // Calcular endStr para FullCalendar (restamos 1 día porque end es checkout)
+            const endDate = new Date(res.end);
+            endDate.setDate(endDate.getDate() - 1);
+            const endStr = endDate.toISOString().slice(0, 10);
+            
+            return {
+                id: res.originalId,
+                title: res.title,
+                start: res.start,
+                end: endStr,
+                color: cabins[res.cabin].color,
+                backgroundColor: cabins[res.cabin].color,
+                borderColor: cabins[res.cabin].color,
+                allDay: true,
+                extendedProps: {
+                    cabin: res.cabin,
+                    cabinName: cabins[res.cabin].name,
+                    guestName: res.title,
+                    startRaw: res.start,
+                    endRaw: res.end
+                }
+            };
+        });
+    }
+    
+    // Mostrar en panel de depuración
+    function updateDebugPanel(events) {
+        const debugDiv = document.getElementById('debug-info');
+        if (!debugDiv) return;
+        
+        if (!events || events.length === 0) {
+            debugDiv.innerHTML = '<div class="event-log">No hay eventos</div>';
+            return;
+        }
+        
+        // Agrupar por fecha para mejor visualización
+        const byDate = {};
+        events.forEach(ev => {
+            const start = ev.startStr;
+            if (!byDate[start]) byDate[start] = [];
+            byDate[start].push(ev);
+        });
+        
+        let html = '';
+        // Ordenar fechas
+        Object.keys(byDate).sort().forEach(date => {
+            html += `<div class="event-log"><strong>📅 ${date}</strong> (${byDate[date].length} reservas)`;
+            byDate[date].forEach(ev => {
+                html += `<div class="event-log-item">
+                    <span style="display:inline-block; width:12px; height:12px; background:${ev.backgroundColor}; border-radius:2px; margin-right:6px;"></span>
+                    <strong>${ev.extendedProps.cabinName}</strong> → ${ev.title} 
+                    (check-in: ${ev.startStr}, check-out: ${ev.extendedProps.endRaw})
+                    <br><span style="font-size:10px; color:#666;">ID: ${ev.id}</span>
+                </div>`;
+            });
+            html += `</div>`;
+        });
+        
+        debugDiv.innerHTML = html;
+    }
+    
+    // Inicializar calendario
+    document.addEventListener('DOMContentLoaded', () => {
+        const calendarEl = document.getElementById('calendar');
+        const events = buildEvents();
+        
+        const calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            locale: 'es',
+            height: 'auto',
+            initialDate: '2026-03-01',
+            displayEventTime: false,
+            eventDisplay: 'block',
+            eventOverlap: true,
+            dayMaxEvents: false,
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,dayGridWeek'
+            },
+            buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana' },
+            events: events,
+            eventDidMount: function(info) {
+                // Tooltip con información completa
+                const props = info.event.extendedProps;
+                info.el.setAttribute('title', `${props.cabinName} - ${props.guestName}\nCheck-in: ${props.startRaw}\nCheck-out: ${props.endRaw}`);
+            }
+        });
+        
+        calendar.render();
+        
+        // Mostrar en panel de depuración
+        updateDebugPanel(calendar.getEvents());
+        
+        // Actualizar panel cuando se navegue
+        calendar.on('datesSet', () => {
+            updateDebugPanel(calendar.getEvents());
+        });
+    });
+</script>
+</body>
+</html>
