@@ -50,10 +50,11 @@
         .whatsapp-link:hover { background:#1ebe5d; }
         
         /* ============================================
-           ESTILOS PARA BARRAS MÁS DELGADAS Y APILADAS
+           ESTILOS CLAVE: MULTIPLES BARRAS APILADAS
+           (basado en el código de prueba que funcionó)
            ============================================ */
         
-        /* Reducir altura de cada evento/barra */
+        /* Barras más delgadas y apiladas verticalmente */
         .fc-daygrid-event {
             height: 18px !important;
             line-height: 16px !important;
@@ -66,7 +67,7 @@
             padding: 0 4px !important;
         }
         
-        /* Contenedor de eventos del día: apilamiento vertical compacto */
+        /* Contenedor de eventos: apilamiento vertical */
         .fc-daygrid-day-events {
             display: flex !important;
             flex-direction: column !important;
@@ -75,31 +76,35 @@
             overflow-y: visible !important;
         }
         
-        /* Cada evento individual */
+        /* Cada contenedor individual del evento */
         .fc-daygrid-event-harness {
             margin-top: 0 !important;
             margin-bottom: 0 !important;
         }
         
-        /* Celda del día: altura automática pero compacta */
+        /* Celda del día: altura automática */
         .fc-daygrid-day-frame {
             min-height: 45px !important;
             height: auto !important;
         }
         
-        /* El contenedor de eventos dentro de la celda */
+        /* Asegurar que se muestren todos los eventos */
         .fc-daygrid-day-events {
             min-height: 20px !important;
+        }
+        
+        /* Ocultar el botón "+X" si aparece para que no limite */
+        .fc-daygrid-more-link {
+            display: none !important;
         }
         
         @media (max-width:768px) { 
             body { padding:12px; } 
             #managementTable th, #managementTable td { padding:8px 6px; font-size:0.75rem; } 
             .whatsapp-link { font-size:0.7rem; padding:3px 8px; }
-            /* En móvil, barras un poco más altas para mejor touch */
             .fc-daygrid-event {
-                height: 22px !important;
-                line-height: 20px !important;
+                height: 20px !important;
+                line-height: 18px !important;
                 font-size: 0.7rem !important;
             }
         }
@@ -230,7 +235,7 @@
         }
 
         // ============================================
-        // CARGAR EVENTOS DE UNA CABAÑA (ID ESTABLE)
+        // CARGAR EVENTOS DE UNA CABAÑA
         // ============================================
         async function loadCabinEvents(cabinNumber, cabinUrl) {
             try {
@@ -247,7 +252,6 @@
                 
                 for (const ve of vevents) {
                     const ev = new ICAL.Event(ve);
-                    // Saltar eventos bloqueados
                     if (ev.summary && (ev.summary.includes('Not available') || ev.summary.includes('blocked'))) continue;
                     
                     const start = ev.startDate.toJSDate();
@@ -257,10 +261,9 @@
                     const startStr = start.toISOString().slice(0,10);
                     const endStr = endAdj.toISOString().slice(0,10);
                     
-                    // ID ESTABLE: mismo formato que siempre funcionó
+                    // ID estable: mismo formato que siempre funcionó
                     const stableId = `${cabinNumber}|${startStr}|${endStr}`;
                     
-                    // Título base
                     let title = cabinNames[cabinNumber];
                     if (ev.summary) {
                         let clean = ev.summary.replace(/Reservado:|Reserved:|Réservé:/i,'').trim();
@@ -300,17 +303,14 @@
             for (const ev of allEvents) {
                 const evId = ev.id;
                 const extra = guestData[evId] || {};
-                
                 if (extra.nombre && extra.nombre.trim() !== '') {
                     ev.setProp('title', extra.nombre.trim());
-                } else if (ev.extendedProps.originalTitle) {
-                    ev.setProp('title', ev.extendedProps.originalTitle);
                 }
             }
         }
 
         // ============================================
-        // ACTUALIZACIÓN INTELIGENTE DEL CALENDARIO
+        // ACTUALIZACIÓN DEL CALENDARIO (VERSIÓN ESTABLE)
         // ============================================
         async function refreshCalendarIntelligently() {
             if (isLoading) return;
@@ -344,7 +344,6 @@
                     if (!existingEv) {
                         calendar.addEvent(newEv);
                     } else {
-                        // Actualizar solo lo necesario
                         if (existingEv.startStr !== newEv.start) existingEv.setStart(newEv.start);
                         if (existingEv.endStr !== newEv.end) existingEv.setEnd(newEv.end);
                         existingEv.setProp('backgroundColor', newEv.color);
@@ -492,7 +491,7 @@
                 displayEventTime: false,
                 eventDisplay: 'block',
                 eventOverlap: true,
-                dayMaxEvents: false,
+                dayMaxEvents: false,           // CRUCIAL: mostrar todos los eventos
                 headerToolbar: { 
                     left: 'prev,next today', 
                     center: 'title', 
@@ -500,7 +499,7 @@
                 },
                 buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana' },
                 eventDidMount: function(info) {
-                    // Añadir tooltip con información completa
+                    // Tooltip con información
                     let cabinNum = info.event.extendedProps.cabin;
                     let cabinNameText = cabinNames[cabinNum] || `Cabaña ${cabinNum}`;
                     let guestName = info.event.title;
