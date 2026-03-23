@@ -38,6 +38,7 @@
         .management-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:15px; }
         .btn { background:#2d6a27; color:white; border:none; padding:8px 18px; border-radius:40px; cursor:pointer; font-weight:500; transition: background 0.2s; }
         .btn:hover { background:#1f4f1a; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .table-wrapper { overflow-x:auto; border-radius:16px; border:1px solid #e0e7e0; }
         #managementTable { width:100%; border-collapse:collapse; font-size:0.85rem; }
         #managementTable th, #managementTable td { padding:12px 10px; text-align:left; border-bottom:1px solid #e9ece9; }
@@ -52,8 +53,6 @@
         /* ============================================
            BARRAS DELGADAS Y APILAMIENTO VERTICAL
            ============================================ */
-        
-        /* Barras más delgadas */
         .fc-daygrid-event {
             height: 18px !important;
             line-height: 16px !important;
@@ -65,8 +64,6 @@
             text-overflow: ellipsis !important;
             padding: 0 4px !important;
         }
-        
-        /* Apilar eventos verticalmente */
         .fc-daygrid-day-events {
             display: flex !important;
             flex-direction: column !important;
@@ -74,27 +71,17 @@
             max-height: none !important;
             overflow-y: visible !important;
         }
-        
         .fc-daygrid-event-harness {
             margin-top: 0 !important;
             margin-bottom: 0 !important;
         }
-        
         .fc-daygrid-day-frame {
             min-height: 45px !important;
             height: auto !important;
         }
-        
-        .fc-daygrid-day-events {
-            min-height: 20px !important;
-        }
-        
-        /* Ocultar el botón "+X" que limita la vista */
         .fc-daygrid-more-link {
             display: none !important;
         }
-        
-        /* Ajuste para móvil */
         @media (max-width:768px) { 
             body { padding:12px; } 
             #managementTable th, #managementTable td { padding:8px 6px; font-size:0.75rem; } 
@@ -173,7 +160,8 @@
         let eventsByCabin = {1:[], 2:[], 3:[]};
         let guestData = {};
         let cabinNames = {1: 'Cabaña 1', 2: 'Cabaña 2', 3: 'Cabaña 3'};
-        let isLoading = false;
+        let isRefreshing = false;      // ← CONTROL PARA EVITAR RECARGAS MÚLTIPLES
+        let refreshTimeout = null;     // ← DEBOUNCE PARA BOTÓN
 
         function checkPassword() {
             const input = document.getElementById('passwordInput').value;
@@ -371,24 +359,65 @@
             updateCalendarTitles();
         }
 
+        // ============================================
+        // REFRESH CON PROTECCIONES
+        // ============================================
         async function refreshAll() {
-            if (confirm('¿Actualizar todos los datos?')) {
+            // Evitar múltiples actualizaciones simultáneas
+            if (isRefreshing) {
                 const statusDiv = document.getElementById('status');
-                statusDiv.innerHTML = '🔄 Actualizando...';
+                statusDiv.innerHTML = '⏳ Ya hay una actualización en curso...';
                 statusDiv.className = 'status info';
+                setTimeout(() => {
+                    if (statusDiv.innerHTML === '⏳ Ya hay una actualización en curso...') {
+                        statusDiv.innerHTML = '📅 Calendario listo';
+                        statusDiv.className = 'status info';
+                    }
+                }, 1500);
+                return;
+            }
+            
+            isRefreshing = true;
+            const refreshBtn = document.getElementById('refreshDataBtn');
+            refreshBtn.disabled = true;
+            
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = '🔄 Actualizando...';
+            statusDiv.className = 'status info';
+            
+            try {
                 await loadAllEvents();
                 buildTable();
                 statusDiv.innerHTML = '✅ Datos actualizados';
                 statusDiv.className = 'status success';
-                setTimeout(() => statusDiv.innerHTML = '📅 Calendario listo', 2000);
+                setTimeout(() => {
+                    if (statusDiv.innerHTML === '✅ Datos actualizados') {
+                        statusDiv.innerHTML = '📅 Calendario listo';
+                        statusDiv.className = 'status info';
+                    }
+                }, 3000);
+            } catch (error) {
+                console.error('Error en actualización:', error);
+                statusDiv.innerHTML = '❌ Error al actualizar';
+                statusDiv.className = 'status error';
+            } finally {
+                isRefreshing = false;
+                refreshBtn.disabled = false;
             }
+        }
+
+        // DEBOUNCE para el botón: espera 300ms antes de ejecutar
+        function debouncedRefresh() {
+            if (refreshTimeout) clearTimeout(refreshTimeout);
+            refreshTimeout = setTimeout(() => refreshAll(), 300);
         }
 
         async function init() {
             await loadCabinNames();
             await loadAllEvents();
             loadGuestData();
-            document.getElementById('refreshDataBtn').onclick = refreshAll;
+            // Botón con debounce
+            document.getElementById('refreshDataBtn').onclick = debouncedRefresh;
         }
     </script>
 </body>
