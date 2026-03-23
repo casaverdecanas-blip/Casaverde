@@ -48,66 +48,7 @@
         #managementTable input { width:100%; padding:6px 8px; border:1px solid #d0dcd0; border-radius:12px; background:white; font-size:0.8rem; }
         .whatsapp-link { display:inline-block; background:#25d366; color:white; padding:5px 12px; border-radius:30px; text-decoration:none; font-size:0.75rem; font-weight:bold; text-align:center; white-space:nowrap; }
         .whatsapp-link:hover { background:#1ebe5d; }
-        
-        /* ============================================
-           ESTILOS CLAVE: MULTIPLES BARRAS APILADAS
-           (basado en el código de prueba que funcionó)
-           ============================================ */
-        
-        /* Barras más delgadas y apiladas verticalmente */
-        .fc-daygrid-event {
-            height: 18px !important;
-            line-height: 16px !important;
-            font-size: 0.65rem !important;
-            margin-bottom: 2px !important;
-            border-radius: 3px !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-            padding: 0 4px !important;
-        }
-        
-        /* Contenedor de eventos: apilamiento vertical */
-        .fc-daygrid-day-events {
-            display: flex !important;
-            flex-direction: column !important;
-            gap: 1px !important;
-            max-height: none !important;
-            overflow-y: visible !important;
-        }
-        
-        /* Cada contenedor individual del evento */
-        .fc-daygrid-event-harness {
-            margin-top: 0 !important;
-            margin-bottom: 0 !important;
-        }
-        
-        /* Celda del día: altura automática */
-        .fc-daygrid-day-frame {
-            min-height: 45px !important;
-            height: auto !important;
-        }
-        
-        /* Asegurar que se muestren todos los eventos */
-        .fc-daygrid-day-events {
-            min-height: 20px !important;
-        }
-        
-        /* Ocultar el botón "+X" si aparece para que no limite */
-        .fc-daygrid-more-link {
-            display: none !important;
-        }
-        
-        @media (max-width:768px) { 
-            body { padding:12px; } 
-            #managementTable th, #managementTable td { padding:8px 6px; font-size:0.75rem; } 
-            .whatsapp-link { font-size:0.7rem; padding:3px 8px; }
-            .fc-daygrid-event {
-                height: 20px !important;
-                line-height: 18px !important;
-                font-size: 0.7rem !important;
-            }
-        }
+        @media (max-width:768px) { body { padding:12px; } #managementTable th, #managementTable td { padding:8px 6px; font-size:0.75rem; } .whatsapp-link { font-size:0.7rem; padding:3px 8px; } }
     </style>
 </head>
 <body>
@@ -135,7 +76,7 @@
                     <thead>
                         <tr><th>Cabaña</th><th>Fecha entrada</th><th>Fecha salida</th><th>Hora check‑in</th><th>Personas</th><th>Observaciones</th><th>Nombre</th><th>Teléfono</th><th>WhatsApp</th></tr>
                     </thead>
-                    <tbody id="managementTableBody"><tr><td colspan="9">Cargando reservas...</td></tr></tbody>
+                    <tbody id="managementTableBody"> <tr><td colspan="9">Cargando reservas...</td></tr> </tbody>
                 </table>
             </div>
         </div>
@@ -178,9 +119,6 @@
         let cabinNames = {1: 'Cabaña 1', 2: 'Cabaña 2', 3: 'Cabaña 3'};
         let isLoading = false;
 
-        // ============================================
-        // AUTENTICACIÓN
-        // ============================================
         function checkPassword() {
             const input = document.getElementById('passwordInput').value;
             if (input === CORRECT_PASSWORD) {
@@ -199,9 +137,6 @@
             init();
         }
 
-        // ============================================
-        // CARGAR NOMBRES DE CABAÑAS
-        // ============================================
         async function loadCabinNames() {
             try {
                 const snap = await db.ref('siteData/apartments').once('value');
@@ -214,238 +149,130 @@
                 document.getElementById('cabin1Name').textContent = cabinNames[1];
                 document.getElementById('cabin2Name').textContent = cabinNames[2];
                 document.getElementById('cabin3Name').textContent = cabinNames[3];
-            } catch(e) { console.warn('Error cargando nombres:', e); }
+            } catch(e) { console.warn(e); }
         }
 
-        // ============================================
-        // PROXY PARA ICAL
-        // ============================================
         async function fetchICalWithProxy(url) {
             const proxyUrl = 'https://casaverdecanas.netlify.app/.netlify/functions/fetch-ical?url=' + encodeURIComponent(url);
             try {
                 const res = await fetch(proxyUrl);
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const text = await res.text();
-                if (!text.includes('BEGIN:VCALENDAR')) throw new Error('No es iCal válido');
+                if (!text.includes('BEGIN:VCALENDAR')) throw new Error('No es iCal');
                 return text;
-            } catch(e) { 
-                console.error(`Error fetching iCal: ${e.message}`); 
-                return null; 
-            }
+            } catch(e) { console.error(e); return null; }
         }
 
-        // ============================================
-        // CARGAR EVENTOS DE UNA CABAÑA
-        // ============================================
         async function loadCabinEvents(cabinNumber, cabinUrl) {
             try {
                 const ical = await fetchICalWithProxy(cabinUrl);
-                if (!ical) {
-                    console.warn(`No se pudo obtener iCal para cabaña ${cabinNumber}`);
-                    return [];
-                }
-                
+                if (!ical) return [];
                 const jcal = ICAL.parse(ical);
                 const comp = new ICAL.Component(jcal);
                 const vevents = comp.getAllSubcomponents('vevent');
                 const cabinEvents = [];
-                
                 for (const ve of vevents) {
                     const ev = new ICAL.Event(ve);
                     if (ev.summary && (ev.summary.includes('Not available') || ev.summary.includes('blocked'))) continue;
-                    
                     const start = ev.startDate.toJSDate();
                     const end = ev.endDate.toJSDate();
                     const endAdj = new Date(end);
-                    endAdj.setDate(endAdj.getDate() - 1);
+                    endAdj.setDate(endAdj.getDate()-1);
                     const startStr = start.toISOString().slice(0,10);
                     const endStr = endAdj.toISOString().slice(0,10);
-                    
-                    // ID estable: mismo formato que siempre funcionó
-                    const stableId = `${cabinNumber}|${startStr}|${endStr}`;
-                    
                     let title = cabinNames[cabinNumber];
                     if (ev.summary) {
                         let clean = ev.summary.replace(/Reservado:|Reserved:|Réservé:/i,'').trim();
-                        if (clean) title = clean.substring(0, 30);
+                        if (clean) title = `${cabinNames[cabinNumber]} - ${clean.substring(0,20)}`;
                     }
-                    
                     cabinEvents.push({
-                        id: stableId,
+                        id: `${cabinNumber}|${startStr}|${endStr}`,
                         title: title,
                         start: startStr,
                         end: endStr,
                         color: CABIN_COLORS[cabinNumber],
-                        backgroundColor: CABIN_COLORS[cabinNumber],
-                        borderColor: CABIN_COLORS[cabinNumber],
                         allDay: true,
-                        extendedProps: { 
-                            cabin: cabinNumber, 
-                            startDate: startStr, 
-                            endDate: endStr
-                        }
+                        extendedProps: { cabin: cabinNumber, startDate: startStr, endDate: endStr }
                     });
                 }
-                
                 return cabinEvents;
-            } catch(e) {
-                console.error(`Error cargando cabaña ${cabinNumber}:`, e);
-                return [];
-            }
+            } catch(e) { return []; }
         }
 
-        // ============================================
-        // ACTUALIZAR TÍTULOS CON NOMBRES GUARDADOS
-        // ============================================
         function updateCalendarTitles() {
             if (!calendar) return;
             const allEvents = calendar.getEvents();
             for (const ev of allEvents) {
-                const evId = ev.id;
-                const extra = guestData[evId] || {};
+                const cabin = ev.extendedProps.cabin;
+                const start = ev.startStr;
+                const end = ev.endStr;
+                const key = `${cabin}|${start}|${end}`;
+                const extra = guestData[key] || {};
                 if (extra.nombre && extra.nombre.trim() !== '') {
                     ev.setProp('title', extra.nombre.trim());
+                } else {
+                    ev.setProp('title', 'Reserva pendiente');
                 }
             }
         }
 
-        // ============================================
-        // ACTUALIZACIÓN DEL CALENDARIO (VERSIÓN ESTABLE)
-        // ============================================
-        async function refreshCalendarIntelligently() {
-            if (isLoading) return;
-            isLoading = true;
-            
-            const statusDiv = document.getElementById('status');
-            statusDiv.innerHTML = '🔄 Actualizando calendario...';
-            statusDiv.className = 'status info';
-            
-            try {
-                const newEventsArrays = await Promise.all([
-                    loadCabinEvents(1, AIRBNB_URLS[1]),
-                    loadCabinEvents(2, AIRBNB_URLS[2]),
-                    loadCabinEvents(3, AIRBNB_URLS[3])
-                ]);
-                const newEvents = newEventsArrays.flat();
-                const newEventMap = new Map(newEvents.map(ev => [ev.id, ev]));
-                
-                const existingEvents = calendar.getEvents();
-                
-                // Eliminar eventos que ya no existen
-                for (const ev of existingEvents) {
-                    if (!newEventMap.has(ev.id)) {
-                        ev.remove();
-                    }
-                }
-                
-                // Agregar o actualizar eventos
-                for (const newEv of newEvents) {
-                    const existingEv = calendar.getEventById(newEv.id);
-                    if (!existingEv) {
-                        calendar.addEvent(newEv);
-                    } else {
-                        if (existingEv.startStr !== newEv.start) existingEv.setStart(newEv.start);
-                        if (existingEv.endStr !== newEv.end) existingEv.setEnd(newEv.end);
-                        existingEv.setProp('backgroundColor', newEv.color);
-                        existingEv.setProp('borderColor', newEv.color);
-                    }
-                }
-                
+        function loadGuestData() {
+            db.ref('reservasExtra').on('value', (snap) => {
+                guestData = snap.val() || {};
                 updateCalendarTitles();
                 buildTable();
-                
-                statusDiv.innerHTML = '✅ Calendario actualizado correctamente';
-                statusDiv.className = 'status success';
-                setTimeout(() => {
-                    if (statusDiv.innerHTML === '✅ Calendario actualizado correctamente') {
-                        statusDiv.innerHTML = '📅 Calendario listo';
-                        statusDiv.className = 'status info';
-                    }
-                }, 3000);
-                
-            } catch (error) {
-                console.error('Error actualizando calendario:', error);
-                statusDiv.innerHTML = '❌ Error al actualizar calendario';
-                statusDiv.className = 'status error';
-            } finally {
-                isLoading = false;
-            }
+            });
         }
 
-        // ============================================
-        // CONSTRUIR TABLA DE RESERVAS
-        // ============================================
         function buildTable() {
             const tbody = document.getElementById('managementTableBody');
             if (!tbody) return;
-            
             const today = new Date().toISOString().slice(0,10);
             let reservas = [];
-            
-            if (calendar) {
-                const events = calendar.getEvents();
-                for (const ev of events) {
-                    if (ev.startStr < today) continue;
-                    const cabin = ev.extendedProps.cabin;
-                    const evId = ev.id;
-                    const extra = guestData[evId] || {};
-                    reservas.push({
-                        cabin: cabin,
-                        start: ev.startStr,
-                        end: ev.endStr,
-                        id: evId,
-                        ...extra
-                    });
+            for (let c=1; c<=3; c++) {
+                for (const ev of eventsByCabin[c]) {
+                    if (ev.start < today) continue;
+                    const key = ev.id;
+                    const extra = guestData[key] || {};
+                    reservas.push({ cabin:c, start:ev.start, end:ev.end, key, ...extra });
                 }
             }
-            
-            reservas.sort((a,b) => new Date(a.start) - new Date(b.start));
-            
-            if (reservas.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9">No hay reservas futuras</td></tr>';
-                return;
-            }
-            
+            reservas.sort((a,b)=>new Date(a.start)-new Date(b.start));
+            if (reservas.length===0) { tbody.innerHTML='<tr><td colspan="9">No hay reservas futuras</td></tr>'; return; }
             tbody.innerHTML = '';
             for (const r of reservas) {
                 const row = tbody.insertRow();
-                row.className = CABIN_ROW_CLASS[r.cabin] || '';
-                row.insertCell(0).innerText = cabinNames[r.cabin] || `Cabaña ${r.cabin}`;
+                row.className = CABIN_ROW_CLASS[r.cabin];
+                row.insertCell(0).innerText = cabinNames[r.cabin];
                 row.insertCell(1).innerText = r.start;
                 row.insertCell(2).innerText = r.end;
-                
                 const horaCell = row.insertCell(3);
                 const horaInp = document.createElement('input');
                 horaInp.type = 'time';
                 horaInp.value = r.horaLlegada || '';
-                horaInp.onchange = (function(id) { return function(e) { saveField(id, 'horaLlegada', e.target.value); }; })(r.id);
+                horaInp.onchange = (function(k){ return function(e){ saveField(k,'horaLlegada',e.target.value); }; })(r.key);
                 horaCell.appendChild(horaInp);
-                
                 const persCell = row.insertCell(4);
                 const persInp = document.createElement('input');
                 persInp.type = 'number';
                 persInp.value = r.personas || '';
-                persInp.onchange = (function(id) { return function(e) { saveField(id, 'personas', e.target.value); }; })(r.id);
+                persInp.onchange = (function(k){ return function(e){ saveField(k,'personas',e.target.value); }; })(r.key);
                 persCell.appendChild(persInp);
-                
                 const obsCell = row.insertCell(5);
                 const obsInp = document.createElement('input');
                 obsInp.value = r.observaciones || '';
-                obsInp.onchange = (function(id) { return function(e) { saveField(id, 'observaciones', e.target.value); }; })(r.id);
+                obsInp.onchange = (function(k){ return function(e){ saveField(k,'observaciones',e.target.value); }; })(r.key);
                 obsCell.appendChild(obsInp);
-                
                 const nomCell = row.insertCell(6);
                 const nomInp = document.createElement('input');
                 nomInp.value = r.nombre || '';
-                nomInp.onchange = (function(id) { return function(e) { saveField(id, 'nombre', e.target.value); updateCalendarTitles(); }; })(r.id);
+                nomInp.onchange = (function(k){ return function(e){ saveField(k,'nombre',e.target.value); updateCalendarTitles(); }; })(r.key);
                 nomCell.appendChild(nomInp);
-                
                 const telCell = row.insertCell(7);
                 const telInp = document.createElement('input');
                 telInp.value = r.telefono || '';
-                telInp.onchange = (function(id) { return function(e) { saveField(id, 'telefono', e.target.value); }; })(r.id);
+                telInp.onchange = (function(k){ return function(e){ saveField(k,'telefono',e.target.value); }; })(r.key);
                 telCell.appendChild(telInp);
-                
                 const waCell = row.insertCell(8);
                 const phone = r.telefono ? r.telefono.replace(/\D/g,'') : '';
                 const waLink = document.createElement('a');
@@ -458,64 +285,54 @@
             }
         }
 
-        // ============================================
-        // GUARDAR CAMPO EN FIREBASE
-        // ============================================
-        function saveField(eventId, field, value) {
-            if (!eventId) return;
-            db.ref(`reservasExtra/${eventId}/${field}`).set(value);
+        function saveField(key, field, value) {
+            db.ref(`reservasExtra/${key}/${field}`).set(value);
         }
 
-        // ============================================
-        // ESCUCHAR DATOS DE HUÉSPEDES
-        // ============================================
-        function loadGuestData() {
-            db.ref('reservasExtra').on('value', (snap) => {
-                guestData = snap.val() || {};
-                updateCalendarTitles();
+        async function loadAllEvents() {
+            const newEventsArrays = await Promise.all([
+                loadCabinEvents(1, AIRBNB_URLS[1]),
+                loadCabinEvents(2, AIRBNB_URLS[2]),
+                loadCabinEvents(3, AIRBNB_URLS[3])
+            ]);
+            eventsByCabin = {1: newEventsArrays[0], 2: newEventsArrays[1], 3: newEventsArrays[2]};
+            const allEvents = [...eventsByCabin[1], ...eventsByCabin[2], ...eventsByCabin[3]];
+            if (calendar) {
+                calendar.removeAllEvents();
+                calendar.addEventSource(allEvents);
+            } else {
+                const el = document.getElementById('calendar');
+                calendar = new FullCalendar.Calendar(el, {
+                    initialView: 'dayGridMonth',
+                    locale: 'es',
+                    events: allEvents,
+                    height: 'auto',
+                    headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,dayGridWeek' },
+                    buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana' }
+                });
+                calendar.render();
+            }
+            updateCalendarTitles();
+        }
+
+        async function refreshAll() {
+            if (confirm('¿Actualizar todos los datos?')) {
+                const statusDiv = document.getElementById('status');
+                statusDiv.innerHTML = '🔄 Actualizando...';
+                statusDiv.className = 'status info';
+                await loadAllEvents();
                 buildTable();
-            });
+                statusDiv.innerHTML = '✅ Datos actualizados';
+                statusDiv.className = 'status success';
+                setTimeout(() => statusDiv.innerHTML = '📅 Calendario listo', 2000);
+            }
         }
 
-        // ============================================
-        // INICIALIZAR CALENDARIO
-        // ============================================
         async function init() {
             await loadCabinNames();
-            
-            const el = document.getElementById('calendar');
-            calendar = new FullCalendar.Calendar(el, {
-                initialView: 'dayGridMonth',
-                locale: 'es',
-                height: 'auto',
-                displayEventTime: false,
-                eventDisplay: 'block',
-                eventOverlap: true,
-                dayMaxEvents: false,           // CRUCIAL: mostrar todos los eventos
-                headerToolbar: { 
-                    left: 'prev,next today', 
-                    center: 'title', 
-                    right: 'dayGridMonth,dayGridWeek' 
-                },
-                buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana' },
-                eventDidMount: function(info) {
-                    // Tooltip con información
-                    let cabinNum = info.event.extendedProps.cabin;
-                    let cabinNameText = cabinNames[cabinNum] || `Cabaña ${cabinNum}`;
-                    let guestName = info.event.title;
-                    if (guestName && guestName !== cabinNameText && !guestName.includes('pendiente')) {
-                        info.el.setAttribute('title', `${cabinNameText} - ${guestName}`);
-                    } else {
-                        info.el.setAttribute('title', cabinNameText);
-                    }
-                }
-            });
-            calendar.render();
-            
-            await refreshCalendarIntelligently();
+            await loadAllEvents();
             loadGuestData();
-            
-            document.getElementById('refreshDataBtn').onclick = () => refreshCalendarIntelligently();
+            document.getElementById('refreshDataBtn').onclick = refreshAll;
         }
     </script>
 </body>
