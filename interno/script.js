@@ -24,7 +24,7 @@ let unsubscribeTasks = null;
 let unsubscribeHistorial = null;
 let tareasCache = [];
 let historialCache = [];
-const adminEmail = 'admin@casaverde.com';
+const adminEmail = 'casaverdecanas@gmail.com';
 
 // ============================================
 // ELEMENTOS DOM
