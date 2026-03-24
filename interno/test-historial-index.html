@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Lógica Index - Historial vs Tareas</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: monospace; }
+        body { background: #0a0a0f; padding: 20px; color: #0f0; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1, h2 { color: #0f0; margin-bottom: 15px; border-bottom: 1px solid #0f0; padding-bottom: 8px; }
+        .login-box, .panel { background: #1a1a2a; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #333; }
+        input, button { padding: 8px 12px; margin: 5px; border-radius: 4px; border: none; }
+        button { background: #0f0; color: #000; cursor: pointer; font-weight: bold; }
+        button:hover { background: #0c0; }
+        .error { color: #f66; background: #2a1a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #f00; }
+        .success { color: #0f0; background: #1a2a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #0f0; }
+        .info { color: #ff0; background: #2a2a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #ff0; }
+        .warning { color: #f90; background: #2a2a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #f90; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #333; vertical-align: top; }
+        th { background: #0f0; color: #000; position: sticky; top: 0; }
+        .table-wrapper { max-height: 400px; overflow-y: auto; border: 1px solid #333; border-radius: 8px; margin-top: 15px; }
+        .log-area { background: #000; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 11px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; }
+        .match { color: #0f0; }
+        .mismatch { color: #f90; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 TEST: Lógica de búsqueda de historial por tareaId</h1>
+        <p style="margin-bottom: 20px; color: #aaa;">Este archivo simula la lógica del index.html: para cada tarea, busca su última realización en historial usando el ID de la tarea.</p>
+        
+        <div class="login-box">
+            <input type="email" id="email" placeholder="Email" value="casaverdecanas@gmail.com">
+            <input type="password" id="password" placeholder="Contraseña">
+            <button onclick="login()">Iniciar Sesión</button>
+            <div id="loginMsg"></div>
+        </div>
+        
+        <div id="resultados" style="display: none;">
+            <div class="panel">
+                <h2>📋 RESULTADO DE CLASIFICACIÓN (como se vería en index.html)</h2>
+                <div id="clasificacionResult"></div>
+            </div>
+            
+            <div class="panel">
+                <h2>🔍 LOG DE BÚSQUEDA (para depurar)</h2>
+                <div id="logArea" class="log-area"></div>
+            </div>
+            
+            <div class="panel">
+                <h2>📊 COMPARACIÓN: IDs de Tareas vs tareaId en Historial</h2>
+                <div class="table-wrapper">
+                    <table id="comparacionTable">
+                        <thead>
+                            <tr>
+                                <th>Tarea (ID)</th>
+                                <th>Título</th>
+                                <th>¿Tiene historial?</th>
+                                <th>Última realización</th>
+                                <th>tareaId en historial (coincidencia)</th>
+                            </thead>
+                        <tbody id="comparacionBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+            authDomain: "tatareas-d8a80.firebaseapp.com",
+            projectId: "tatareas-d8a80",
+            storageBucket: "tatareas-d8a80.firebasestorage.app",
+            messagingSenderId: "709332495480",
+            appId: "1:709332495480:web:7060b2c75984352354918d"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let currentUser = null;
+        let logs = [];
+
+        function addLog(msg, tipo = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logMsg = `[${timestamp}] ${msg}`;
+            logs.push(logMsg);
+            console.log(logMsg);
+            const logDiv = document.getElementById('logArea');
+            if (logDiv) {
+                logDiv.innerHTML = logs.map(l => `<div style="color: ${tipo === 'error' ? '#f66' : (tipo === 'warning' ? '#f90' : '#0f0')}">${escapeHtml(l)}</div>`).join('');
+                logDiv.scrollTop = logDiv.scrollHeight;
+            }
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const msgDiv = document.getElementById('loginMsg');
+            
+            msgDiv.innerHTML = '<div class="info">🔄 Autenticando...</div>';
+            logs = [];
+            
+            try {
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                currentUser = userCredential.user;
+                msgDiv.innerHTML = `<div class="success">✅ Login: ${currentUser.email}</div>`;
+                document.getElementById('resultados').style.display = 'block';
+                await ejecutarPrueba();
+            } catch (error) {
+                msgDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function ejecutarPrueba() {
+            addLog('🚀 INICIANDO PRUEBA DE CLASIFICACIÓN');
+            
+            // 1. Cargar tareas activas
+            addLog('📁 Cargando tareas activas...');
+            const tareasSnapshot = await db.collection('tareas').where('activa', '==', true).get();
+            const tareas = [];
+            tareasSnapshot.forEach(doc => {
+                tareas.push({ id: doc.id, ...doc.data() });
+            });
+            addLog(`📊 Tareas activas encontradas: ${tareas.length}`);
+            
+            // 2. Cargar historial (para referencia)
+            addLog('📜 Cargando historial...');
+            const historialSnapshot = await db.collection('historial').get();
+            const historialMap = new Map(); // tareaId -> última fecha
+            historialSnapshot.forEach(doc => {
+                const data = doc.data();
+                const tareaId = data.tareaId;
+                if (tareaId) {
+                    const fecha = data.fecha ? data.fecha.toDate() : null;
+                    if (!historialMap.has(tareaId) || (fecha && fecha > historialMap.get(tareaId).fecha)) {
+                        historialMap.set(tareaId, {
+                            fecha: fecha,
+                            titulo: data.titulo,
+                            completadaPor: data.completadaPor
+                        });
+                    }
+                }
+            });
+            addLog(`📊 Registros en historial: ${historialSnapshot.size}`);
+            addLog(`📊 Tareas con historial en el mapa: ${historialMap.size}`);
+            
+            // 3. Para cada tarea, buscar su historial
+            addLog('🔍 Buscando última realización para cada tarea...');
+            
+            const clasificacion = [];
+            let conHistorial = 0;
+            let sinHistorial = 0;
+            
+            for (const tarea of tareas) {
+                const tareaId = tarea.id;
+                const historial = historialMap.get(tareaId);
+                
+                if (historial) {
+                    conHistorial++;
+                    addLog(`✅ Tarea "${tarea.titulo}" (ID: ${tareaId.substring(0,12)}...) → TIENE HISTORIAL. Última: ${historial.fecha ? historial.fecha.toLocaleDateString() : 'sin fecha'}`, 'success');
+                    clasificacion.push({
+                        tarea: tarea,
+                        tieneHistorial: true,
+                        ultimaFecha: historial.fecha,
+                        ultimoUsuario: historial.completadaPor
+                    });
+                } else {
+                    sinHistorial++;
+                    addLog(`⚠️ Tarea "${tarea.titulo}" (ID: ${tareaId.substring(0,12)}...) → SIN HISTORIAL encontrado`, 'warning');
+                    clasificacion.push({
+                        tarea: tarea,
+                        tieneHistorial: false,
+                        ultimaFecha: null,
+                        ultimoUsuario: null
+                    });
+                }
+            }
+            
+            addLog(`📊 RESULTADO: ${conHistorial} tareas CON historial | ${sinHistorial} tareas SIN historial`);
+            
+            // 4. Mostrar clasificación
+            mostrarClasificacion(clasificacion);
+            
+            // 5. Mostrar tabla comparativa
+            mostrarComparativa(tareas, historialMap);
+        }
+        
+        function mostrarClasificacion(clasificacion) {
+            const container = document.getElementById('clasificacionResult');
+            
+            const pendientes = clasificacion.filter(c => !c.tieneHistorial);
+            const conHistorialOk = clasificacion.filter(c => c.tieneHistorial);
+            
+            let html = `
+                <div class="success" style="margin-bottom: 15px;">
+                    <strong>📊 RESUMEN:</strong><br>
+                    🟢 Tareas SIN historial (pendientes): ${pendientes.length}<br>
+                    🟡 Tareas CON historial: ${conHistorialOk.length}
+                </div>
+            `;
+            
+            if (pendientes.length > 0) {
+                html += `<div class="info" style="margin-bottom: 10px;"><strong>🟢 Tareas PENDIENTES (sin historial):</strong></div>`;
+                html += `<div class="table-wrapper"><table><thead><th>Título</th><th>Recurrencia</th><th>ID Tarea</th></thead><tbody>`;
+                pendientes.forEach(p => {
+                    html += `<tr>
+                        <td><strong>${escapeHtml(p.tarea.titulo)}</strong></td>
+                        <td>${p.tarea.recurrencia || 'none'}</td>
+                        <td><small>${p.tarea.id}</small></td>
+                    </tr>`;
+                });
+                html += `</tbody></table></div>`;
+            }
+            
+            if (conHistorialOk.length > 0) {
+                html += `<div class="info" style="margin: 15px 0 10px 0;"><strong>🟡 Tareas CON HISTORIAL (última realización):</strong></div>`;
+                html += `<div class="table-wrapper"><table><thead><th>Título</th><th>Recurrencia</th><th>Última fecha</th><th>Realizada por</th><th>ID Tarea</th></thead><tbody>`;
+                conHistorialOk.forEach(c => {
+                    html += `<tr>
+                        <td><strong>${escapeHtml(c.tarea.titulo)}</strong></td>
+                        <td>${c.tarea.recurrencia || 'none'}</td>
+                        <td>${c.ultimaFecha ? c.ultimaFecha.toLocaleString() : 'Sin fecha'}</td>
+                        <td><small>${escapeHtml(c.ultimoUsuario || '?')}</small></td>
+                        <td><small>${c.tarea.id.substring(0,12)}...</small></td>
+                    </tr>`;
+                });
+                html += `</tbody></table></div>`;
+            }
+            
+            if (pendientes.length === 0 && conHistorialOk.length === 0) {
+                html += '<div class="warning">⚠️ No hay tareas activas</div>';
+            }
+            
+            container.innerHTML = html;
+        }
+        
+        function mostrarComparativa(tareas, historialMap) {
+            const tbody = document.getElementById('comparacionBody');
+            let html = '';
+            
+            for (const tarea of tareas) {
+                const tareaId = tarea.id;
+                const historial = historialMap.get(tareaId);
+                const tieneHistorial = !!historial;
+                
+                let historialInfo = '';
+                if (tieneHistorial) {
+                    historialInfo = `✅ Última: ${historial.fecha ? historial.fecha.toLocaleDateString() : '?'}<br>por: ${historial.completadaPor || '?'}`;
+                } else {
+                    historialInfo = '❌ No hay registros';
+                }
+                
+                // Buscar si hay algún registro en historial con tareaId que coincida exactamente
+                let coincidenciaExacta = false;
+                for (let [id, val] of historialMap.entries()) {
+                    if (id === tareaId) {
+                        coincidenciaExacta = true;
+                        break;
+                    }
+                }
+                
+                const colorClass = coincidenciaExacta ? 'match' : 'mismatch';
+                
+                html += `<tr class="${colorClass}">
+                    <td><small>${tareaId}</small></td>
+                    <td><strong>${escapeHtml(tarea.titulo)}</strong></td>
+                    <td>${tieneHistorial ? '✅ Sí' : '❌ No'}</td>
+                    <td><small>${historialInfo}</small></td>
+                    <td class="${colorClass}">${coincidenciaExacta ? '✅ COINCIDE EXACTAMENTE' : '⚠️ NO COINCIDE'}</td>
+                </tr>`;
+            }
+            
+            tbody.innerHTML = html || '<tr><td colspan="5">No hay tareas</td></tr>';
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
+        }
+    </script>
+</body>
+</html>
