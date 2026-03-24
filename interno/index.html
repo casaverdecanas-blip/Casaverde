@@ -242,11 +242,13 @@
 
         async function obtenerUltimaRealizacion(tareaId) {
             try {
+                // Buscar en historial usando el tareaId
                 const snapshot = await db.collection('historial')
                     .where('tareaId', '==', tareaId)
                     .orderBy('fecha', 'desc')
                     .limit(1)
                     .get();
+                
                 if (snapshot.empty) return null;
                 const data = snapshot.docs[0].data();
                 const nombre = await obtenerNombreUsuario(data.completadaPor);
@@ -256,7 +258,7 @@
                     uid: data.completadaPor
                 };
             } catch (error) {
-                console.error('Error:', error);
+                console.error('Error obteniendo última realización:', error);
                 return null;
             }
         }
@@ -433,6 +435,7 @@
         async function mostrarVistaTareas() {
             contentArea.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Cargando tareas...</p></div>';
             
+            // Obtener última realización para CADA tarea (usando su ID)
             const tareasConUltima = await Promise.all(tareasCache.map(async tarea => {
                 const ultima = await obtenerUltimaRealizacion(tarea.id);
                 return { ...tarea, ultimaRealizacion: ultima };
@@ -442,36 +445,57 @@
             const realizadasRecientes = [];
             const ahora = new Date();
             
+            // Clasificar según espaciado mínimo
             for (const tarea of tareasConUltima) {
                 let esReciente = false;
+                
                 if (tarea.ultimaRealizacion) {
                     const diasDiferencia = Math.floor((ahora - tarea.ultimaRealizacion.fecha) / (86400000));
                     const espaciadoMinimo = getEspaciadoMinimo(tarea.recurrencia);
-                    if (espaciadoMinimo > 0 && diasDiferencia < espaciadoMinimo) esReciente = true;
+                    
+                    if (espaciadoMinimo > 0 && diasDiferencia < espaciadoMinimo) {
+                        esReciente = true;
+                    }
                 }
-                if (esReciente) realizadasRecientes.push(tarea);
-                else pendientes.push(tarea);
+                
+                if (esReciente) {
+                    realizadasRecientes.push(tarea);
+                } else {
+                    pendientes.push(tarea);
+                }
             }
             
+            // Ordenar por prioridad
             const ordenPrioridad = { 'alta': 1, 'media': 2, 'baja': 3 };
             pendientes.sort((a,b) => ordenPrioridad[a.prioridad] - ordenPrioridad[b.prioridad]);
             realizadasRecientes.sort((a,b) => ordenPrioridad[a.prioridad] - ordenPrioridad[b.prioridad]);
             pendingToday.textContent = pendientes.length;
             
             let html = `<div class="tasks-container"><h2><span class="material-icons">list</span> Mis Tareas <span class="count-badge">${tareasCache.length}</span></h2><div class="tasks-list">`;
-            if (pendientes.length > 0) html += pendientes.map(t => renderizarTarea(t, false)).join('');
-            else if (realizadasRecientes.length === 0) html += '<div class="empty-state"><span class="material-icons">check_circle</span><p>No hay tareas pendientes</p></div>';
+            
+            // Tareas pendientes (arriba, clickeables)
+            if (pendientes.length > 0) {
+                html += pendientes.map(t => renderizarTarea(t, false)).join('');
+            } else if (realizadasRecientes.length === 0) {
+                html += '<div class="empty-state"><span class="material-icons">check_circle</span><p>No hay tareas pendientes</p></div>';
+            }
+            
+            // Tareas realizadas recientemente (abajo, tachadas)
             if (realizadasRecientes.length > 0) {
                 html += `<div class="recientes-divider"><span class="material-icons">history</span> Realizadas recientemente</div>`;
                 html += realizadasRecientes.map(t => renderizarTarea(t, true)).join('');
             }
+            
             html += `</div></div>`;
             contentArea.innerHTML = html;
             
+            // Event listeners para tareas pendientes
             document.querySelectorAll('.task-item:not(.completed)').forEach(card => {
                 card.addEventListener('click', () => {
                     const tarea = tareasCache.find(t => t.id === card.dataset.id);
-                    if (tarea && confirm(`✅ ¿Marcar "${tarea.titulo}" como realizada?`)) completarTarea(tarea.id, tarea.titulo);
+                    if (tarea && confirm(`✅ ¿Marcar "${tarea.titulo}" como realizada?`)) {
+                        completarTarea(tarea.id, tarea.titulo);
+                    }
                 });
             });
         }
@@ -497,7 +521,14 @@
                 const tareaDoc = await db.collection('tareas').doc(tareaId).get();
                 if (!tareaDoc.exists) { alert('La tarea ya no existe'); return; }
                 const tarea = tareaDoc.data();
-                const ultima = await db.collection('historial').where('tareaId', '==', tareaId).orderBy('fecha', 'desc').limit(1).get();
+                
+                // Verificar última realización
+                const ultima = await db.collection('historial')
+                    .where('tareaId', '==', tareaId)
+                    .orderBy('fecha', 'desc')
+                    .limit(1)
+                    .get();
+                
                 const espaciado = getEspaciadoMinimo(tarea.recurrencia);
                 if (!ultima.empty && espaciado > 0) {
                     const ultimaFecha = ultima.docs[0].data().fecha.toDate();
@@ -507,10 +538,23 @@
                         return;
                     }
                 }
-                await db.collection('historial').add({ tareaId, titulo, completadaPor: currentUser.uid, fecha: firebase.firestore.FieldValue.serverTimestamp() });
+                
+                // Guardar en historial con el UID del usuario actual
+                await db.collection('historial').add({ 
+                    tareaId: tareaId, 
+                    titulo: titulo, 
+                    completadaPor: currentUser.uid,
+                    completadaPorEmail: currentUser.email,
+                    fecha: firebase.firestore.FieldValue.serverTimestamp() 
+                });
+                
                 alert(`✅ Tarea "${titulo}" registrada`);
-                actualizarDashboard(); actualizarVista();
-            } catch(e) { alert('Error al registrar'); }
+                actualizarDashboard(); 
+                actualizarVista();
+            } catch(e) { 
+                console.error(e);
+                alert('Error al registrar'); 
+            }
         }
 
         async function mostrarVistaSemana() {
@@ -529,7 +573,7 @@
                 let lista = porDia[f] || [];
                 let nombre = d.toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'short' });
                 html += `<div class="day-card"><h3>${nombre}</h3>`;
-                if (lista.length) lista.forEach(t => html += `<div class="day-task"><span>📋 ${escapeHtml(t.titulo)}</span><span class="day-task-user">👤 ${t.completadaPor}</span></div>`);
+                if (lista.length) lista.forEach(t => html += `<div class="day-task"><span>📋 ${escapeHtml(t.titulo)}</span><span class="day-task-user">👤 ${await obtenerNombreUsuario(t.completadaPor)}</span></div>`);
                 else html += '<p class="day-empty">✨ Sin tareas realizadas</p>';
                 html += `</div>`;
             }
@@ -539,14 +583,15 @@
 
         function mostrarHistorial() {
             let mis = historialCache.filter(h => h.completadaPor === currentUser?.uid);
-            let html = `<div class="history-container"><h2><span class="material-icons">history</span> Mi Historial <span class="count-badge">${mis.length}</span></h2><div style="overflow-x:auto;"><table class="history-table"><thead><tr><th>Fecha</th><th>Tarea</th><th>Realizada por</th></tr></thead><tbody>`;
-            if (!mis.length) html += '<tr><td colspan="3">📭 No tienes tareas realizadas aún</td></tr>';
-            else mis.slice(0,200).forEach(h => {
+            let html = `<div class="history-container"><h2><span class="material-icons">history</span> Mi Historial <span class="count-badge">${mis.length}</span></h2><div style="overflow-x:auto;"><table class="history-table"><thead> <th>Fecha</th><th>Tarea</th><th>Realizada por</th> </thead><tbody>`;
+            if (!mis.length) html += ' <td colspan="3">📭 No tienes tareas realizadas aún</td> ';
+            else mis.slice(0,200).forEach(async h => {
                 let f = '';
                 if (h.fecha) try { f = h.fecha.toDate().toLocaleString(); } catch(e) {}
-                html += `<tr><td>${f}</td><td>${escapeHtml(h.titulo)}</td><td>${h.completadaPor}</td></tr>`;
+                let nombre = await obtenerNombreUsuario(h.completadaPor);
+                html += `<tr><td class="fecha-col">${f}</td><td class="tarea-col">${escapeHtml(h.titulo)}</td><td class="usuario-col">${escapeHtml(nombre)}</td></tr>`;
             });
-            html += `</tbody></table></div></div>`;
+            html += `</tbody> </table></div></div>`;
             contentArea.innerHTML = html;
         }
 
