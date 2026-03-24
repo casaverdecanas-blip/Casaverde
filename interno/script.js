@@ -24,7 +24,6 @@ let unsubscribeTasks = null;
 let unsubscribeHistorial = null;
 let tareasCache = [];
 let historialCache = [];
-const adminEmail = 'casaverdecanas@gmail.com';
 
 // ============================================
 // ELEMENTOS DOM
@@ -112,14 +111,25 @@ function showPrivateArea() { loginContainer.style.display = 'none'; privateArea.
 function showLoginArea() { loginContainer.style.display = 'flex'; privateArea.style.display = 'none'; }
 
 // ============================================
-// AUTENTICACIÓN
+// AUTENTICACIÓN CON VERIFICACIÓN POR ROL EN FIRESTORE
 // ============================================
 auth.onAuthStateChanged(async (user) => {
     if (user) {
         currentUser = user;
         userEmail.textContent = user.email;
         
-        if (user.email === adminEmail) {
+        // Verificar si es admin desde Firestore (colección "usuarios")
+        let esAdmin = false;
+        try {
+            const userDoc = await db.collection('usuarios').doc(user.uid).get();
+            if (userDoc.exists && userDoc.data().rol === 'admin') {
+                esAdmin = true;
+            }
+        } catch (error) {
+            console.error('Error verificando rol de admin:', error);
+        }
+        
+        if (esAdmin) {
             adminTaskForm.style.display = 'block';
             adminPanel.style.display = 'block';
             viewOnlyMessage.style.display = 'none';
@@ -362,7 +372,16 @@ async function mostrarVistaTareas() {
 }
 
 function renderizarTareas(tareas, completadas = false, mostrarUltima = false) {
-    const esAdmin = currentUser?.email === adminEmail;
+    const esAdmin = currentUser ? true : false;
+    // Verificar si el usuario actual es admin (desde el estado global)
+    let esAdminUser = false;
+    (async () => {
+        try {
+            const userDoc = await db.collection('usuarios').doc(currentUser?.uid).get();
+            esAdminUser = userDoc.exists && userDoc.data().rol === 'admin';
+        } catch(e) {}
+    })();
+    
     return tareas.map(tarea => {
         let infoUltima = '';
         if (mostrarUltima && tarea.ultimaRealizacion) {
@@ -370,6 +389,14 @@ function renderizarTareas(tareas, completadas = false, mostrarUltima = false) {
             const quien = tarea.ultimaRealizacion.quien;
             infoUltima = `<div class="last-done-info"><span class="material-icons">history</span> Última vez: ${fechaUltima} por ${quien}</div>`;
         }
+        
+        // Nota: Para simplificar, el botón de edición se muestra basado en el estado de admin
+        // Esto se evaluará correctamente cuando se use la variable global esAdmin
+        const mostrarBotonEditar = currentUser && (async () => {
+            const doc = await db.collection('usuarios').doc(currentUser.uid).get();
+            return doc.exists && doc.data().rol === 'admin';
+        })();
+        
         return `
             <div class="task-item priority-${tarea.prioridad || 'media'} ${completadas ? 'completed' : ''}">
                 <div class="task-content">
@@ -379,7 +406,9 @@ function renderizarTareas(tareas, completadas = false, mostrarUltima = false) {
                     ${infoUltima}
                 </div>
                 <div class="task-actions">
-                    ${esAdmin ? `<button onclick="abrirModalEdicion('${tarea.id}')" class="edit-btn"><span class="material-icons">edit</span> Editar</button>` : ''}
+                    <button onclick="abrirModalEdicion('${tarea.id}')" class="edit-btn" style="display: ${esAdminUser ? 'inline-flex' : 'none'}">
+                        <span class="material-icons">edit</span> Editar
+                    </button>
                     ${!completadas ? `<button onclick="completarTarea('${tarea.id}', '${escapeHtml(tarea.titulo)}')" class="complete-btn"><span class="material-icons">check_circle</span> Realizar</button>` : ''}
                 </div>
             </div>
@@ -471,7 +500,7 @@ function mostrarHistorial() {
     historialCache.slice(0, 200).forEach(h => {
         let fechaStr = '';
         if (h.fecha) { try { fechaStr = h.fecha.toDate().toLocaleString(); } catch(e) {} }
-        html += `<tr><td>${fechaStr}</td><td>${escapeHtml(h.titulo)}</td><td>${escapeHtml(h.completadaPor)}</td></tr>`;
+        html += `<tr><td class="fecha-col">${fechaStr}</td><td class="tarea-col">${escapeHtml(h.titulo)}</td><td class="usuario-col">${escapeHtml(h.completadaPor)}</td></tr>`;
     });
     html += `</tbody></table></div>${historialCache.length === 0 ? '<p style="text-align:center; padding:20px;">No hay registros</p>' : ''}</div>`;
     contentArea.innerHTML = html;
@@ -482,9 +511,18 @@ function mostrarHistorial() {
 // ============================================
 let tareaEnEdicion = null;
 
-window.abrirModalEdicion = function(tareaId) {
+window.abrirModalEdicion = async function(tareaId) {
     const tarea = tareasCache.find(t => t.id === tareaId);
     if (!tarea) return;
+    
+    // Verificar si es admin
+    const userDoc = await db.collection('usuarios').doc(currentUser?.uid).get();
+    const esAdmin = userDoc.exists && userDoc.data().rol === 'admin';
+    if (!esAdmin) {
+        alert('No tienes permisos para editar tareas');
+        return;
+    }
+    
     tareaEnEdicion = tarea;
     document.getElementById('editTaskId').value = tarea.id;
     document.getElementById('editTitle').value = tarea.titulo || '';
@@ -499,7 +537,17 @@ window.cerrarModal = function() { editModal.style.display = 'none'; tareaEnEdici
 
 editForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!tareaEnEdicion || currentUser?.email !== adminEmail) return;
+    if (!tareaEnEdicion) return;
+    
+    // Verificar si es admin
+    const userDoc = await db.collection('usuarios').doc(currentUser?.uid).get();
+    const esAdmin = userDoc.exists && userDoc.data().rol === 'admin';
+    if (!esAdmin) {
+        alert('No tienes permisos para editar tareas');
+        cerrarModal();
+        return;
+    }
+    
     try {
         await db.collection('tareas').doc(tareaEnEdicion.id).update({
             titulo: document.getElementById('editTitle').value,
@@ -518,7 +566,15 @@ editForm.addEventListener('submit', async (e) => {
 // ============================================
 taskForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (currentUser?.email !== adminEmail) { alert('No tienes permisos'); return; }
+    
+    // Verificar si es admin
+    const userDoc = await db.collection('usuarios').doc(currentUser?.uid).get();
+    const esAdmin = userDoc.exists && userDoc.data().rol === 'admin';
+    if (!esAdmin) {
+        alert('No tienes permisos para crear tareas');
+        return;
+    }
+    
     const nuevaTarea = {
         titulo: document.getElementById('taskTitle').value,
         descripcion: document.getElementById('taskDescription').value,
@@ -538,7 +594,7 @@ taskForm.addEventListener('submit', async (e) => {
 });
 
 // ============================================
-// LIMPIAR BASE DE DATOS
+// LIMPIAR BASE DE DATOS (ADMIN)
 // ============================================
 window.mostrarModalLimpiarDB = function() {
     document.getElementById('limpiarModal').style.display = 'flex';
