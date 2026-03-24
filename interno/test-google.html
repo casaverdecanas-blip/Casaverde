@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login con Google - Prueba</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+        h2 { color: #333; margin-bottom: 20px; }
+        .google-btn {
+            background: #4285F4;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+            width: 100%;
+            justify-content: center;
+        }
+        .google-btn:hover { background: #3367D6; }
+        .status { margin-top: 20px; padding: 12px; border-radius: 8px; display: none; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>🔐 Acceso Admin</h2>
+        <button id="googleLoginBtn" class="google-btn">
+            <span style="font-size: 18px;">G</span> Iniciar sesión con Google
+        </button>
+        <div id="status" class="status"></div>
+        <div id="userInfo" style="margin-top: 20px; text-align: left; display: none;">
+            <strong>✅ Sesión activa:</strong><br>
+            <span id="userEmail"></span><br>
+            <span id="userUid" style="font-size: 12px; color: #666;"></span><br>
+            <button id="logoutBtn" style="margin-top: 10px; padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 6px; cursor: pointer;">Cerrar sesión</button>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+            authDomain: "tatareas-d8a80.firebaseapp.com",
+            projectId: "tatareas-d8a80",
+            storageBucket: "tatareas-d8a80.firebasestorage.app",
+            messagingSenderId: "709332495480",
+            appId: "1:709332495480:web:7060b2c75984352354918d"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        
+        // Configurar Google Auth Provider
+        const googleProvider = new firebase.auth.GoogleAuthProvider();
+        googleProvider.addScope('email');
+        googleProvider.addScope('profile');
+
+        const googleBtn = document.getElementById('googleLoginBtn');
+        const statusDiv = document.getElementById('status');
+        const userInfoDiv = document.getElementById('userInfo');
+        const userEmailSpan = document.getElementById('userEmail');
+        const userUidSpan = document.getElementById('userUid');
+        const logoutBtn = document.getElementById('logoutBtn');
+
+        function mostrarStatus(mensaje, tipo) {
+            statusDiv.textContent = mensaje;
+            statusDiv.className = `status ${tipo}`;
+            statusDiv.style.display = 'block';
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        async function verificarYAsignarAdmin(user) {
+            try {
+                const userDoc = await db.collection('usuarios').doc(user.uid).get();
+                
+                if (!userDoc.exists) {
+                    // Si no existe, crear documento de usuario
+                    await db.collection('usuarios').doc(user.uid).set({
+                        email: user.email,
+                        nombre: user.displayName || '',
+                        rol: 'admin',  // Le damos rol admin automáticamente
+                        telefono: user.phoneNumber || '',
+                        creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    mostrarStatus(`✅ Usuario ${user.email} creado con rol ADMIN`, 'success');
+                } else if (userDoc.data().rol !== 'admin') {
+                    // Si existe pero no es admin, actualizar a admin
+                    await db.collection('usuarios').doc(user.uid).update({
+                        rol: 'admin'
+                    });
+                    mostrarStatus(`✅ Usuario ${user.email} actualizado a ADMIN`, 'success');
+                } else {
+                    mostrarStatus(`✅ Bienvenido ADMIN: ${user.email}`, 'success');
+                }
+                
+                userEmailSpan.textContent = user.email;
+                userUidSpan.textContent = `UID: ${user.uid}`;
+                userInfoDiv.style.display = 'block';
+                googleBtn.style.display = 'none';
+                
+            } catch (error) {
+                console.error('Error:', error);
+                mostrarStatus(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        googleBtn.addEventListener('click', async () => {
+            try {
+                const result = await auth.signInWithPopup(googleProvider);
+                const user = result.user;
+                await verificarYAsignarAdmin(user);
+            } catch (error) {
+                console.error('Error login:', error);
+                mostrarStatus(`❌ Error: ${error.message}`, 'error');
+            }
+        });
+
+        logoutBtn.addEventListener('click', async () => {
+            await auth.signOut();
+            userInfoDiv.style.display = 'none';
+            googleBtn.style.display = 'flex';
+            mostrarStatus('Sesión cerrada', 'info');
+        });
+
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                await verificarYAsignarAdmin(user);
+            } else {
+                userInfoDiv.style.display = 'none';
+                googleBtn.style.display = 'flex';
+            }
+        });
+    </script>
+</body>
+</html>
