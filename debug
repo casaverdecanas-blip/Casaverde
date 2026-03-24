@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Depuración Firebase - CasaVerdeCanas</title>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <style>
+        body { font-family: monospace; max-width: 900px; margin: 30px auto; padding: 20px; background: #f5f5f5; }
+        .card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        h2 { color: #2d5a27; margin-top: 0; }
+        .success { color: #27ae60; }
+        .warning { color: #e67e22; }
+        .error { color: #e74c3c; }
+        .info { color: #3498db; }
+        pre { background: #f0f0f0; padding: 10px; border-radius: 6px; overflow-x: auto; font-size: 12px; }
+        button { background: #2d5a27; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; margin-top: 10px; }
+        button:hover { background: #1e3f1a; }
+        .danger-btn { background: #e74c3c; }
+        .danger-btn:hover { background: #c0392b; }
+        .log { background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>🧹 Depurador de Base de Datos - CasaVerdeCanas</h1>
+    <p><strong>⚠️ ADVERTENCIA:</strong> Este script modificará tu base de datos. Ejecútalo solo una vez y luego elimínalo.</p>
+
+    <div class="card">
+        <h2>📋 Diagnóstico</h2>
+        <div id="diagnostico"></div>
+        <button id="runCleanupBtn" class="danger-btn">🧹 EJECUTAR LIMPIEZA</button>
+    </div>
+
+    <div class="card">
+        <h2>📝 Log de acciones</h2>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
+            authDomain: "casaverdecanas-199.firebaseapp.com",
+            databaseURL: "https://casaverdecanas-199-default-rtdb.firebaseio.com",
+            projectId: "casaverdecanas-199",
+            storageBucket: "casaverdecanas-199.firebasestorage.app",
+            messagingSenderId: "417825635316",
+            appId: "1:417825635316:web:ff7f4fe52edcab43d8d7a1"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        
+        let logs = [];
+        
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            logs.push(`[${timestamp}] ${message}`);
+            const logDiv = document.getElementById('log');
+            if (logDiv) {
+                logDiv.innerHTML = logs.map(l => `<div>${l}</div>`).join('');
+                logDiv.scrollTop = logDiv.scrollHeight;
+            }
+            console.log(message);
+        }
+        
+        async function diagnosticar() {
+            const div = document.getElementById('diagnostico');
+            div.innerHTML = '<p>🔍 Analizando estructura...</p>';
+            
+            try {
+                // 1. Verificar config
+                const configSnap = await db.ref('config').once('value');
+                const config = configSnap.val() || {};
+                
+                let configHtml = '<h3>📁 Configuración</h3>';
+                if (config.adminPassword) {
+                    configHtml += `<p class="success">✅ adminPassword: ${config.adminPassword}</p>`;
+                } else {
+                    configHtml += `<p class="error">❌ adminPassword NO EXISTE</p>`;
+                }
+                if (config.apiToken) {
+                    configHtml += `<p class="success">✅ apiToken: ${config.apiToken.substring(0, 10)}...</p>`;
+                } else {
+                    configHtml += `<p class="error">❌ apiToken NO EXISTE</p>`;
+                }
+                
+                // 2. Verificar reservasExtra
+                const reservasSnap = await db.ref('reservasExtra').once('value');
+                const reservas = reservasSnap.val() || {};
+                const ids = Object.keys(reservas);
+                
+                const malFormados = ids.filter(id => id.includes('|') && id.split('|').length > 3);
+                const correctos = ids.filter(id => id.includes('|') && id.split('|').length === 3);
+                const otros = ids.filter(id => !id.includes('|'));
+                
+                configHtml += `<h3>📁 reservasExtra</h3>`;
+                configHtml += `<p>📊 Total de nodos: ${ids.length}</p>`;
+                configHtml += `<p class="success">✅ IDs correctos (cabaña|inicio|fin): ${correctos.length}</p>`;
+                if (malFormados.length > 0) {
+                    configHtml += `<p class="warning">⚠️ IDs mal formados (texto extra): ${malFormados.length}</p>`;
+                    configHtml += `<pre>${malFormados.join('\n')}</pre>`;
+                }
+                if (otros.length > 0) {
+                    configHtml += `<p class="info">📌 Otros nodos: ${otros.length}</p>`;
+                }
+                
+                // 3. Verificar nodos de prueba
+                const testSnap = await db.ref('test').once('value');
+                const testConexionSnap = await db.ref('test_conexion').once('value');
+                
+                configHtml += `<h3>📁 Nodos de prueba</h3>`;
+                if (testSnap.exists()) {
+                    configHtml += `<p class="warning">⚠️ Nodo "test" existe (puede eliminarse)</p>`;
+                } else {
+                    configHtml += `<p class="success">✅ Nodo "test" no existe</p>`;
+                }
+                if (testConexionSnap.exists()) {
+                    configHtml += `<p class="warning">⚠️ Nodo "test_conexion" existe (puede eliminarse)</p>`;
+                } else {
+                    configHtml += `<p class="success">✅ Nodo "test_conexion" no existe</p>`;
+                }
+                
+                // 4. Verificar activeSessions (debería estar vacío o no existir)
+                const sessionsSnap = await db.ref('activeSessions').once('value');
+                if (sessionsSnap.exists()) {
+                    const sessionsCount = Object.keys(sessionsSnap.val() || {}).length;
+                    configHtml += `<p class="info">📌 activeSessions tiene ${sessionsCount} sesiones activas</p>`;
+                }
+                
+                // 5. Verificar failedLogins
+                const failedSnap = await db.ref('failedLogins').once('value');
+                if (failedSnap.exists()) {
+                    const failedCount = Object.keys(failedSnap.val() || {}).length;
+                    configHtml += `<p class="info">📌 failedLogins tiene ${failedCount} registros de intentos fallidos</p>`;
+                }
+                
+                div.innerHTML = configHtml;
+                return { malFormados, otros, tieneTest: testSnap.exists(), tieneTestConexion: testConexionSnap.exists() };
+                
+            } catch (error) {
+                div.innerHTML = `<p class="error">❌ Error en diagnóstico: ${error.message}</p>`;
+                throw error;
+            }
+        }
+        
+        async function limpiar() {
+            if (!confirm('⚠️ ESTA ACCIÓN ES IRREVERSIBLE. ¿Seguro que quieres limpiar la base de datos?\n\nSe eliminarán:\n- IDs mal formados en reservasExtra\n- Nodos de prueba (test, test_conexion)\n\nLos datos correctos NO se eliminarán.')) {
+                addLog('❌ Limpieza cancelada por el usuario', 'error');
+                return;
+            }
+            
+            addLog('🧹 Iniciando limpieza...', 'warning');
+            
+            try {
+                // 1. Limpiar IDs mal formados en reservasExtra
+                const reservasSnap = await db.ref('reservasExtra').once('value');
+                const reservas = reservasSnap.val() || {};
+                const ids = Object.keys(reservas);
+                
+                const malFormados = ids.filter(id => id.includes('|') && id.split('|').length > 3);
+                
+                for (const id of malFormados) {
+                    const datos = reservas[id];
+                    addLog(`🗑️ Eliminando ID mal formado: ${id}`, 'warning');
+                    await db.ref(`reservasExtra/${id}`).remove();
+                    
+                    // Buscar si existe el ID correcto para estos datos
+                    const partes = id.split('|');
+                    const idCorrecto = `${partes[0]}|${partes[1]}|${partes[2]}`;
+                    const existeCorrecto = await db.ref(`reservasExtra/${idCorrecto}`).once('value');
+                    
+                    if (!existeCorrecto.exists() && datos && Object.keys(datos).length > 0) {
+                        addLog(`📦 Moviendo datos a ID correcto: ${idCorrecto}`, 'info');
+                        await db.ref(`reservasExtra/${idCorrecto}`).set(datos);
+                    } else if (existeCorrecto.exists()) {
+                        addLog(`⚠️ ID correcto ya existe, datos no movidos: ${idCorrecto}`, 'warning');
+                    }
+                }
+                
+                // 2. Eliminar nodos de prueba
+                const testSnap = await db.ref('test').once('value');
+                if (testSnap.exists()) {
+                    addLog(`🗑️ Eliminando nodo "test"`, 'warning');
+                    await db.ref('test').remove();
+                }
+                
+                const testConexionSnap = await db.ref('test_conexion').once('value');
+                if (testConexionSnap.exists()) {
+                    addLog(`🗑️ Eliminando nodo "test_conexion"`, 'warning');
+                    await db.ref('test_conexion').remove();
+                }
+                
+                // 3. Verificar si hay nodos sueltos en reservas que no deberían existir
+                const reservasRootSnap = await db.ref('reservas').once('value');
+                if (reservasRootSnap.exists()) {
+                    addLog(`🗑️ Eliminando nodo "reservas" (raíz) - no debería existir`, 'warning');
+                    await db.ref('reservas').remove();
+                }
+                
+                addLog('✅ Limpieza completada', 'success');
+                
+                // 4. Mostrar diagnóstico final
+                addLog('📊 Re-ejecutando diagnóstico...', 'info');
+                await diagnosticar();
+                
+            } catch (error) {
+                addLog(`❌ Error durante limpieza: ${error.message}`, 'error');
+            }
+        }
+        
+        // Ejecutar diagnóstico al cargar
+        window.onload = async () => {
+            addLog('🚀 Iniciando depurador...', 'info');
+            await diagnosticar();
+            document.getElementById('runCleanupBtn').onclick = limpiar;
+        };
+    </script>
+</body>
+</html>
