@@ -22,13 +22,16 @@
         .login-box h2 { color:#1f4f1a; margin-bottom:20px; }
         .login-box input { width:100%; padding:12px; margin:15px 0; border:1px solid #cbd5c0; border-radius:40px; font-size:1rem; text-align:center; }
         .login-box button { background:#2d6a27; color:white; border:none; padding:12px; border-radius:40px; font-size:1rem; cursor:pointer; width:100%; }
-        .error-msg { color:#c0392b; margin-top:12px; }
+        .login-box button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .error-msg { color:#c0392b; margin-top:12px; font-size:0.9rem; }
+        .warning-msg { color:#e67e22; margin-top:8px; font-size:0.8rem; }
         .calendar-container, .management-container { background:white; padding:20px; border-radius:24px; box-shadow:0 8px 20px rgba(0,0,0,0.05); margin-bottom:30px; }
         #calendar { min-height: 550px; }
         .status { padding:12px; border-radius:16px; margin-bottom:20px; text-align:center; font-weight:500; transition: all 0.3s; }
         .status.success { background:#d4edda; color:#155724; border-left:4px solid #28a745; }
         .status.error { background:#f8d7da; color:#721c24; border-left:4px solid #dc3545; }
         .status.info { background:#d1ecf1; color:#0c5460; border-left:4px solid #17a2b8; }
+        .status.warning { background:#fff3cd; color:#856404; border-left:4px solid #ffc107; }
         .legend { display:flex; justify-content:center; gap:24px; margin-top:20px; padding:12px; background:#f5f5f5; border-radius:40px; flex-wrap:wrap; }
         .legend-item { display:flex; align-items:center; gap:8px; }
         .legend-color { width:20px; height:20px; border-radius:4px; }
@@ -39,6 +42,8 @@
         .btn { background:#2d6a27; color:white; border:none; padding:8px 18px; border-radius:40px; cursor:pointer; font-weight:500; transition: background 0.2s; }
         .btn:hover { background:#1f4f1a; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .logout-btn { position: fixed; bottom: 20px; left: 20px; background: #e74c3c; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; z-index: 100; }
+        .logout-btn:hover { background: #c0392b; }
         .table-wrapper { overflow-x:auto; border-radius:16px; border:1px solid #e0e7e0; }
         #managementTable { width:100%; border-collapse:collapse; font-size:0.85rem; }
         #managementTable th, #managementTable td { padding:12px 10px; text-align:left; border-bottom:1px solid #e9ece9; }
@@ -50,7 +55,6 @@
         .whatsapp-link { display:inline-block; background:#25d366; color:white; padding:5px 12px; border-radius:30px; text-decoration:none; font-size:0.75rem; font-weight:bold; text-align:center; white-space:nowrap; }
         .whatsapp-link:hover { background:#1ebe5d; }
         
-        /* Barras delgadas y apilamiento */
         .fc-daygrid-event {
             height: 18px !important;
             line-height: 16px !important;
@@ -69,26 +73,14 @@
             max-height: none !important;
             overflow-y: visible !important;
         }
-        .fc-daygrid-event-harness {
-            margin-top: 0 !important;
-            margin-bottom: 0 !important;
-        }
-        .fc-daygrid-day-frame {
-            min-height: 45px !important;
-            height: auto !important;
-        }
-        .fc-daygrid-more-link {
-            display: none !important;
-        }
+        .fc-daygrid-event-harness { margin-top: 0 !important; margin-bottom: 0 !important; }
+        .fc-daygrid-day-frame { min-height: 45px !important; height: auto !important; }
+        .fc-daygrid-more-link { display: none !important; }
         @media (max-width:768px) { 
             body { padding:12px; } 
             #managementTable th, #managementTable td { padding:8px 6px; font-size:0.75rem; } 
             .whatsapp-link { font-size:0.7rem; padding:3px 8px; }
-            .fc-daygrid-event {
-                height: 20px !important;
-                line-height: 18px !important;
-                font-size: 0.7rem !important;
-            }
+            .fc-daygrid-event { height: 20px !important; line-height: 18px !important; font-size: 0.7rem !important; }
         }
     </style>
 </head>
@@ -114,58 +106,30 @@
             </div>
             <div class="table-wrapper">
                 <table id="managementTable">
-                    <thead>
-                        <tr><th>Cabaña</th><th>Fecha entrada</th><th>Fecha salida</th><th>Hora check‑in</th><th>Personas</th><th>Observaciones</th><th>Nombre</th><th>Teléfono</th><th>WhatsApp</th>   </thead>
-                    <tbody id="managementTableBody">   <td colspan="9">Cargando reservas...   </tbody>
-                </table>
+                    <thead><tr><th>Cabaña</th><th>Fecha entrada</th><th>Fecha salida</th><th>Hora check‑in</th><th>Personas</th><th>Observaciones</th><th>Nombre</th><th>Teléfono</th><th>WhatsApp</th> </thead>
+                    <tbody id="managementTableBody"> <td colspan="9">Cargando reservas...</td> </tbody>
+                 </table>
             </div>
         </div>
     </div>
 
     <div id="loginOverlay" class="login-overlay">
         <div class="login-box">
-            <h2>Acceso restringido</h2>
+            <h2>🔐 Acceso restringido</h2>
             <input type="password" id="passwordInput" placeholder="Contraseña" autocomplete="off">
-            <button onclick="checkPassword()">Ingresar</button>
+            <button id="loginBtn">Ingresar</button>
             <div id="loginError" class="error-msg"></div>
+            <div id="loginWarning" class="warning-msg"></div>
         </div>
     </div>
 
     <script>
-        const CORRECT_PASSWORD = "CasaVerde2026";
-        
         // ============================================
-        // AUTENTICACIÓN POR SESIÓN
+        // CONFIGURACIÓN
         // ============================================
-        let sessionToken = null;
-        
-        // Generar un token de sesión aleatorio
-        function generateSessionToken() {
-            return 'sess_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        }
-        
-        function checkPassword() {
-            const input = document.getElementById('passwordInput').value;
-            if (input === CORRECT_PASSWORD) {
-                // Generar token de sesión único para esta sesión
-                sessionToken = generateSessionToken();
-                sessionStorage.setItem('auth', 'true');
-                sessionStorage.setItem('sessionToken', sessionToken);
-                document.getElementById('loginOverlay').style.display = 'none';
-                document.getElementById('app').style.display = 'block';
-                init();
-            } else {
-                document.getElementById('loginError').innerText = 'Contraseña incorrecta';
-            }
-        }
-        
-        // Verificar sesión al cargar
-        if (sessionStorage.getItem('auth') === 'true') {
-            sessionToken = sessionStorage.getItem('sessionToken');
-            document.getElementById('loginOverlay').style.display = 'none';
-            document.getElementById('app').style.display = 'block';
-            init();
-        }
+        const SESSION_DURATION_HOURS = 1;           // Duración de sesión: 1 hora
+        const MAX_LOGIN_ATTEMPTS = 3;               // Intentos máximos antes de bloqueo
+        const BLOCK_DURATION_HOURS = 3;             // Duración de bloqueo: 3 horas
         
         // Configuración Firebase
         const firebaseConfig = {
@@ -177,9 +141,262 @@
             messagingSenderId: "417825635316",
             appId: "1:417825635316:web:ff7f4fe52edcab43d8d7a1"
         };
+        
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
-
+        
+        // Variables globales
+        let sessionToken = null;
+        let userIP = null;
+        let failedAttempts = 0;
+        let loginLockedUntil = null;
+        
+        // ============================================
+        // FUNCIONES DE UTILIDAD
+        // ============================================
+        async function getUserIP() {
+            try {
+                const res = await fetch('https://api.ipify.org?format=json');
+                const data = await res.json();
+                return data.ip;
+            } catch(e) {
+                return 'unknown';
+            }
+        }
+        
+        function generateSessionToken() {
+            return 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        }
+        
+        function addLog(message) {
+            console.log(`[${new Date().toLocaleTimeString()}] ${message}`);
+        }
+        
+        // ============================================
+        // VERIFICACIÓN DE BLOQUEO POR IP
+        // ============================================
+        async function checkIPBlocked() {
+            if (!userIP) return false;
+            
+            try {
+                const snapshot = await db.ref(`failedLogins/${userIP.replace(/\./g, '_')}`).once('value');
+                const data = snapshot.val();
+                
+                if (data && data.blockedUntil && data.blockedUntil > Date.now()) {
+                    const remainingMinutes = Math.ceil((data.blockedUntil - Date.now()) / 60000);
+                    document.getElementById('loginWarning').innerHTML = `🔒 Demasiados intentos fallidos. Intenta nuevamente en ${remainingMinutes} minutos.`;
+                    return true;
+                }
+                return false;
+            } catch(e) {
+                addLog('Error verificando bloqueo: ' + e.message);
+                return false;
+            }
+        }
+        
+        // ============================================
+        // REGISTRAR INTENTO FALLIDO
+        // ============================================
+        async function registerFailedAttempt() {
+            if (!userIP) return;
+            
+            const ipKey = userIP.replace(/\./g, '_');
+            const snapshot = await db.ref(`failedLogins/${ipKey}`).once('value');
+            const data = snapshot.val() || { attempts: 0 };
+            
+            let newAttempts = (data.attempts || 0) + 1;
+            let blockedUntil = null;
+            
+            if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
+                blockedUntil = Date.now() + (BLOCK_DURATION_HOURS * 60 * 60 * 1000);
+                newAttempts = MAX_LOGIN_ATTEMPTS;
+            }
+            
+            await db.ref(`failedLogins/${ipKey}`).set({
+                attempts: newAttempts,
+                lastAttempt: Date.now(),
+                blockedUntil: blockedUntil
+            });
+            
+            addLog(`Intento fallido #${newAttempts} desde IP ${userIP}`);
+        }
+        
+        // ============================================
+        // LIMPIAR INTENTOS FALLIDOS (después de login exitoso)
+        // ============================================
+        async function clearFailedAttempts() {
+            if (!userIP) return;
+            const ipKey = userIP.replace(/\./g, '_');
+            await db.ref(`failedLogins/${ipKey}`).remove();
+        }
+        
+        // ============================================
+        // VERIFICAR CONTRASEÑA CONTRA FIREBASE
+        // ============================================
+        async function verifyPassword(password) {
+            try {
+                const snapshot = await db.ref('config/adminPassword').once('value');
+                const correctPassword = snapshot.val();
+                return password === correctPassword;
+            } catch(e) {
+                addLog('Error verificando contraseña: ' + e.message);
+                return false;
+            }
+        }
+        
+        // ============================================
+        // CREAR SESIÓN EN FIREBASE
+        // ============================================
+        async function createSession(token) {
+            const expiresAt = Date.now() + (SESSION_DURATION_HOURS * 60 * 60 * 1000);
+            const sessionData = {
+                createdAt: Date.now(),
+                expiresAt: expiresAt,
+                ip: userIP,
+                userAgent: navigator.userAgent,
+                isValid: true
+            };
+            
+            await db.ref(`activeSessions/${token}`).set(sessionData);
+            addLog(`Sesión creada: ${token.substring(0, 20)}... expira en ${SESSION_DURATION_HOURS}h`);
+            return true;
+        }
+        
+        // ============================================
+        // VALIDAR SESIÓN EXISTENTE
+        // ============================================
+        async function validateSession(token) {
+            if (!token) return false;
+            
+            try {
+                const snapshot = await db.ref(`activeSessions/${token}`).once('value');
+                const session = snapshot.val();
+                
+                if (!session || !session.isValid) return false;
+                if (Date.now() > session.expiresAt) {
+                    await db.ref(`activeSessions/${token}`).remove();
+                    return false;
+                }
+                
+                // Opcional: verificar IP (descomentar para validar IP)
+                // if (session.ip !== userIP) return false;
+                
+                return true;
+            } catch(e) {
+                addLog('Error validando sesión: ' + e.message);
+                return false;
+            }
+        }
+        
+        // ============================================
+        // CERRAR SESIÓN
+        // ============================================
+        async function logout() {
+            if (sessionToken) {
+                try {
+                    await db.ref(`activeSessions/${sessionToken}`).remove();
+                    addLog('Sesión cerrada correctamente');
+                } catch(e) { addLog('Error cerrando sesión: ' + e.message); }
+            }
+            sessionToken = null;
+            sessionStorage.removeItem('sessionToken');
+            location.reload();
+        }
+        
+        // ============================================
+        // INTENTO DE LOGIN
+        // ============================================
+        async function attemptLogin() {
+            const passwordInput = document.getElementById('passwordInput');
+            const loginBtn = document.getElementById('loginBtn');
+            const errorDiv = document.getElementById('loginError');
+            const warningDiv = document.getElementById('loginWarning');
+            
+            // Limpiar mensajes anteriores
+            errorDiv.innerHTML = '';
+            warningDiv.innerHTML = '';
+            
+            // Verificar bloqueo por IP
+            const isBlocked = await checkIPBlocked();
+            if (isBlocked) {
+                errorDiv.innerHTML = 'Demasiados intentos fallidos. Espera antes de intentar nuevamente.';
+                return;
+            }
+            
+            const password = passwordInput.value.trim();
+            if (!password) {
+                errorDiv.innerHTML = 'Ingresa la contraseña';
+                return;
+            }
+            
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'Verificando...';
+            
+            try {
+                const isValid = await verifyPassword(password);
+                
+                if (isValid) {
+                    // Login exitoso
+                    await clearFailedAttempts();
+                    sessionToken = generateSessionToken();
+                    await createSession(sessionToken);
+                    sessionStorage.setItem('sessionToken', sessionToken);
+                    
+                    // Mostrar panel y ocultar login
+                    document.getElementById('loginOverlay').style.display = 'none';
+                    document.getElementById('app').style.display = 'block';
+                    
+                    // Inicializar aplicación
+                    init();
+                } else {
+                    // Login fallido
+                    await registerFailedAttempt();
+                    errorDiv.innerHTML = 'Contraseña incorrecta';
+                    
+                    // Verificar si ahora está bloqueado
+                    const nowBlocked = await checkIPBlocked();
+                    if (nowBlocked) {
+                        errorDiv.innerHTML = 'Demasiados intentos fallidos. Cuenta bloqueada por 3 horas.';
+                    }
+                    
+                    passwordInput.value = '';
+                    passwordInput.focus();
+                }
+            } catch(e) {
+                errorDiv.innerHTML = 'Error de conexión. Intenta nuevamente.';
+                addLog('Error en login: ' + e.message);
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Ingresar';
+            }
+        }
+        
+        // ============================================
+        // VERIFICAR SESIÓN EXISTENTE AL CARGAR
+        // ============================================
+        async function checkExistingSession() {
+            userIP = await getUserIP();
+            addLog(`IP detectada: ${userIP}`);
+            
+            const storedToken = sessionStorage.getItem('sessionToken');
+            if (storedToken) {
+                const isValid = await validateSession(storedToken);
+                if (isValid) {
+                    sessionToken = storedToken;
+                    document.getElementById('loginOverlay').style.display = 'none';
+                    document.getElementById('app').style.display = 'block';
+                    init();
+                    return true;
+                } else {
+                    sessionStorage.removeItem('sessionToken');
+                }
+            }
+            return false;
+        }
+        
+        // ============================================
+        // FUNCIONES DEL CALENDARIO
+        // ============================================
         const AIRBNB_URLS = {
             1: 'https://www.airbnb.com/calendar/ical/1337276103911358917.ics?t=dae43f43820441b886a5167ef71c8533&locale=es-419',
             2: 'https://www.airbnb.com/calendar/ical/1110346888721141996.ics?t=a51528fdc71c427ba5a3ca4b75c368a1&locale=es-419',
@@ -194,28 +411,13 @@
         let cabinNames = {1: 'Cabaña 1', 2: 'Cabaña 2', 3: 'Cabaña 3'};
         let isRefreshing = false;
         let refreshTimeout = null;
-
-        async function loadCabinNames() {
-            try {
-                const snap = await db.ref('siteData/apartments').once('value');
-                const apts = snap.val() || {};
-                for (let i=1; i<=3; i++) {
-                    const c = apts[`cabin-${i}`];
-                    if (c && c.name && c.name.es) cabinNames[i] = c.name.es;
-                    else cabinNames[i] = `Cabaña ${i}`;
-                }
-                document.getElementById('cabin1Name').textContent = cabinNames[1];
-                document.getElementById('cabin2Name').textContent = cabinNames[2];
-                document.getElementById('cabin3Name').textContent = cabinNames[3];
-            } catch(e) { console.warn(e); }
-        }
-
+        
         // ============================================
-        // FETCH CON TOKEN DE SESIÓN EN CABECERA
+        // FETCH CON TOKEN DE SESIÓN
         // ============================================
         async function fetchICalWithProxy(url) {
             if (!sessionToken) {
-                console.error('No hay sesión activa');
+                addLog('No hay sesión activa');
                 return null;
             }
             
@@ -229,30 +431,39 @@
                 });
                 
                 if (res.status === 401) {
-                    console.error('Sesión expirada o inválida');
-                    sessionStorage.removeItem('auth');
+                    addLog('Sesión inválida o expirada');
                     sessionStorage.removeItem('sessionToken');
                     alert('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.');
                     location.reload();
                     return null;
                 }
                 
-                if (!res.ok) {
-                    throw new Error(`HTTP ${res.status}`);
-                }
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 
                 const text = await res.text();
-                if (!text.includes('BEGIN:VCALENDAR')) {
-                    throw new Error('No es iCal válido');
-                }
+                if (!text.includes('BEGIN:VCALENDAR')) throw new Error('No es iCal válido');
                 return text;
                 
             } catch(e) { 
-                console.error('Error en fetchICalWithProxy:', e.message); 
+                addLog('Error en fetchICalWithProxy: ' + e.message); 
                 return null; 
             }
         }
-
+        
+        async function loadCabinNames() {
+            try {
+                const snap = await db.ref('siteData/apartments').once('value');
+                const apts = snap.val() || {};
+                for (let i=1; i<=3; i++) {
+                    const c = apts[`cabin-${i}`];
+                    cabinNames[i] = (c && c.name && c.name.es) ? c.name.es : `Cabaña ${i}`;
+                }
+                document.getElementById('cabin1Name').textContent = cabinNames[1];
+                document.getElementById('cabin2Name').textContent = cabinNames[2];
+                document.getElementById('cabin3Name').textContent = cabinNames[3];
+            } catch(e) { console.warn(e); }
+        }
+        
         async function loadCabinEvents(cabinNumber, cabinUrl) {
             try {
                 const ical = await fetchICalWithProxy(cabinUrl);
@@ -288,24 +499,17 @@
                 return cabinEvents;
             } catch(e) { return []; }
         }
-
+        
         function updateCalendarTitles() {
             if (!calendar) return;
             const allEvents = calendar.getEvents();
             for (const ev of allEvents) {
-                const cabin = ev.extendedProps.cabin;
-                const start = ev.startStr;
-                const end = ev.endStr;
-                const key = `${cabin}|${start}|${end}`;
+                const key = ev.id;
                 const extra = guestData[key] || {};
-                if (extra.nombre && extra.nombre.trim() !== '') {
-                    ev.setProp('title', extra.nombre.trim());
-                } else {
-                    ev.setProp('title', 'Reserva pendiente');
-                }
+                ev.setProp('title', (extra.nombre && extra.nombre.trim()) ? extra.nombre.trim() : 'Reserva pendiente');
             }
         }
-
+        
         function loadGuestData() {
             db.ref('reservasExtra').on('value', (snap) => {
                 guestData = snap.val() || {};
@@ -313,7 +517,7 @@
                 buildTable();
             });
         }
-
+        
         function buildTable() {
             const tbody = document.getElementById('managementTableBody');
             if (!tbody) return;
@@ -322,9 +526,8 @@
             for (let c=1; c<=3; c++) {
                 for (const ev of eventsByCabin[c]) {
                     if (ev.start < today) continue;
-                    const key = ev.id;
-                    const extra = guestData[key] || {};
-                    reservas.push({ cabin:c, start:ev.start, end:ev.end, key, ...extra });
+                    const extra = guestData[ev.id] || {};
+                    reservas.push({ cabin:c, start:ev.start, end:ev.end, id:ev.id, ...extra });
                 }
             }
             reservas.sort((a,b)=>new Date(a.start)-new Date(b.start));
@@ -336,33 +539,32 @@
                 row.insertCell(0).innerText = cabinNames[r.cabin];
                 row.insertCell(1).innerText = r.start;
                 row.insertCell(2).innerText = r.end;
+                
                 const horaCell = row.insertCell(3);
-                const horaInp = document.createElement('input');
-                horaInp.type = 'time';
-                horaInp.value = r.horaLlegada || '';
-                horaInp.onchange = (function(k){ return function(e){ saveField(k,'horaLlegada',e.target.value); }; })(r.key);
+                const horaInp = document.createElement('input'); horaInp.type = 'time'; horaInp.value = r.horaLlegada || '';
+                horaInp.onchange = (function(id){ return function(e){ db.ref(`reservasExtra/${id}/horaLlegada`).set(e.target.value); }; })(r.id);
                 horaCell.appendChild(horaInp);
+                
                 const persCell = row.insertCell(4);
-                const persInp = document.createElement('input');
-                persInp.type = 'number';
-                persInp.value = r.personas || '';
-                persInp.onchange = (function(k){ return function(e){ saveField(k,'personas',e.target.value); }; })(r.key);
+                const persInp = document.createElement('input'); persInp.type = 'number'; persInp.value = r.personas || '';
+                persInp.onchange = (function(id){ return function(e){ db.ref(`reservasExtra/${id}/personas`).set(e.target.value); }; })(r.id);
                 persCell.appendChild(persInp);
+                
                 const obsCell = row.insertCell(5);
-                const obsInp = document.createElement('input');
-                obsInp.value = r.observaciones || '';
-                obsInp.onchange = (function(k){ return function(e){ saveField(k,'observaciones',e.target.value); }; })(r.key);
+                const obsInp = document.createElement('input'); obsInp.value = r.observaciones || '';
+                obsInp.onchange = (function(id){ return function(e){ db.ref(`reservasExtra/${id}/observaciones`).set(e.target.value); }; })(r.id);
                 obsCell.appendChild(obsInp);
+                
                 const nomCell = row.insertCell(6);
-                const nomInp = document.createElement('input');
-                nomInp.value = r.nombre || '';
-                nomInp.onchange = (function(k){ return function(e){ saveField(k,'nombre',e.target.value); updateCalendarTitles(); }; })(r.key);
+                const nomInp = document.createElement('input'); nomInp.value = r.nombre || '';
+                nomInp.onchange = (function(id){ return function(e){ db.ref(`reservasExtra/${id}/nombre`).set(e.target.value); updateCalendarTitles(); }; })(r.id);
                 nomCell.appendChild(nomInp);
+                
                 const telCell = row.insertCell(7);
-                const telInp = document.createElement('input');
-                telInp.value = r.telefono || '';
-                telInp.onchange = (function(k){ return function(e){ saveField(k,'telefono',e.target.value); }; })(r.key);
+                const telInp = document.createElement('input'); telInp.value = r.telefono || '';
+                telInp.onchange = (function(id){ return function(e){ db.ref(`reservasExtra/${id}/telefono`).set(e.target.value); }; })(r.id);
                 telCell.appendChild(telInp);
+                
                 const waCell = row.insertCell(8);
                 const phone = r.telefono ? r.telefono.replace(/\D/g,'') : '';
                 const waLink = document.createElement('a');
@@ -374,11 +576,7 @@
                 waCell.appendChild(waLink);
             }
         }
-
-        function saveField(key, field, value) {
-            db.ref(`reservasExtra/${key}/${field}`).set(value);
-        }
-
+        
         async function loadAllEvents() {
             const newEventsArrays = await Promise.all([
                 loadCabinEvents(1, AIRBNB_URLS[1]),
@@ -404,61 +602,54 @@
             }
             updateCalendarTitles();
         }
-
+        
         async function refreshAll() {
-            if (isRefreshing) {
-                const statusDiv = document.getElementById('status');
-                statusDiv.innerHTML = '⏳ Ya hay una actualización en curso...';
-                statusDiv.className = 'status info';
-                setTimeout(() => {
-                    if (statusDiv.innerHTML === '⏳ Ya hay una actualización en curso...') {
-                        statusDiv.innerHTML = '📅 Calendario listo';
-                        statusDiv.className = 'status info';
-                    }
-                }, 1500);
-                return;
-            }
-            
+            if (isRefreshing) return;
             isRefreshing = true;
             const refreshBtn = document.getElementById('refreshDataBtn');
-            refreshBtn.disabled = true;
-            
             const statusDiv = document.getElementById('status');
+            refreshBtn.disabled = true;
             statusDiv.innerHTML = '🔄 Actualizando...';
             statusDiv.className = 'status info';
-            
             try {
                 await loadAllEvents();
                 buildTable();
                 statusDiv.innerHTML = '✅ Datos actualizados';
                 statusDiv.className = 'status success';
-                setTimeout(() => {
-                    if (statusDiv.innerHTML === '✅ Datos actualizados') {
-                        statusDiv.innerHTML = '📅 Calendario listo';
-                        statusDiv.className = 'status info';
-                    }
-                }, 3000);
-            } catch (error) {
-                console.error('Error en actualización:', error);
-                statusDiv.innerHTML = '❌ Error al actualizar';
-                statusDiv.className = 'status error';
-            } finally {
-                isRefreshing = false;
-                refreshBtn.disabled = false;
-            }
+                setTimeout(() => { if (statusDiv.innerHTML === '✅ Datos actualizados') { statusDiv.innerHTML = '📅 Calendario listo'; statusDiv.className = 'status info'; } }, 3000);
+            } catch(e) { statusDiv.innerHTML = '❌ Error'; statusDiv.className = 'status error'; }
+            finally { isRefreshing = false; refreshBtn.disabled = false; }
         }
-
-        function debouncedRefresh() {
-            if (refreshTimeout) clearTimeout(refreshTimeout);
-            refreshTimeout = setTimeout(() => refreshAll(), 300);
-        }
-
+        
+        function debouncedRefresh() { if (refreshTimeout) clearTimeout(refreshTimeout); refreshTimeout = setTimeout(() => refreshAll(), 300); }
+        
         async function init() {
             await loadCabinNames();
             await loadAllEvents();
             loadGuestData();
             document.getElementById('refreshDataBtn').onclick = debouncedRefresh;
+            
+            // Botón de cerrar sesión
+            const logoutBtn = document.createElement('button');
+            logoutBtn.textContent = '🔒 Cerrar sesión';
+            logoutBtn.className = 'logout-btn';
+            logoutBtn.onclick = () => logout();
+            document.body.appendChild(logoutBtn);
         }
+        
+        // ============================================
+        // INICIO
+        // ============================================
+        (async function() {
+            const loginBtn = document.getElementById('loginBtn');
+            loginBtn.onclick = attemptLogin;
+            
+            const sessionExists = await checkExistingSession();
+            if (!sessionExists) {
+                document.getElementById('loginOverlay').style.display = 'flex';
+                document.getElementById('app').style.display = 'none';
+            }
+        })();
     </script>
 </body>
 </html>
