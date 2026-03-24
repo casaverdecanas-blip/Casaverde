@@ -10,12 +10,10 @@ const firebaseConfig = {
     appId: "1:709332495480:web:7060b2c75984352354918d"
 };
 
-// Inicializar Firebase
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// Configurar persistencia
 auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
 // ============================================
@@ -27,7 +25,6 @@ let unsubscribeTasks = null;
 let unsubscribeHistorial = null;
 let tareasCache = [];
 let historialCache = [];
-let realizadasHoySet = new Set();
 const adminEmail = 'admin@casaverde.com';
 
 // ============================================
@@ -58,6 +55,69 @@ const adminPanel = document.getElementById('adminPanel');
 const viewOnlyMessage = document.getElementById('viewOnlyMessage');
 
 // ============================================
+// FUNCIONES AUXILIARES
+// ============================================
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
+}
+
+function getRecurrenciaText(recurrencia) {
+    const map = {
+        'none': 'Una vez',
+        'daily': 'Diaria',
+        'weekly': 'Semanal',
+        'biweekly': '2 veces/semana',
+        'monthly': 'Mensual'
+    };
+    return map[recurrencia] || recurrencia;
+}
+
+function getEspaciadoMinimo(recurrencia) {
+    switch (recurrencia) {
+        case 'daily': return 1;
+        case 'biweekly': return 3;
+        case 'weekly': return 6;
+        case 'monthly': return 28;
+        default: return 0;
+    }
+}
+
+function getInicioSemana() {
+    const fecha = new Date();
+    fecha.setHours(0, 0, 0, 0);
+    const dia = fecha.getDay();
+    const diff = dia === 0 ? 6 : dia - 1;
+    fecha.setDate(fecha.getDate() - diff);
+    return fecha;
+}
+
+async function obtenerUltimaRealizacion(tareaId) {
+    try {
+        const snapshot = await db.collection('historial')
+            .where('tareaId', '==', tareaId)
+            .orderBy('fecha', 'desc')
+            .limit(1)
+            .get();
+        
+        if (snapshot.empty) return null;
+        const data = snapshot.docs[0].data();
+        return {
+            fecha: data.fecha.toDate(),
+            quien: data.completadaPor
+        };
+    } catch (error) {
+        console.error('Error obteniendo última realización:', error);
+        return null;
+    }
+}
+
+// ============================================
 // INICIALIZACIÓN
 // ============================================
 const hoy = new Date();
@@ -68,15 +128,24 @@ todayDate.textContent = hoy.toLocaleDateString('es-ES', {
     day: 'numeric' 
 });
 
+function showPrivateArea() {
+    loginContainer.style.display = 'none';
+    privateArea.style.display = 'block';
+}
+
+function showLoginArea() {
+    loginContainer.style.display = 'flex';
+    privateArea.style.display = 'none';
+}
+
 // ============================================
 // AUTENTICACIÓN
 // ============================================
-auth.onAuthStateChanged((user) => {
+auth.onAuthStateChanged(async (user) => {
     if (user) {
         currentUser = user;
         userEmail.textContent = user.email;
         
-        // Controlar visibilidad según si es admin
         if (user.email === adminEmail) {
             adminTaskForm.style.display = 'block';
             adminPanel.style.display = 'block';
@@ -88,7 +157,7 @@ auth.onAuthStateChanged((user) => {
         }
         
         showPrivateArea();
-        cargarDatosIniciales();
+        await cargarDatosIniciales();
         configurarListenersTiempoReal();
     } else {
         currentUser = null;
@@ -98,7 +167,6 @@ auth.onAuthStateChanged((user) => {
     }
 });
 
-// Login
 loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = document.getElementById('username').value;
@@ -129,20 +197,7 @@ loginForm.addEventListener('submit', async (e) => {
     }
 });
 
-// Logout
 logoutBtn.addEventListener('click', () => auth.signOut());
-
-// ============================================
-// FILTROS
-// ============================================
-filterTabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-        filterTabs.forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        currentFilter = tab.dataset.filter;
-        actualizarVista();
-    });
-});
 
 // ============================================
 // LISTENERS EN TIEMPO REAL
@@ -173,32 +228,11 @@ function configurarListenersTiempoReal() {
             snapshot.forEach(doc => {
                 historialCache.push({ id: doc.id, ...doc.data() });
             });
-            actualizarSetRealizadasHoy();
             actualizarDashboard();
             actualizarVista();
         }, (error) => {
             console.error('Error en listener de historial:', error);
         });
-}
-
-// ============================================
-// ACTUALIZAR SET DE REALIZADAS HOY
-// ============================================
-function actualizarSetRealizadasHoy() {
-    realizadasHoySet.clear();
-    const inicioDia = new Date();
-    inicioDia.setHours(0, 0, 0, 0);
-    
-    historialCache.forEach(h => {
-        if (h.fecha) {
-            try {
-                const fechaHistorial = h.fecha.toDate();
-                if (fechaHistorial >= inicioDia) {
-                    realizadasHoySet.add(h.tareaId);
-                }
-            } catch (e) {}
-        }
-    });
 }
 
 // ============================================
@@ -225,7 +259,6 @@ async function cargarDatosIniciales() {
             historialCache.push({ id: doc.id, ...doc.data() });
         });
         
-        actualizarSetRealizadasHoy();
         actualizarDashboard();
         actualizarVista();
         
@@ -235,7 +268,7 @@ async function cargarDatosIniciales() {
 }
 
 // ============================================
-// CALCULAR OCURRENCIAS SEMANALES DE UNA TAREA
+// CALCULAR OCURRENCIAS SEMANALES
 // ============================================
 function calcularOcurrenciasSemanales(tarea) {
     if (!tarea.activa || !tarea.fechaInicio) return 0;
@@ -245,84 +278,46 @@ function calcularOcurrenciasSemanales(tarea) {
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
         
-        // Si la tarea no tiene recurrencia, solo cuenta si está en la semana actual
         if (tarea.recurrencia === 'none') {
-            // Verificar si la fecha de inicio está en la semana actual
             const inicioSemana = getInicioSemana();
             const finSemana = new Date(inicioSemana);
             finSemana.setDate(inicioSemana.getDate() + 6);
             finSemana.setHours(23, 59, 59, 999);
-            
             return (fechaInicio >= inicioSemana && fechaInicio <= finSemana) ? 1 : 0;
         }
         
-        // Para tareas con recurrencia, calcular cuántas veces ocurren en la semana
         let ocurrencias = 0;
         const inicioSemana = getInicioSemana();
         const finSemana = new Date(inicioSemana);
         finSemana.setDate(inicioSemana.getDate() + 6);
         finSemana.setHours(23, 59, 59, 999);
         
-        // Calcular la primera ocurrencia después o igual a inicioSemana
         let fecha = new Date(fechaInicio);
         let intentos = 0;
         const maxIntentos = 100;
         
-        // Avanzar hasta la semana actual o después
         while (fecha < inicioSemana && intentos < maxIntentos) {
             switch(tarea.recurrencia) {
-                case 'daily':
-                    fecha.setDate(fecha.getDate() + 1);
-                    break;
-                case 'weekly':
-                    fecha.setDate(fecha.getDate() + 7);
-                    break;
-                case 'biweekly':
-                    fecha.setDate(fecha.getDate() + 1);
-                    while (fecha.getDay() !== 1 && fecha.getDay() !== 4 && intentos < 7) {
-                        fecha.setDate(fecha.getDate() + 1);
-                        intentos++;
-                    }
-                    break;
-                case 'monthly':
-                    fecha.setMonth(fecha.getMonth() + 1);
-                    break;
+                case 'daily': fecha.setDate(fecha.getDate() + 1); break;
+                case 'weekly': fecha.setDate(fecha.getDate() + 7); break;
+                case 'biweekly': fecha.setDate(fecha.getDate() + 3); break;
+                case 'monthly': fecha.setMonth(fecha.getMonth() + 1); break;
             }
             intentos++;
         }
         
-        // Contar ocurrencias dentro de la semana
         intentos = 0;
         while (fecha <= finSemana && intentos < maxIntentos) {
-            if (fecha >= inicioSemana) {
-                ocurrencias++;
-            }
-            
-            // Avanzar a la siguiente ocurrencia
+            if (fecha >= inicioSemana) ocurrencias++;
             switch(tarea.recurrencia) {
-                case 'daily':
-                    fecha.setDate(fecha.getDate() + 1);
-                    break;
-                case 'weekly':
-                    fecha.setDate(fecha.getDate() + 7);
-                    break;
-                case 'biweekly':
-                    fecha.setDate(fecha.getDate() + 1);
-                    let subIntentos = 0;
-                    while (fecha.getDay() !== 1 && fecha.getDay() !== 4 && subIntentos < 7) {
-                        fecha.setDate(fecha.getDate() + 1);
-                        subIntentos++;
-                    }
-                    break;
-                case 'monthly':
-                    fecha.setMonth(fecha.getMonth() + 1);
-                    break;
+                case 'daily': fecha.setDate(fecha.getDate() + 1); break;
+                case 'weekly': fecha.setDate(fecha.getDate() + 7); break;
+                case 'biweekly': fecha.setDate(fecha.getDate() + 3); break;
+                case 'monthly': fecha.setMonth(fecha.getMonth() + 1); break;
             }
             intentos++;
         }
-        
         return ocurrencias;
-        
     } catch (error) {
         console.error('Error calculando ocurrencias:', error);
         return 0;
@@ -333,53 +328,9 @@ function calcularOcurrenciasSemanales(tarea) {
 // ACTUALIZAR DASHBOARD
 // ============================================
 function actualizarDashboard() {
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    
-    // Tareas para hoy
-    const tareasHoy = tareasCache.filter(t => {
-        if (!t.fechaInicio) return false;
-        try {
-            const fechaTarea = new Date(t.fechaInicio + 'T00:00:00');
-            
-            // Si es sin repetición, verificar si es hoy
-            if (t.recurrencia === 'none') {
-                return fechaTarea.toDateString() === hoy.toDateString();
-            }
-            
-            // Para tareas con repetición, verificar si hoy es un día de ejecución
-            if (t.recurrencia === 'biweekly') {
-                return (hoy.getDay() === 1 || hoy.getDay() === 4);
-            } else {
-                // Para daily, weekly, monthly - verificar si la fecha coincide con el ciclo
-                // Simplificamos: si la fecha de inicio es anterior o igual a hoy,
-                // y la diferencia de días es múltiplo del período
-                if (fechaTarea > hoy) return false;
-                
-                const diffTime = hoy - fechaTarea;
-                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                
-                switch(t.recurrencia) {
-                    case 'daily':
-                        return true; // Todos los días
-                    case 'weekly':
-                        return diffDays % 7 === 0;
-                    case 'monthly':
-                        return fechaTarea.getDate() === hoy.getDate();
-                    default:
-                        return false;
-                }
-            }
-        } catch (e) {
-            return false;
-        }
-    });
-    
-    pendingToday.textContent = tareasHoy.length;
     totalActive.textContent = tareasCache.length;
-    completedToday.textContent = realizadasHoySet.size;
-    
     tareasCount.textContent = tareasCache.length;
+    historialCount.textContent = historialCache.length;
     
     // Calcular tareas únicas realizadas esta semana
     const tareasSemanaUnicas = new Set();
@@ -395,54 +346,30 @@ function actualizarDashboard() {
         }
     });
     semanaCount.textContent = tareasSemanaUnicas.size;
-    historialCount.textContent = historialCache.length;
     
-    // ============================================
-    // NUEVO CÁLCULO CORREGIDO: Actividades proyectadas vs realizadas
-    // ============================================
+    // Estadísticas semanales para el usuario actual
     if (currentUser) {
-        // Calcular total de ocurrencias de tareas en la semana
         let totalOcurrenciasSemana = 0;
         tareasCache.forEach(tarea => {
             totalOcurrenciasSemana += calcularOcurrenciasSemanales(tarea);
         });
-        
-        // Calcular realizadas por el usuario en la semana
-        const inicioSemana = getInicioSemana();
-        const finSemana = new Date(inicioSemana);
-        finSemana.setDate(inicioSemana.getDate() + 6);
-        finSemana.setHours(23, 59, 59, 999);
         
         let realizadasSemana = 0;
         historialCache.forEach(h => {
             if (h.completadaPor === currentUser.email && h.fecha) {
                 try {
                     const fechaHistorial = h.fecha.toDate();
-                    if (fechaHistorial >= inicioSemana && fechaHistorial <= finSemana) {
+                    if (fechaHistorial >= inicioSemana) {
                         realizadasSemana++;
                     }
                 } catch (e) {}
             }
         });
         
-        // Actualizar UI
         weeklyStatsText.textContent = `Llevas realizadas ${realizadasSemana} actividades de las ${totalOcurrenciasSemana} programadas para esta semana`;
-        
         const porcentaje = totalOcurrenciasSemana > 0 ? (realizadasSemana / totalOcurrenciasSemana) * 100 : 0;
         weeklyProgress.style.width = `${porcentaje}%`;
     }
-}
-
-// ============================================
-// FUNCIONES DE FECHA
-// ============================================
-function getInicioSemana() {
-    const fecha = new Date();
-    fecha.setHours(0, 0, 0, 0);
-    const dia = fecha.getDay();
-    const diff = dia === 0 ? 6 : dia - 1;
-    fecha.setDate(fecha.getDate() - diff);
-    return fecha;
 }
 
 // ============================================
@@ -463,22 +390,42 @@ function actualizarVista() {
 }
 
 // ============================================
-// VISTA TAREAS
+// VISTA TAREAS (CON CLASIFICACIÓN POR ESPACIADO)
 // ============================================
-function mostrarVistaTareas() {
-    const pendientes = [];
-    const realizadas = [];
+async function mostrarVistaTareas() {
+    contentArea.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Cargando tareas...</p></div>';
     
-    tareasCache.forEach(tarea => {
-        if (realizadasHoySet.has(tarea.id)) {
-            realizadas.push(tarea);
+    const tareasConUltima = await Promise.all(tareasCache.map(async tarea => {
+        const ultima = await obtenerUltimaRealizacion(tarea.id);
+        return { ...tarea, ultimaRealizacion: ultima };
+    }));
+    
+    const pendientes = [];
+    const realizadasRecientes = [];
+    const ahora = new Date();
+    
+    for (const tarea of tareasConUltima) {
+        let esReciente = false;
+        
+        if (tarea.ultimaRealizacion) {
+            const diasDiferencia = Math.floor((ahora - tarea.ultimaRealizacion.fecha) / (1000 * 60 * 60 * 24));
+            const espaciadoMinimo = getEspaciadoMinimo(tarea.recurrencia);
+            
+            if (espaciadoMinimo > 0 && diasDiferencia < espaciadoMinimo) {
+                esReciente = true;
+            }
+        }
+        
+        if (esReciente) {
+            realizadasRecientes.push(tarea);
         } else {
             pendientes.push(tarea);
         }
-    });
+    }
     
     const ordenPrioridad = { 'alta': 1, 'media': 2, 'baja': 3 };
     pendientes.sort((a, b) => ordenPrioridad[a.prioridad] - ordenPrioridad[b.prioridad]);
+    realizadasRecientes.sort((a, b) => ordenPrioridad[a.prioridad] - ordenPrioridad[b.prioridad]);
     
     contentArea.innerHTML = `
         <div class="tasks-container">
@@ -493,20 +440,20 @@ function mostrarVistaTareas() {
                     <h3 class="section-title pending-title">
                         <span class="material-icons">pending</span> Pendientes (${pendientes.length})
                     </h3>
-                    ${renderizarTareas(pendientes, false)}
+                    ${renderizarTareas(pendientes, false, false)}
                 </div>
             ` : ''}
             
-            ${realizadas.length > 0 ? `
+            ${realizadasRecientes.length > 0 ? `
                 <div class="task-section">
                     <h3 class="section-title completed-title">
-                        <span class="material-icons">check_circle</span> Realizadas hoy (${realizadas.length})
+                        <span class="material-icons">check_circle</span> Realizadas recientemente (${realizadasRecientes.length})
                     </h3>
-                    ${renderizarTareas(realizadas, true)}
+                    ${renderizarTareas(realizadasRecientes, true, true)}
                 </div>
             ` : ''}
             
-            ${pendientes.length === 0 && realizadas.length === 0 ? `
+            ${pendientes.length === 0 && realizadasRecientes.length === 0 ? `
                 <div class="empty-state">
                     <span class="material-icons empty-icon">assignment</span>
                     <p class="empty-text">No hay tareas</p>
@@ -516,230 +463,91 @@ function mostrarVistaTareas() {
     `;
 }
 
-function renderizarTareas(tareas, completadas = false) {
+function renderizarTareas(tareas, completadas = false, mostrarUltima = false) {
     const esAdmin = currentUser?.email === adminEmail;
     
-    return tareas.map(tarea => `
-        <div class="task-item priority-${tarea.prioridad || 'media'} ${completadas ? 'completed' : ''}">
-            <div class="task-content">
-                <h3>
-                    ${escapeHtml(tarea.titulo)}
-                    ${tarea.recurrencia && tarea.recurrencia !== 'none' ? 
-                        `<span class="recurrence-badge">${getRecurrenciaText(tarea.recurrencia)}</span>` : ''}
-                </h3>
-                ${tarea.descripcion ? `<p>${escapeHtml(tarea.descripcion)}</p>` : ''}
-                <div class="task-meta">
-                    <span><span class="material-icons">event</span> ${tarea.fechaInicio || 'Sin fecha'}</span>
-                    <span><span class="material-icons">flag</span> ${tarea.prioridad}</span>
-                </div>
-            </div>
-            <div class="task-actions">
-                ${esAdmin ? `
-                    <button onclick="abrirModalEdicion('${tarea.id}')" class="edit-btn">
-                        <span class="material-icons">edit</span> Editar
-                    </button>
-                ` : ''}
-                ${!completadas ? `
-                    <button onclick="completarTarea('${tarea.id}', '${escapeHtml(tarea.titulo)}')" class="complete-btn">
-                        <span class="material-icons">check_circle</span> Realizar
-                    </button>
-                ` : ''}
-            </div>
-        </div>
-    `).join('');
-}
-
-// ============================================
-// VISTA SEMANA
-// ============================================
-function mostrarVistaSemana() {
-    const inicioSemana = getInicioSemana();
-    const tareasMap = new Map();
-    
-    historialCache.forEach(h => {
-        if (h.fecha) {
-            try {
-                const fechaHistorial = h.fecha.toDate();
-                if (fechaHistorial >= inicioSemana) {
-                    if (!tareasMap.has(h.titulo)) {
-                        tareasMap.set(h.titulo, {
-                            titulo: h.titulo,
-                            veces: 0,
-                            usuarios: new Set()
-                        });
-                    }
-                    const tarea = tareasMap.get(h.titulo);
-                    tarea.veces++;
-                    tarea.usuarios.add(h.completadaPor);
-                }
-            } catch (e) {}
+    return tareas.map(tarea => {
+        let infoUltima = '';
+        if (mostrarUltima && tarea.ultimaRealizacion) {
+            const fechaUltima = tarea.ultimaRealizacion.fecha.toLocaleDateString();
+            const quien = tarea.ultimaRealizacion.quien;
+            infoUltima = `<div class="last-done-info">
+                <span class="material-icons">history</span> 
+                Última vez: ${fechaUltima} por ${quien}
+            </div>`;
         }
-    });
-    
-    const tareasArray = Array.from(tareasMap.values());
-    
-    contentArea.innerHTML = `
-        <div class="history-container">
-            <h2>
-                <span class="material-icons">event_note</span>
-                Realizadas esta semana
-                <span class="count-badge">${tareasArray.length}</span>
-            </h2>
-            
-            ${tareasArray.length === 0 ? `
-                <div class="empty-state">
-                    <span class="material-icons empty-icon">event_busy</span>
-                    <p class="empty-text">No hay tareas realizadas esta semana</p>
+        
+        return `
+            <div class="task-item priority-${tarea.prioridad || 'media'} ${completadas ? 'completed' : ''}">
+                <div class="task-content">
+                    <h3>
+                        ${escapeHtml(tarea.titulo)}
+                        ${tarea.recurrencia && tarea.recurrencia !== 'none' ? 
+                            `<span class="recurrence-badge">${getRecurrenciaText(tarea.recurrencia)}</span>` : ''}
+                    </h3>
+                    ${tarea.descripcion ? `<p>${escapeHtml(tarea.descripcion)}</p>` : ''}
+                    <div class="task-meta">
+                        <span><span class="material-icons">event</span> ${tarea.fechaInicio || 'Sin fecha'}</span>
+                        <span><span class="material-icons">flag</span> ${tarea.prioridad}</span>
+                    </div>
+                    ${infoUltima}
                 </div>
-            ` : `
-                <div class="weekly-stats">
-                    ${tareasArray.map(t => `
-                        <div class="stat-item">
-                            <div class="task-name">
-                                <span class="material-icons">task</span>
-                                ${escapeHtml(t.titulo)}
-                            </div>
-                            <div>
-                                <span class="task-count">${t.veces} ${t.veces === 1 ? 'vez' : 'veces'}</span>
-                                <span class="task-users">por ${Array.from(t.usuarios).join(', ')}</span>
-                            </div>
-                        </div>
-                    `).join('')}
+                <div class="task-actions">
+                    ${esAdmin ? `
+                        <button onclick="abrirModalEdicion('${tarea.id}')" class="edit-btn">
+                            <span class="material-icons">edit</span> Editar
+                        </button>
+                    ` : ''}
+                    ${!completadas ? `
+                        <button onclick="completarTarea('${tarea.id}', '${escapeHtml(tarea.titulo)}')" class="complete-btn">
+                            <span class="material-icons">check_circle</span> Realizar
+                        </button>
+                    ` : ''}
                 </div>
-            `}
-        </div>
-    `;
+            </div>
+        `;
+    }).join('');
 }
 
 // ============================================
-// VISTA HISTORIAL
+// COMPLETAR TAREA (CON VALIDACIÓN DE ESPACIADO)
 // ============================================
-function mostrarHistorial() {
-    const registros = historialCache.map(h => {
-        if (h.fecha) {
-            try {
-                const fecha = h.fecha.toDate();
-                return {
-                    fecha: fecha.toLocaleDateString(),
-                    hora: fecha.toLocaleTimeString(),
-                    titulo: h.titulo,
-                    usuario: h.completadaPor
-                };
-            } catch (e) {
-                return null;
+async function completarTarea(tareaId, titulo) {
+    if (!currentUser) {
+        alert('Debes iniciar sesión para marcar tareas.');
+        return;
+    }
+    
+    try {
+        const tareaDoc = await db.collection('tareas').doc(tareaId).get();
+        if (!tareaDoc.exists) {
+            alert('La tarea ya no existe.');
+            return;
+        }
+        const tarea = tareaDoc.data();
+        
+        const ultimaSnapshot = await db.collection('historial')
+            .where('tareaId', '==', tareaId)
+            .orderBy('fecha', 'desc')
+            .limit(1)
+            .get();
+        
+        const espaciadoMinimo = getEspaciadoMinimo(tarea.recurrencia);
+        
+        if (!ultimaSnapshot.empty && espaciadoMinimo > 0) {
+            const ultima = ultimaSnapshot.docs[0].data();
+            const ultimaFecha = ultima.fecha.toDate();
+            const ahora = new Date();
+            const diasDiferencia = Math.floor((ahora - ultimaFecha) / (1000 * 60 * 60 * 24));
+            
+            if (diasDiferencia < espaciadoMinimo) {
+                const fechaUltima = ultimaFecha.toLocaleDateString();
+                const quien = ultima.completadaPor;
+                alert(`⚠️ No puedes realizar esta tarea todavía.\n\nÚltima vez: ${fechaUltima} por ${quien}\nEspaciado mínimo requerido: ${espaciadoMinimo} días.\nHan pasado: ${diasDiferencia} días.`);
+                return;
             }
         }
-        return null;
-    }).filter(r => r !== null);
-
-    contentArea.innerHTML = `
-        <div class="history-container">
-            <h2>
-                <span class="material-icons">history</span>
-                Historial de Tareas Realizadas
-                <span class="count-badge">${registros.length}</span>
-            </h2>
-            
-            <table class="history-table">
-                <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Hora</th>
-                        <th>Tarea</th>
-                        <th>Realizada por</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${registros.length === 0 ? 
-                        '<tr><td colspan="4" class="empty-table">No hay historial</td></tr>' :
-                        registros.map(r => `
-                            <tr>
-                                <td class="fecha-col">${r.fecha}</td>
-                                <td>${r.hora}</td>
-                                <td class="tarea-col">${escapeHtml(r.titulo)}</td>
-                                <td class="usuario-col">${escapeHtml(r.usuario)}</td>
-                            </tr>
-                        `).join('')
-                    }
-                </tbody>
-            </table>
-        </div>
-    `;
-}
-
-// ============================================
-// CREAR TAREA
-// ============================================
-taskForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    if (!currentUser) {
-        alert('❌ Debes iniciar sesión');
-        return;
-    }
-    
-    if (currentUser.email !== adminEmail) {
-        alert('❌ Solo el administrador puede crear tareas');
-        return;
-    }
-    
-    const titulo = document.getElementById('taskTitle').value;
-    const descripcion = document.getElementById('taskDescription').value;
-    const prioridad = document.getElementById('taskPriority').value;
-    const recurrencia = document.getElementById('taskRecurrence').value;
-    const fechaInicio = document.getElementById('taskStartDate').value;
-    
-    if (!titulo || !fechaInicio) {
-        alert('❌ Título y fecha son obligatorios');
-        return;
-    }
-    
-    try {
-        await db.collection('tareas').add({
-            titulo: titulo,
-            descripcion: descripcion || '',
-            prioridad: prioridad,
-            recurrencia: recurrencia,
-            fechaInicio: fechaInicio,
-            activa: true,
-            creadaPor: currentUser.email,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-        });
         
-        taskForm.reset();
-        document.getElementById('taskStartDate').value = new Date().toISOString().split('T')[0];
-        
-    } catch (error) {
-        console.error('Error:', error);
-        alert('❌ Error al crear la tarea: ' + error.message);
-    }
-});
-
-// ============================================
-// COMPLETAR TAREA
-// ============================================
-window.completarTarea = async (tareaId, titulo) => {
-    if (!currentUser) {
-        alert('❌ Debes iniciar sesión');
-        return;
-    }
-    
-    if (realizadasHoySet.has(tareaId)) {
-        const registro = historialCache.find(h => h.tareaId === tareaId);
-        let hora = 'hora desconocida';
-        if (registro?.fecha) {
-            try {
-                hora = registro.fecha.toDate().toLocaleTimeString();
-            } catch (e) {}
-        }
-        
-        alert(`⛔ Tarea ya realizada hoy por ${registro?.completadaPor || 'otro usuario'} a las ${hora}`);
-        return;
-    }
-    
-    if (!confirm(`¿Marcar "${titulo}" como realizada?`)) return;
-    
-    try {
         await db.collection('historial').add({
             tareaId: tareaId,
             titulo: titulo,
@@ -747,238 +555,277 @@ window.completarTarea = async (tareaId, titulo) => {
             fecha: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        const tareaRef = db.collection('tareas').doc(tareaId);
-        const tareaDoc = await tareaRef.get();
-        const tareaData = tareaDoc.data();
-        
-        if (tareaData.recurrencia && tareaData.recurrencia !== 'none') {
-            try {
-                const fechaActual = new Date(tareaData.fechaInicio + 'T00:00:00');
-                let nuevaFecha = new Date(fechaActual);
-                
-                switch(tareaData.recurrencia) {
-                    case 'daily':
-                        nuevaFecha.setDate(nuevaFecha.getDate() + 1);
-                        break;
-                    case 'weekly':
-                        nuevaFecha.setDate(nuevaFecha.getDate() + 7);
-                        break;
-                    case 'biweekly':
-                        nuevaFecha.setDate(nuevaFecha.getDate() + 1);
-                        while (nuevaFecha.getDay() !== 1 && nuevaFecha.getDay() !== 4) {
-                            nuevaFecha.setDate(nuevaFecha.getDate() + 1);
-                        }
-                        break;
-                    case 'monthly':
-                        nuevaFecha.setMonth(nuevaFecha.getMonth() + 1);
-                        break;
-                }
-                
-                await tareaRef.update({
-                    fechaInicio: nuevaFecha.toISOString().split('T')[0]
-                });
-            } catch (e) {}
-        } else {
-            await tareaRef.update({ activa: false });
-        }
-        
-    } catch (error) {
-        console.error('Error:', error);
-        alert('❌ Error al completar la tarea: ' + error.message);
-    }
-};
-
-// ============================================
-// EDITAR TAREA
-// ============================================
-window.abrirModalEdicion = async (tareaId) => {
-    if (!currentUser || currentUser.email !== adminEmail) {
-        alert('❌ Solo el administrador puede editar tareas');
-        return;
-    }
-    
-    try {
-        const tareaRef = db.collection('tareas').doc(tareaId);
-        const tareaDoc = await tareaRef.get();
-        
-        if (!tareaDoc.exists) {
-            alert('❌ La tarea no existe');
-            return;
-        }
-        
-        const data = tareaDoc.data();
-        
-        document.getElementById('editTaskId').value = tareaId;
-        document.getElementById('editTitle').value = data.titulo || '';
-        document.getElementById('editDescription').value = data.descripcion || '';
-        document.getElementById('editPriority').value = data.prioridad || 'media';
-        document.getElementById('editRecurrence').value = data.recurrencia || 'none';
-        document.getElementById('editStartDate').value = data.fechaInicio || '';
-        
-        editModal.style.display = 'block';
-    } catch (error) {
-        console.error('Error:', error);
-        alert('❌ Error al cargar la tarea');
-    }
-};
-
-window.cerrarModal = () => {
-    editModal.style.display = 'none';
-};
-
-window.onclick = (event) => {
-    if (event.target === editModal) {
-        cerrarModal();
-    }
-};
-
-editForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    if (!currentUser || currentUser.email !== adminEmail) {
-        alert('❌ Solo el administrador puede editar tareas');
-        return;
-    }
-    
-    try {
-        const tareaId = document.getElementById('editTaskId').value;
-        const tareaRef = db.collection('tareas').doc(tareaId);
-        
-        await tareaRef.update({
-            titulo: document.getElementById('editTitle').value,
-            descripcion: document.getElementById('editDescription').value,
-            prioridad: document.getElementById('editPriority').value,
-            recurrencia: document.getElementById('editRecurrence').value,
-            fechaInicio: document.getElementById('editStartDate').value
-        });
-        
-        cerrarModal();
-        
-    } catch (error) {
-        console.error('Error:', error);
-        alert('❌ Error al actualizar la tarea');
-    }
-});
-
-// ============================================
-// LIMPIAR BASE DE DATOS
-// ============================================
-let limpiandoDB = false;
-
-window.mostrarModalLimpiarDB = () => {
-    if (!currentUser || currentUser.email !== adminEmail) {
-        alert('❌ Solo el administrador puede limpiar la base de datos');
-        return;
-    }
-    
-    document.getElementById('confirmPassword').value = '';
-    document.getElementById('limpiarError').style.display = 'none';
-    document.getElementById('limpiarModal').style.display = 'block';
-};
-
-window.cerrarModalLimpiar = () => {
-    document.getElementById('limpiarModal').style.display = 'none';
-};
-
-window.ejecutarLimpiarDB = async () => {
-    if (limpiandoDB) return;
-    
-    const password = document.getElementById('confirmPassword').value;
-    const errorDiv = document.getElementById('limpiarError');
-    
-    if (!password) {
-        errorDiv.textContent = '❌ Debes ingresar tu contraseña';
-        errorDiv.style.display = 'block';
-        return;
-    }
-    
-    limpiandoDB = true;
-    
-    try {
-        const credential = firebase.auth.EmailAuthProvider.credential(
-            currentUser.email,
-            password
-        );
-        
-        await currentUser.reauthenticateWithCredential(credential);
-        
-        errorDiv.style.display = 'none';
-        cerrarModalLimpiar();
-        
-        const confirmar = confirm('⚠️ ¿Estás ABSOLUTAMENTE SEGURO?\n\nEsta acción eliminará TODAS las tareas y TODO el historial permanentemente.\n\nNo hay forma de recuperar los datos.');
-        if (!confirmar) {
-            limpiandoDB = false;
-            return;
-        }
-        
-        alert('🔄 Limpiando base de datos... Por favor espera.');
-        
-        const tareasSnapshot = await db.collection('tareas').get();
-        const batchTareas = db.batch();
-        tareasSnapshot.docs.forEach(doc => {
-            batchTareas.delete(doc.ref);
-        });
-        await batchTareas.commit();
-        
-        const historialSnapshot = await db.collection('historial').get();
-        const batchHistorial = db.batch();
-        historialSnapshot.docs.forEach(doc => {
-            batchHistorial.delete(doc.ref);
-        });
-        await batchHistorial.commit();
-        
-        tareasCache = [];
-        historialCache = [];
-        realizadasHoySet.clear();
+        alert(`✅ Tarea "${titulo}" registrada como realizada.`);
         
         actualizarDashboard();
         actualizarVista();
         
-        alert('✅ Base de datos limpiada correctamente');
+    } catch (error) {
+        console.error('Error al completar tarea:', error);
+        alert('Error al registrar la tarea. Intenta de nuevo.');
+    }
+}
+
+// ============================================
+// VISTA SEMANA
+// ============================================
+async function mostrarVistaSemana() {
+    const inicioSemana = getInicioSemana();
+    const diasSemana = [];
+    for (let i = 0; i < 7; i++) {
+        const fecha = new Date(inicioSemana);
+        fecha.setDate(inicioSemana.getDate() + i);
+        diasSemana.push(fecha);
+    }
+    
+    // Agrupar realizaciones por día
+    const realizacionesPorDia = {};
+    historialCache.forEach(h => {
+        if (h.fecha) {
+            try {
+                const fecha = h.fecha.toDate();
+                const fechaStr = fecha.toISOString().slice(0,10);
+                if (!realizacionesPorDia[fechaStr]) realizacionesPorDia[fechaStr] = [];
+                realizacionesPorDia[fechaStr].push(h);
+            } catch(e) {}
+        }
+    });
+    
+    let html = `
+        <div class="tasks-container">
+            <h2>
+                <span class="material-icons">calendar_view_week</span>
+                Realizadas esta semana
+                <span class="count-badge">${semanaCount.textContent}</span>
+            </h2>
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+    `;
+    
+    for (const fecha of diasSemana) {
+        const fechaStr = fecha.toISOString().slice(0,10);
+        const realizaciones = realizacionesPorDia[fechaStr] || [];
+        const nombreDia = fecha.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+        
+        html += `
+            <div style="border: 1px solid #e0e0e0; border-radius: 12px; padding: 12px;">
+                <h3 style="margin-bottom: 10px; color: #2c3e50;">${nombreDia}</h3>
+                ${realizaciones.length > 0 ? 
+                    realizaciones.map(r => `
+                        <div style="padding: 6px 0; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between;">
+                            <span>📋 ${escapeHtml(r.titulo)}</span>
+                            <span style="color: #667eea;">👤 ${r.completadaPor}</span>
+                        </div>
+                    `).join('') : 
+                    '<p style="color:#999; padding: 8px 0;">Sin tareas realizadas</p>'
+                }
+            </div>
+        `;
+    }
+    
+    html += `</div></div>`;
+    contentArea.innerHTML = html;
+}
+
+// ============================================
+// VISTA HISTORIAL
+// ============================================
+function mostrarHistorial() {
+    let html = `
+        <div class="history-container">
+            <h2>
+                <span class="material-icons">history</span>
+                Historial completo
+                <span class="count-badge">${historialCache.length}</span>
+            </h2>
+            <div style="overflow-x: auto;">
+                <table class="history-table">
+                    <thead>
+                        <tr><th>Fecha</th><th>Tarea</th><th>Realizada por</th></tr>
+                    </thead>
+                    <tbody>
+    `;
+    
+    historialCache.slice(0, 200).forEach(h => {
+        let fechaStr = '';
+        if (h.fecha) {
+            try {
+                fechaStr = h.fecha.toDate().toLocaleString();
+            } catch(e) { fechaStr = 'Fecha desconocida'; }
+        }
+        html += `
+            <tr>
+                <td class="fecha-col">${fechaStr}</td>
+                <td class="tarea-col">${escapeHtml(h.titulo)}</td>
+                <td class="usuario-col">${escapeHtml(h.completadaPor || '?')}</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                    </tbody>
+                </table>
+            </div>
+            ${historialCache.length === 0 ? '<p style="text-align:center; padding:20px;">No hay registros en el historial</p>' : ''}
+        </div>
+    `;
+    contentArea.innerHTML = html;
+}
+
+// ============================================
+// EDICIÓN DE TAREAS (ADMIN)
+// ============================================
+let tareaEnEdicion = null;
+
+window.abrirModalEdicion = function(tareaId) {
+    const tarea = tareasCache.find(t => t.id === tareaId);
+    if (!tarea) return;
+    
+    tareaEnEdicion = tarea;
+    document.getElementById('editTaskId').value = tarea.id;
+    document.getElementById('editTitle').value = tarea.titulo || '';
+    document.getElementById('editDescription').value = tarea.descripcion || '';
+    document.getElementById('editPriority').value = tarea.prioridad || 'media';
+    document.getElementById('editRecurrence').value = tarea.recurrencia || 'none';
+    document.getElementById('editStartDate').value = tarea.fechaInicio || '';
+    
+    editModal.style.display = 'flex';
+};
+
+window.cerrarModal = function() {
+    editModal.style.display = 'none';
+    tareaEnEdicion = null;
+};
+
+editForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!tareaEnEdicion || currentUser?.email !== adminEmail) return;
+    
+    const updates = {
+        titulo: document.getElementById('editTitle').value,
+        descripcion: document.getElementById('editDescription').value,
+        prioridad: document.getElementById('editPriority').value,
+        recurrencia: document.getElementById('editRecurrence').value,
+        fechaInicio: document.getElementById('editStartDate').value
+    };
+    
+    try {
+        await db.collection('tareas').doc(tareaEnEdicion.id).update(updates);
+        cerrarModal();
+        alert('Tarea actualizada correctamente.');
+    } catch (error) {
+        console.error('Error al actualizar tarea:', error);
+        alert('Error al guardar cambios.');
+    }
+});
+
+// ============================================
+// CREAR TAREA (ADMIN)
+// ============================================
+taskForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (currentUser?.email !== adminEmail) {
+        alert('No tienes permisos para crear tareas.');
+        return;
+    }
+    
+    const nuevaTarea = {
+        titulo: document.getElementById('taskTitle').value,
+        descripcion: document.getElementById('taskDescription').value,
+        prioridad: document.getElementById('taskPriority').value,
+        recurrencia: document.getElementById('taskRecurrence').value,
+        fechaInicio: document.getElementById('taskStartDate').value,
+        activa: true,
+        creadaEn: firebase.firestore.FieldValue.serverTimestamp(),
+        creadaPor: currentUser.email
+    };
+    
+    if (!nuevaTarea.titulo) {
+        alert('El título es obligatorio');
+        return;
+    }
+    
+    try {
+        await db.collection('tareas').add(nuevaTarea);
+        taskForm.reset();
+        alert('Tarea creada correctamente.');
+    } catch (error) {
+        console.error('Error al crear tarea:', error);
+        alert('Error al crear la tarea.');
+    }
+});
+
+// ============================================
+// LIMPIAR BASE DE DATOS (ADMIN)
+// ============================================
+window.mostrarModalLimpiarDB = function() {
+    const modal = document.getElementById('limpiarModal');
+    if (modal) modal.style.display = 'flex';
+};
+
+window.cerrarModalLimpiar = function() {
+    const modal = document.getElementById('limpiarModal');
+    if (modal) modal.style.display = 'none';
+    document.getElementById('confirmPassword').value = '';
+    document.getElementById('limpiarError').style.display = 'none';
+};
+
+window.ejecutarLimpiarDB = async function() {
+    const password = document.getElementById('confirmPassword').value;
+    
+    if (!password) {
+        document.getElementById('limpiarError').textContent = 'Ingresa tu contraseña para confirmar.';
+        document.getElementById('limpiarError').style.display = 'block';
+        return;
+    }
+    
+    try {
+        const credential = firebase.auth.EmailAuthProvider.credential(currentUser.email, password);
+        await currentUser.reauthenticateWithCredential(credential);
+        
+        if (!confirm('⚠️ Esta acción eliminará TODAS las tareas y TODO el historial. ¿Estás ABSOLUTAMENTE seguro?')) {
+            cerrarModalLimpiar();
+            return;
+        }
+        
+        // Eliminar todas las tareas
+        const tareasSnapshot = await db.collection('tareas').get();
+        const batchTareas = db.batch();
+        tareasSnapshot.forEach(doc => batchTareas.delete(doc.ref));
+        await batchTareas.commit();
+        
+        // Eliminar todo el historial
+        const historialSnapshot = await db.collection('historial').get();
+        const batchHistorial = db.batch();
+        historialSnapshot.forEach(doc => batchHistorial.delete(doc.ref));
+        await batchHistorial.commit();
+        
+        alert('✅ Base de datos limpiada correctamente.');
+        cerrarModalLimpiar();
         
     } catch (error) {
-        console.error('Error:', error);
-        errorDiv.textContent = '❌ Contraseña incorrecta o error de autenticación';
-        errorDiv.style.display = 'block';
-    } finally {
-        limpiandoDB = false;
+        console.error('Error al limpiar:', error);
+        document.getElementById('limpiarError').textContent = 'Error: ' + (error.message || 'Contraseña incorrecta');
+        document.getElementById('limpiarError').style.display = 'block';
     }
 };
 
 // ============================================
-// FUNCIONES AUXILIARES
+// FILTROS
 // ============================================
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function getRecurrenciaText(recurrencia) {
-    const textos = {
-        daily: 'Diaria',
-        weekly: 'Semanal',
-        biweekly: '2 veces/semana',
-        monthly: 'Mensual'
-    };
-    return textos[recurrencia] || recurrencia;
-}
-
-function showPrivateArea() {
-    loginContainer.style.display = 'none';
-    privateArea.style.display = 'block';
-}
-
-function showLoginArea() {
-    loginContainer.style.display = 'flex';
-    privateArea.style.display = 'none';
-}
-
-// Cerrar modal de limpieza al hacer clic fuera
-window.addEventListener('click', (event) => {
-    const modal = document.getElementById('limpiarModal');
-    if (event.target === modal) {
-        cerrarModalLimpiar();
-    }
+filterTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+        filterTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        currentFilter = tab.dataset.filter;
+        actualizarVista();
+    });
 });
+
+// ============================================
+// CIERRE DE MODALES AL HACER CLICK FUERA
+// ============================================
+window.onclick = function(event) {
+    if (event.target === editModal) cerrarModal();
+    const limpiarModal = document.getElementById('limpiarModal');
+    if (event.target === limpiarModal) cerrarModalLimpiar();
+};
