@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Login Simple</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <style>
+        body { font-family: monospace; background: #0a0a0f; color: #0f0; padding: 20px; }
+        .card { background: #1a1a2a; padding: 20px; border-radius: 8px; max-width: 500px; margin: 0 auto; }
+        input, button { padding: 8px; margin: 5px; width: 100%; }
+        button { background: #0f0; color: #000; cursor: pointer; border: none; }
+        .success { color: #0f0; }
+        .error { color: #f66; }
+        .info { color: #ff0; }
+        .log { background: #000; padding: 10px; margin-top: 10px; font-size: 11px; max-height: 300px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>🔐 Test Login Simple</h2>
+        <input type="email" id="email" placeholder="Email" value="casaverdecanas@gmail.com">
+        <input type="password" id="password" placeholder="Contraseña">
+        <button onclick="login()">Iniciar Sesión</button>
+        <div id="status"></div>
+        <div id="userInfo" style="display: none; margin-top: 15px; padding: 10px; background: #2a2a3a; border-radius: 8px;">
+            <strong>✅ Sesión activa:</strong><br>
+            <span id="userEmail"></span><br>
+            <span id="userUid"></span><br>
+            <span id="userRol"></span><br>
+            <button onclick="logout()" style="margin-top: 10px; background: #f66;">Cerrar sesión</button>
+        </div>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+            authDomain: "tatareas-d8a80.firebaseapp.com",
+            projectId: "tatareas-d8a80",
+            storageBucket: "tatareas-d8a80.firebasestorage.app",
+            messagingSenderId: "709332495480",
+            appId: "1:709332495480:web:7060b2c75984352354918d"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let logs = [];
+
+        function addLog(msg, tipo = 'info') {
+            const time = new Date().toLocaleTimeString();
+            logs.push(`[${time}] ${msg}`);
+            const logDiv = document.getElementById('log');
+            logDiv.innerHTML = logs.map(l => `<div style="color: ${tipo === 'error' ? '#f66' : (tipo === 'success' ? '#0f0' : '#ff0')}">${l}</div>`).join('');
+            console.log(msg);
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const statusDiv = document.getElementById('status');
+            
+            addLog(`🔐 Intentando login con: ${email}`);
+            statusDiv.innerHTML = '<div class="info">🔄 Autenticando...</div>';
+            
+            try {
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                addLog(`✅ Login exitoso: ${user.email} (UID: ${user.uid})`, 'success');
+                statusDiv.innerHTML = '<div class="success">✅ Login exitoso</div>';
+                
+                // Verificar rol en Firestore
+                addLog(`🔍 Buscando documento en usuarios para UID: ${user.uid}`);
+                const userDoc = await db.collection('usuarios').doc(user.uid).get();
+                
+                let rol = 'no encontrado';
+                if (userDoc.exists) {
+                    rol = userDoc.data().rol || 'sin rol';
+                    addLog(`✅ Documento encontrado. Rol: ${rol}`, 'success');
+                } else {
+                    addLog(`⚠️ No hay documento en usuarios para este UID`, 'error');
+                }
+                
+                document.getElementById('userEmail').textContent = user.email;
+                document.getElementById('userUid').textContent = user.uid;
+                document.getElementById('userRol').textContent = rol;
+                document.getElementById('userInfo').style.display = 'block';
+                
+            } catch (error) {
+                addLog(`❌ Error: ${error.message}`, 'error');
+                statusDiv.innerHTML = `<div class="error">❌ ${error.message}</div>`;
+            }
+        }
+
+        async function logout() {
+            await auth.signOut();
+            document.getElementById('userInfo').style.display = 'none';
+            addLog(`🚪 Sesión cerrada`, 'info');
+            document.getElementById('status').innerHTML = '';
+        }
+
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                addLog(`🔄 Sesión ya activa: ${user.email}`, 'info');
+                const userDoc = await db.collection('usuarios').doc(user.uid).get();
+                let rol = userDoc.exists ? userDoc.data().rol : 'no encontrado';
+                document.getElementById('userEmail').textContent = user.email;
+                document.getElementById('userUid').textContent = user.uid;
+                document.getElementById('userRol').textContent = rol;
+                document.getElementById('userInfo').style.display = 'block';
+            } else {
+                addLog(`🔄 No hay sesión activa`, 'info');
+                document.getElementById('userInfo').style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
