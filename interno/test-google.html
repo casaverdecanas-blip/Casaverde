@@ -50,6 +50,8 @@
         .success { background: #d4edda; color: #155724; }
         .error { background: #f8d7da; color: #721c24; }
         .info { background: #d1ecf1; color: #0c5460; }
+        .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 8px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -81,7 +83,6 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
         
-        // Configurar Google Auth Provider
         const googleProvider = new firebase.auth.GoogleAuthProvider();
         googleProvider.addScope('email');
         googleProvider.addScope('profile');
@@ -107,20 +108,16 @@
                 const userDoc = await db.collection('usuarios').doc(user.uid).get();
                 
                 if (!userDoc.exists) {
-                    // Si no existe, crear documento de usuario
                     await db.collection('usuarios').doc(user.uid).set({
                         email: user.email,
                         nombre: user.displayName || '',
-                        rol: 'admin',  // Le damos rol admin automáticamente
+                        rol: 'admin',
                         telefono: user.phoneNumber || '',
                         creadoEn: firebase.firestore.FieldValue.serverTimestamp()
                     });
                     mostrarStatus(`✅ Usuario ${user.email} creado con rol ADMIN`, 'success');
                 } else if (userDoc.data().rol !== 'admin') {
-                    // Si existe pero no es admin, actualizar a admin
-                    await db.collection('usuarios').doc(user.uid).update({
-                        rol: 'admin'
-                    });
+                    await db.collection('usuarios').doc(user.uid).update({ rol: 'admin' });
                     mostrarStatus(`✅ Usuario ${user.email} actualizado a ADMIN`, 'success');
                 } else {
                     mostrarStatus(`✅ Bienvenido ADMIN: ${user.email}`, 'success');
@@ -137,15 +134,25 @@
             }
         }
 
+        // USAR REDIRECCIÓN EN VEZ DE POPUP
         googleBtn.addEventListener('click', async () => {
+            mostrarStatus('🔄 Redirigiendo a Google...', 'info');
             try {
-                const result = await auth.signInWithPopup(googleProvider);
-                const user = result.user;
-                await verificarYAsignarAdmin(user);
+                await auth.signInWithRedirect(googleProvider);
             } catch (error) {
-                console.error('Error login:', error);
+                console.error('Error:', error);
                 mostrarStatus(`❌ Error: ${error.message}`, 'error');
             }
+        });
+
+        // Manejar el resultado de la redirección
+        auth.getRedirectResult().then(async (result) => {
+            if (result.user) {
+                await verificarYAsignarAdmin(result.user);
+            }
+        }).catch((error) => {
+            console.error('Error redirect:', error);
+            mostrarStatus(`❌ Error: ${error.message}`, 'error');
         });
 
         logoutBtn.addEventListener('click', async () => {
