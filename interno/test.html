@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba - Clasificación de Tareas</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { background: #1e1e2f; padding: 20px; color: #fff; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { margin-bottom: 20px; color: #667eea; }
+        .login-box { background: #2a2a3a; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
+        input, button { padding: 10px; margin: 5px; border-radius: 8px; border: none; }
+        button { background: #667eea; color: white; cursor: pointer; }
+        button:hover { background: #5a6fd8; }
+        table { width: 100%; border-collapse: collapse; background: #2a2a3a; border-radius: 12px; overflow: hidden; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #3a3a4a; }
+        th { background: #667eea; color: white; }
+        .pendiente { background: #2a5a2a; color: #aaffaa; }
+        .reciente { background: #5a2a2a; color: #ffaaaa; }
+        .info { background: #2a2a5a; color: #aaaaff; }
+        .error { background: #5a2a2a; color: #ffaaaa; }
+        .status { padding: 12px; border-radius: 8px; margin-bottom: 20px; }
+        .status.success { background: #2a5a2a; color: #aaffaa; }
+        .status.error { background: #5a2a2a; color: #ffaaaa; }
+        .status.info { background: #2a2a5a; color: #aaaaff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Prueba de Clasificación de Tareas</h1>
+        
+        <div class="login-box">
+            <h3>🔐 Login para pruebas</h3>
+            <input type="email" id="email" placeholder="Email" value="casaverdecanas@gmail.com">
+            <input type="password" id="password" placeholder="Contraseña">
+            <button onclick="login()">Iniciar Sesión</button>
+            <div id="loginStatus" class="status" style="margin-top: 15px; display: none;"></div>
+        </div>
+        
+        <div id="testResults" style="display: none;">
+            <div id="loading" style="text-align: center; padding: 40px;">🔄 Cargando datos...</div>
+            <div id="resultsTable" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // Configuración Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+            authDomain: "tatareas-d8a80.firebaseapp.com",
+            projectId: "tatareas-d8a80",
+            storageBucket: "tatareas-d8a80.firebasestorage.app",
+            messagingSenderId: "709332495480",
+            appId: "1:709332495480:web:7060b2c75984352354918d"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let currentUser = null;
+
+        // Funciones auxiliares
+        function getEspaciadoMinimo(recurrencia) {
+            switch (recurrencia) {
+                case 'daily': return 1;
+                case 'biweekly': return 3;
+                case 'weekly': return 6;
+                case 'monthly': return 28;
+                default: return 0;
+            }
+        }
+
+        function getRecurrenciaTexto(recurrencia) {
+            const map = { 'none': 'Una vez', 'daily': 'Diaria', 'weekly': 'Semanal', 'biweekly': '2 veces/semana', 'monthly': 'Mensual' };
+            return map[recurrencia] || recurrencia;
+        }
+
+        async function obtenerUltimaRealizacion(tareaId) {
+            try {
+                const snapshot = await db.collection('historial')
+                    .where('tareaId', '==', tareaId)
+                    .orderBy('fecha', 'desc')
+                    .limit(1)
+                    .get();
+                if (snapshot.empty) return null;
+                const data = snapshot.docs[0].data();
+                return {
+                    fecha: data.fecha.toDate(),
+                    quien: data.completadaPor
+                };
+            } catch (error) {
+                console.error('Error:', error);
+                return null;
+            }
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const loginStatus = document.getElementById('loginStatus');
+            
+            loginStatus.style.display = 'block';
+            loginStatus.className = 'status info';
+            loginStatus.textContent = '🔄 Autenticando...';
+            
+            try {
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                currentUser = userCredential.user;
+                loginStatus.className = 'status success';
+                loginStatus.textContent = '✅ Login exitoso. Cargando tareas...';
+                await cargarYClasificarTareas();
+            } catch (error) {
+                if (error.code === 'auth/user-not-found') {
+                    try {
+                        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                        currentUser = userCredential.user;
+                        loginStatus.className = 'status success';
+                        loginStatus.textContent = '✅ Usuario creado. Cargando tareas...';
+                        await cargarYClasificarTareas();
+                    } catch (createError) {
+                        loginStatus.className = 'status error';
+                        loginStatus.textContent = '❌ Error al crear usuario: ' + createError.message;
+                    }
+                } else {
+                    loginStatus.className = 'status error';
+                    loginStatus.textContent = '❌ Error: ' + error.message;
+                }
+            }
+        }
+
+        async function cargarYClasificarTareas() {
+            document.getElementById('testResults').style.display = 'block';
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('resultsTable').style.display = 'none';
+            
+            try {
+                // Obtener todas las tareas activas
+                const tareasSnapshot = await db.collection('tareas').where('activa', '==', true).get();
+                const tareas = [];
+                tareasSnapshot.forEach(doc => tareas.push({ id: doc.id, ...doc.data() }));
+                
+                // Obtener última realización de cada tarea
+                const tareasConUltima = await Promise.all(tareas.map(async tarea => {
+                    const ultima = await obtenerUltimaRealizacion(tarea.id);
+                    return { ...tarea, ultimaRealizacion: ultima };
+                }));
+                
+                // Clasificar
+                const ahora = new Date();
+                const pendientes = [];
+                const recientes = [];
+                
+                for (const tarea of tareasConUltima) {
+                    let esReciente = false;
+                    let ultimaInfo = '';
+                    let diasDiferencia = null;
+                    let espaciadoMinimo = getEspaciadoMinimo(tarea.recurrencia);
+                    
+                    if (tarea.ultimaRealizacion) {
+                        diasDiferencia = Math.floor((ahora - tarea.ultimaRealizacion.fecha) / (1000 * 60 * 60 * 24));
+                        ultimaInfo = `${tarea.ultimaRealizacion.fecha.toLocaleDateString()} por ${tarea.ultimaRealizacion.quien}`;
+                        
+                        if (espaciadoMinimo > 0 && diasDiferencia < espaciadoMinimo) {
+                            esReciente = true;
+                        }
+                    } else {
+                        ultimaInfo = 'Nunca realizada';
+                        diasDiferencia = '-';
+                    }
+                    
+                    const clasificacion = esReciente ? '🔴 RECIENTE (tachada)' : '🟢 PENDIENTE';
+                    
+                    recientes.push({
+                        id: tarea.id,
+                        titulo: tarea.titulo,
+                        recurrencia: getRecurrenciaTexto(tarea.recurrencia),
+                        espaciado: espaciadoMinimo,
+                        ultimaInfo: ultimaInfo,
+                        diasDiferencia: diasDiferencia,
+                        clasificacion: clasificacion,
+                        esReciente: esReciente
+                    });
+                }
+                
+                // Ordenar: pendientes arriba, recientes abajo
+                recientes.sort((a, b) => {
+                    if (a.esReciente === b.esReciente) return 0;
+                    return a.esReciente ? 1 : -1;
+                });
+                
+                mostrarTabla(recientes);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('loading').innerHTML = `<div class="status error">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        function mostrarTabla(tareas) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('resultsTable').style.display = 'block';
+            
+            let html = `
+                <h2 style="margin: 20px 0 10px 0;">📋 Resultado de clasificación</h2>
+                <p style="margin-bottom: 15px; color: #aaa;">✅ Las tareas PENDIENTES están disponibles para marcar.<br>
+                🔴 Las tareas RECIENTES aparecerán tachadas al final de la lista con información de última vez.</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tarea</th>
+                            <th>Frecuencia</th>
+                            <th>Espaciado mínimo</th>
+                            <th>Última realización</th>
+                            <th>Días desde última</th>
+                            <th>Clasificación</th>
+                        </thead>
+                    </thead>
+                    <tbody>
+            `;
+            
+            for (const tarea of tareas) {
+                const rowClass = tarea.esReciente ? 'reciente' : 'pendiente';
+                html += `
+                    <tr class="${rowClass}">
+                        <td><strong>${escapeHtml(tarea.titulo)}</strong></td>
+                        <td>${escapeHtml(tarea.recurrencia)}</td>
+                        <td>${tarea.espaciado} días</td>
+                        <td>${escapeHtml(tarea.ultimaInfo)}</td>
+                        <td>${tarea.diasDiferencia !== '-' ? tarea.diasDiferencia + ' días' : '-'}</td>
+                        <td>${tarea.clasificacion}</td>
+                    </tr>
+                `;
+            }
+            
+            if (tareas.length === 0) {
+                html += `<tr><td colspan="6" style="text-align:center;">No hay tareas activas</td></tr>`;
+            }
+            
+            html += `
+                    </tbody>
+                </table>
+                <p style="margin-top: 20px; padding: 12px; background: #2a2a3a; border-radius: 8px;">
+                    <strong>📌 Resumen:</strong><br>
+                    🟢 Pendientes: ${tareas.filter(t => !t.esReciente).length}<br>
+                    🔴 Recientes (tachadas): ${tareas.filter(t => t.esReciente).length}
+                </p>
+            `;
+            
+            document.getElementById('resultsTable').innerHTML = html;
+        }
+        
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
+        }
+        
+        // Autologin si ya hay sesión
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                currentUser = user;
+                document.getElementById('loginStatus').style.display = 'block';
+                document.getElementById('loginStatus').className = 'status success';
+                document.getElementById('loginStatus').textContent = `✅ Sesión activa: ${user.email}`;
+                await cargarYClasificarTareas();
+                document.getElementById('testResults').style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>
