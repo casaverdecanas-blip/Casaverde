@@ -1,435 +1,324 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel Admin - CasaVerdeCanas</title>
-    
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
-        body { background: linear-gradient(135deg, #2d5a27 0%, #1e3f1a 100%); min-height: 100vh; padding: 20px; }
-        .container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-        .header { background: #2d5a27; color: white; padding: 20px 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 10px; }
-        .user-info { display: flex; align-items: center; gap: 15px; background: rgba(255,255,255,0.2); padding: 8px 15px; border-radius: 30px; }
-        .btn-back, .btn-logout { background: rgba(255,255,255,0.2); color: white; border: none; padding: 6px 12px; border-radius: 20px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; text-decoration: none; font-size: 0.85rem; }
-        .btn-logout { background: #e74c3c; }
-        .btn-logout:hover { background: #c0392b; }
-        .tabs { display: flex; gap: 5px; background: #f0f4f0; padding: 0 25px; border-bottom: 1px solid #d0e0d0; }
-        .tab-btn { padding: 12px 24px; background: none; border: none; cursor: pointer; font-size: 0.9rem; font-weight: 500; display: flex; align-items: center; gap: 8px; color: #4a6741; transition: all 0.2s; }
-        .tab-btn:hover { background: #e0e8e0; }
-        .tab-btn.active { color: #2d5a27; border-bottom: 3px solid #2d5a27; background: white; }
-        .panel { display: none; padding: 25px; }
-        .panel.active { display: block; }
-        .toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #e0e0e0; }
-        .btn { padding: 8px 18px; border: none; border-radius: 30px; cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
-        .btn-primary { background: #2d5a27; color: white; }
-        .btn-primary:hover { background: #1e3f1a; }
-        .btn-success { background: #27ae60; color: white; }
-        .btn-success:hover { background: #219a52; }
-        .btn-danger { background: #e74c3c; color: white; }
-        .btn-danger:hover { background: #c0392b; }
-        .btn-warning { background: #f39c12; color: white; }
-        .btn-warning:hover { background: #e67e22; }
-        .btn-secondary { background: #95a5a6; color: white; }
-        .stats { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-        .stat-badge { background: #e8f5e9; padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; color: #2d5a27; }
-        .table-wrapper { overflow-x: auto; max-height: 60vh; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 12px; }
-        .data-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-        .data-table th { background: #f8f9fa; padding: 12px 8px; text-align: left; position: sticky; top: 0; color: #2d5a27; font-weight: 600; border-bottom: 2px solid #e0e0e0; }
-        .data-table td { padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: middle; }
-        .data-table tr:hover { background: #fafafa; }
-        .data-table input, .data-table select, .data-table textarea { width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 0.75rem; }
-        .data-table textarea { min-height: 50px; resize: vertical; }
-        .action-buttons { display: flex; gap: 5px; flex-wrap: wrap; }
-        .icon-btn { background: none; border: none; cursor: pointer; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; display: inline-flex; align-items: center; gap: 3px; }
-        .icon-btn.save { background: #27ae60; color: white; }
-        .icon-btn.delete { background: #e74c3c; color: white; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
-        .modal-content { background: white; padding: 25px; border-radius: 16px; width: 90%; max-width: 500px; }
-        .modal-content input, .modal-content select { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; }
-        .status-message { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; border-radius: 30px; background: #2d5a27; color: white; z-index: 1000; display: none; }
-        .login-container { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .login-box { background: white; padding: 35px; border-radius: 20px; width: 350px; text-align: center; }
-        .login-box h2 { color: #2d5a27; margin-bottom: 25px; display: flex; align-items: center; justify-content: center; gap: 10px; }
-        .login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 30px; }
-        .login-box button { width: 100%; padding: 12px; background: #2d5a27; color: white; border: none; border-radius: 30px; cursor: pointer; }
-        .error-msg { color: #e74c3c; margin-top: 10px; }
-        @media (max-width: 768px) { .tabs { flex-direction: column; padding: 0; } .tab-btn { justify-content: center; } .toolbar { flex-direction: column; align-items: stretch; } .btn { justify-content: center; } }
-    </style>
-</head>
-<body>
-    <div id="loginContainer" class="login-container">
-        <div class="login-box">
-            <h2><span class="material-icons">admin_panel_settings</span> Acceso Admin</h2>
-            <input type="email" id="adminEmail" placeholder="Email">
-            <input type="password" id="adminPassword" placeholder="Contraseña">
-            <button onclick="loginAdmin()">Ingresar</button>
-            <div id="loginError" class="error-msg"></div>
-        </div>
-    </div>
+const firebaseConfig = {
+    apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+    authDomain: "tatareas-d8a80.firebaseapp.com",
+    projectId: "tatareas-d8a80",
+    storageBucket: "tatareas-d8a80.firebasestorage.app",
+    messagingSenderId: "709332495480",
+    appId: "1:709332495480:web:7060b2c75984352354918d"
+};
 
-    <div id="adminPanel" class="container" style="display: none;">
-        <div class="header">
-            <h1><span class="material-icons">dashboard</span> Panel de Administración</h1>
-            <div class="user-info">
-                <span class="material-icons">account_circle</span>
-                <span id="userEmailDisplay"></span>
-                <a href="index.html" class="btn-back"><span class="material-icons">arrow_back</span> Volver</a>
-                <button onclick="logoutAdmin()" class="btn-logout"><span class="material-icons">logout</span> Salir</button>
-            </div>
-        </div>
-        
-        <div class="tabs">
-            <button class="tab-btn active" data-tab="tasks"><span class="material-icons">assignment</span> 📋 Tareas</button>
-            <button class="tab-btn" data-tab="users"><span class="material-icons">people</span> 👥 Usuarios</button>
-            <button class="tab-btn" data-tab="history"><span class="material-icons">history</span> 📊 Historial</button>
-        </div>
-        
-        <!-- Panel Tareas -->
-        <div id="tasksPanel" class="panel active">
-            <div class="toolbar">
-                <div class="stats"><span class="stat-badge" id="tasksCount">0 tareas</span></div>
-                <button onclick="saveAllTasks()" class="btn-success"><span class="material-icons">save</span> Guardar Todo</button>
-            </div>
-            <div class="table-wrapper">
-                <table class="data-table" id="tasksTable">
-                    <thead><tr><th style="width:25%">Título</th><th style="width:35%">Descripción</th><th style="width:12%">Prioridad</th><th style="width:12%">Recurrencia</th><th style="width:10%">Fecha Inicio</th><th style="width:6%">Activa</th></tr></thead>
-                    <tbody id="tasksTableBody"><tr><td colspan="6">Cargando tareas...</td></tr></tbody>
-                </table>
-            </div>
-        </div>
-        
-        <!-- Panel Usuarios -->
-        <div id="usersPanel" class="panel">
-            <div class="toolbar">
-                <div class="stats"><span class="stat-badge" id="usersCount">0 usuarios</span></div>
-                <button onclick="showAddUserModal()" class="btn-primary"><span class="material-icons">add</span> Nuevo Usuario</button>
-            </div>
-            <div class="table-wrapper">
-                <table class="data-table" id="usersTable">
-                    <thead><tr><th>Email</th><th>Nombre</th><th>Rol</th><th>Teléfono</th><th>Acciones</th></tr></thead>
-                    <tbody id="usersTableBody"><tr><td colspan="5">Cargando usuarios...</td></tr></tbody>
-                </table>
-            </div>
-        </div>
-        
-        <!-- Panel Historial -->
-        <div id="historyPanel" class="panel">
-            <div class="toolbar">
-                <div class="stats"><span class="stat-badge" id="historyCount">0 registros</span></div>
-                <div style="display: flex; gap: 10px;">
-                    <button onclick="exportHistoryToCSV()" class="btn-warning"><span class="material-icons">download</span> Exportar CSV</button>
-                    <button onclick="clearOldHistory()" class="btn-danger"><span class="material-icons">delete_sweep</span> Limpiar Antiguo</button>
-                </div>
-            </div>
-            <div class="table-wrapper">
-                <table class="data-table" id="historyTable">
-                    <thead><tr><th>Fecha</th><th>Tarea</th><th>Realizada por</th></tr></thead>
-                    <tbody id="historyTableBody"><tr><td colspan="3">Cargando historial...</td></tr></tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Modal Usuario -->
-    <div id="userModal" class="modal">
-        <div class="modal-content">
-            <h3 id="modalTitle">Nuevo Usuario</h3>
-            <input type="email" id="userEmail" placeholder="Email *">
-            <input type="password" id="userPassword" placeholder="Contraseña *">
-            <input type="text" id="userName" placeholder="Nombre completo">
-            <select id="userRole"><option value="user">Usuario normal</option><option value="admin">Administrador</option></select>
-            <input type="text" id="userPhone" placeholder="Teléfono">
-            <div style="display: flex; gap: 10px; margin-top: 15px;">
-                <button onclick="saveUser()" class="btn-success">Guardar</button>
-                <button onclick="closeUserModal()" class="btn-secondary">Cancelar</button>
-            </div>
-            <div id="modalError" style="color:#e74c3c; margin-top:10px;"></div>
-        </div>
-    </div>
-    
-    <div id="statusMessage" class="status-message"></div>
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
 
-    <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
-            authDomain: "tatareas-d8a80.firebaseapp.com",
-            projectId: "tatareas-d8a80",
-            storageBucket: "tatareas-d8a80.firebasestorage.app",
-            messagingSenderId: "709332495480",
-            appId: "1:709332495480:web:7060b2c75984352354918d"
-        };
+let currentUser = null;
+let tareasCache = [], usuariosCache = [], historialCache = [];
+let editingUserId = null;
+
+function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m)); }
+function mostrarMensaje(msg, tipo) {
+    const div = document.getElementById('statusMessage');
+    div.textContent = msg;
+    div.style.backgroundColor = tipo === 'error' ? '#e74c3c' : (tipo === 'warning' ? '#f39c12' : '#2d5a27');
+    div.style.display = 'block';
+    setTimeout(() => div.style.display = 'none', 3000);
+}
+
+// ============================================
+// LOGIN CON VERIFICACIÓN POR ROL
+// ============================================
+async function loginAdmin() {
+    const email = document.getElementById('adminEmail').value;
+    const password = document.getElementById('adminPassword').value;
+    const errorDiv = document.getElementById('loginError');
+    
+    if (!email || !password) {
+        errorDiv.textContent = 'Ingresa email y contraseña';
+        return;
+    }
+    
+    try {
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        const user = userCredential.user;
         
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-        
-        const ADMIN_EMAIL = 'admin@casaverde.com';
-        let currentUser = null;
-        let tareasCache = [], usuariosCache = [], historialCache = [];
-        let editingUserId = null;
-        
-        function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m)); }
-        function mostrarMensaje(msg, tipo) {
-            const div = document.getElementById('statusMessage');
-            div.textContent = msg;
-            div.style.backgroundColor = tipo === 'error' ? '#e74c3c' : (tipo === 'warning' ? '#f39c12' : '#2d5a27');
-            div.style.display = 'block';
-            setTimeout(() => div.style.display = 'none', 3000);
+        // Verificar si es admin en Firestore
+        const userDoc = await db.collection('usuarios').doc(user.uid).get();
+        if (!userDoc.exists || userDoc.data().rol !== 'admin') {
+            await auth.signOut();
+            errorDiv.textContent = 'Acceso solo para administradores';
+            return;
         }
         
-        async function loginAdmin() {
-            const email = document.getElementById('adminEmail').value;
-            const password = document.getElementById('adminPassword').value;
-            const errorDiv = document.getElementById('loginError');
-            if (!email || !password) { errorDiv.textContent = 'Ingresa email y contraseña'; return; }
-            try {
-                const userCredential = await auth.signInWithEmailAndPassword(email, password);
-                if (userCredential.user.email !== ADMIN_EMAIL) { await auth.signOut(); errorDiv.textContent = 'Acceso solo para administradores'; return; }
-                currentUser = userCredential.user;
-                document.getElementById('loginContainer').style.display = 'none';
-                document.getElementById('adminPanel').style.display = 'block';
-                document.getElementById('userEmailDisplay').textContent = currentUser.email;
-                cargarTodosLosDatos();
-            } catch (error) {
-                errorDiv.textContent = 'Email o contraseña incorrectos';
-            }
-        }
-        
-        function logoutAdmin() { auth.signOut(); location.reload(); }
-        
-        auth.onAuthStateChanged((user) => {
-            if (user && user.email === ADMIN_EMAIL) {
+        currentUser = user;
+        document.getElementById('loginContainer').style.display = 'none';
+        document.getElementById('adminPanel').style.display = 'block';
+        document.getElementById('userEmailDisplay').textContent = currentUser.email;
+        cargarTodosLosDatos();
+    } catch (error) {
+        errorDiv.textContent = 'Email o contraseña incorrectos';
+    }
+}
+
+function logoutAdmin() { auth.signOut(); location.reload(); }
+
+// ============================================
+// VERIFICACIÓN DE SESIÓN
+// ============================================
+auth.onAuthStateChanged(async (user) => {
+    if (user) {
+        // Verificar si es admin en Firestore
+        try {
+            const userDoc = await db.collection('usuarios').doc(user.uid).get();
+            if (userDoc.exists && userDoc.data().rol === 'admin') {
                 currentUser = user;
                 document.getElementById('loginContainer').style.display = 'none';
                 document.getElementById('adminPanel').style.display = 'block';
                 document.getElementById('userEmailDisplay').textContent = user.email;
                 cargarTodosLosDatos();
+            } else {
+                // No es admin, cerrar sesión
+                await auth.signOut();
+                document.getElementById('loginError').textContent = 'Acceso solo para administradores';
+                document.getElementById('loginContainer').style.display = 'flex';
+                document.getElementById('adminPanel').style.display = 'none';
             }
-        });
-        
-        async function cargarTodosLosDatos() {
-            await Promise.all([cargarTareas(), cargarUsuarios(), cargarHistorial()]);
+        } catch (error) {
+            console.error('Error verificando admin:', error);
+            await auth.signOut();
         }
-        
-        async function cargarTareas() {
-            const snapshot = await db.collection('tareas').orderBy('titulo').get();
-            tareasCache = [];
-            snapshot.forEach(doc => tareasCache.push({ id: doc.id, ...doc.data() }));
-            renderizarTareas();
-            document.getElementById('tasksCount').textContent = `${tareasCache.length} tareas`;
-        }
-        
-        async function cargarUsuarios() {
-            const snapshot = await db.collection('usuarios').get();
-            usuariosCache = [];
-            snapshot.forEach(doc => usuariosCache.push({ id: doc.id, ...doc.data() }));
-            renderizarUsuarios();
-            document.getElementById('usersCount').textContent = `${usuariosCache.length} usuarios`;
-        }
-        
-        async function cargarHistorial() {
-            const snapshot = await db.collection('historial').orderBy('fecha', 'desc').limit(500).get();
-            historialCache = [];
-            snapshot.forEach(doc => historialCache.push({ id: doc.id, ...doc.data() }));
-            renderizarHistorial();
-            document.getElementById('historyCount').textContent = `${historialCache.length} registros`;
-        }
-        
-        function renderizarTareas() {
-            const tbody = document.getElementById('tasksTableBody');
-            if (tareasCache.length === 0) { tbody.innerHTML = '<tr><td colspan="6">No hay tareas</td></tr>'; return; }
-            tbody.innerHTML = tareasCache.map(t => `
-                <tr data-id="${t.id}">
-                    <td><input type="text" class="task-title" value="${escapeHtml(t.titulo || '')}"></td>
-                    <td><textarea class="task-desc">${escapeHtml(t.descripcion || '')}</textarea></td>
-                    <td><select class="task-priority"><option value="alta" ${t.prioridad === 'alta' ? 'selected' : ''}>Alta</option><option value="media" ${t.prioridad === 'media' ? 'selected' : ''}>Media</option><option value="baja" ${t.prioridad === 'baja' ? 'selected' : ''}>Baja</option></select></td>
-                    <td><select class="task-recurrence"><option value="none" ${t.recurrencia === 'none' ? 'selected' : ''}>Una vez</option><option value="daily" ${t.recurrencia === 'daily' ? 'selected' : ''}>Diaria</option><option value="weekly" ${t.recurrencia === 'weekly' ? 'selected' : ''}>Semanal</option><option value="biweekly" ${t.recurrencia === 'biweekly' ? 'selected' : ''}>2 veces/semana</option><option value="monthly" ${t.recurrencia === 'monthly' ? 'selected' : ''}>Mensual</option></select></td>
-                    <td><input type="date" class="task-startdate" value="${t.fechaInicio || ''}"></td>
-                    <td style="text-align:center"><input type="checkbox" class="task-active" ${t.activa !== false ? 'checked' : ''}></td>
-                </tr>
-            `).join('');
-        }
-        
-        async function saveAllTasks() {
-            mostrarMensaje('Guardando cambios...', 'info');
-            let guardados = 0, errores = 0;
-            const rows = document.querySelectorAll('#tasksTableBody tr');
-            for (const row of rows) {
-                const id = row.dataset.id;
-                if (!id) continue;
-                const titulo = row.querySelector('.task-title')?.value.trim();
-                if (!titulo) { errores++; continue; }
-                try {
-                    await db.collection('tareas').doc(id).update({
-                        titulo, descripcion: row.querySelector('.task-desc')?.value || '',
-                        prioridad: row.querySelector('.task-priority')?.value || 'media',
-                        recurrencia: row.querySelector('.task-recurrence')?.value || 'none',
-                        fechaInicio: row.querySelector('.task-startdate')?.value || null,
-                        activa: row.querySelector('.task-active')?.checked || false
-                    });
-                    guardados++;
-                } catch(e) { errores++; }
-            }
-            mostrarMensaje(`✅ Guardados: ${guardados} tareas. ❌ Errores: ${errores}`, guardados > 0 ? 'success' : 'error');
-            await cargarTareas();
-        }
-        
-        function renderizarUsuarios() {
-            const tbody = document.getElementById('usersTableBody');
-            if (usuariosCache.length === 0) { tbody.innerHTML = '<tr><td colspan="5">No hay usuarios</td></tr>'; return; }
-            tbody.innerHTML = usuariosCache.map(u => `
-                <tr data-id="${u.id}">
-                    <td>${escapeHtml(u.email)}</td>
-                    <td><input type="text" class="user-name" value="${escapeHtml(u.nombre || '')}" style="width:100%"></td>
-                    <td><select class="user-role"><option value="user" ${u.rol === 'user' ? 'selected' : ''}>Usuario</option><option value="admin" ${u.rol === 'admin' ? 'selected' : ''}>Administrador</option></select></td>
-                    <td><input type="text" class="user-phone" value="${escapeHtml(u.telefono || '')}" style="width:100%"></td>
-                    <td class="action-buttons"><button onclick="updateUser('${u.id}')" class="icon-btn save"><span class="material-icons">save</span></button><button onclick="deleteUser('${u.id}', '${escapeHtml(u.email)}')" class="icon-btn delete"><span class="material-icons">delete</span></button></td>
-                </tr>
-            `).join('');
-        }
-        
-        function showAddUserModal() {
-            editingUserId = null;
-            document.getElementById('modalTitle').textContent = 'Nuevo Usuario';
-            document.getElementById('userEmail').value = '';
-            document.getElementById('userPassword').value = '';
-            document.getElementById('userName').value = '';
-            document.getElementById('userRole').value = 'user';
-            document.getElementById('userPhone').value = '';
-            document.getElementById('modalError').textContent = '';
-            document.getElementById('userModal').style.display = 'flex';
-        }
-        
-        function closeUserModal() { document.getElementById('userModal').style.display = 'none'; editingUserId = null; }
-        
-        async function saveUser() {
-            const email = document.getElementById('userEmail').value.trim();
-            const password = document.getElementById('userPassword').value;
-            const nombre = document.getElementById('userName').value.trim();
-            const rol = document.getElementById('userRole').value;
-            const telefono = document.getElementById('userPhone').value.trim();
-            const errorDiv = document.getElementById('modalError');
-            if (!email) { errorDiv.textContent = 'El email es obligatorio'; return; }
-            try {
-                if (editingUserId) {
-                    await db.collection('usuarios').doc(editingUserId).update({ nombre, rol, telefono });
-                    mostrarMensaje('Usuario actualizado', 'success');
-                } else {
-                    if (!password || password.length < 6) { errorDiv.textContent = 'La contraseña debe tener al menos 6 caracteres'; return; }
-                    const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-                    await db.collection('usuarios').doc(userCredential.user.uid).set({ email, nombre, rol, telefono, creadoEn: firebase.firestore.FieldValue.serverTimestamp() });
-                    mostrarMensaje('Usuario creado', 'success');
-                }
-                closeUserModal();
-                await cargarUsuarios();
-            } catch (error) {
-                errorDiv.textContent = error.code === 'auth/email-already-in-use' ? 'Email ya registrado' : 'Error: ' + error.message;
-            }
-        }
-        
-        async function updateUser(userId) {
-            const row = document.querySelector(`#usersTableBody tr[data-id="${userId}"]`);
-            if (!row) return;
-            const nombre = row.querySelector('.user-name')?.value || '';
-            const rol = row.querySelector('.user-role')?.value || 'user';
-            const telefono = row.querySelector('.user-phone')?.value || '';
-            try {
-                await db.collection('usuarios').doc(userId).update({ nombre, rol, telefono });
-                mostrarMensaje('Usuario actualizado', 'success');
-                await cargarUsuarios();
-            } catch(e) { mostrarMensaje('Error', 'error'); }
-        }
-        
-        async function deleteUser(userId, userEmail) {
-            if (userEmail === ADMIN_EMAIL) { mostrarMensaje('No puedes eliminar al administrador principal', 'error'); return; }
-            if (!confirm(`¿Eliminar al usuario ${userEmail}?`)) return;
-            try {
-                await db.collection('usuarios').doc(userId).delete();
-                mostrarMensaje('Usuario eliminado', 'success');
-                await cargarUsuarios();
-            } catch(e) { mostrarMensaje('Error', 'error'); }
-        }
-        
-        function renderizarHistorial() {
-            const tbody = document.getElementById('historyTableBody');
-            if (historialCache.length === 0) { tbody.innerHTML = '<tr><td colspan="3">No hay registros</td></tr>'; return; }
-            tbody.innerHTML = historialCache.map(h => {
-                let fechaStr = '';
-                if (h.fecha) { try { fechaStr = h.fecha.toDate().toLocaleString(); } catch(e) {} }
-                return `<tr><td>${fechaStr}</td><td>${escapeHtml(h.titulo || '')}</td><td>${escapeHtml(h.completadaPor || '')}</td></tr>`;
-            }).join('');
-        }
-        
-        function exportHistoryToCSV() {
-            if (historialCache.length === 0) { mostrarMensaje('No hay datos para exportar', 'warning'); return; }
-            const headers = ['Fecha', 'Tarea', 'Realizada por'];
-            const rows = historialCache.map(h => {
-                let fechaStr = '';
-                if (h.fecha) { try { fechaStr = h.fecha.toDate().toISOString(); } catch(e) {} }
-                return [fechaStr, h.titulo || '', h.completadaPor || ''];
+    } else {
+        document.getElementById('loginContainer').style.display = 'flex';
+        document.getElementById('adminPanel').style.display = 'none';
+    }
+});
+
+// ============================================
+// CARGA DE DATOS (igual que antes)
+// ============================================
+async function cargarTodosLosDatos() {
+    await Promise.all([cargarTareas(), cargarUsuarios(), cargarHistorial()]);
+}
+
+async function cargarTareas() {
+    const snapshot = await db.collection('tareas').orderBy('titulo').get();
+    tareasCache = [];
+    snapshot.forEach(doc => tareasCache.push({ id: doc.id, ...doc.data() }));
+    renderizarTareas();
+    document.getElementById('tasksCount').textContent = `${tareasCache.length} tareas`;
+}
+
+async function cargarUsuarios() {
+    const snapshot = await db.collection('usuarios').get();
+    usuariosCache = [];
+    snapshot.forEach(doc => usuariosCache.push({ id: doc.id, ...doc.data() }));
+    renderizarUsuarios();
+    document.getElementById('usersCount').textContent = `${usuariosCache.length} usuarios`;
+}
+
+async function cargarHistorial() {
+    const snapshot = await db.collection('historial').orderBy('fecha', 'desc').limit(500).get();
+    historialCache = [];
+    snapshot.forEach(doc => historialCache.push({ id: doc.id, ...doc.data() }));
+    renderizarHistorial();
+    document.getElementById('historyCount').textContent = `${historialCache.length} registros`;
+}
+
+// ============================================
+// RENDERIZADO DE TAREAS (EDITABLE)
+// ============================================
+function renderizarTareas() {
+    const tbody = document.getElementById('tasksTableBody');
+    if (tareasCache.length === 0) { tbody.innerHTML = 'rables<td colspan="6">No hay tareas</td></tr>'; return; }
+    tbody.innerHTML = tareasCache.map(t => `
+        <tr data-id="${t.id}">
+            <td><input type="text" class="task-title" value="${escapeHtml(t.titulo || '')}"></td>
+            <td><textarea class="task-desc">${escapeHtml(t.descripcion || '')}</textarea></td>
+            <td><select class="task-priority"><option value="alta" ${t.prioridad === 'alta' ? 'selected' : ''}>Alta</option><option value="media" ${t.prioridad === 'media' ? 'selected' : ''}>Media</option><option value="baja" ${t.prioridad === 'baja' ? 'selected' : ''}>Baja</option></select></td>
+            <td><select class="task-recurrence"><option value="none" ${t.recurrencia === 'none' ? 'selected' : ''}>Una vez</option><option value="daily" ${t.recurrencia === 'daily' ? 'selected' : ''}>Diaria</option><option value="weekly" ${t.recurrencia === 'weekly' ? 'selected' : ''}>Semanal</option><option value="biweekly" ${t.recurrencia === 'biweekly' ? 'selected' : ''}>2 veces/semana</option><option value="monthly" ${t.recurrencia === 'monthly' ? 'selected' : ''}>Mensual</option></select></td>
+            <td><input type="date" class="task-startdate" value="${t.fechaInicio || ''}"></td>
+            <td style="text-align:center"><input type="checkbox" class="task-active" ${t.activa !== false ? 'checked' : ''}></td>
+        </tr>
+    `).join('');
+}
+
+async function saveAllTasks() {
+    mostrarMensaje('Guardando cambios...', 'info');
+    let guardados = 0, errores = 0;
+    const rows = document.querySelectorAll('#tasksTableBody tr');
+    for (const row of rows) {
+        const id = row.dataset.id;
+        if (!id) continue;
+        const titulo = row.querySelector('.task-title')?.value.trim();
+        if (!titulo) { errores++; continue; }
+        try {
+            await db.collection('tareas').doc(id).update({
+                titulo, descripcion: row.querySelector('.task-desc')?.value || '',
+                prioridad: row.querySelector('.task-priority')?.value || 'media',
+                recurrencia: row.querySelector('.task-recurrence')?.value || 'none',
+                fechaInicio: row.querySelector('.task-startdate')?.value || null,
+                activa: row.querySelector('.task-active')?.checked || false
             });
-            const csvContent = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
-            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.setAttribute('download', `historial_${new Date().toISOString().slice(0,10)}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            mostrarMensaje('Exportación completada', 'success');
+            guardados++;
+        } catch(e) { errores++; }
+    }
+    mostrarMensaje(`✅ Guardados: ${guardados} tareas. ❌ Errores: ${errores}`, guardados > 0 ? 'success' : 'error');
+    await cargarTareas();
+}
+
+// ============================================
+// GESTIÓN DE USUARIOS
+// ============================================
+function renderizarUsuarios() {
+    const tbody = document.getElementById('usersTableBody');
+    if (usuariosCache.length === 0) { tbody.innerHTML = '<tr><td colspan="5">No hay usuarios</td></tr>'; return; }
+    tbody.innerHTML = usuariosCache.map(u => `
+        <tr data-id="${u.id}">
+            <td>${escapeHtml(u.email)}</td>
+            <td><input type="text" class="user-name" value="${escapeHtml(u.nombre || '')}" style="width:100%"></td>
+            <td><select class="user-role"><option value="user" ${u.rol === 'user' ? 'selected' : ''}>Usuario</option><option value="admin" ${u.rol === 'admin' ? 'selected' : ''}>Administrador</option></select></td>
+            <td><input type="text" class="user-phone" value="${escapeHtml(u.telefono || '')}" style="width:100%"></td>
+            <td class="action-buttons"><button onclick="updateUser('${u.id}')" class="icon-btn save"><span class="material-icons">save</span></button><button onclick="deleteUser('${u.id}', '${escapeHtml(u.email)}')" class="icon-btn delete"><span class="material-icons">delete</span></button></td>
+        </tr>
+    `).join('');
+}
+
+function showAddUserModal() {
+    editingUserId = null;
+    document.getElementById('modalTitle').textContent = 'Nuevo Usuario';
+    document.getElementById('userEmail').value = '';
+    document.getElementById('userPassword').value = '';
+    document.getElementById('userName').value = '';
+    document.getElementById('userRole').value = 'user';
+    document.getElementById('userPhone').value = '';
+    document.getElementById('modalError').textContent = '';
+    document.getElementById('userModal').style.display = 'flex';
+}
+
+function closeUserModal() { document.getElementById('userModal').style.display = 'none'; editingUserId = null; }
+
+async function saveUser() {
+    const email = document.getElementById('userEmail').value.trim();
+    const password = document.getElementById('userPassword').value;
+    const nombre = document.getElementById('userName').value.trim();
+    const rol = document.getElementById('userRole').value;
+    const telefono = document.getElementById('userPhone').value.trim();
+    const errorDiv = document.getElementById('modalError');
+    if (!email) { errorDiv.textContent = 'El email es obligatorio'; return; }
+    try {
+        if (editingUserId) {
+            await db.collection('usuarios').doc(editingUserId).update({ nombre, rol, telefono });
+            mostrarMensaje('Usuario actualizado', 'success');
+        } else {
+            if (!password || password.length < 6) { errorDiv.textContent = 'La contraseña debe tener al menos 6 caracteres'; return; }
+            const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+            await db.collection('usuarios').doc(userCredential.user.uid).set({ email, nombre, rol, telefono, creadoEn: firebase.firestore.FieldValue.serverTimestamp() });
+            mostrarMensaje('Usuario creado', 'success');
         }
-        
-        async function clearOldHistory() {
-            const dias = prompt('¿Eliminar registros de hace cuántos días?', '30');
-            if (!dias) return;
-            const diasNum = parseInt(dias);
-            if (isNaN(diasNum) || diasNum < 1) { mostrarMensaje('Número inválido', 'error'); return; }
-            if (!confirm(`¿Eliminar registros con más de ${diasNum} días?`)) return;
-            const fechaLimite = new Date();
-            fechaLimite.setDate(fechaLimite.getDate() - diasNum);
-            let eliminados = 0;
-            for (const h of historialCache) {
-                if (h.fecha) {
-                    try {
-                        if (h.fecha.toDate() < fechaLimite) {
-                            await db.collection('historial').doc(h.id).delete();
-                            eliminados++;
-                        }
-                    } catch(e) {}
+        closeUserModal();
+        await cargarUsuarios();
+    } catch (error) {
+        errorDiv.textContent = error.code === 'auth/email-already-in-use' ? 'Email ya registrado' : 'Error: ' + error.message;
+    }
+}
+
+async function updateUser(userId) {
+    const row = document.querySelector(`#usersTableBody tr[data-id="${userId}"]`);
+    if (!row) return;
+    const nombre = row.querySelector('.user-name')?.value || '';
+    const rol = row.querySelector('.user-role')?.value || 'user';
+    const telefono = row.querySelector('.user-phone')?.value || '';
+    try {
+        await db.collection('usuarios').doc(userId).update({ nombre, rol, telefono });
+        mostrarMensaje('Usuario actualizado', 'success');
+        await cargarUsuarios();
+    } catch(e) { mostrarMensaje('Error', 'error'); }
+}
+
+async function deleteUser(userId, userEmail) {
+    if (userEmail === currentUser?.email) { mostrarMensaje('No puedes eliminar tu propia cuenta', 'error'); return; }
+    if (!confirm(`¿Eliminar al usuario ${userEmail}?`)) return;
+    try {
+        await db.collection('usuarios').doc(userId).delete();
+        mostrarMensaje('Usuario eliminado', 'success');
+        await cargarUsuarios();
+    } catch(e) { mostrarMensaje('Error', 'error'); }
+}
+
+// ============================================
+// HISTORIAL
+// ============================================
+function renderizarHistorial() {
+    const tbody = document.getElementById('historyTableBody');
+    if (historialCache.length === 0) { tbody.innerHTML = 'rables<td colspan="3">No hay registros</td></tr>'; return; }
+    tbody.innerHTML = historialCache.map(h => {
+        let fechaStr = '';
+        if (h.fecha) { try { fechaStr = h.fecha.toDate().toLocaleString(); } catch(e) {} }
+        return `<tr><td>${fechaStr}</td><td>${escapeHtml(h.titulo || '')}</td><td>${escapeHtml(h.completadaPor || '')}</td></tr>`;
+    }).join('');
+}
+
+function exportHistoryToCSV() {
+    if (historialCache.length === 0) { mostrarMensaje('No hay datos para exportar', 'warning'); return; }
+    const headers = ['Fecha', 'Tarea', 'Realizada por'];
+    const rows = historialCache.map(h => {
+        let fechaStr = '';
+        if (h.fecha) { try { fechaStr = h.fecha.toDate().toISOString(); } catch(e) {} }
+        return [fechaStr, h.titulo || '', h.completadaPor || ''];
+    });
+    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', `historial_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    mostrarMensaje('Exportación completada', 'success');
+}
+
+async function clearOldHistory() {
+    const dias = prompt('¿Eliminar registros de hace cuántos días?', '30');
+    if (!dias) return;
+    const diasNum = parseInt(dias);
+    if (isNaN(diasNum) || diasNum < 1) { mostrarMensaje('Número inválido', 'error'); return; }
+    if (!confirm(`¿Eliminar registros con más de ${diasNum} días?`)) return;
+    const fechaLimite = new Date();
+    fechaLimite.setDate(fechaLimite.getDate() - diasNum);
+    let eliminados = 0;
+    for (const h of historialCache) {
+        if (h.fecha) {
+            try {
+                if (h.fecha.toDate() < fechaLimite) {
+                    await db.collection('historial').doc(h.id).delete();
+                    eliminados++;
                 }
-            }
-            mostrarMensaje(`✅ Eliminados ${eliminados} registros`, 'success');
-            await cargarHistorial();
+            } catch(e) {}
         }
-        
-        // Tabs
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-                btn.classList.add('active');
-                document.getElementById(`${btn.dataset.tab}Panel`).classList.add('active');
-            });
-        });
-        
-        window.showAddUserModal = showAddUserModal;
-        window.closeUserModal = closeUserModal;
-        window.saveUser = saveUser;
-        window.updateUser = updateUser;
-        window.deleteUser = deleteUser;
-        window.saveAllTasks = saveAllTasks;
-        window.exportHistoryToCSV = exportHistoryToCSV;
-        window.clearOldHistory = clearOldHistory;
-        window.loginAdmin = loginAdmin;
-        window.logoutAdmin = logoutAdmin;
-    </script>
-</body>
-</html>
+    }
+    mostrarMensaje(`✅ Eliminados ${eliminados} registros`, 'success');
+    await cargarHistorial();
+}
+
+// ============================================
+// TABS
+// ============================================
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(`${btn.dataset.tab}Panel`).classList.add('active');
+    });
+});
+
+// Exponer funciones globales
+window.showAddUserModal = showAddUserModal;
+window.closeUserModal = closeUserModal;
+window.saveUser = saveUser;
+window.updateUser = updateUser;
+window.deleteUser = deleteUser;
+window.saveAllTasks = saveAllTasks;
+window.exportHistoryToCSV = exportHistoryToCSV;
+window.clearOldHistory = clearOldHistory;
+window.loginAdmin = loginAdmin;
+window.logoutAdmin = logoutAdmin;
