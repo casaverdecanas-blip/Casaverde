@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico - Tareas vs Historial</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: monospace; }
+        body { background: #0a0a0f; padding: 20px; color: #0f0; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1, h2 { color: #0f0; margin-bottom: 15px; border-bottom: 1px solid #0f0; padding-bottom: 8px; }
+        .login-box, .panel { background: #1a1a2a; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #333; }
+        input, button { padding: 8px 12px; margin: 5px; border-radius: 4px; border: none; }
+        button { background: #0f0; color: #000; cursor: pointer; font-weight: bold; }
+        button:hover { background: #0c0; }
+        .error { color: #f66; background: #2a1a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #f00; }
+        .success { color: #0f0; background: #1a2a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #0f0; }
+        .info { color: #ff0; background: #2a2a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #ff0; }
+        .warning { color: #f90; background: #2a2a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #f90; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #333; vertical-align: top; }
+        th { background: #0f0; color: #000; position: sticky; top: 0; }
+        .table-wrapper { max-height: 500px; overflow-y: auto; border: 1px solid #333; border-radius: 8px; }
+        .pendiente { background: #1a2a1a; }
+        .reciente { background: #2a1a1a; }
+        .log-area { background: #000; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 11px; max-height: 300px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 DIAGNÓSTICO: Tareas vs Historial</h1>
+        
+        <div class="login-box">
+            <input type="email" id="email" placeholder="Email" value="maurogasta@gmail.com">
+            <input type="password" id="password" placeholder="Contraseña">
+            <button onclick="login()">Iniciar Sesión</button>
+            <div id="loginMsg"></div>
+        </div>
+        
+        <div id="resultados" style="display: none;">
+            <div class="panel">
+                <h2>📋 CLASIFICACIÓN DE TAREAS (como debería verse)</h2>
+                <div id="clasificacion"></div>
+            </div>
+            
+            <div class="panel">
+                <h2>📊 DETALLE: Cada tarea con su última realización</h2>
+                <div class="table-wrapper">
+                    <table id="detalleTable">
+                        <thead>
+                            <tr>
+                                <th>Tarea</th>
+                                <th>ID Tarea</th>
+                                <th>Recurrencia</th>
+                                <th>Espaciado mínimo</th>
+                                <th>¿Tiene historial?</th>
+                                <th>Última realización</th>
+                                <th>Días desde última</th>
+                                <th>Clasificación</th>
+                            </thead>
+                        <tbody id="detalleBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h2>📜 REGISTROS EN HISTORIAL (para esta tarea)</h2>
+                <div id="historialRegistros"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+            authDomain: "tatareas-d8a80.firebaseapp.com",
+            projectId: "tatareas-d8a80",
+            storageBucket: "tatareas-d8a80.firebasestorage.app",
+            messagingSenderId: "709332495480",
+            appId: "1:709332495480:web:7060b2c75984352354918d"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let currentUser = null;
+        let usuariosCache = {};
+
+        async function obtenerNombreUsuario(uid) {
+            if (!uid) return 'Desconocido';
+            if (usuariosCache[uid]) return usuariosCache[uid];
+            try {
+                const doc = await db.collection('usuarios').doc(uid).get();
+                if (doc.exists) {
+                    const nombre = doc.data().nombre || doc.data().email || uid;
+                    usuariosCache[uid] = nombre;
+                    return nombre;
+                }
+                return uid.substring(0, 8);
+            } catch (e) {
+                return uid.substring(0, 8);
+            }
+        }
+
+        function getEspaciadoMinimo(recurrencia) {
+            switch (recurrencia) {
+                case 'daily': return 1;
+                case 'biweekly': return 3;
+                case 'weekly': return 6;
+                case 'monthly': return 28;
+                default: return 0;
+            }
+        }
+
+        function getRecurrenciaTexto(r) {
+            const map = { 'none': 'Una vez', 'daily': 'Diaria', 'weekly': 'Semanal', 'biweekly': '2 veces/semana', 'monthly': 'Mensual' };
+            return map[r] || r;
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const msgDiv = document.getElementById('loginMsg');
+            
+            msgDiv.innerHTML = '<div class="info">🔄 Autenticando...</div>';
+            
+            try {
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                currentUser = userCredential.user;
+                msgDiv.innerHTML = `<div class="success">✅ Login: ${currentUser.email} (UID: ${currentUser.uid})</div>`;
+                document.getElementById('resultados').style.display = 'block';
+                await cargarDiagnostico();
+            } catch (error) {
+                msgDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function cargarDiagnostico() {
+            // Cargar tareas activas
+            const tareasSnapshot = await db.collection('tareas').where('activa', '==', true).get();
+            const tareas = [];
+            tareasSnapshot.forEach(doc => tareas.push({ id: doc.id, ...doc.data() }));
+            
+            // Cargar historial y mapear por tareaId
+            const historialSnapshot = await db.collection('historial').get();
+            const historialPorTarea = new Map(); // tareaId -> {fecha, completadaPor, titulo}
+            
+            historialSnapshot.forEach(doc => {
+                const data = doc.data();
+                const tareaId = data.tareaId;
+                if (tareaId) {
+                    const fecha = data.fecha ? data.fecha.toDate() : null;
+                    if (!historialPorTarea.has(tareaId) || 
+                        (fecha && (!historialPorTarea.get(tareaId).fecha || fecha > historialPorTarea.get(tareaId).fecha))) {
+                        historialPorTarea.set(tareaId, {
+                            fecha: fecha,
+                            completadaPor: data.completadaPor,
+                            titulo: data.titulo,
+                            docId: doc.id
+                        });
+                    }
+                }
+            });
+            
+            // Mostrar registros de historial
+            mostrarHistorialRegistros(historialSnapshot);
+            
+            // Clasificar tareas
+            const detalles = [];
+            const pendientes = [];
+            const recientes = [];
+            const ahora = new Date();
+            
+            for (const tarea of tareas) {
+                const historial = historialPorTarea.get(tarea.id);
+                let tieneHistorial = !!historial;
+                let ultimaFecha = historial?.fecha || null;
+                let ultimoUsuario = historial?.completadaPor || null;
+                let ultimoNombre = ultimoUsuario ? await obtenerNombreUsuario(ultimoUsuario) : null;
+                let diasDiferencia = ultimaFecha ? Math.floor((ahora - ultimaFecha) / 86400000) : null;
+                let espaciadoMinimo = getEspaciadoMinimo(tarea.recurrencia);
+                let esReciente = false;
+                
+                if (tieneHistorial && espaciadoMinimo > 0 && diasDiferencia !== null && diasDiferencia < espaciadoMinimo) {
+                    esReciente = true;
+                }
+                
+                detalles.push({
+                    titulo: tarea.titulo,
+                    id: tarea.id,
+                    recurrencia: getRecurrenciaTexto(tarea.recurrencia),
+                    espaciadoMinimo: espaciadoMinimo,
+                    tieneHistorial: tieneHistorial,
+                    ultimaFecha: ultimaFecha,
+                    ultimoUsuario: ultimoNombre,
+                    diasDiferencia: diasDiferencia,
+                    esReciente: esReciente
+                });
+                
+                if (esReciente) {
+                    recientes.push(tarea);
+                } else {
+                    pendientes.push(tarea);
+                }
+            }
+            
+            // Mostrar clasificación visual
+            mostrarClasificacion(pendientes, recientes);
+            
+            // Mostrar tabla detallada
+            mostrarTablaDetalle(detalles);
+        }
+        
+        function mostrarClasificacion(pendientes, recientes) {
+            const container = document.getElementById('clasificacion');
+            
+            let html = `
+                <div class="success" style="margin-bottom: 15px;">
+                    <strong>📊 RESUMEN:</strong><br>
+                    🟢 PENDIENTES (disponibles para realizar): ${pendientes.length}<br>
+                    🔴 REALIZADAS RECIENTEMENTE (tachadas): ${recientes.length}
+                </div>
+            `;
+            
+            if (pendientes.length > 0) {
+                html += `<div class="info"><strong>🟢 TAREAS PENDIENTES:</strong></div><div class="table-wrapper">`;
+                html += `<table><thead><th>Tarea</th><th>Recurrencia</th></thead><tbody>`;
+                pendientes.forEach(t => {
+                    html += `<tr class="pendiente"><td><strong>${escapeHtml(t.titulo)}</strong></td><td>${getRecurrenciaTexto(t.recurrencia)}</td></tr>`;
+                });
+                html += `</tbody></table></div>`;
+            }
+            
+            if (recientes.length > 0) {
+                html += `<div class="warning" style="margin-top: 15px;"><strong>🔴 TAREAS REALIZADAS RECIENTEMENTE (deberían aparecer tachadas):</strong></div><div class="table-wrapper">`;
+                html += `<table><thead><th>Tarea</th><th>Recurrencia</th></thead><tbody>`;
+                for (const t of recientes) {
+                    html += `<tr class="reciente"><td><s>${escapeHtml(t.titulo)}</s></td><td>${getRecurrenciaTexto(t.recurrencia)}</td></tr>`;
+                }
+                html += `</tbody></table></div>`;
+            }
+            
+            container.innerHTML = html;
+        }
+        
+        function mostrarTablaDetalle(detalles) {
+            const tbody = document.getElementById('detalleBody');
+            let html = '';
+            
+            for (const d of detalles) {
+                const rowClass = d.esReciente ? 'reciente' : 'pendiente';
+                html += `<tr class="${rowClass}">
+                    <td><strong>${escapeHtml(d.titulo)}</strong></td>
+                    <td><small>${d.id.substring(0, 12)}...</small></td>
+                    <td>${d.recurrencia}</td>
+                    <td>${d.espaciadoMinimo} días</td>
+                    <td>${d.tieneHistorial ? '✅ Sí' : '❌ No'}</td>
+                    <td>${d.ultimaFecha ? d.ultimaFecha.toLocaleString() : '-'}<br>${d.ultimoUsuario ? `por: ${d.ultimoUsuario}` : ''}</td>
+                    <td>${d.diasDiferencia !== null ? d.diasDiferencia + ' días' : '-'}</td>
+                    <td>${d.esReciente ? '🔴 RECIENTE (tachada)' : '🟢 PENDIENTE'}</td>
+                </tr>`;
+            }
+            
+            tbody.innerHTML = html || '.<td colspan="8">No hay tareas</td>';
+        }
+        
+        function mostrarHistorialRegistros(historialSnapshot) {
+            const container = document.getElementById('historialRegistros');
+            let html = `<div class="table-wrapper"><table><thead>
+                <th>ID Historial</th><th>tareaId</th><th>Título</th><th>Fecha</th><th>Realizada por (UID)</th>
+            </thead><tbody>`;
+            
+            historialSnapshot.forEach(doc => {
+                const data = doc.data();
+                let fechaStr = '';
+                if (data.fecha) {
+                    try { fechaStr = data.fecha.toDate().toLocaleString(); } catch(e) { fechaStr = 'Inválida'; }
+                }
+                html += `<tr>
+                    <td><small>${doc.id.substring(0, 8)}...</small></td>
+                    <td><small>${data.tareaId ? data.tareaId.substring(0, 12) + '...' : '-'}</small></td>
+                    <td>${escapeHtml(data.titulo || '?')}</td>
+                    <td>${fechaStr}</td>
+                    <td><small>${data.completadaPor || '-'}</small></td>
+                </tr>`;
+            });
+            
+            html += `</tbody></table></div>`;
+            container.innerHTML = html;
+        }
+        
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
+        }
+    </script>
+</body>
+</html>
