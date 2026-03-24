@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba - Lectura de Historial</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', monospace; }
+        body { background: #0a0a0f; padding: 20px; color: #0f0; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1, h2 { color: #0f0; margin-bottom: 15px; border-bottom: 1px solid #0f0; padding-bottom: 8px; }
+        .login-box, .panel { background: #1a1a2a; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #333; }
+        input, button { padding: 8px 12px; margin: 5px; border-radius: 4px; border: none; font-family: monospace; }
+        button { background: #0f0; color: #000; cursor: pointer; font-weight: bold; }
+        button:hover { background: #0c0; }
+        .error { color: #f66; background: #2a1a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #f00; }
+        .success { color: #0f0; background: #1a2a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #0f0; }
+        .info { color: #ff0; background: #2a2a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #ff0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #333; }
+        th { background: #0f0; color: #000; position: sticky; top: 0; }
+        .table-wrapper { max-height: 500px; overflow-y: auto; border: 1px solid #333; border-radius: 8px; }
+        .uid-badge { font-family: monospace; background: #2a2a5a; padding: 2px 6px; border-radius: 4px; font-size: 10px; }
+        .nombre { color: #0f0; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 PRUEBA DE LECTURA - HISTORIAL DE TAREAS</h1>
+        <p style="margin-bottom: 20px; color: #aaa;">Este archivo muestra todos los registros del historial con los nombres de los usuarios (buscando en la colección "usuarios").</p>
+        
+        <div class="login-box">
+            <h3>🔐 Iniciar Sesión</h3>
+            <input type="email" id="email" placeholder="Email" value="casaverdecanas@gmail.com">
+            <input type="password" id="password" placeholder="Contraseña">
+            <button onclick="login()">Iniciar Sesión</button>
+            <div id="loginMsg"></div>
+        </div>
+        
+        <div id="resultados" style="display: none;">
+            <div class="panel">
+                <h2>📋 REGISTROS DEL HISTORIAL</h2>
+                <div id="stats"></div>
+                <div class="table-wrapper">
+                    <table id="historialTable">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Fecha y Hora</th>
+                                <th>Tarea</th>
+                                <th>Realizada por (UID)</th>
+                                <th>Nombre del Usuario</th>
+                                <th>Email Original (backup)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historialBody">
+                            <tr><td colspan="6" class="info">🔄 Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+            authDomain: "tatareas-d8a80.firebaseapp.com",
+            projectId: "tatareas-d8a80",
+            storageBucket: "tatareas-d8a80.firebasestorage.app",
+            messagingSenderId: "709332495480",
+            appId: "1:709332495480:web:7060b2c75984352354918d"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let currentUser = null;
+        let usuariosMap = {};  // uid -> {nombre, email}
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const msgDiv = document.getElementById('loginMsg');
+            
+            msgDiv.innerHTML = '<div class="info">🔄 Autenticando...</div>';
+            
+            try {
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                currentUser = userCredential.user;
+                msgDiv.innerHTML = `<div class="success">✅ Login exitoso: ${currentUser.email}</div>`;
+                document.getElementById('resultados').style.display = 'block';
+                await cargarUsuarios();
+                await cargarHistorial();
+            } catch (error) {
+                if (error.code === 'auth/user-not-found') {
+                    try {
+                        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                        currentUser = userCredential.user;
+                        msgDiv.innerHTML = `<div class="success">✅ Usuario creado: ${currentUser.email}</div>`;
+                        document.getElementById('resultados').style.display = 'block';
+                        await cargarUsuarios();
+                        await cargarHistorial();
+                    } catch (createError) {
+                        msgDiv.innerHTML = `<div class="error">❌ Error: ${createError.message}</div>`;
+                    }
+                } else {
+                    msgDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                }
+            }
+        }
+
+        async function cargarUsuarios() {
+            const snapshot = await db.collection('usuarios').get();
+            usuariosMap = {};
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                usuariosMap[doc.id] = {
+                    nombre: data.nombre || data.email?.split('@')[0] || 'Sin nombre',
+                    email: data.email
+                };
+            });
+            console.log(`📊 Usuarios cargados: ${Object.keys(usuariosMap).length}`);
+        }
+
+        async function obtenerNombreUsuario(uid) {
+            if (!uid) return '❌ Sin UID';
+            if (usuariosMap[uid]) {
+                return usuariosMap[uid].nombre;
+            }
+            // Si no está en el mapa, intentar buscar directamente
+            try {
+                const doc = await db.collection('usuarios').doc(uid).get();
+                if (doc.exists) {
+                    const nombre = doc.data().nombre || doc.data().email || uid.substring(0,8);
+                    usuariosMap[uid] = { nombre, email: doc.data().email };
+                    return nombre;
+                }
+                return `⚠️ Usuario no encontrado (${uid.substring(0,8)}...)`;
+            } catch(e) {
+                return `❌ Error: ${uid.substring(0,8)}...`;
+            }
+        }
+
+        async function cargarHistorial() {
+            const tbody = document.getElementById('historialBody');
+            const statsDiv = document.getElementById('stats');
+            
+            tbody.innerHTML = '<tr><td colspan="6" class="info">🔄 Cargando registros...</td></tr>';
+            
+            try {
+                const snapshot = await db.collection('historial').orderBy('fecha', 'desc').limit(100).get();
+                const registros = [];
+                
+                for (const doc of snapshot.docs) {
+                    const data = doc.data();
+                    registros.push({
+                        id: doc.id,
+                        fecha: data.fecha,
+                        titulo: data.titulo,
+                        completadaPor: data.completadaPor,
+                        completadaPorEmail: data.completadaPorEmail || ''
+                    });
+                }
+                
+                statsDiv.innerHTML = `<div class="success">📊 Total registros mostrados: ${registros.length}</div>`;
+                
+                if (registros.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="info">📭 No hay registros en el historial</td></tr>';
+                    return;
+                }
+                
+                let html = '';
+                let contador = 0;
+                
+                for (const reg of registros) {
+                    contador++;
+                    let fechaStr = '';
+                    if (reg.fecha) {
+                        try {
+                            fechaStr = reg.fecha.toDate().toLocaleString();
+                        } catch(e) {
+                            fechaStr = 'Fecha inválida';
+                        }
+                    } else {
+                        fechaStr = 'Sin fecha';
+                    }
+                    
+                    const uid = reg.completadaPor || '';
+                    const nombre = await obtenerNombreUsuario(uid);
+                    const emailBackup = reg.completadaPorEmail || '-';
+                    
+                    // Determinar color según si el UID es válido
+                    const uidClass = uid && uid.length > 10 ? 'uid-badge' : '';
+                    const nombreClass = uid && usuariosMap[uid] ? 'nombre' : '';
+                    
+                    html += `
+                        <tr>
+                            <td>${contador}</td>
+                            <td><small>${fechaStr}</small></td>
+                            <td><strong>${escapeHtml(reg.titulo || '?')}</strong></td>
+                            <td><span class="${uidClass}">${uid ? uid.substring(0, 12) + '...' : '❌ Vacío'}</span></td>
+                            <td><span class="${nombreClass}">${nombre}</span></td>
+                            <td><small>${escapeHtml(emailBackup)}</small></td>
+                        </tr>
+                    `;
+                }
+                
+                tbody.innerHTML = html;
+                
+                // Resumen adicional
+                const conUID = registros.filter(r => r.completadaPor && r.completadaPor.length > 10).length;
+                const conEmail = registros.filter(r => r.completadaPorEmail).length;
+                statsDiv.innerHTML += `<div class="info" style="margin-top: 10px;">
+                    📊 Detalle: ${conUID} registros con UID válido | ${conEmail} registros con email de respaldo
+                </div>`;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                tbody.innerHTML = `<tr><td colspan="6" class="error">❌ Error: ${error.message}</td></tr>`;
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
+        }
+    </script>
+</body>
+</html>
