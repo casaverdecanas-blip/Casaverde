@@ -3,34 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Migrar Historial - Email a UID</title>
+    <title>Migración Controlada - Asignar Usuarios</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', monospace; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
         body { background: #0a0a0f; padding: 20px; color: #0f0; }
-        .container { max-width: 1200px; margin: 0 auto; }
+        .container { max-width: 1400px; margin: 0 auto; }
         h1, h2 { color: #0f0; margin-bottom: 15px; border-bottom: 1px solid #0f0; padding-bottom: 8px; }
         .login-box, .panel { background: #1a1a2a; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #333; }
-        input, button { padding: 8px 12px; margin: 5px; border-radius: 4px; border: none; font-family: monospace; }
+        input, button, select { padding: 8px 12px; margin: 5px; border-radius: 4px; border: none; font-family: monospace; }
         button { background: #0f0; color: #000; cursor: pointer; font-weight: bold; }
         button:hover { background: #0c0; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
         .error { color: #f66; background: #2a1a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #f00; }
         .success { color: #0f0; background: #1a2a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #0f0; }
         .info { color: #ff0; background: #2a2a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #ff0; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
-        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #333; }
-        th { background: #0f0; color: #000; }
-        .log-area { background: #000; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 11px; max-height: 300px; overflow-y: auto; }
+        .table-wrapper { max-height: 500px; overflow-y: auto; border: 1px solid #333; border-radius: 8px; margin-top: 15px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #333; vertical-align: middle; }
+        th { background: #0f0; color: #000; position: sticky; top: 0; }
+        select { background: #2a2a3a; color: #0f0; border: 1px solid #0f0; width: 100%; min-width: 200px; }
+        .email-original { font-family: monospace; background: #2a2a5a; padding: 4px 8px; border-radius: 4px; font-size: 11px; display: inline-block; }
+        .badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; }
+        .badge-pending { background: #f90; color: #000; }
+        .badge-mapped { background: #0f0; color: #000; }
+        .stats { display: flex; gap: 20px; margin-bottom: 15px; flex-wrap: wrap; }
+        .stat-card { background: #2a2a3a; padding: 10px 15px; border-radius: 8px; }
+        .stat-number { font-size: 24px; font-weight: bold; }
+        .btn-warning { background: #f90; color: #000; }
+        .btn-danger { background: #f00; color: #fff; }
+        .progress-bar { width: 100%; height: 8px; background: #333; border-radius: 4px; overflow: hidden; margin-top: 10px; }
+        .progress-fill { height: 100%; background: #0f0; transition: width 0.3s; }
+        .filter-box { margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .filter-box input { flex: 1; background: #2a2a3a; color: #0f0; border: 1px solid #0f0; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🔄 MIGRACIÓN: Email → UID en Historial</h1>
+        <h1>🔄 MIGRACIÓN CONTROLADA: Asignar Usuarios a Registros</h1>
+        <p style="margin-bottom: 20px; color: #aaa;">Para cada registro, selecciona el usuario que realizó la tarea. El sistema sugerirá automáticamente el usuario que coincida con el email.</p>
         
         <div class="login-box">
             <h3>🔐 Login (solo admin)</h3>
@@ -41,22 +56,40 @@
         </div>
         
         <div id="migracionPanel" style="display: none;">
+            <!-- Panel de usuarios disponibles -->
             <div class="panel">
-                <h2>📊 1. Estado Actual</h2>
-                <button onclick="verEstado()">🔍 Analizar historial</button>
-                <div id="estado"></div>
+                <h2>👥 Usuarios Registrados</h2>
+                <div id="usuariosList"></div>
             </div>
             
+            <!-- Panel de registros a migrar -->
             <div class="panel">
-                <h2>🔄 2. Ejecutar Migración</h2>
-                <button id="btnMigrar" onclick="ejecutarMigracion()" style="background: #f90;">▶ EJECUTAR MIGRACIÓN</button>
-                <div id="log" class="log-area" style="margin-top: 15px;"></div>
-            </div>
-            
-            <div class="panel">
-                <h2>✅ 3. Verificar Resultado</h2>
-                <button onclick="verResultado()">🔍 Ver registros migrados</button>
-                <div id="resultado"></div>
+                <h2>📋 Registros del Historial</h2>
+                <div class="stats" id="stats"></div>
+                <div class="filter-box">
+                    <input type="text" id="filterInput" placeholder="🔍 Filtrar por tarea o email..." onkeyup="filtrarTabla()">
+                    <button onclick="seleccionarTodos()">✅ Seleccionar todos sugeridos</button>
+                    <button onclick="guardarSeleccionados()" class="btn-warning" id="btnGuardar">💾 Guardar seleccionados</button>
+                </div>
+                <div class="table-wrapper">
+                    <table id="registrosTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 30px;"><input type="checkbox" id="selectAll" onchange="toggleSeleccionarTodos()"></th>
+                                <th>Fecha</th>
+                                <th>Tarea</th>
+                                <th>Email original</th>
+                                <th>Asignar a usuario</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="registrosBody"></tbody>
+                    </table>
+                </div>
+                <div class="progress-bar" id="progressBar" style="display: none;">
+                    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                </div>
+                <div id="mensajeGuardado" style="margin-top: 15px;"></div>
             </div>
         </div>
     </div>
@@ -76,7 +109,10 @@
         const db = firebase.firestore();
 
         let currentUser = null;
-        let emailToUid = {};
+        let usuarios = [];           // Lista de usuarios {uid, email, nombre}
+        let registros = [];          // Lista de registros originales
+        let selecciones = {};        // Mapa: registroId -> uidSeleccionado
+        let registroMap = {};         // Mapa: registroId -> datos originales
 
         async function login() {
             const email = document.getElementById('email').value;
@@ -89,12 +125,12 @@
                 const userCredential = await auth.signInWithEmailAndPassword(email, password);
                 currentUser = userCredential.user;
                 
-                // Verificar si es admin
                 const userDoc = await db.collection('usuarios').doc(currentUser.uid).get();
                 if (userDoc.exists && userDoc.data().rol === 'admin') {
                     msgDiv.innerHTML = `<div class="success">✅ Admin: ${currentUser.email}</div>`;
                     document.getElementById('migracionPanel').style.display = 'block';
                     await cargarUsuarios();
+                    await cargarRegistros();
                 } else {
                     msgDiv.innerHTML = `<div class="error">❌ No tienes permisos de administrador</div>`;
                 }
@@ -105,139 +141,233 @@
 
         async function cargarUsuarios() {
             const snapshot = await db.collection('usuarios').get();
-            emailToUid = {};
+            usuarios = [];
             snapshot.forEach(doc => {
                 const data = doc.data();
-                if (data.email) {
-                    emailToUid[data.email] = doc.id;
-                }
+                usuarios.push({
+                    uid: doc.id,
+                    email: data.email,
+                    nombre: data.nombre || data.email.split('@')[0],
+                    rol: data.rol
+                });
             });
-            console.log('Usuarios cargados:', Object.keys(emailToUid).length);
+            
+            // Ordenar por nombre
+            usuarios.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+            
+            const container = document.getElementById('usuariosList');
+            container.innerHTML = `
+                <div class="success">
+                    <strong>📊 Total usuarios: ${usuarios.length}</strong><br>
+                    ${usuarios.map(u => `👤 ${u.nombre} (${u.email})`).join('<br>')}
+                </div>
+            `;
         }
 
-        async function verEstado() {
-            const container = document.getElementById('estado');
-            container.innerHTML = '<div class="info">🔄 Cargando...</div>';
+        async function cargarRegistros() {
+            const container = document.getElementById('registrosBody');
+            container.innerHTML = '<tr><td colspan="6" class="info">🔄 Cargando registros...</td></tr>';
             
             try {
-                const snapshot = await db.collection('historial').get();
-                let conEmail = 0;
-                let conUid = 0;
+                const snapshot = await db.collection('historial').orderBy('fecha', 'desc').get();
+                registros = [];
+                registroMap = {};
+                selecciones = {};
                 
                 snapshot.forEach(doc => {
-                    const completadaPor = doc.data().completadaPor;
-                    if (completadaPor && completadaPor.includes('@')) {
-                        conEmail++;
-                    } else if (completadaPor) {
-                        conUid++;
-                    }
-                });
-                
-                container.innerHTML = `
-                    <div class="success">
-                        <strong>📊 Estadísticas:</strong><br>
-                        🟡 Registros con EMAIL: ${conEmail}<br>
-                        🟢 Registros con UID: ${conUid}<br>
-                        📋 Total registros: ${snapshot.size}
-                    </div>
-                    ${conEmail === 0 ? '<div class="success">✅ No hay registros con email. ¡Ya está migrado!</div>' : ''}
-                `;
-            } catch (error) {
-                container.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
-            }
-        }
-
-        async function ejecutarMigracion() {
-            const btn = document.getElementById('btnMigrar');
-            const logDiv = document.getElementById('log');
-            
-            if (!confirm('⚠️ ¿Estás seguro de ejecutar la migración? Se convertirán todos los emails a UID.')) return;
-            
-            btn.disabled = true;
-            btn.textContent = '⏳ MIGRANDO...';
-            logDiv.innerHTML = '🔄 Iniciando migración...\n';
-            
-            try {
-                const snapshot = await db.collection('historial').get();
-                let migrados = 0;
-                let errores = 0;
-                let ignorados = 0;
-                
-                for (const doc of snapshot.docs) {
                     const data = doc.data();
                     const completadaPor = data.completadaPor;
                     
-                    if (!completadaPor || !completadaPor.includes('@')) {
-                        ignorados++;
-                        continue;
-                    }
-                    
-                    const uid = emailToUid[completadaPor];
-                    
-                    if (uid) {
-                        await doc.ref.update({
-                            completadaPor: uid,
-                            completadaPorEmail: completadaPor
+                    // Solo mostrar registros que tienen email (no UID)
+                    if (completadaPor && completadaPor.includes('@')) {
+                        registros.push({
+                            id: doc.id,
+                            fecha: data.fecha,
+                            titulo: data.titulo,
+                            emailOriginal: completadaPor,
+                            completadaPorEmail: data.completadaPorEmail || completadaPor
                         });
-                        migrados++;
-                        logDiv.innerHTML += `✅ ${doc.id.substring(0,8)}...: ${completadaPor} → ${uid.substring(0,8)}...\n`;
-                    } else {
-                        errores++;
-                        logDiv.innerHTML += `⚠️ Email no encontrado: ${completadaPor}\n`;
+                        registroMap[doc.id] = data;
+                        
+                        // Buscar sugerencia automática: usuario que coincida con el email
+                        const usuarioSugerido = usuarios.find(u => u.email === completadaPor);
+                        if (usuarioSugerido) {
+                            selecciones[doc.id] = usuarioSugerido.uid;
+                        } else {
+                            selecciones[doc.id] = '';
+                        }
                     }
-                }
+                });
                 
-                logDiv.innerHTML += `\n📊 RESUMEN:\n`;
-                logDiv.innerHTML += `   ✅ Migrados: ${migrados}\n`;
-                logDiv.innerHTML += `   ⚠️ Ignorados: ${ignorados}\n`;
-                logDiv.innerHTML += `   ❌ Errores: ${errores}\n`;
-                
-                if (migrados > 0) {
-                    logDiv.innerHTML += `\n🎉 Migración completada!\n`;
-                }
+                console.log(`📊 Registros con email: ${registros.length}`);
+                renderizarTabla();
                 
             } catch (error) {
-                logDiv.innerHTML += `\n❌ Error fatal: ${error.message}\n`;
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '▶ EJECUTAR MIGRACIÓN';
-                await verEstado();
+                container.innerHTML = `<tr><td colspan="6" class="error">❌ Error: ${error.message}</td></tr>`;
             }
         }
 
-        async function verResultado() {
-            const container = document.getElementById('resultado');
-            container.innerHTML = '<div class="info">🔄 Cargando...</div>';
+        function renderizarTabla() {
+            const tbody = document.getElementById('registrosBody');
+            const statsDiv = document.getElementById('stats');
             
+            if (registros.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="success">✅ No hay registros con email. ¡Todo está migrado!</td></tr>';
+                statsDiv.innerHTML = '<div class="success">✅ No hay registros pendientes de migración</div>';
+                return;
+            }
+            
+            const pendientes = registros.filter(r => !selecciones[r.id]).length;
+            const asignados = registros.filter(r => selecciones[r.id]).length;
+            
+            statsDiv.innerHTML = `
+                <div class="stat-card"><span class="stat-number">${registros.length}</span><br>Total registros</div>
+                <div class="stat-card"><span class="stat-number" style="color: #f90;">${pendientes}</span><br>Pendientes</div>
+                <div class="stat-card"><span class="stat-number" style="color: #0f0;">${asignados}</span><br>Asignados</div>
+            `;
+            
+            let html = '';
+            for (const reg of registros) {
+                const seleccionado = selecciones[reg.id] || '';
+                const usuarioSeleccionado = usuarios.find(u => u.uid === seleccionado);
+                const tieneSugerencia = usuarios.find(u => u.email === reg.emailOriginal);
+                
+                html += `
+                    <tr data-id="${reg.id}">
+                        <td><input type="checkbox" class="row-checkbox" data-id="${reg.id}" ${seleccionado ? 'checked' : ''}></td>
+                        <td><small>${formatearFecha(reg.fecha)}</small></td>
+                        <td><strong>${escapeHtml(reg.titulo || '?')}</strong></td>
+                        <td><span class="email-original">${escapeHtml(reg.emailOriginal)}</span></td>
+                        <td>
+                            <select class="user-select" data-id="${reg.id}" onchange="cambiarSeleccion('${reg.id}', this.value)">
+                                <option value="">-- Seleccionar usuario --</option>
+                                ${usuarios.map(u => `
+                                    <option value="${u.uid}" ${seleccionado === u.uid ? 'selected' : ''} ${tieneSugerencia && u.email === reg.emailOriginal ? 'style="background:#1a3a1a;"' : ''}>
+                                        ${u.nombre} (${u.email})
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </td>
+                        <td>
+                            ${seleccionado ? 
+                                `<span class="badge badge-mapped">✅ Asignado a ${usuarioSeleccionado?.nombre || 'usuario'}</span>` : 
+                                `<span class="badge badge-pending">⚠️ Pendiente</span>`
+                            }
+                        </td>
+                    </tr>
+                `;
+            }
+            tbody.innerHTML = html;
+            
+            // Actualizar checkbox "seleccionar todos"
+            const todosCheckbox = document.getElementById('selectAll');
+            if (todosCheckbox) {
+                const todosSeleccionados = registros.every(r => selecciones[r.id]);
+                todosCheckbox.checked = todosSeleccionados;
+                todosCheckbox.indeterminate = !todosSeleccionados && registros.some(r => selecciones[r.id]);
+            }
+        }
+
+        function cambiarSeleccion(registroId, uid) {
+            selecciones[registroId] = uid;
+            renderizarTabla();
+        }
+
+        function formatearFecha(fechaObj) {
+            if (!fechaObj) return 'Sin fecha';
             try {
-                const snapshot = await db.collection('historial').orderBy('fecha', 'desc').limit(20).get();
-                
-                let html = `<table><thead><tr><th>Fecha</th><th>Tarea</th><th>UID (realizada por)</th><th>Email original</th></tr></thead><tbody>`;
-                
-                for (const doc of snapshot.docs) {
-                    const data = doc.data();
-                    let fechaStr = '';
-                    if (data.fecha) {
-                        try { fechaStr = data.fecha.toDate().toLocaleString(); } catch(e) { fechaStr = 'Fecha inválida'; }
+                return fechaObj.toDate().toLocaleString();
+            } catch(e) {
+                return 'Fecha inválida';
+            }
+        }
+
+        function filtrarTabla() {
+            const filtro = document.getElementById('filterInput').value.toLowerCase();
+            const rows = document.querySelectorAll('#registrosBody tr');
+            
+            rows.forEach(row => {
+                const texto = row.innerText.toLowerCase();
+                row.style.display = texto.includes(filtro) ? '' : 'none';
+            });
+        }
+
+        function toggleSeleccionarTodos() {
+            const checkbox = document.getElementById('selectAll');
+            const todosSeleccionados = checkbox.checked;
+            
+            for (const reg of registros) {
+                if (todosSeleccionados) {
+                    if (!selecciones[reg.id]) {
+                        // Si no tiene selección, buscar sugerencia
+                        const sugerido = usuarios.find(u => u.email === reg.emailOriginal);
+                        selecciones[reg.id] = sugerido ? sugerido.uid : '';
                     }
-                    
-                    const uid = data.completadaPor || '-';
-                    const emailOriginal = data.completadaPorEmail || '-';
-                    
-                    html += `<tr>
-                        <td>${fechaStr}</td>
-                        <td>${escapeHtml(data.titulo || '?')}</td>
-                        <td><small>${uid.substring(0,12)}...</small></td>
-                        <td><small>${escapeHtml(emailOriginal)}</small></td>
-                    </tr>`;
+                }
+            }
+            renderizarTabla();
+        }
+
+        function seleccionarTodos() {
+            for (const reg of registros) {
+                const sugerido = usuarios.find(u => u.email === reg.emailOriginal);
+                selecciones[reg.id] = sugerido ? sugerido.uid : '';
+            }
+            renderizarTabla();
+        }
+
+        async function guardarSeleccionados() {
+            const btn = document.getElementById('btnGuardar');
+            const progressBar = document.getElementById('progressBar');
+            const progressFill = document.getElementById('progressFill');
+            const mensajeDiv = document.getElementById('mensajeGuardado');
+            
+            const aGuardar = registros.filter(r => selecciones[r.id]);
+            
+            if (aGuardar.length === 0) {
+                mensajeDiv.innerHTML = '<div class="warning">⚠️ No hay registros seleccionados para guardar</div>';
+                return;
+            }
+            
+            if (!confirm(`¿Guardar cambios para ${aGuardar.length} registros?`)) return;
+            
+            btn.disabled = true;
+            progressBar.style.display = 'block';
+            let completados = 0;
+            let errores = 0;
+            
+            for (const reg of aGuardar) {
+                const uid = selecciones[reg.id];
+                const usuario = usuarios.find(u => u.uid === uid);
+                
+                try {
+                    await db.collection('historial').doc(reg.id).update({
+                        completadaPor: uid,
+                        completadaPorEmail: reg.emailOriginal,
+                        completadaPorNombre: usuario?.nombre || ''
+                    });
+                    completados++;
+                } catch (error) {
+                    console.error(`Error en ${reg.id}:`, error);
+                    errores++;
                 }
                 
-                html += `</tbody></table>`;
-                container.innerHTML = html;
-                
-            } catch (error) {
-                container.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                const porcentaje = (completados / aGuardar.length) * 100;
+                progressFill.style.width = `${porcentaje}%`;
             }
+            
+            mensajeDiv.innerHTML = `
+                <div class="success">
+                    ✅ Migración completada: ${completados} registros actualizados.<br>
+                    ❌ Errores: ${errores}
+                </div>
+            `;
+            
+            btn.disabled = false;
+            setTimeout(() => {
+                progressBar.style.display = 'none';
+                cargarRegistros(); // Recargar la lista
+            }, 2000);
         }
 
         function escapeHtml(str) {
