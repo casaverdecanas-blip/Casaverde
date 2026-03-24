@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Admin - CasaVerdeCanas</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        
+        body {
+            background: linear-gradient(135deg, #2d5a27 0%, #1e3f1a 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .header {
+            background: #2d5a27;
+            color: white;
+            padding: 20px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: rgba(255,255,255,0.2);
+            padding: 8px 15px;
+            border-radius: 30px;
+        }
+        
+        .btn-back, .btn-logout {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            text-decoration: none;
+            font-size: 0.85rem;
+        }
+        
+        .btn-logout { background: #e74c3c; }
+        .btn-logout:hover { background: #c0392b; }
+        
+        .tabs {
+            display: flex;
+            gap: 5px;
+            background: #f0f4f0;
+            padding: 0 25px;
+            border-bottom: 1px solid #d0e0d0;
+        }
+        
+        .tab-btn {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #4a6741;
+            transition: all 0.2s;
+        }
+        
+        .tab-btn:hover { background: #e0e8e0; }
+        .tab-btn.active {
+            color: #2d5a27;
+            border-bottom: 3px solid #2d5a27;
+            background: white;
+        }
+        
+        .panel {
+            display: none;
+            padding: 25px;
+        }
+        
+        .panel.active { display: block; }
+        
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .btn {
+            padding: 8px 18px;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary { background: #2d5a27; color: white; }
+        .btn-primary:hover { background: #1e3f1a; }
+        .btn-success { background: #27ae60; color: white; }
+        .btn-success:hover { background: #219a52; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-danger:hover { background: #c0392b; }
+        .btn-warning { background: #f39c12; color: white; }
+        .btn-warning:hover { background: #e67e22; }
+        .btn-secondary { background: #95a5a6; color: white; }
+        
+        .stats {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .stat-badge {
+            background: #e8f5e9;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            color: #2d5a27;
+        }
+        
+        .table-wrapper {
+            overflow-x: auto;
+            max-height: 60vh;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+        
+        .data-table th {
+            background: #f8f9fa;
+            padding: 12px 8px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            color: #2d5a27;
+            font-weight: 600;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .data-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #eee;
+            vertical-align: middle;
+        }
+        
+        .data-table tr:hover { background: #fafafa; }
+        
+        .data-table input, .data-table select, .data-table textarea {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.75rem;
+        }
+        
+        .data-table textarea { min-height: 50px; resize: vertical; }
+        
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+        
+        .icon-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
+        
+        .icon-btn.save { background: #27ae60; color: white; }
+        .icon-btn.delete { background: #e74c3c; color: white; }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 500px;
+        }
+        
+        .modal-content input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        
+        .status-message {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 30px;
+            background: #2d5a27;
+            color: white;
+            z-index: 1000;
+            display: none;
+        }
+        
+        @media (max-width: 768px) {
+            .tabs { flex-direction: column; padding: 0; }
+            .tab-btn { justify-content: center; }
+            .toolbar { flex-direction: column; align-items: stretch; }
+            .btn { justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+    <div id="loginContainer" class="login-container" style="display: flex; justify-content: center; align-items: center; min-height: 100vh;">
+        <div class="login-box" style="background: white; padding: 35px; border-radius: 20px; width: 350px; text-align: center;">
+            <h2 style="color: #2d5a27;"><span class="material-icons">admin_panel_settings</span> Acceso Admin</h2>
+            <input type="email" id="adminEmail" placeholder="Email" style="width:100%; padding:12px; margin:10px 0; border-radius:30px; border:1px solid #ddd;">
+            <input type="password" id="adminPassword" placeholder="Contraseña" style="width:100%; padding:12px; margin:10px 0; border-radius:30px; border:1px solid #ddd;">
+            <button onclick="loginAdmin()" class="btn-primary" style="width:100%; padding:12px; border-radius:30px;">Ingresar</button>
+            <div id="loginError" style="color:#e74c3c; margin-top:10px;"></div>
+        </div>
+    </div>
+
+    <div id="adminPanel" class="container" style="display: none;">
+        <div class="header">
+            <h1><span class="material-icons">dashboard</span> Panel de Administración</h1>
+            <div class="user-info">
+                <span class="material-icons">account_circle</span>
+                <span id="userEmailDisplay"></span>
+                <a href="index.html" class="btn-back"><span class="material-icons">arrow_back</span> Volver</a>
+                <button onclick="logoutAdmin()" class="btn-logout"><span class="material-icons">logout</span> Salir</button>
+            </div>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="tasks"><span class="material-icons">assignment</span> 📋 Tareas</button>
+            <button class="tab-btn" data-tab="users"><span class="material-icons">people</span> 👥 Usuarios</button>
+            <button class="tab-btn" data-tab="history"><span class="material-icons">history</span> 📊 Historial</button>
+        </div>
+        
+        <!-- Panel Tareas -->
+        <div id="tasksPanel" class="panel active">
+            <div class="toolbar">
+                <div class="stats">
+                    <span class="stat-badge" id="tasksCount">0 tareas</span>
+                </div>
+                <button onclick="saveAllTasks()" class="btn-success"><span class="material-icons">save</span> Guardar Todo</button>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table" id="tasksTable">
+                    <thead>
+                        <tr>
+                            <th style="width:25%">Título</th>
+                            <th style="width:35%">Descripción</th>
+                            <th style="width:12%">Prioridad</th>
+                            <th style="width:12%">Recurrencia</th>
+                            <th style="width:10%">Fecha Inicio</th>
+                            <th style="width:6%">Activa</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tasksTableBody">
+                        <tr><td colspan="6">Cargando tareas...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Panel Usuarios -->
+        <div id="usersPanel" class="panel">
+            <div class="toolbar">
+                <div class="stats">
+                    <span class="stat-badge" id="usersCount">0 usuarios</span>
+                </div>
+                <button onclick="showAddUserModal()" class="btn-primary"><span class="material-icons">add</span> Nuevo Usuario</button>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table" id="usersTable">
+                    <thead>
+                        <tr>
+                            <th>Email</th>
+                            <th>Nombre</th>
+                            <th>Rol</th>
+                            <th>Teléfono</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+                        <tr><td colspan="5">Cargando usuarios...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Panel Historial -->
+        <div id="historyPanel" class="panel">
+            <div class="toolbar">
+                <div class="stats">
+                    <span class="stat-badge" id="historyCount">0 registros</span>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="exportHistoryToCSV()" class="btn-warning"><span class="material-icons">download</span> Exportar CSV</button>
+                    <button onclick="clearOldHistory()" class="btn-danger"><span class="material-icons">delete_sweep</span> Limpiar Antiguo</button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table" id="historyTable">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Tarea</th>
+                            <th>Realizada por</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody">
+                        <tr><td colspan="3">Cargando historial...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para agregar/editar usuario -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <h3 id="modalTitle">Nuevo Usuario</h3>
+            <input type="email" id="userEmail" placeholder="Email *" required>
+            <input type="password" id="userPassword" placeholder="Contraseña *">
+            <input type="text" id="userName" placeholder="Nombre completo">
+            <select id="userRole">
+                <option value="user">Usuario normal</option>
+                <option value="admin">Administrador</option>
+            </select>
+            <input type="text" id="userPhone" placeholder="Teléfono (opcional)">
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button onclick="saveUser()" class="btn-success">Guardar</button>
+                <button onclick="closeUserModal()" class="btn-secondary">Cancelar</button>
+            </div>
+            <div id="modalError" style="color:#e74c3c; margin-top:10px;"></div>
+        </div>
+    </div>
+    
+    <div id="statusMessage" class="status-message"></div>
+
+    <script>
+        // ============================================
+        // CONFIGURACIÓN FIREBASE
+        // ============================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+            authDomain: "tatareas-d8a80.firebaseapp.com",
+            projectId: "tatareas-d8a80",
+            storageBucket: "tatareas-d8a80.firebasestorage.app",
+            messagingSenderId: "709332495480",
+            appId: "1:709332495480:web:7060b2c75984352354918d"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        
+        const ADMIN_EMAIL = 'admin@casaverde.com';
+        let currentUser = null;
+        
+        // Cache de datos
+        let tareasCache = [];
+        let usuariosCache = [];
+        let historialCache = [];
+        
+        // ============================================
+        // AUTENTICACIÓN
+        // ============================================
+        async function loginAdmin() {
+            const email = document.getElementById('adminEmail').value;
+            const password = document.getElementById('adminPassword').value;
+            const errorDiv = document.getElementById('loginError');
+            
+            if (!email || !password) {
+                errorDiv.textContent = 'Ingresa email y contraseña';
+                return;
+            }
+            
+            try {
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                if (userCredential.user.email !== ADMIN_EMAIL) {
+                    await auth.signOut();
+                    errorDiv.textContent = 'Acceso solo para administradores';
+                    return;
+                }
+                currentUser = userCredential.user;
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('adminPanel').style.display = 'block';
+                document.getElementById('userEmailDisplay').textContent = currentUser.email;
+                cargarTodosLosDatos();
+            } catch (error) {
+                if (error.code === 'auth/user-not-found') {
+                    errorDiv.textContent = 'Usuario no encontrado';
+                } else {
+                    errorDiv.textContent = 'Email o contraseña incorrectos';
+                }
+            }
+        }
+        
+        function logoutAdmin() {
+            auth.signOut();
+            location.reload();
+        }
+        
+        auth.onAuthStateChanged((user) => {
+            if (user && user.email === ADMIN_EMAIL) {
+                currentUser = user;
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('adminPanel').style.display = 'block';
+                document.getElementById('userEmailDisplay').textContent = user.email;
+                cargarTodosLosDatos();
+            }
+        });
+        
+        // ============================================
+        // CARGA DE DATOS
+        // ============================================
+        async function cargarTodosLosDatos() {
+            await Promise.all([
+                cargarTareas(),
+                cargarUsuarios(),
+                cargarHistorial()
+            ]);
+        }
+        
+        async function cargarTareas() {
+            try {
+                const snapshot = await db.collection('tareas').orderBy('titulo').get();
+                tareasCache = [];
+                snapshot.forEach(doc => {
+                    tareasCache.push({ id: doc.id, ...doc.data() });
+                });
+                renderizarTareas();
+                document.getElementById('tasksCount').textContent = `${tareasCache.length} tareas`;
+            } catch (error) {
+                console.error('Error cargando tareas:', error);
+                mostrarMensaje('Error al cargar tareas', 'error');
+            }
+        }
+        
+        async function cargarUsuarios() {
+            try {
+                const snapshot = await db.collection('usuarios').get();
+                usuariosCache = [];
+                snapshot.forEach(doc => {
+                    usuariosCache.push({ id: doc.id, ...doc.data() });
+                });
+                renderizarUsuarios();
+                document.getElementById('usersCount').textContent = `${usuariosCache.length} usuarios`;
+            } catch (error) {
+                console.error('Error cargando usuarios:', error);
+                mostrarMensaje('Error al cargar usuarios', 'error');
+            }
+        }
+        
+        async function cargarHistorial() {
+            try {
+                const snapshot = await db.collection('historial').orderBy('fecha', 'desc').limit(500).get();
+                historialCache = [];
+                snapshot.forEach(doc => {
+                    historialCache.push({ id: doc.id, ...doc.data() });
+                });
+                renderizarHistorial();
+                document.getElementById('historyCount').textContent = `${historialCache.length} registros`;
+            } catch (error) {
+                console.error('Error cargando historial:', error);
+                mostrarMensaje('Error al cargar historial', 'error');
+            }
+        }
+        
+        // ============================================
+        // RENDERIZADO DE TAREAS (EDITABLE)
+        // ============================================
+        function renderizarTareas() {
+            const tbody = document.getElementById('tasksTableBody');
+            if (!tbody) return;
+            
+            if (tareasCache.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6">No hay tareas. Crea algunas desde el gestor principal.</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = tareasCache.map(tarea => `
+                <tr data-id="${tarea.id}">
+                    <td><input type="text" class="task-title" value="${escapeHtml(tarea.titulo || '')}"></td>
+                    <td><textarea class="task-desc">${escapeHtml(tarea.descripcion || '')}</textarea></td>
+                    <td>
+                        <select class="task-priority">
+                            <option value="alta" ${tarea.prioridad === 'alta' ? 'selected' : ''}>Alta</option>
+                            <option value="media" ${tarea.prioridad === 'media' ? 'selected' : ''}>Media</option>
+                            <option value="baja" ${tarea.prioridad === 'baja' ? 'selected' : ''}>Baja</option>
+                        </select>
+                    </td>
+                    <td>
+                        <select class="task-recurrence">
+                            <option value="none" ${tarea.recurrencia === 'none' ? 'selected' : ''}>Una vez</option>
+                            <option value="daily" ${tarea.recurrencia === 'daily' ? 'selected' : ''}>Diaria</option>
+                            <option value="weekly" ${tarea.recurrencia === 'weekly' ? 'selected' : ''}>Semanal</option>
+                            <option value="biweekly" ${tarea.recurrencia === 'biweekly' ? 'selected' : ''}>2 veces/semana</option>
+                            <option value="monthly" ${tarea.recurrencia === 'monthly' ? 'selected' : ''}>Mensual</option>
+                        </select>
+                    </td>
+                    <td><input type="date" class="task-startdate" value="${tarea.fechaInicio || ''}"></td>
+                    <td style="text-align:center">
+                        <input type="checkbox" class="task-active" ${tarea.activa !== false ? 'checked' : ''}>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        async function saveAllTasks() {
+            mostrarMensaje('Guardando cambios...', 'info');
+            let guardados = 0;
+            let errores = 0;
+            
+            const rows = document.querySelectorAll('#tasksTableBody tr');
+            for (const row of rows) {
+                const id = row.dataset.id;
+                if (!id) continue;
+                
+                const titulo = row.querySelector('.task-title')?.value.trim();
+                if (!titulo) {
+                    errores++;
+                    continue;
+                }
+                
+                const updates = {
+                    titulo: titulo,
+                    descripcion: row.querySelector('.task-desc')?.value || '',
+                    prioridad: row.querySelector('.task-priority')?.value || 'media',
+                    recurrencia: row.querySelector('.task-recurrence')?.value || 'none',
+                    fechaInicio: row.querySelector('.task-startdate')?.value || null,
+                    activa: row.querySelector('.task-active')?.checked || false
+                };
+                
+                try {
+                    await db.collection('tareas').doc(id).update(updates);
+                    guardados++;
+                } catch (error) {
+                    console.error(`Error guardando tarea ${id}:`, error);
+                    errores++;
+                }
+            }
+            
+            mostrarMensaje(`✅ Guardados: ${guardados} tareas. ❌ Errores: ${errores}`, guardados > 0 ? 'success' : 'error');
+            await cargarTareas();
+        }
+        
+        // ============================================
+        // GESTIÓN DE USUARIOS
+        // ============================================
+        let editingUserId = null;
+        
+        function renderizarUsuarios() {
+            const tbody = document.getElementById('usersTableBody');
+            if (!tbody) return;
+            
+            if (usuariosCache.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5">No hay usuarios registrados</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = usuariosCache.map(user => `
+                <tr data-id="${user.id}">
+                    <td>${escapeHtml(user.email)}</td>
+                    <td><input type="text" class="user-name" value="${escapeHtml(user.nombre || '')}" style="width:100%"></td>
+                    <td>
+                        <select class="user-role">
+                            <option value="user" ${user.rol === 'user' ? 'selected' : ''}>Usuario</option>
+                            <option value="admin" ${user.rol === 'admin' ? 'selected' : ''}>Administrador</option>
+                        </select>
+                    </td>
+                    <td><input type="text" class="user-phone" value="${escapeHtml(user.telefono || '')}" style="width:100%"></td>
+                    <td class="action-buttons">
+                        <button onclick="updateUser('${user.id}')" class="icon-btn save"><span class="material-icons">save</span></button>
+                        <button onclick="deleteUser('${user.id}', '${escapeHtml(user.email)}')" class="icon-btn delete"><span class="material-icons">delete</span></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        function showAddUserModal() {
+            editingUserId = null;
+            document.getElementById('modalTitle').textContent = 'Nuevo Usuario';
+            document.getElementById('userEmail').value = '';
+            document.getElementById('userPassword').value = '';
+            document.getElementById('userName').value = '';
+            document.getElementById('userRole').value = 'user';
+            document.getElementById('userPhone').value = '';
+            document.getElementById('modalError').textContent = '';
+            document.getElementById('userModal').style.display = 'flex';
+        }
+        
+        function closeUserModal() {
+            document.getElementById('userModal').style.display = 'none';
+            editingUserId = null;
+        }
+        
+        async function saveUser() {
+            const email = document.getElementById('userEmail').value.trim();
+            const password = document.getElementById('userPassword').value;
+            const nombre = document.getElementById('userName').value.trim();
+            const rol = document.getElementById('userRole').value;
+            const telefono = document.getElementById('userPhone').value.trim();
+            const errorDiv = document.getElementById('modalError');
+            
+            if (!email) {
+                errorDiv.textContent = 'El email es obligatorio';
+                return;
+            }
+            
+            try {
+                if (editingUserId) {
+                    // Actualizar datos en Firestore (no se puede cambiar email/contraseña desde aquí por seguridad)
+                    await db.collection('usuarios').doc(editingUserId).update({
+                        nombre, rol, telefono
+                    });
+                    mostrarMensaje('Usuario actualizado', 'success');
+                } else {
+                    if (!password || password.length < 6) {
+                        errorDiv.textContent = 'La contraseña debe tener al menos 6 caracteres';
+                        return;
+                    }
+                    // Crear usuario en Firebase Auth
+                    const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                    // Guardar datos adicionales en Firestore
+                    await db.collection('usuarios').doc(userCredential.user.uid).set({
+                        email, nombre, rol, telefono,
+                        creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    mostrarMensaje('Usuario creado correctamente', 'success');
+                }
+                closeUserModal();
+                await cargarUsuarios();
+            } catch (error) {
+                console.error('Error guardando usuario:', error);
+                if (error.code === 'auth/email-already-in-use') {
+                    errorDiv.textContent = 'Este email ya está registrado';
+                } else {
+                    errorDiv.textContent = 'Error: ' + error.message;
+                }
+            }
+        }
+        
+        async function updateUser(userId) {
+            const row = document.querySelector(`#usersTableBody tr[data-id="${userId}"]`);
+            if (!row) return;
+            
+            const nombre = row.querySelector('.user-name')?.value || '';
+            const rol = row.querySelector('.user-role')?.value || 'user';
+            const telefono = row.querySelector('.user-phone')?.value || '';
+            
+            try {
+                await db.collection('usuarios').doc(userId).update({ nombre, rol, telefono });
+                mostrarMensaje('Usuario actualizado', 'success');
+                await cargarUsuarios();
+            } catch (error) {
+                console.error('Error actualizando usuario:', error);
+                mostrarMensaje('Error al actualizar', 'error');
+            }
+        }
+        
+        async function deleteUser(userId, userEmail) {
+            if (userEmail === ADMIN_EMAIL) {
+                mostrarMensaje('No puedes eliminar al administrador principal', 'error');
+                return;
+            }
+            
+            if (!confirm(`¿Eliminar al usuario ${userEmail}? Esta acción no se puede deshacer.`)) return;
+            
+            try {
+                // Primero eliminar de Firestore
+                await db.collection('usuarios').doc(userId).delete();
+                // Luego eliminar de Firebase Auth (requiere función de servidor, pero podemos omitir)
+                mostrarMensaje('Usuario eliminado de la base de datos', 'success');
+                await cargarUsuarios();
+            } catch (error) {
+                console.error('Error eliminando usuario:', error);
+                mostrarMensaje('Error al eliminar', 'error');
+            }
+        }
+        
+        // ============================================
+        // HISTORIAL - EXPORTAR Y LIMPIAR
+        // ============================================
+        function renderizarHistorial() {
+            const tbody = document.getElementById('historyTableBody');
+            if (!tbody) return;
+            
+            if (historialCache.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3">No hay registros en el historial</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = historialCache.map(h => {
+                let fechaStr = '';
+                if (h.fecha) {
+                    try {
+                        fechaStr = h.fecha.toDate().toLocaleString();
+                    } catch(e) { fechaStr = 'Fecha desconocida'; }
+                }
+                return `
+                    <tr>
+                        <td>${fechaStr}</td>
+                        <td>${escapeHtml(h.titulo || '?')}</td>
+                        <td>${escapeHtml(h.completadaPor || '?')}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        function exportHistoryToCSV() {
+            if (historialCache.length === 0) {
+                mostrarMensaje('No hay datos para exportar', 'warning');
+                return;
+            }
+            
+            const headers = ['Fecha', 'Tarea', 'Realizada por'];
+            const rows = historialCache.map(h => {
+                let fechaStr = '';
+                if (h.fecha) {
+                    try {
+                        fechaStr = h.fecha.toDate().toISOString();
+                    } catch(e) { fechaStr = ''; }
+                }
+                return [fechaStr, h.titulo || '', h.completadaPor || ''];
+            });
+            
+            const csvContent = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.href = url;
+            link.setAttribute('download', `historial_tareas_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            mostrarMensaje('Exportación completada', 'success');
+        }
+        
+        async function clearOldHistory() {
+            const dias = prompt('¿Eliminar registros de hace cuántos días? (Ej: 30 para eliminar los más antiguos de 30 días)', '30');
+            if (!dias) return;
+            
+            const diasNum = parseInt(dias);
+            if (isNaN(diasNum) || diasNum < 1) {
+                mostrarMensaje('Número de días inválido', 'error');
+                return;
+            }
+            
+            if (!confirm(`¿Eliminar registros de historial con más de ${diasNum} días? Esta acción no se puede deshacer.`)) return;
+            
+            const fechaLimite = new Date();
+            fechaLimite.setDate(fechaLimite.getDate() - diasNum);
+            
+            let eliminados = 0;
+            for (const h of historialCache) {
+                if (h.fecha) {
+                    try {
+                        const fecha = h.fecha.toDate();
+                        if (fecha < fechaLimite) {
+                            await db.collection('historial').doc(h.id).delete();
+                            eliminados++;
+                        }
+                    } catch(e) {}
+                }
+            }
+            
+            mostrarMensaje(`✅ Eliminados ${eliminados} registros antiguos`, 'success');
+            await cargarHistorial();
+        }
+        
+        // ============================================
+        // UTILIDADES
+        // ============================================
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
+        }
+        
+        function mostrarMensaje(msg, tipo) {
+            const div = document.getElementById('statusMessage');
+            div.textContent = msg;
+            div.style.backgroundColor = tipo === 'error' ? '#e74c3c' : (tipo === 'warning' ? '#f39c12' : '#2d5a27');
+            div.style.display = 'block';
+            setTimeout(() => { div.style.display = 'none'; }, 3000);
+        }
+        
+        // Tabs
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+                btn.classList.add('active');
+                const tabId = btn.dataset.tab;
+                document.getElementById(`${tabId}Panel`).classList.add('active');
+            });
+        });
+        
+        window.showAddUserModal = showAddUserModal;
+        window.closeUserModal = closeUserModal;
+        window.saveUser = saveUser;
+        window.updateUser = updateUser;
+        window.deleteUser = deleteUser;
+        window.saveAllTasks = saveAllTasks;
+        window.exportHistoryToCSV = exportHistoryToCSV;
+        window.clearOldHistory = clearOldHistory;
+        window.loginAdmin = loginAdmin;
+        window.logoutAdmin = logoutAdmin;
+    </script>
+</body>
+</html>
