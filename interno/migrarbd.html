@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Migrar Historial - Email a UID</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', monospace; }
+        body { background: #0a0a0f; padding: 20px; color: #0f0; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1, h2 { color: #0f0; margin-bottom: 15px; border-bottom: 1px solid #0f0; padding-bottom: 8px; }
+        .login-box, .panel { background: #1a1a2a; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #333; }
+        input, button { padding: 8px 12px; margin: 5px; border-radius: 4px; border: none; font-family: monospace; }
+        button { background: #0f0; color: #000; cursor: pointer; font-weight: bold; }
+        button:hover { background: #0c0; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .error { color: #f66; background: #2a1a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #f00; }
+        .success { color: #0f0; background: #1a2a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #0f0; }
+        .info { color: #ff0; background: #2a2a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #ff0; }
+        .warning { color: #f90; background: #2a2a1a; padding: 10px; border-radius: 4px; border-left: 4px solid #f90; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #333; }
+        th { background: #0f0; color: #000; }
+        .log-area { background: #000; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 11px; max-height: 300px; overflow-y: auto; }
+        .status-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 10px; }
+        .badge-email { background: #f90; color: #000; }
+        .badge-uid { background: #0f0; color: #000; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 MIGRACIÓN: Email → UID en Historial</h1>
+        <p style="margin-bottom: 20px; color: #aaa;">Este script convertirá todos los registros de historial para usar UID en lugar de email.</p>
+        
+        <div class="login-box">
+            <h3>🔐 Login (solo admin)</h3>
+            <input type="email" id="email" placeholder="Email" value="casaverdecanas@gmail.com">
+            <input type="password" id="password" placeholder="Contraseña">
+            <button onclick="login()">Iniciar Sesión</button>
+            <div id="loginMsg"></div>
+        </div>
+        
+        <div id="migracionPanel" style="display: none;">
+            <!-- Panel 1: Estado actual -->
+            <div class="panel">
+                <h2>📊 1. Estado Actual del Historial</h2>
+                <button onclick="verEstadoActual()">🔍 Analizar historial</button>
+                <div id="estadoActual"></div>
+            </div>
+            
+            <!-- Panel 2: Mapa de usuarios -->
+            <div class="panel">
+                <h2>👥 2. Usuarios (Email ↔ UID)</h2>
+                <button onclick="cargarUsuarios()">📋 Cargar usuarios</button>
+                <div id="usuariosMap"></div>
+            </div>
+            
+            <!-- Panel 3: Ejecutar migración -->
+            <div class="panel">
+                <h2>🔄 3. Ejecutar Migración</h2>
+                <button id="btnMigrar" onclick="ejecutarMigracion()" style="background: #f90; color: #000;">▶ EJECUTAR MIGRACIÓN</button>
+                <div id="migracionLog" class="log-area" style="margin-top: 15px;"></div>
+            </div>
+            
+            <!-- Panel 4: Verificar resultado -->
+            <div class="panel">
+                <h2>✅ 4. Verificar Resultado</h2>
+                <button onclick="verResultado()">🔍 Ver registros migrados</button>
+                <div id="resultado"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+            authDomain: "tatareas-d8a80.firebaseapp.com",
+            projectId: "tatareas-d8a80",
+            storageBucket: "tatareas-d8a80.firebasestorage.app",
+            messagingSenderId: "709332495480",
+            appId: "1:709332495480:web:7060b2c75984352354918d"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let currentUser = null;
+        let esAdmin = false;
+        let emailToUidMap = {};  // Mapa de email → UID
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const msgDiv = document.getElementById('loginMsg');
+            
+            msgDiv.innerHTML = '<div class="info">🔄 Autenticando...</div>';
+            
+            try {
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                currentUser = userCredential.user;
+                
+                const userDoc = await db.collection('usuarios').doc(currentUser.uid).get();
+                if (userDoc.exists && userDoc.data().rol === 'admin') {
+                    esAdmin = true;
+                    msgDiv.innerHTML = `<div class="success">✅ Admin: ${currentUser.email}</div>`;
+                    document.getElementById('migracionPanel').style.display = 'block';
+                    await cargarUsuarios();  // Cargar mapa de usuarios automáticamente
+                } else {
+                    esAdmin = false;
+                    msgDiv.innerHTML = `<div class="error">❌ Acceso solo para administradores</div>`;
+                }
+            } catch (error) {
+                msgDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        // Cargar todos los usuarios y crear mapa email → UID
+        async function cargarUsuarios() {
+            const container = document.getElementById('usuariosMap');
+            container.innerHTML = '<div class="info">🔄 Cargando usuarios...</div>';
+            
+            try {
+                const snapshot = await db.collection('usuarios').get();
+                emailToUidMap = {};
+                
+                let html = ` <thead> <th>Email</th><th>UID</th><th>Nombre</th> </thead><tbody>`;
+                
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const email = data.email;
+                    const uid = doc.id;
+                    emailToUidMap[email] = uid;
+                    html += `<tr>
+                        <td>${escapeHtml(email)}</td>
+                        <td><small>${uid.substring(0, 12)}...</small></td>
+                        <td>${escapeHtml(data.nombre || '-')}</td>
+                    </tr>`;
+                });
+                
+                html += `</tbody>`;
+                container.innerHTML = `
+                    <p><strong>Total usuarios:</strong> ${snapshot.size}</p>
+                    ${snapshot.size > 0 ? html : '<div class="warning">⚠️ No hay usuarios en la colección "usuarios"</div>'}
+                `;
+                
+            } catch (error) {
+                container.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        // Ver estado actual: cuántos registros tienen email vs UID
+        async function verEstadoActual() {
+            const container = document.getElementById('estadoActual');
+            container.innerHTML = '<div class="info">🔄 Analizando historial...</div>';
+            
+            try {
+                const snapshot = await db.collection('historial').get();
+                let conEmail = 0;
+                let conUid = 0;
+                let sinCampo = 0;
+                let ejemplos = [];
+                
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const completadaPor = data.completadaPor;
+                    
+                    if (!completadaPor) {
+                        sinCampo++;
+                    } else if (completadaPor.includes('@')) {
+                        conEmail++;
+                        if (ejemplos.length < 3) {
+                            ejemplos.push({ id: doc.id, email: completadaPor, titulo: data.titulo });
+                        }
+                    } else {
+                        conUid++;
+                    }
+                });
+                
+                let ejemplosHtml = '';
+                if (ejemplos.length > 0) {
+                    ejemplosHtml = `<div class="info" style="margin-top: 15px;">
+                        <strong>📌 Ejemplos de registros con EMAIL:</strong><br>
+                        ${ejemplos.map(e => `- ${e.email} → "${e.titulo}"`).join('<br>')}
+                    </div>`;
+                }
+                
+                container.innerHTML = `
+                    <div class="success" style="margin-bottom: 10px;">
+                        <strong>📊 Estadísticas:</strong><br>
+                        🟡 Con EMAIL: ${conEmail}<br>
+                        🟢 Con UID: ${conUid}<br>
+                        ⚪ Sin campo completadaPor: ${sinCampo}<br>
+                        📋 Total registros: ${snapshot.size}
+                    </div>
+                    ${ejemplosHtml}
+                    ${conEmail === 0 ? '<div class="success">✅ No hay registros con email. ¡Ya está migrado!</div>' : ''}
+                `;
+                
+            } catch (error) {
+                container.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        // Ejecutar la migración
+        async function ejecutarMigracion() {
+            const btn = document.getElementById('btnMigrar');
+            const logDiv = document.getElementById('migracionLog');
+            
+            if (!confirm('⚠️ ¿Estás seguro de ejecutar la migración? Se convertirán todos los emails a UID.')) return;
+            
+            btn.disabled = true;
+            btn.textContent = '⏳ MIGRANDO...';
+            logDiv.innerHTML = '🔄 Iniciando migración...\n';
+            
+            try {
+                const snapshot = await db.collection('historial').get();
+                let migrados = 0;
+                let errores = 0;
+                let ignorados = 0;
+                
+                for (const doc of snapshot.docs) {
+                    const data = doc.data();
+                    const completadaPor = data.completadaPor;
+                    
+                    // Si ya es UID o no tiene campo, ignorar
+                    if (!completadaPor || !completadaPor.includes('@')) {
+                        ignorados++;
+                        continue;
+                    }
+                    
+                    // Buscar UID por email
+                    const uid = emailToUidMap[completadaPor];
+                    
+                    if (uid) {
+                        try {
+                            await doc.ref.update({
+                                completadaPor: uid,
+                                completadaPorEmail: completadaPor  // Guardar email original como respaldo
+                            });
+                            migrados++;
+                            logDiv.innerHTML += `✅ ${doc.id.substring(0, 8)}...: ${completadaPor} → ${uid.substring(0, 8)}...\n`;
+                        } catch (error) {
+                            errores++;
+                            logDiv.innerHTML += `❌ Error en ${doc.id}: ${error.message}\n`;
+                        }
+                    } else {
+                        errores++;
+                        logDiv.innerHTML += `⚠️ No se encontró UID para email: ${completadaPor}\n`;
+                    }
+                }
+                
+                logDiv.innerHTML += `\n📊 RESUMEN:\n`;
+                logDiv.innerHTML += `   ✅ Migrados: ${migrados}\n`;
+                logDiv.innerHTML += `   ⚠️ Ignorados (ya UID): ${ignorados}\n`;
+                logDiv.innerHTML += `   ❌ Errores: ${errores}\n`;
+                
+                if (migrados > 0) {
+                    logDiv.innerHTML += `\n🎉 Migración completada! Ahora actualiza los archivos index.html y admin-tareas.html.\n`;
+                }
+                
+            } catch (error) {
+                logDiv.innerHTML += `\n❌ Error fatal: ${error.message}\n`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '▶ EJECUTAR MIGRACIÓN';
+                await verEstadoActual();  // Actualizar estado
+            }
+        }
+
+        // Ver resultado después de migrar
+        async function verResultado() {
+            const container = document.getElementById('resultado');
+            container.innerHTML = '<div class="info">🔄 Cargando registros migrados...</div>';
+            
+            try {
+                const snapshot = await db.collection('historial').orderBy('fecha', 'desc').limit(20).get();
+                
+                let html = ` <thead> <th>Fecha</th><th>Tarea</th><th>UID (realizada por)</th><th>Email original</th> </thead><tbody>`;
+                
+                for (const doc of snapshot.docs) {
+                    const data = doc.data();
+                    let fechaStr = '';
+                    if (data.fecha) {
+                        try { fechaStr = data.fecha.toDate().toLocaleString(); } catch(e) { fechaStr = 'Fecha inválida'; }
+                    }
+                    
+                    const uid = data.completadaPor || '-';
+                    const emailOriginal = data.completadaPorEmail || '-';
+                    
+                    html += `<tr>
+                        <td>${fechaStr}</td>
+                        <td>${escapeHtml(data.titulo || '?')}</td>
+                        <td><small>${uid.substring(0, 12)}...</small></td>
+                        <td><small>${escapeHtml(emailOriginal)}</small></td>
+                    </tr>`;
+                }
+                
+                html += `</tbody>`;
+                container.innerHTML = html;
+                
+            } catch (error) {
+                container.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
+        }
+
+        // Auto-login si hay sesión
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                currentUser = user;
+                const userDoc = await db.collection('usuarios').doc(user.uid).get();
+                if (userDoc.exists && userDoc.data().rol === 'admin') {
+                    esAdmin = true;
+                    document.getElementById('loginMsg').innerHTML = `<div class="success">✅ Sesión activa: ${user.email}</div>`;
+                    document.getElementById('migracionPanel').style.display = 'block';
+                    await cargarUsuarios();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
