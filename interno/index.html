@@ -724,6 +724,7 @@
         // AUTENTICACIÓN
         // ============================================
         auth.onAuthStateChanged(async (user) => {
+            console.log('onAuthStateChanged:', user ? user.email : 'null');
             if (user) {
                 currentUser = user;
                 userEmailSpan.textContent = user.email;
@@ -881,9 +882,12 @@
             const inicioSemana = getInicioSemana();
             const tareasSemanaUnicas = new Set();
             historialCache.forEach(h => {
-                if (h.fecha && h.completadaPor === currentUser?.uid) {
+                if (h.fecha) {
                     try {
-                        if (h.fecha.toDate() >= inicioSemana) tareasSemanaUnicas.add(h.titulo);
+                        const fecha = h.fecha.toDate();
+                        if (fecha >= inicioSemana) {
+                            tareasSemanaUnicas.add(h.titulo);
+                        }
                     } catch (e) {}
                 }
             });
@@ -893,9 +897,12 @@
             hoyInicio.setHours(0, 0, 0, 0);
             let completadasHoy = 0;
             historialCache.forEach(h => {
-                if (h.fecha && h.completadaPor === currentUser?.uid) {
+                if (h.fecha) {
                     try {
-                        if (h.fecha.toDate() >= hoyInicio) completadasHoy++;
+                        const fecha = h.fecha.toDate();
+                        if (fecha >= hoyInicio) {
+                            completadasHoy++;
+                        }
                     } catch (e) {}
                 }
             });
@@ -907,9 +914,12 @@
                 
                 let realizadasSemana = 0;
                 historialCache.forEach(h => {
-                    if (h.completadaPor === currentUser.uid && h.fecha) {
+                    if (h.fecha) {
                         try {
-                            if (h.fecha.toDate() >= inicioSemana) realizadasSemana++;
+                            const fecha = h.fecha.toDate();
+                            if (fecha >= inicioSemana) {
+                                realizadasSemana++;
+                            }
                         } catch (e) {}
                     }
                 });
@@ -927,12 +937,11 @@
         }
 
         // ============================================
-        // VISTA TAREAS PRINCIPAL (CON LA LÓGICA QUE FUNCIONÓ)
+        // VISTA TAREAS PRINCIPAL
         // ============================================
         async function mostrarVistaTareas() {
             contentAreaDiv.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Cargando tareas...</p></div>';
             
-            // Obtener última realización para CADA tarea
             const tareasConUltima = await Promise.all(tareasCache.map(async tarea => {
                 const ultima = await obtenerUltimaRealizacion(tarea.id);
                 return { ...tarea, ultimaRealizacion: ultima };
@@ -942,19 +951,15 @@
             const realizadasRecientes = [];
             const ahora = new Date();
             
-            // Clasificar según espaciado mínimo
             for (const tarea of tareasConUltima) {
                 let esReciente = false;
-                
                 if (tarea.ultimaRealizacion) {
                     const diasDiferencia = Math.floor((ahora - tarea.ultimaRealizacion.fecha) / 86400000);
                     const espaciadoMinimo = getEspaciadoMinimo(tarea.recurrencia);
-                    
                     if (espaciadoMinimo > 0 && diasDiferencia < espaciadoMinimo) {
                         esReciente = true;
                     }
                 }
-                
                 if (esReciente) {
                     realizadasRecientes.push(tarea);
                 } else {
@@ -962,7 +967,6 @@
                 }
             }
             
-            // Ordenar por prioridad
             const ordenPrioridad = { 'alta': 1, 'media': 2, 'baja': 3 };
             pendientes.sort((a, b) => ordenPrioridad[a.prioridad] - ordenPrioridad[b.prioridad]);
             realizadasRecientes.sort((a, b) => ordenPrioridad[a.prioridad] - ordenPrioridad[b.prioridad]);
@@ -974,14 +978,12 @@
                     <div class="tasks-list">
             `;
             
-            // Tareas pendientes (arriba, clickeables)
             if (pendientes.length > 0) {
                 html += pendientes.map(t => renderizarTarjeta(t, false)).join('');
             } else if (realizadasRecientes.length === 0) {
                 html += '<div class="empty-state"><span class="material-icons">check_circle</span><p>🎉 No hay tareas pendientes</p></div>';
             }
             
-            // Tareas realizadas recientemente (abajo, tachadas con info)
             if (realizadasRecientes.length > 0) {
                 html += `<div class="recientes-divider"><span class="material-icons">history</span> Realizadas recientemente (no disponibles)</div>`;
                 html += realizadasRecientes.map(t => renderizarTarjeta(t, true)).join('');
@@ -990,7 +992,6 @@
             html += `</div></div>`;
             contentAreaDiv.innerHTML = html;
             
-            // Event listeners para tareas pendientes
             document.querySelectorAll('.task-card:not(.completed)').forEach(card => {
                 card.addEventListener('click', () => {
                     const tarea = tareasCache.find(t => t.id === card.dataset.id);
@@ -1091,7 +1092,7 @@
             
             const porDia = {};
             historialCache.forEach(h => {
-                if (h.fecha && h.completadaPor === currentUser?.uid) {
+                if (h.fecha) {
                     try {
                         let d = h.fecha.toDate();
                         let f = d.toISOString().slice(0, 10);
@@ -1130,10 +1131,34 @@
         }
 
         // ============================================
-        // VISTA HISTORIAL
+        // VISTA HISTORIAL (CORREGIDA)
         // ============================================
         async function mostrarHistorial() {
-            const misHistorial = historialCache.filter(h => h.completadaPor === currentUser?.uid);
+            console.log('=== DIAGNÓSTICO HISTORIAL ===');
+            console.log('Usuario actual:', currentUser?.email, 'UID:', currentUser?.uid);
+            console.log('Total registros en historialCache:', historialCache.length);
+            
+            // Mostrar los primeros 3 registros para depurar
+            if (historialCache.length > 0) {
+                console.log('Ejemplo de registro en historial:', historialCache[0]);
+            }
+            
+            // Filtrar registros del usuario actual (flexible: por UID o por email)
+            const misHistorial = historialCache.filter(h => {
+                const completadaPor = h.completadaPor || '';
+                
+                // Si es un UID (string largo sin @)
+                if (completadaPor.length > 20 && !completadaPor.includes('@')) {
+                    return completadaPor === currentUser?.uid;
+                }
+                // Si es un email
+                if (completadaPor.includes('@')) {
+                    return completadaPor === currentUser?.email;
+                }
+                return false;
+            });
+            
+            console.log('Registros filtrados para este usuario:', misHistorial.length);
             
             let html = `
                 <div class="history-container">
@@ -1149,7 +1174,10 @@
             `;
             
             if (misHistorial.length === 0) {
-                html += '<tr><td colspan="3" style="text-align:center; padding:40px;">📭 No tienes tareas realizadas aún</td> </tr>';
+                html += `作文<td colspan="3" style="text-align:center; padding:40px;">
+                    📭 No tienes tareas realizadas aún<br>
+                    <small style="color:#888;">(El historial tiene ${historialCache.length} registros totales)</small>
+                 </tr>`;
             } else {
                 for (const h of misHistorial.slice(0, 200)) {
                     let fechaStr = '';
@@ -1157,10 +1185,11 @@
                         try { fechaStr = h.fecha.toDate().toLocaleString(); } catch (e) {}
                     }
                     let nombreUsuario = await obtenerNombreUsuario(h.completadaPor);
-                    html += ` <td class="fecha-col">${fechaStr}</td>
+                    html += ` 
+                        <td class="fecha-col">${fechaStr}</td>
                         <td class="tarea-col">${escapeHtml(h.titulo)}</td>
                         <td class="usuario-col">${escapeHtml(nombreUsuario)}</td>
-                     `;
+                     </tr>`;
                 }
             }
             
