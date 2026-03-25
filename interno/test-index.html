@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mis Tareas - Versión Estable</title>
+    <title>Mis Tareas - Nueva Estructura</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -82,11 +82,18 @@
         .task-row:hover {
             background: #2a2a3a;
         }
+        .badge-dependencia {
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            margin-left: 5px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📋 Mis Tareas</h1>
+        <h1>📋 Mis Tareas (Nueva Estructura)</h1>
         
         <!-- Login -->
         <div class="login-box">
@@ -123,6 +130,36 @@
         let historialCache = [];
         let usuariosCache = {};
 
+        // ============================================
+        // FUNCIONES AUXILIARES
+        // ============================================
+        
+        // Traducir recurrencia (número → texto)
+        function traducirRecurrencia(numero) {
+            const mapa = {
+                0: 'Una vez',
+                1: 'Diaria',
+                2: 'Cada 2 días',
+                3: 'Cada 3 días',
+                4: 'Cada 4 días',
+                5: 'Cada 5 días',
+                6: 'Semanal',
+                7: 'Cada 7 días',
+                28: 'Mensual'
+            };
+            return mapa[numero] || `Cada ${numero} días`;
+        }
+
+        // Obtener espaciado mínimo por recurrencia (número)
+        function getEspaciadoMinimo(recurrencia) {
+            if (recurrencia === 0) return 0;      // Única vez
+            if (recurrencia === 1) return 1;      // Diaria
+            if (recurrencia === 3) return 3;      // Cada 3 días
+            if (recurrencia === 6) return 6;      // Semanal
+            if (recurrencia === 28) return 28;    // Mensual
+            return recurrencia;                    // Cualquier otro número
+        }
+
         // Obtener nombre de usuario por UID
         async function obtenerNombre(uid) {
             if (!uid) return 'Desconocido';
@@ -140,38 +177,30 @@
             }
         }
 
-        // Obtener espaciado mínimo por recurrencia
-        function getEspaciadoMinimo(recurrencia) {
-            switch(recurrencia) {
-                case 'daily': return 1;
-                case 'biweekly': return 3;
-                case 'weekly': return 6;
-                case 'monthly': return 28;
-                default: return 0;
-            }
-        }
-
-        // Obtener última realización de una tarea
+        // Obtener última realización de una tarea (usando nueva estructura)
         async function obtenerUltimaRealizacion(tareaId) {
             try {
                 const snap = await db.collection('historial')
                     .where('tareaId', '==', tareaId)
-                    .orderBy('fecha', 'desc')
+                    .orderBy('timestamp', 'desc')
                     .limit(1)
                     .get();
                 if (snap.empty) return null;
                 const data = snap.docs[0].data();
-                const nombre = await obtenerNombre(data.completadaPor);
+                const nombre = await obtenerNombre(data.usuarioId);
                 return {
-                    fecha: data.fecha.toDate(),
+                    fecha: data.timestamp.toDate(),
                     quien: nombre,
-                    uid: data.completadaPor
+                    uid: data.usuarioId
                 };
             } catch(e) {
                 return null;
             }
         }
 
+        // ============================================
+        // AUTENTICACIÓN
+        // ============================================
         async function login() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
@@ -206,28 +235,34 @@
             }
         }
 
+        // ============================================
+        // CARGA Y CLASIFICACIÓN DE TAREAS
+        // ============================================
         async function cargarDatos() {
-            // Cargar tareas activas
+            // Cargar tareas activas (usando nuevo campo "nombre")
             const tareasSnap = await db.collection('tareas').where('activa', '==', true).get();
             tareasCache = [];
-            tareasSnap.forEach(doc => tareasCache.push({ id: doc.id, ...doc.data() }));
+            tareasSnap.forEach(doc => {
+                tareasCache.push({ id: doc.id, ...doc.data() });
+            });
             
-            // Cargar historial
+            // Cargar historial (usando nueva estructura con timestamp)
             const historialSnap = await db.collection('historial').get();
             historialCache = [];
-            historialSnap.forEach(doc => historialCache.push({ id: doc.id, ...doc.data() }));
+            historialSnap.forEach(doc => {
+                historialCache.push({ id: doc.id, ...doc.data() });
+            });
             
             // Crear mapa de última realización por tareaId
             const ultimaPorTarea = new Map();
             historialCache.forEach(h => {
                 const tareaId = h.tareaId;
                 if (tareaId) {
-                    const fecha = h.fecha ? h.fecha.toDate() : null;
+                    const fecha = h.timestamp ? h.timestamp.toDate() : null;
                     if (!ultimaPorTarea.has(tareaId) || (fecha && fecha > ultimaPorTarea.get(tareaId).fecha)) {
                         ultimaPorTarea.set(tareaId, {
                             fecha: fecha,
-                            completadaPor: h.completadaPor,
-                            titulo: h.titulo
+                            usuarioId: h.usuarioId
                         });
                     }
                 }
@@ -251,14 +286,14 @@
                 }
                 
                 if (esReciente) {
-                    recientes.push({ ...tarea, ultimaFecha: ultima.fecha, ultimoUsuario: ultima.completadaPor });
+                    recientes.push({ ...tarea, ultimaFecha: ultima.fecha, ultimoUsuarioId: ultima.usuarioId });
                 } else {
                     pendientes.push(tarea);
                 }
             }
             
             // Mostrar resultados
-            mostrarResultados(pendientes, recientes);
+            await mostrarResultados(pendientes, recientes);
         }
         
         async function mostrarResultados(pendientes, recientes) {
@@ -273,31 +308,38 @@
             
             let html = '<h2>📋 Tareas Pendientes (click para marcar)</h2>';
             html += '<div class="table-wrapper">';
-            html += '<table><thead><tr><th>Título</th><th>Recurrencia</th><th>Prioridad</th><th>Fecha inicio</th></tr></thead><tbody>';
+            html += '<table><thead> <th>Nombre</th><th>Recurrencia</th><th>Prioridad</th><th>Dependencias</th><th>Fecha inicio</th> </thead><tbody>';
             
             for (const t of pendientes) {
-                html += `<tr class="task-row pendiente" data-id="${t.id}" data-titulo="${escapeHtml(t.titulo)}">
-                    <td><strong>${escapeHtml(t.titulo)}</strong></td>
-                    <td>${t.recurrencia || 'none'}</td>
+                const recurrenciaTexto = traducirRecurrencia(t.recurrencia);
+                const dependencias = t.dependencias || [];
+                const dependenciasHtml = dependencias.length > 0 ? 
+                    `<span class="badge-dependencia">${dependencias.length} dependencias</span>` : '-';
+                
+                html += `<tr class="task-row pendiente" data-id="${t.id}" data-titulo="${escapeHtml(t.nombre)}">
+                    <td><strong>${escapeHtml(t.nombre)}</strong> ${t.descripcion ? `<br><small>${escapeHtml(t.descripcion.substring(0, 50))}</small>` : ''}</td>
+                    <td>${recurrenciaTexto}</td>
                     <td>${t.prioridad || 'media'}</td>
+                    <td>${dependenciasHtml}</td>
                     <td>${t.fechaInicio || '-'}</td>
                 </tr>`;
             }
-            html += '</tbody></table></div>';
+            html += '</tbody> </table> </div>';
             
             if (recientes.length > 0) {
                 html += '<h2>🔴 Tareas Realizadas Recientemente</h2>';
                 html += '<div class="table-wrapper">';
-                html += '<table><thead><tr><th>Título</th><th>Recurrencia</th><th>Última realización</th><th>Realizada por</th></tr></thead><tbody>';
+                html += '<table><thead> <th>Nombre</th><th>Recurrencia</th><th>Última realización</th><th>Realizada por</th> </thead><tbody>';
                 
                 for (const t of recientes) {
                     let fechaStr = t.ultimaFecha ? t.ultimaFecha.toLocaleDateString() : '-';
-                    let nombre = await obtenerNombre(t.ultimoUsuario);
+                    let nombreUsuario = await obtenerNombre(t.ultimoUsuarioId);
+                    const recurrenciaTexto = traducirRecurrencia(t.recurrencia);
                     html += `<tr class="reciente">
-                        <td><s>${escapeHtml(t.titulo)}</s></td>
-                        <td>${t.recurrencia || 'none'}</td>
+                        <td><s>${escapeHtml(t.nombre)}</s></td>
+                        <td>${recurrenciaTexto}</td>
                         <td>${fechaStr}</td>
-                        <td>${escapeHtml(nombre)}</td>
+                        <td>${escapeHtml(nombreUsuario)}</td>
                     </tr>`;
                 }
                 html += '</tbody></table></div>';
@@ -318,37 +360,39 @@
             });
         }
         
+        // ============================================
+        // COMPLETAR TAREA (NUEVA ESTRUCTURA)
+        // ============================================
         async function completarTarea(tareaId, titulo) {
             try {
-                // Verificar espaciado
-                const ultimaSnap = await db.collection('historial')
-                    .where('tareaId', '==', tareaId)
-                    .orderBy('fecha', 'desc')
-                    .limit(1)
-                    .get();
-                
+                // Verificar espaciado mínimo
                 const tareaDoc = await db.collection('tareas').doc(tareaId).get();
                 const tarea = tareaDoc.data();
                 const espaciado = getEspaciadoMinimo(tarea.recurrencia);
                 
+                // Obtener última realización
+                const ultimaSnap = await db.collection('historial')
+                    .where('tareaId', '==', tareaId)
+                    .orderBy('timestamp', 'desc')
+                    .limit(1)
+                    .get();
+                
                 if (!ultimaSnap.empty && espaciado > 0) {
                     const ultima = ultimaSnap.docs[0].data();
-                    const ultimaFecha = ultima.fecha.toDate();
+                    const ultimaFecha = ultima.timestamp.toDate();
                     const dias = Math.floor((new Date() - ultimaFecha) / 86400000);
                     if (dias < espaciado) {
-                        const nombre = await obtenerNombre(ultima.completadaPor);
+                        const nombre = await obtenerNombre(ultima.usuarioId);
                         alert(`⚠️ No puedes realizar esta tarea.\nÚltima vez: ${ultimaFecha.toLocaleDateString()} por ${nombre}\nEspaciado mínimo: ${espaciado} días.`);
                         return;
                     }
                 }
                 
-                // Guardar en historial
+                // Guardar en historial con nueva estructura
                 await db.collection('historial').add({
                     tareaId: tareaId,
-                    titulo: titulo,
-                    completadaPor: currentUser.uid,
-                    completadaPorEmail: currentUser.email,
-                    fecha: firebase.firestore.FieldValue.serverTimestamp()
+                    usuarioId: currentUser.uid,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 
                 alert(`✅ Tarea "${titulo}" registrada`);
