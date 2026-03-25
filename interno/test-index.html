@@ -2,294 +2,593 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Migración de Base de Datos - Nuevo Sistema de Tareas</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Mis Tareas - CasaVerdeCanas</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Segoe UI', monospace;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        
+
         body {
-            background: linear-gradient(135deg, #1a1a2a 0%, #0a0a0f 100%);
-            padding: 20px;
-            color: #0f0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
         }
-        
-        .container {
+
+        /* ===== LOGIN ===== */
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            width: 380px;
+        }
+
+        .login-box h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .input-group span {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #999;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 14px 14px 14px 45px;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 16px;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-weight: 600;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .error-message {
+            color: #e74c3c;
+            text-align: center;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .info-message {
+            color: #3498db;
+            text-align: center;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+
+        /* ===== ÁREA PRIVADA ===== */
+        .private-area {
+            background: #f5f7fb;
+            min-height: 100vh;
+            display: none;
+        }
+
+        .app-header {
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
             max-width: 1200px;
             margin: 0 auto;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
         }
-        
-        h1 {
-            color: #0f0;
+
+        .header-content h1 {
+            color: #333;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: #f0f2f5;
+            padding: 8px 16px;
+            border-radius: 40px;
+        }
+
+        .logout-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 40px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+        }
+
+        .logout-btn:hover {
+            background: #c0392b;
+        }
+
+        .main-content {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 0 24px;
+        }
+
+        /* ===== DASHBOARD ===== */
+        .today-dashboard {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+        }
+
+        .today-dashboard h2 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
             margin-bottom: 20px;
-            border-bottom: 2px solid #0f0;
-            padding-bottom: 10px;
+            font-size: 20px;
         }
-        
-        h2, h3 {
-            color: #0f0;
-            margin: 20px 0 10px 0;
+
+        .today-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 20px;
         }
-        
-        .card {
-            background: #1a1a2a;
+
+        .stat-card {
+            background: rgba(255,255,255,0.15);
             padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            border: 1px solid #0f0;
+            border-radius: 16px;
+            text-align: center;
         }
-        
-        .success {
-            background: #1a2a1a;
-            border-left: 4px solid #0f0;
-            padding: 15px;
-            margin: 10px 0;
-            border-radius: 4px;
+
+        .stat-card .number {
+            font-size: 32px;
+            font-weight: bold;
         }
-        
-        .error {
-            background: #2a1a1a;
-            border-left: 4px solid #f00;
-            padding: 15px;
-            margin: 10px 0;
-            border-radius: 4px;
-            color: #f66;
+
+        /* ===== MENSAJE MODO EMPLEADO ===== */
+        .view-only-message {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffe69b 100%);
+            padding: 20px 25px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
-        
-        .info {
-            background: #2a2a1a;
-            border-left: 4px solid #ff0;
-            padding: 15px;
-            margin: 10px 0;
-            border-radius: 4px;
-            color: #ff0;
+
+        .view-only-content {
+            flex: 1;
         }
-        
-        input, textarea, select {
+
+        .view-only-stats {
+            background: white;
+            border-radius: 12px;
+            padding: 12px 18px;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-left: 4px solid #667eea;
+        }
+
+        .progress-bar {
             width: 100%;
-            padding: 10px;
-            margin: 8px 0;
-            background: #2a2a3a;
-            border: 1px solid #0f0;
-            color: #0f0;
-            border-radius: 4px;
-            font-family: monospace;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            margin-top: 12px;
+            overflow: hidden;
         }
-        
-        button {
-            background: #0f0;
-            color: #000;
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s;
+        }
+
+        /* ===== FILTROS ===== */
+        .filters-section {
+            background: white;
+            padding: 16px 20px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .filter-tab {
             padding: 10px 20px;
             border: none;
-            border-radius: 4px;
+            background: #f0f2f5;
+            border-radius: 40px;
             cursor: pointer;
-            font-weight: bold;
-            margin: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+            transition: all 0.3s;
         }
-        
-        button:hover {
-            background: #0c0;
-            transform: translateY(-1px);
+
+        .filter-tab:hover {
+            background: #e4e6e9;
         }
-        
-        button.danger {
-            background: #f00;
+
+        .filter-tab.active {
+            background: #667eea;
             color: white;
         }
-        
-        button.danger:hover {
-            background: #c00;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-        }
-        
-        th, td {
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid #333;
-        }
-        
-        th {
-            background: #0f0;
-            color: #000;
-        }
-        
-        .table-wrapper {
-            max-height: 400px;
-            overflow-y: auto;
-            border: 1px solid #333;
-            border-radius: 8px;
-        }
-        
-        .badge {
-            display: inline-block;
+
+        .filter-badge {
+            background: rgba(0,0,0,0.1);
             padding: 2px 8px;
-            border-radius: 4px;
+            border-radius: 20px;
             font-size: 11px;
-            margin: 2px;
         }
-        
-        .badge-pending {
-            background: #ff6600;
-            color: #000;
+
+        /* ===== LISTA DE TAREAS ===== */
+        .tasks-container {
+            background: white;
+            padding: 25px;
+            border-radius: 20px;
+            margin-bottom: 30px;
         }
-        
-        .badge-completed {
-            background: #00cc00;
-            color: #000;
-        }
-        
-        .dependency-item {
-            background: #2a2a3a;
-            padding: 8px;
-            margin: 5px;
-            border-radius: 4px;
-            display: inline-block;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 5px;
-            color: #0f0;
-        }
-        
-        .flex-row {
+
+        .tasks-container h2 {
+            color: #333;
+            margin-bottom: 20px;
             display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .tasks-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .task-card {
+            background: #ffffff;
+            border-left: 4px solid;
+            padding: 16px 20px;
+            border-radius: 12px;
+            transition: all 0.2s;
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .task-card:not(.completed):hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .task-card.completed {
+            opacity: 0.75;
+            background: #f8f9fa;
+            border-left-color: #adb5bd !important;
+            cursor: default;
+        }
+
+        .task-card.completed .task-title {
+            text-decoration: line-through;
+            color: #6c757d;
+        }
+
+        .task-card.priority-alta { border-left-color: #e74c3c; }
+        .task-card.priority-media { border-left-color: #f39c12; }
+        .task-card.priority-baja { border-left-color: #27ae60; }
+
+        .task-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
             gap: 10px;
             flex-wrap: wrap;
         }
-        
-        .task-preview {
-            background: #0a0a0f;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 5px 0;
+
+        .recurrence-badge {
+            background: #e8f4fd;
+            color: #3498db;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .task-description {
+            color: #6c757d;
+            font-size: 13px;
+            margin: 8px 0;
+            line-height: 1.4;
+        }
+
+        .task-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
+            color: #9aa6b5;
+            flex-wrap: wrap;
+        }
+
+        .task-meta span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .last-done-info {
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px dashed #e9ecef;
+            font-size: 11px;
+            color: #6c757d;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .count-badge {
+            background: #667eea;
+            color: white;
+            padding: 2px 10px;
+            border-radius: 30px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .recientes-divider {
+            margin: 20px 0 15px 0;
+            padding: 12px 0 8px 0;
+            font-size: 13px;
+            color: #6c757d;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: #9aa6b5;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 3px solid #e9ecef;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ===== VISTA SEMANA ===== */
+        .day-card {
+            background: #f8f9fa;
+            border-radius: 16px;
+            padding: 16px;
+            border-left: 4px solid #667eea;
+            margin-bottom: 12px;
+        }
+
+        .day-card h3 {
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: #495057;
+        }
+
+        .day-task {
+            padding: 10px 0;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .day-task-user {
+            color: #667eea;
+            font-size: 12px;
+        }
+
+        /* ===== HISTORIAL ===== */
+        .history-container {
+            background: white;
+            padding: 25px;
+            border-radius: 20px;
+        }
+
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .history-table th {
+            background: #f8f9fa;
+            color: #495057;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .history-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        @media (max-width: 768px) {
+            .header-content { flex-direction: column; text-align: center; }
+            .user-info { width: 100%; justify-content: center; }
+            .filter-tabs { flex-direction: column; }
+            .filter-tab { width: 100%; justify-content: center; }
+            .today-stats { grid-template-columns: 1fr; }
+            .task-card { padding: 14px 16px; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🔄 MIGRACIÓN DE BASE DE DATOS</h1>
-        <p style="color: #aaa; margin-bottom: 20px;">
-            Nueva estructura: tareas con frecuencia en días, fecha próxima (prox), y dependencias (dep)
-        </p>
-        
-        <div class="card">
-            <h3>🔐 Autenticación (Admin)</h3>
-            <input type="email" id="email" placeholder="Email" value="casaverdecanas@gmail.com">
-            <input type="password" id="password" placeholder="Contraseña">
-            <button onclick="login()">Iniciar Sesión</button>
-            <div id="loginMsg"></div>
-        </div>
-        
-        <div id="adminArea" style="display: none;">
-            <!-- Panel de Migración -->
-            <div class="card">
-                <h2>📦 MIGRAR BASE DE DATOS</h2>
-                <p style="color: #aaa; margin-bottom: 15px;">
-                    Esto convertirá todas las tareas existentes al nuevo formato:
-                </p>
-                <ul style="color: #aaa; margin-left: 20px; margin-bottom: 15px;">
-                    <li>📅 <strong>frecuencia</strong>: número de días (1 = diaria, 2 = cada 2 días, 0 = única vez)</li>
-                    <li>📆 <strong>prox</strong>: fecha próxima de realización</li>
-                    <li>🔗 <strong>dep</strong>: array de IDs de tareas que se activan al completar esta</li>
-                </ul>
-                <button onclick="migrarBaseDeDatos()" style="background: #ff6600;">🚀 Iniciar Migración</button>
-                <button onclick="verificarEstructura()" style="background: #0099ff;">🔍 Verificar Estructura</button>
-                <div id="migracionMsg"></div>
-            </div>
-            
-            <!-- Panel para Crear Tareas con Dependencias -->
-            <div class="card">
-                <h2>➕ CREAR NUEVA TAREA (con dependencias)</h2>
-                
-                <div class="form-group">
-                    <label>📝 Nombre de la tarea:</label>
-                    <input type="text" id="nuevoTitulo" placeholder="Ej: Aspirar piscina">
+    <!-- Pantalla de Login -->
+    <div id="loginContainer" class="login-container">
+        <div class="login-box">
+            <h2><span class="material-icons">task_alt</span> Mis Tareas</h2>
+            <form id="loginForm">
+                <div class="input-group">
+                    <span class="material-icons">email</span>
+                    <input type="email" id="username" placeholder="Email" required>
                 </div>
-                
-                <div class="form-group">
-                    <label>📄 Descripción:</label>
-                    <textarea id="nuevaDescripcion" rows="2" placeholder="Descripción detallada..."></textarea>
+                <div class="input-group">
+                    <span class="material-icons">lock</span>
+                    <input type="password" id="password" placeholder="Contraseña" required>
                 </div>
-                
-                <div class="form-group">
-                    <label>⏱️ Frecuencia (días):</label>
-                    <input type="number" id="nuevaFrecuencia" value="1" min="0" step="1">
-                    <small style="color: #aaa;">0 = única vez | 1 = diaria | 2 = cada 2 días | etc.</small>
+                <button type="submit" class="login-btn">
+                    <span class="material-icons">login</span> Ingresar
+                </button>
+                <div id="loginError" class="error-message"></div>
+                <div class="info-message">
+                    💡 Usa cualquier email (mínimo 6 caracteres). Si es nuevo, se creará automáticamente.
                 </div>
-                
-                <div class="form-group">
-                    <label>📅 Próxima fecha (prox):</label>
-                    <input type="date" id="nuevaProx">
-                </div>
-                
-                <div class="form-group">
-                    <label>🔗 Dependencias (IDs de tareas que se activan al completar esta):</label>
-                    <input type="text" id="nuevasDeps" placeholder="Ej: tarea_id_1, tarea_id_2 (separados por coma)">
-                    <small style="color: #aaa;">Cuando se marque esta tarea como realizada, estas tareas se activarán como pendientes</small>
-                </div>
-                
-                <button onclick="crearTareaConDeps()" style="background: #00cc00;">✅ Crear Tarea</button>
-                <div id="crearTareaMsg"></div>
-            </div>
-            
-            <!-- Lista de Tareas Actuales -->
-            <div class="card">
-                <h2>📋 TAREAS EN BASE DE DATOS</h2>
-                <button onclick="cargarTareas()" style="background: #0099ff;">🔄 Actualizar Lista</button>
-                <div class="table-wrapper">
-                    <table id="tareasTable">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Título</th>
-                                <th>Frecuencia (días)</th>
-                                <th>Próxima fecha</th>
-                                <th>Dependencias</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tareasBody">
-                            <tr><td colspan="6" class="info">Cargando...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            
-            <!-- Simulador de Completado de Tarea -->
-            <div class="card">
-                <h2>✅ SIMULAR COMPLETADO DE TAREA</h2>
-                <p style="color: #aaa;">Esto probará la lógica de dependencias:</p>
-                <div class="flex-row">
-                    <input type="text" id="tareaACompletar" placeholder="ID de la tarea a completar" style="flex: 1;">
-                    <button onclick="simularCompletarTarea()" style="background: #ff6600;">🎯 Completar Tarea</button>
-                </div>
-                <div id="simulacionMsg"></div>
-            </div>
+            </form>
         </div>
     </div>
 
+    <!-- Área Principal -->
+    <div id="privateArea" class="private-area">
+        <header class="app-header">
+            <div class="header-content">
+                <h1><span class="material-icons">checklist</span> Mis Tareas</h1>
+                <div class="user-info">
+                    <span class="material-icons">account_circle</span>
+                    <span id="userEmail"></span>
+                    <button id="logoutBtn" class="logout-btn">
+                        <span class="material-icons">logout</span> Salir
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- Dashboard -->
+            <div class="today-dashboard">
+                <h2><span class="material-icons">today</span> Resumen de hoy - <span id="todayDate"></span></h2>
+                <div class="today-stats">
+                    <div class="stat-card"><div class="number" id="pendingToday">0</div><div>Pendientes hoy</div></div>
+                    <div class="stat-card"><div class="number" id="completedToday">0</div><div>Completadas hoy</div></div>
+                    <div class="stat-card"><div class="number" id="totalActive">0</div><div>Tareas activas</div></div>
+                </div>
+            </div>
+
+            <!-- Mensaje de bienvenida -->
+            <div class="view-only-message">
+                <span class="material-icons">celebration</span>
+                <div class="view-only-content">
+                    <strong>✨ Haz clic en las tareas que realizaste</strong>
+                    <div class="view-only-stats">
+                        <span class="material-icons">bar_chart</span>
+                        <span id="weeklyStatsText">Cargando estadísticas...</span>
+                    </div>
+                    <div class="progress-bar"><div id="weeklyProgress" class="progress-fill" style="width: 0%"></div></div>
+                </div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="filters-section">
+                <div class="filter-tabs">
+                    <button class="filter-tab active" data-filter="tareas"><span class="material-icons">list</span> Tareas <span class="filter-badge" id="tareasCount">0</span></button>
+                    <button class="filter-tab" data-filter="semana"><span class="material-icons">calendar_today</span> Realizadas esta semana <span class="filter-badge" id="semanaCount">0</span></button>
+                    <button class="filter-tab" data-filter="historial"><span class="material-icons">history</span> Histórico <span class="filter-badge" id="historialCount">0</span></button>
+                </div>
+            </div>
+
+            <div id="contentArea"></div>
+        </main>
+    </div>
+
     <script>
-        // Configuración Firebase
+        // ============================================
+        // CONFIGURACIÓN FIREBASE
+        // ============================================
         const firebaseConfig = {
             apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
             authDomain: "tatareas-d8a80.firebaseapp.com",
@@ -302,333 +601,592 @@
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
+        auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
+        // ============================================
+        // VARIABLES GLOBALES
+        // ============================================
         let currentUser = null;
+        let currentFilter = 'tareas';
+        let unsubscribeTasks = null;
+        let unsubscribeHistorial = null;
+        let tareasCache = [];
+        let historialCache = [];
 
-        // Login
-        async function login() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            const msgDiv = document.getElementById('loginMsg');
-            
-            msgDiv.innerHTML = '<div class="info">🔄 Autenticando...</div>';
-            
-            try {
-                const userCredential = await auth.signInWithEmailAndPassword(email, password);
-                currentUser = userCredential.user;
-                msgDiv.innerHTML = `<div class="success">✅ Login exitoso: ${currentUser.email}</div>`;
-                document.getElementById('adminArea').style.display = 'block';
-                cargarTareas();
-            } catch (error) {
-                msgDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
-            }
-        }
+        // ============================================
+        // ELEMENTOS DOM
+        // ============================================
+        const loginContainer = document.getElementById('loginContainer');
+        const privateArea = document.getElementById('privateArea');
+        const loginForm = document.getElementById('loginForm');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const userEmailSpan = document.getElementById('userEmail');
+        const loginErrorDiv = document.getElementById('loginError');
+        const todayDateSpan = document.getElementById('todayDate');
+        const filterTabs = document.querySelectorAll('.filter-tab');
+        const contentAreaDiv = document.getElementById('contentArea');
+        const pendingTodaySpan = document.getElementById('pendingToday');
+        const completedTodaySpan = document.getElementById('completedToday');
+        const totalActiveSpan = document.getElementById('totalActive');
+        const weeklyStatsTextSpan = document.getElementById('weeklyStatsText');
+        const weeklyProgressDiv = document.getElementById('weeklyProgress');
+        const tareasCountSpan = document.getElementById('tareasCount');
+        const semanaCountSpan = document.getElementById('semanaCount');
+        const historialCountSpan = document.getElementById('historialCount');
 
-        // Verificar estructura actual
-        async function verificarEstructura() {
-            const msgDiv = document.getElementById('migracionMsg');
-            msgDiv.innerHTML = '<div class="info">🔍 Verificando estructura...</div>';
-            
-            try {
-                const snapshot = await db.collection('tareas').limit(5).get();
-                let estructuraMsg = '';
-                
-                if (snapshot.empty) {
-                    estructuraMsg = '📭 No hay tareas en la base de datos.';
-                } else {
-                    estructuraMsg = '📊 Estructura actual de las tareas:<br><br>';
-                    snapshot.forEach(doc => {
-                        const data = doc.data();
-                        estructuraMsg += `<div class="task-preview">
-                            <strong>${doc.id}</strong><br>
-                            Campos: ${Object.keys(data).join(', ')}<br>
-                            Tiene prox: ${data.prox ? '✅' : '❌'}<br>
-                            Tiene frecuencia: ${data.frecuencia !== undefined ? '✅' : '❌'}<br>
-                            Tiene dep: ${data.dep ? '✅' : '❌'}
-                        </div>`;
-                    });
-                }
-                
-                msgDiv.innerHTML = `<div class="info">${estructuraMsg}</div>`;
-            } catch (error) {
-                msgDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
-            }
-        }
-
-        // Migrar base de datos
-        async function migrarBaseDeDatos() {
-            const msgDiv = document.getElementById('migracionMsg');
-            msgDiv.innerHTML = '<div class="info">🔄 Iniciando migración...</div>';
-            
-            try {
-                const snapshot = await db.collection('tareas').get();
-                let migrados = 0;
-                let errores = 0;
-                
-                for (const doc of snapshot.docs) {
-                    const data = doc.data();
-                    const updates = {};
-                    let necesitaUpdate = false;
-                    
-                    // Convertir recurrencia a frecuencia en días
-                    if (data.recurrencia !== undefined && data.frecuencia === undefined) {
-                        const recurrenciaMap = {
-                            'none': 0,
-                            'daily': 1,
-                            'biweekly': 3,
-                            'weekly': 7,
-                            'monthly': 30
-                        };
-                        updates.frecuencia = recurrenciaMap[data.recurrencia] || 0;
-                        necesitaUpdate = true;
-                    }
-                    
-                    // Crear prox si no existe
-                    if (data.prox === undefined) {
-                        if (data.fechaInicio) {
-                            updates.prox = data.fechaInicio;
-                        } else {
-                            updates.prox = new Date();
-                        }
-                        necesitaUpdate = true;
-                    }
-                    
-                    // Crear dep si no existe
-                    if (data.dep === undefined) {
-                        updates.dep = [];
-                        necesitaUpdate = true;
-                    }
-                    
-                    if (necesitaUpdate) {
-                        await db.collection('tareas').doc(doc.id).update(updates);
-                        migrados++;
-                        console.log(`✅ Migrada tarea: ${doc.id}`);
-                    }
-                }
-                
-                msgDiv.innerHTML = `<div class="success">
-                    ✅ Migración completada!<br>
-                    📊 Tareas migradas: ${migrados}<br>
-                    ❌ Errores: ${errores}
-                </div>`;
-                
-                cargarTareas();
-                
-            } catch (error) {
-                msgDiv.innerHTML = `<div class="error">❌ Error en migración: ${error.message}</div>`;
-            }
-        }
-
-        // Crear nueva tarea con dependencias
-        async function crearTareaConDeps() {
-            const titulo = document.getElementById('nuevoTitulo').value;
-            const descripcion = document.getElementById('nuevaDescripcion').value;
-            const frecuencia = parseInt(document.getElementById('nuevaFrecuencia').value);
-            const proxRaw = document.getElementById('nuevaProx').value;
-            const depsRaw = document.getElementById('nuevasDeps').value;
-            const msgDiv = document.getElementById('crearTareaMsg');
-            
-            if (!titulo) {
-                msgDiv.innerHTML = '<div class="error">❌ El título es obligatorio</div>';
-                return;
-            }
-            
-            // Procesar dependencias
-            let deps = [];
-            if (depsRaw.trim()) {
-                deps = depsRaw.split(',').map(d => d.trim()).filter(d => d);
-            }
-            
-            // Procesar fecha prox
-            let prox = null;
-            if (proxRaw) {
-                prox = new Date(proxRaw);
-            } else {
-                prox = new Date();
-            }
-            
-            try {
-                const nuevaTarea = {
-                    titulo: titulo,
-                    descripcion: descripcion || '',
-                    frecuencia: frecuencia,
-                    prox: prox,
-                    dep: deps,
-                    activa: true,
-                    creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-                };
-                
-                const docRef = await db.collection('tareas').add(nuevaTarea);
-                
-                msgDiv.innerHTML = `<div class="success">
-                    ✅ Tarea creada exitosamente!<br>
-                    ID: ${docRef.id}<br>
-                    📅 Frecuencia: ${frecuencia} días<br>
-                    🔗 Dependencias: ${deps.length > 0 ? deps.join(', ') : 'Ninguna'}
-                </div>`;
-                
-                // Limpiar campos
-                document.getElementById('nuevoTitulo').value = '';
-                document.getElementById('nuevaDescripcion').value = '';
-                document.getElementById('nuevaFrecuencia').value = '1';
-                document.getElementById('nuevaProx').value = '';
-                document.getElementById('nuevasDeps').value = '';
-                
-                cargarTareas();
-                
-            } catch (error) {
-                msgDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
-            }
-        }
-
-        // Cargar y mostrar todas las tareas
-        async function cargarTareas() {
-            const tbody = document.getElementById('tareasBody');
-            tbody.innerHTML = '<tr><td colspan="6" class="info">🔄 Cargando...</td></tr>';
-            
-            try {
-                const snapshot = await db.collection('tareas').orderBy('creadoEn', 'desc').get();
-                
-                if (snapshot.empty) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="info">📭 No hay tareas en la base de datos</td></tr>';
-                    return;
-                }
-                
-                let html = '';
-                for (const doc of snapshot.docs) {
-                    const data = doc.data();
-                    
-                    // Formatear fecha prox
-                    let proxStr = 'No definida';
-                    if (data.prox) {
-                        try {
-                            const fecha = data.prox.toDate ? data.prox.toDate() : new Date(data.prox);
-                            proxStr = fecha.toLocaleDateString('es-ES');
-                        } catch(e) {
-                            proxStr = 'Fecha inválida';
-                        }
-                    }
-                    
-                    // Mostrar dependencias
-                    let depsStr = 'Ninguna';
-                    if (data.dep && data.dep.length > 0) {
-                        depsStr = data.dep.map(d => `<span class="badge">${d.substring(0, 8)}...</span>`).join(' ');
-                    }
-                    
-                    html += `
-                        <tr>
-                            <td><small>${doc.id.substring(0, 12)}...</small></td>
-                            <td><strong>${escapeHtml(data.titulo || 'Sin título')}</strong><br>
-                                <small>${escapeHtml((data.descripcion || '').substring(0, 50))}</small>
-                            </td>
-                            <td>${data.frecuencia !== undefined ? data.frecuencia + ' días' : '❌ No definida'}</td>
-                            <td>${proxStr}</td>
-                            <td>${depsStr}</td>
-                            <td>
-                                <button onclick="eliminarTarea('${doc.id}')" class="danger" style="padding: 4px 8px;">🗑️</button>
-                            </td>
-                        </tr>
-                    `;
-                }
-                
-                tbody.innerHTML = html;
-                
-            } catch (error) {
-                tbody.innerHTML = `<tr><td colspan="6" class="error">❌ Error: ${error.message}</td></tr>`;
-            }
-        }
-
-        // Eliminar tarea
-        async function eliminarTarea(id) {
-            if (!confirm('¿Eliminar esta tarea permanentemente?')) return;
-            
-            try {
-                await db.collection('tareas').doc(id).delete();
-                cargarTareas();
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-        }
-
-        // Simular completado de tarea (prueba de dependencias)
-        async function simularCompletarTarea() {
-            const tareaId = document.getElementById('tareaACompletar').value.trim();
-            const msgDiv = document.getElementById('simulacionMsg');
-            
-            if (!tareaId) {
-                msgDiv.innerHTML = '<div class="error">❌ Ingresa un ID de tarea</div>';
-                return;
-            }
-            
-            msgDiv.innerHTML = '<div class="info">🔄 Procesando...</div>';
-            
-            try {
-                // Obtener la tarea
-                const tareaDoc = await db.collection('tareas').doc(tareaId).get();
-                if (!tareaDoc.exists) {
-                    msgDiv.innerHTML = '<div class="error">❌ Tarea no encontrada</div>';
-                    return;
-                }
-                
-                const tarea = tareaDoc.data();
-                const frecuencia = tarea.frecuencia || 0;
-                const dependencias = tarea.dep || [];
-                
-                // Calcular nueva fecha próxima
-                let nuevaProx = null;
-                if (frecuencia > 0) {
-                    nuevaProx = new Date();
-                    nuevaProx.setDate(nuevaProx.getDate() + frecuencia);
-                }
-                
-                // Registrar en historial
-                await db.collection('historial').add({
-                    tareaId: tareaId,
-                    titulo: tarea.titulo,
-                    completadaPor: currentUser?.uid || 'admin',
-                    completadaPorEmail: currentUser?.email || 'admin@test.com',
-                    fecha: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                
-                // Actualizar la tarea con nueva prox
-                if (nuevaProx) {
-                    await db.collection('tareas').doc(tareaId).update({
-                        prox: nuevaProx
-                    });
-                }
-                
-                // Activar tareas dependientes
-                let activadas = [];
-                for (const depId of dependencias) {
-                    const depDoc = await db.collection('tareas').doc(depId).get();
-                    if (depDoc.exists) {
-                        // Asegurar que la tarea dependiente esté activa
-                        await db.collection('tareas').doc(depId).update({
-                            activa: true,
-                            prox: new Date() // Se activa inmediatamente
-                        });
-                        activadas.push(depId);
-                    }
-                }
-                
-                msgDiv.innerHTML = `<div class="success">
-                    ✅ Tarea completada exitosamente!<br>
-                    📅 Frecuencia: ${frecuencia} días<br>
-                    ${nuevaProx ? `📆 Nueva fecha próxima: ${nuevaProx.toLocaleDateString()}` : '⏹️ Tarea única (no se reprograma)'}<br>
-                    ${activadas.length > 0 ? `🔗 Tareas dependientes activadas: ${activadas.length}` : '🔗 Sin dependencias'}
-                </div>`;
-                
-                cargarTareas();
-                
-            } catch (error) {
-                msgDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
-            }
-        }
-
+        // ============================================
+        // FUNCIONES AUXILIARES (desde el diagnóstico funcional)
+        // ============================================
         function escapeHtml(str) {
             if (!str) return '';
             return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
         }
+
+        function getRecurrenciaTexto(r) {
+            const map = { 'none': 'Una vez', 'daily': 'Diaria', 'weekly': 'Semanal', 'biweekly': '2 veces/semana', 'monthly': 'Mensual' };
+            return map[r] || r;
+        }
+
+        function getEspaciadoMinimo(recurrencia) {
+            switch (recurrencia) {
+                case 'daily': return 1;
+                case 'biweekly': return 3;
+                case 'weekly': return 6;
+                case 'monthly': return 28;
+                default: return 0;
+            }
+        }
+
+        function getInicioSemana() {
+            const fecha = new Date();
+            fecha.setHours(0, 0, 0, 0);
+            const dia = fecha.getDay();
+            const diff = dia === 0 ? 6 : dia - 1;
+            fecha.setDate(fecha.getDate() - diff);
+            return fecha;
+        }
+
+        // Obtener nombre de usuario por UID (desde caché o consulta)
+        let usuariosCache = {};
+        async function obtenerNombreUsuario(uid) {
+            if (!uid) return 'Desconocido';
+            if (usuariosCache[uid]) return usuariosCache[uid];
+            try {
+                const doc = await db.collection('usuarios').doc(uid).get();
+                if (doc.exists) {
+                    const nombre = doc.data().nombre || doc.data().email || uid;
+                    usuariosCache[uid] = nombre;
+                    return nombre;
+                }
+                return uid.substring(0, 8);
+            } catch (e) {
+                return uid.substring(0, 8);
+            }
+        }
+
+        // Obtener la última realización de una tarea (misma lógica que el diagnóstico)
+        async function obtenerUltimaRealizacion(tareaId) {
+            try {
+                const snapshot = await db.collection('historial')
+                    .where('tareaId', '==', tareaId)
+                    .orderBy('fecha', 'desc')
+                    .limit(1)
+                    .get();
+                if (snapshot.empty) return null;
+                const data = snapshot.docs[0].data();
+                const nombre = await obtenerNombreUsuario(data.completadaPor);
+                return {
+                    fecha: data.fecha.toDate(),
+                    quien: nombre,
+                    uid: data.completadaPor
+                };
+            } catch (error) {
+                console.error('Error:', error);
+                return null;
+            }
+        }
+
+        // ============================================
+        // INICIALIZACIÓN
+        // ============================================
+        const hoy = new Date();
+        todayDateSpan.textContent = hoy.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+        function showPrivateArea() {
+            loginContainer.style.display = 'none';
+            privateArea.style.display = 'block';
+        }
+
+        function showLoginArea() {
+            loginContainer.style.display = 'flex';
+            privateArea.style.display = 'none';
+        }
+
+        // ============================================
+        // AUTENTICACIÓN
+        // ============================================
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                currentUser = user;
+                userEmailSpan.textContent = user.email;
+
+                // Verificar si es admin (redirigir si es admin)
+                let esAdmin = false;
+                try {
+                    const userDoc = await db.collection('usuarios').doc(user.uid).get();
+                    if (userDoc.exists && userDoc.data().rol === 'admin') esAdmin = true;
+                } catch (e) {}
+                if (esAdmin) {
+                    window.location.href = 'admin-tareas.html';
+                    return;
+                }
+
+                showPrivateArea();
+                await cargarDatosIniciales();
+                configurarListenersTiempoReal();
+            } else {
+                currentUser = null;
+                showLoginArea();
+                if (unsubscribeTasks) unsubscribeTasks();
+                if (unsubscribeHistorial) unsubscribeHistorial();
+            }
+        });
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            if (password.length < 6) {
+                loginErrorDiv.textContent = 'La contraseña debe tener al menos 6 caracteres';
+                loginErrorDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+                loginErrorDiv.style.display = 'none';
+            } catch (error) {
+                if (error.code === 'auth/user-not-found') {
+                    try {
+                        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                        await db.collection('usuarios').doc(userCredential.user.uid).set({
+                            email: email,
+                            nombre: '',
+                            rol: 'user',
+                            telefono: '',
+                            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        loginErrorDiv.style.display = 'none';
+                    } catch (createError) {
+                        loginErrorDiv.textContent = 'Error al crear usuario';
+                        loginErrorDiv.style.display = 'block';
+                    }
+                } else {
+                    loginErrorDiv.textContent = 'Email o contraseña incorrectos';
+                    loginErrorDiv.style.display = 'block';
+                }
+            }
+        });
+
+        logoutBtn.addEventListener('click', () => auth.signOut());
+
+        // ============================================
+        // LISTENERS EN TIEMPO REAL
+        // ============================================
+        function configurarListenersTiempoReal() {
+            if (unsubscribeTasks) unsubscribeTasks();
+            unsubscribeTasks = db.collection('tareas').where('activa', '==', true).onSnapshot((snapshot) => {
+                tareasCache = [];
+                snapshot.forEach(doc => tareasCache.push({ id: doc.id, ...doc.data() }));
+                actualizarDashboard();
+                actualizarVista();
+            });
+
+            if (unsubscribeHistorial) unsubscribeHistorial();
+            unsubscribeHistorial = db.collection('historial').orderBy('fecha', 'desc').limit(1000).onSnapshot((snapshot) => {
+                historialCache = [];
+                snapshot.forEach(doc => historialCache.push({ id: doc.id, ...doc.data() }));
+                actualizarDashboard();
+                actualizarVista();
+            });
+        }
+
+        async function cargarDatosIniciales() {
+            try {
+                const tareasSnapshot = await db.collection('tareas').where('activa', '==', true).get();
+                tareasCache = [];
+                tareasSnapshot.forEach(doc => tareasCache.push({ id: doc.id, ...doc.data() }));
+
+                const historialSnapshot = await db.collection('historial').orderBy('fecha', 'desc').limit(1000).get();
+                historialCache = [];
+                historialSnapshot.forEach(doc => historialCache.push({ id: doc.id, ...doc.data() }));
+
+                actualizarDashboard();
+                actualizarVista();
+            } catch (error) {
+                console.error('Error cargando datos:', error);
+            }
+        }
+
+        function calcularOcurrenciasSemanales(tarea) {
+            if (!tarea.activa || !tarea.fechaInicio) return 0;
+            try {
+                const fechaInicio = new Date(tarea.fechaInicio + 'T00:00:00');
+                const inicioSemana = getInicioSemana();
+                const finSemana = new Date(inicioSemana);
+                finSemana.setDate(inicioSemana.getDate() + 6);
+                finSemana.setHours(23, 59, 59, 999);
+
+                if (tarea.recurrencia === 'none') {
+                    return (fechaInicio >= inicioSemana && fechaInicio <= finSemana) ? 1 : 0;
+                }
+
+                let ocurrencias = 0;
+                let fecha = new Date(fechaInicio);
+                let intentos = 0;
+                while (fecha < inicioSemana && intentos < 100) {
+                    switch (tarea.recurrencia) {
+                        case 'daily': fecha.setDate(fecha.getDate() + 1); break;
+                        case 'weekly': fecha.setDate(fecha.getDate() + 7); break;
+                        case 'biweekly': fecha.setDate(fecha.getDate() + 3); break;
+                        case 'monthly': fecha.setMonth(fecha.getMonth() + 1); break;
+                    }
+                    intentos++;
+                }
+                intentos = 0;
+                while (fecha <= finSemana && intentos < 100) {
+                    if (fecha >= inicioSemana) ocurrencias++;
+                    switch (tarea.recurrencia) {
+                        case 'daily': fecha.setDate(fecha.getDate() + 1); break;
+                        case 'weekly': fecha.setDate(fecha.getDate() + 7); break;
+                        case 'biweekly': fecha.setDate(fecha.getDate() + 3); break;
+                        case 'monthly': fecha.setMonth(fecha.getMonth() + 1); break;
+                    }
+                    intentos++;
+                }
+                return ocurrencias;
+            } catch (error) {
+                return 0;
+            }
+        }
+
+        function actualizarDashboard() {
+            totalActiveSpan.textContent = tareasCache.length;
+            tareasCountSpan.textContent = tareasCache.length;
+            historialCountSpan.textContent = historialCache.length;
+
+            const inicioSemana = getInicioSemana();
+            const tareasSemanaUnicas = new Set();
+            historialCache.forEach(h => {
+                if (h.fecha) {
+                    try {
+                        if (h.fecha.toDate() >= inicioSemana) tareasSemanaUnicas.add(h.titulo);
+                    } catch (e) {}
+                }
+            });
+            semanaCountSpan.textContent = tareasSemanaUnicas.size;
+
+            const hoyInicio = new Date();
+            hoyInicio.setHours(0, 0, 0, 0);
+            let completadasHoy = 0;
+            historialCache.forEach(h => {
+                if (h.fecha) {
+                    try {
+                        if (h.fecha.toDate() >= hoyInicio) completadasHoy++;
+                    } catch (e) {}
+                }
+            });
+            completedTodaySpan.textContent = completadasHoy;
+
+            if (currentUser) {
+                let totalOcurrenciasSemana = 0;
+                tareasCache.forEach(t => totalOcurrenciasSemana += calcularOcurrenciasSemanales(t));
+
+                let realizadasSemana = 0;
+                historialCache.forEach(h => {
+                    if (h.fecha) {
+                        try {
+                            if (h.fecha.toDate() >= inicioSemana) realizadasSemana++;
+                        } catch (e) {}
+                    }
+                });
+
+                weeklyStatsTextSpan.textContent = `Llevas realizadas ${realizadasSemana} de ${totalOcurrenciasSemana} programadas esta semana`;
+                const porcentaje = totalOcurrenciasSemana > 0 ? (realizadasSemana / totalOcurrenciasSemana) * 100 : 0;
+                weeklyProgressDiv.style.width = `${porcentaje}%`;
+            }
+        }
+
+        function actualizarVista() {
+            if (currentFilter === 'tareas') mostrarVistaTareas();
+            else if (currentFilter === 'semana') mostrarVistaSemana();
+            else if (currentFilter === 'historial') mostrarHistorial();
+        }
+
+        // ============================================
+        // VISTA TAREAS PRINCIPAL (igual al diagnóstico funcional)
+        // ============================================
+        async function mostrarVistaTareas() {
+            contentAreaDiv.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Cargando tareas...</p></div>';
+
+            // Obtener última realización de cada tarea
+            const tareasConUltima = await Promise.all(tareasCache.map(async tarea => {
+                const ultima = await obtenerUltimaRealizacion(tarea.id);
+                return { ...tarea, ultimaRealizacion: ultima };
+            }));
+
+            const pendientes = [];
+            const realizadasRecientes = [];
+            const ahora = new Date();
+
+            for (const tarea of tareasConUltima) {
+                let esReciente = false;
+                if (tarea.ultimaRealizacion) {
+                    const diasDiferencia = Math.floor((ahora - tarea.ultimaRealizacion.fecha) / 86400000);
+                    const espaciadoMinimo = getEspaciadoMinimo(tarea.recurrencia);
+                    if (espaciadoMinimo > 0 && diasDiferencia < espaciadoMinimo) {
+                        esReciente = true;
+                    }
+                }
+                if (esReciente) {
+                    realizadasRecientes.push(tarea);
+                } else {
+                    pendientes.push(tarea);
+                }
+            }
+
+            const ordenPrioridad = { 'alta': 1, 'media': 2, 'baja': 3 };
+            pendientes.sort((a, b) => ordenPrioridad[a.prioridad] - ordenPrioridad[b.prioridad]);
+            realizadasRecientes.sort((a, b) => ordenPrioridad[a.prioridad] - ordenPrioridad[b.prioridad]);
+            pendingTodaySpan.textContent = pendientes.length;
+
+            let html = `
+                <div class="tasks-container">
+                    <h2><span class="material-icons">format_list_bulleted</span> Mis Tareas <span class="count-badge">${tareasCache.length}</span></h2>
+                    <div class="tasks-list">
+            `;
+
+            if (pendientes.length > 0) {
+                html += pendientes.map(t => renderizarTarjeta(t, false)).join('');
+            } else if (realizadasRecientes.length === 0) {
+                html += '<div class="empty-state"><span class="material-icons">check_circle</span><p>🎉 No hay tareas pendientes</p></div>';
+            }
+
+            if (realizadasRecientes.length > 0) {
+                html += `<div class="recientes-divider"><span class="material-icons">history</span> Realizadas recientemente (no disponibles)</div>`;
+                html += realizadasRecientes.map(t => renderizarTarjeta(t, true)).join('');
+            }
+
+            html += `</div></div>`;
+            contentAreaDiv.innerHTML = html;
+
+            // Event listeners para tareas pendientes
+            document.querySelectorAll('.task-card:not(.completed)').forEach(card => {
+                card.addEventListener('click', () => {
+                    const tarea = tareasCache.find(t => t.id === card.dataset.id);
+                    if (tarea && confirm(`✅ ¿Marcar "${tarea.titulo}" como realizada?`)) {
+                        completarTarea(tarea.id, tarea.titulo);
+                    }
+                });
+            });
+        }
+
+        function renderizarTarjeta(tarea, completadaRecientemente = false) {
+            let infoExtra = '';
+            if (completadaRecientemente && tarea.ultimaRealizacion) {
+                const fecha = tarea.ultimaRealizacion.fecha.toLocaleDateString();
+                const quien = tarea.ultimaRealizacion.quien;
+                infoExtra = `<div class="last-done-info">
+                    <span class="material-icons">schedule</span> 
+                    Realizada el ${fecha} por ${quien}
+                </div>`;
+            }
+
+            return `
+                <div class="task-card priority-${tarea.prioridad || 'media'} ${completadaRecientemente ? 'completed' : ''}" data-id="${tarea.id}">
+                    <div class="task-title">
+                        ${escapeHtml(tarea.titulo)}
+                        ${tarea.recurrencia && tarea.recurrencia !== 'none' ? 
+                            `<span class="recurrence-badge">${getRecurrenciaTexto(tarea.recurrencia)}</span>` : ''}
+                    </div>
+                    ${tarea.descripcion ? `<div class="task-description">${escapeHtml(tarea.descripcion)}</div>` : ''}
+                    <div class="task-meta">
+                        <span><span class="material-icons">event</span> ${tarea.fechaInicio || 'Sin fecha'}</span>
+                        <span><span class="material-icons">flag</span> Prioridad: ${tarea.prioridad || 'media'}</span>
+                    </div>
+                    ${infoExtra}
+                </div>
+            `;
+        }
+
+        // ============================================
+        // COMPLETAR TAREA (CON VALIDACIÓN Y GUARDADO CORRECTO)
+        // ============================================
+        async function completarTarea(tareaId, titulo) {
+            if (!currentUser) return;
+
+            try {
+                const tareaDoc = await db.collection('tareas').doc(tareaId).get();
+                if (!tareaDoc.exists) {
+                    alert('La tarea ya no existe');
+                    return;
+                }
+                const tarea = tareaDoc.data();
+
+                // Verificar última realización (espaciado mínimo)
+                const ultimaSnapshot = await db.collection('historial')
+                    .where('tareaId', '==', tareaId)
+                    .orderBy('fecha', 'desc')
+                    .limit(1)
+                    .get();
+
+                const espaciadoMinimo = getEspaciadoMinimo(tarea.recurrencia);
+                if (!ultimaSnapshot.empty && espaciadoMinimo > 0) {
+                    const ultima = ultimaSnapshot.docs[0].data();
+                    const ultimaFecha = ultima.fecha.toDate();
+                    const diasDiferencia = Math.floor((new Date() - ultimaFecha) / 86400000);
+                    if (diasDiferencia < espaciadoMinimo) {
+                        const nombre = await obtenerNombreUsuario(ultima.completadaPor);
+                        alert(`⚠️ No puedes realizar esta tarea todavía.\n\n📅 Última vez: ${ultimaFecha.toLocaleDateString()}\n👤 Realizada por: ${nombre}\n⏱️ Espaciado mínimo: ${espaciadoMinimo} días.\n📆 Han pasado: ${diasDiferencia} días.`);
+                        return;
+                    }
+                }
+
+                // Guardar en historial con el UID del usuario actual y el tareaId
+                await db.collection('historial').add({
+                    tareaId: tareaId,
+                    titulo: titulo,
+                    completadaPor: currentUser.uid,
+                    completadaPorEmail: currentUser.email,
+                    fecha: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                alert(`✅ Tarea "${titulo}" registrada como realizada.`);
+                actualizarDashboard();
+                actualizarVista();
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al registrar la tarea. Intenta de nuevo.');
+            }
+        }
+
+        // ============================================
+        // VISTA SEMANA (igual al diagnóstico)
+        // ============================================
+        async function mostrarVistaSemana() {
+            const inicioSemana = getInicioSemana();
+            const dias = [];
+            for (let i = 0; i < 7; i++) {
+                let d = new Date(inicioSemana);
+                d.setDate(inicioSemana.getDate() + i);
+                dias.push(d);
+            }
+
+            const porDia = {};
+            historialCache.forEach(h => {
+                if (h.fecha) {
+                    try {
+                        let d = h.fecha.toDate();
+                        let f = d.toISOString().slice(0, 10);
+                        if (!porDia[f]) porDia[f] = [];
+                        porDia[f].push(h);
+                    } catch (e) {}
+                }
+            });
+
+            let html = `
+                <div class="tasks-container">
+                    <h2><span class="material-icons">calendar_view_week</span> Realizadas esta semana <span class="count-badge">${semanaCountSpan.textContent}</span></h2>
+            `;
+
+            for (let d of dias) {
+                let f = d.toISOString().slice(0, 10);
+                let lista = porDia[f] || [];
+                let nombreDia = d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+                html += `<div class="day-card"><h3>${nombreDia}</h3>`;
+                if (lista.length) {
+                    for (let t of lista) {
+                        let nombreUsuario = await obtenerNombreUsuario(t.completadaPor);
+                        html += `<div class="day-task">
+                            <span>📋 ${escapeHtml(t.titulo)}</span>
+                            <span class="day-task-user">👤 ${nombreUsuario}</span>
+                        </div>`;
+                    }
+                } else {
+                    html += '<div class="day-empty">✨ Sin tareas realizadas</div>';
+                }
+                html += `</div>`;
+            }
+
+            html += `</div>`;
+            contentAreaDiv.innerHTML = html;
+        }
+
+        // ============================================
+        // VISTA HISTORIAL (filtrada por usuario actual)
+        // ============================================
+        async function mostrarHistorial() {
+            // Filtrar registros del usuario actual (por UID o email)
+            const misHistorial = historialCache.filter(h => {
+                const completadaPor = h.completadaPor || '';
+                if (completadaPor.length > 20 && !completadaPor.includes('@')) {
+                    return completadaPor === currentUser?.uid;
+                }
+                if (completadaPor.includes('@')) {
+                    return completadaPor === currentUser?.email;
+                }
+                return false;
+            });
+
+            let html = `
+                <div class="history-container">
+                    <h2><span class="material-icons">history</span> Mi Historial <span class="count-badge">${misHistorial.length}</span></h2>
+                    <div style="overflow-x: auto;">
+                        <table class="history-table">
+                            <thead>
+                                <th>Fecha</th>
+                                <th>Tarea</th>
+                                <th>Realizada por</th>
+                            </thead>
+                            <tbody>
+            `;
+
+            if (misHistorial.length === 0) {
+                html += ` <td colspan="3" style="text-align:center; padding:40px;">
+                    📭 No tienes tareas realizadas aún<br>
+                    <small style="color:#888;">(El historial tiene ${historialCache.length} registros totales)</small>
+                  </td>`;
+            } else {
+                for (const h of misHistorial.slice(0, 200)) {
+                    let fechaStr = '';
+                    if (h.fecha) {
+                        try { fechaStr = h.fecha.toDate().toLocaleString(); } catch (e) {}
+                    }
+                    let nombreUsuario = await obtenerNombreUsuario(h.completadaPor);
+                    html += ` 
+                        <td class="fecha-col">${fechaStr}</td>
+                        <td class="tarea-col">${escapeHtml(h.titulo)}</td>
+                        <td class="usuario-col">${escapeHtml(nombreUsuario)}</td>
+                     `;
+                }
+            }
+
+            html += `</tbody> </table> </div></div>`;
+            contentAreaDiv.innerHTML = html;
+        }
+
+        // ============================================
+        // FILTROS
+        // ============================================
+        filterTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                filterTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentFilter = tab.dataset.filter;
+                actualizarVista();
+            });
+        });
     </script>
 </body>
 </html>
