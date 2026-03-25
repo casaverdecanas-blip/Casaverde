@@ -3,54 +3,263 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prueba - Clasificación de Tareas</title>
+    <title>Panel de Historial - Tareas</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
-        body { background: #1e1e2f; padding: 20px; color: #fff; }
-        .container { max-width: 1400px; margin: 0 auto; }
-        h1 { margin-bottom: 20px; color: #667eea; }
-        .login-box { background: #2a2a3a; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
-        input, button { padding: 10px; margin: 5px; border-radius: 8px; border: none; }
-        button { background: #667eea; color: white; cursor: pointer; }
-        button:hover { background: #5a6fd8; }
-        table { width: 100%; border-collapse: collapse; background: #2a2a3a; border-radius: 12px; overflow: hidden; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #3a3a4a; }
-        th { background: #667eea; color: white; }
-        .pendiente { background: #2a5a2a; color: #aaffaa; }
-        .reciente { background: #5a2a2a; color: #ffaaaa; }
-        .info { background: #2a2a5a; color: #aaaaff; }
-        .error { background: #5a2a2a; color: #ffaaaa; }
-        .status { padding: 12px; border-radius: 8px; margin-bottom: 20px; }
-        .status.success { background: #2a5a2a; color: #aaffaa; }
-        .status.error { background: #5a2a2a; color: #ffaaaa; }
-        .status.info { background: #2a2a5a; color: #aaaaff; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Monaco', monospace;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0a0a0f 0%, #0f0f1a 100%);
+            padding: 20px;
+            color: #0f0;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: #0f0;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #0f0;
+            padding-bottom: 10px;
+            font-size: 28px;
+            text-shadow: 0 0 10px rgba(0,255,0,0.3);
+        }
+        
+        h2, h3 {
+            color: #0f0;
+            margin-bottom: 15px;
+        }
+        
+        .login-box, .panel {
+            background: rgba(26, 26, 42, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(0,255,0,0.3);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        
+        input, button {
+            padding: 10px 15px;
+            margin: 8px 5px;
+            border-radius: 6px;
+            border: none;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        
+        input {
+            background: #2a2a3a;
+            color: #0f0;
+            border: 1px solid #0f0;
+            min-width: 250px;
+        }
+        
+        input:focus {
+            outline: none;
+            box-shadow: 0 0 5px #0f0;
+        }
+        
+        button {
+            background: #0f0;
+            color: #000;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        button:hover {
+            background: #0c0;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,255,0,0.3);
+        }
+        
+        .error {
+            color: #f66;
+            background: rgba(42, 26, 26, 0.95);
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 4px solid #f00;
+            margin-top: 10px;
+        }
+        
+        .success {
+            color: #0f0;
+            background: rgba(26, 42, 26, 0.95);
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 4px solid #0f0;
+            margin-top: 10px;
+        }
+        
+        .info {
+            color: #ff0;
+            background: rgba(42, 42, 26, 0.95);
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 4px solid #ff0;
+            margin-top: 10px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 13px;
+        }
+        
+        th, td {
+            padding: 12px 10px;
+            text-align: left;
+            border-bottom: 1px solid rgba(0,255,0,0.2);
+        }
+        
+        th {
+            background: #0f0;
+            color: #000;
+            position: sticky;
+            top: 0;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+        
+        .table-wrapper {
+            max-height: 600px;
+            overflow-y: auto;
+            border: 1px solid rgba(0,255,0,0.3);
+            border-radius: 8px;
+            background: rgba(0,0,0,0.3);
+        }
+        
+        .uid-badge {
+            font-family: monospace;
+            background: rgba(42, 42, 90, 0.8);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            color: #88f;
+        }
+        
+        .nombre {
+            color: #0f0;
+            font-weight: bold;
+            text-shadow: 0 0 5px rgba(0,255,0,0.5);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: rgba(0,0,0,0.5);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #0f0;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 28px;
+            font-weight: bold;
+            color: #0f0;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #aaa;
+            margin-top: 5px;
+        }
+        
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #1a1a2a;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #0f0;
+            border-radius: 4px;
+        }
+        
+        @media (max-width: 768px) {
+            table {
+                font-size: 11px;
+            }
+            
+            th, td {
+                padding: 8px 6px;
+            }
+            
+            input {
+                min-width: 180px;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🔍 Prueba de Clasificación de Tareas</h1>
+        <h1>📊 PANEL DE HISTORIAL - TAREAS COMPLETADAS</h1>
+        <p style="margin-bottom: 20px; color: #aaa; font-size: 14px;">
+            Sistema de visualización de historial con nombres de usuarios desde Firestore
+        </p>
         
         <div class="login-box">
-            <h3>🔐 Login para pruebas</h3>
+            <h3>🔐 Acceso al Sistema</h3>
             <input type="email" id="email" placeholder="Email" value="casaverdecanas@gmail.com">
             <input type="password" id="password" placeholder="Contraseña">
             <button onclick="login()">Iniciar Sesión</button>
-            <div id="loginStatus" class="status" style="margin-top: 15px; display: none;"></div>
+            <div id="loginMsg"></div>
         </div>
         
-        <div id="testResults" style="display: none;">
-            <div id="loading" style="text-align: center; padding: 40px;">🔄 Cargando datos...</div>
-            <div id="resultsTable" style="display: none;"></div>
+        <div id="resultados" style="display: none;">
+            <div class="panel">
+                <h2>📋 REGISTROS DEL HISTORIAL</h2>
+                <div id="stats"></div>
+                <div class="table-wrapper">
+                    <table id="historialTable">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Fecha y Hora</th>
+                                <th>Tarea Realizada</th>
+                                <th>ID del Usuario (UID)</th>
+                                <th>Nombre del Usuario</th>
+                                <th>Email Registrado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historialBody">
+                            <tr><td colspan="6" class="info">🔄 Esperando autenticación...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
-        // Configuración Firebase
+        // Configuración de Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
             authDomain: "tatareas-d8a80.firebaseapp.com",
@@ -60,216 +269,259 @@
             appId: "1:709332495480:web:7060b2c75984352354918d"
         };
 
+        // Inicializar Firebase
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
 
         let currentUser = null;
+        let usuariosMap = new Map(); // uid -> {nombre, email}
+        let usuariosCache = {}; // Para compatibilidad
 
-        // Funciones auxiliares
-        function getEspaciadoMinimo(recurrencia) {
-            switch (recurrencia) {
-                case 'daily': return 1;
-                case 'biweekly': return 3;
-                case 'weekly': return 6;
-                case 'monthly': return 28;
-                default: return 0;
-            }
-        }
-
-        function getRecurrenciaTexto(recurrencia) {
-            const map = { 'none': 'Una vez', 'daily': 'Diaria', 'weekly': 'Semanal', 'biweekly': '2 veces/semana', 'monthly': 'Mensual' };
-            return map[recurrencia] || recurrencia;
-        }
-
-        async function obtenerUltimaRealizacion(tareaId) {
-            try {
-                const snapshot = await db.collection('historial')
-                    .where('tareaId', '==', tareaId)
-                    .orderBy('fecha', 'desc')
-                    .limit(1)
-                    .get();
-                if (snapshot.empty) return null;
-                const data = snapshot.docs[0].data();
-                return {
-                    fecha: data.fecha.toDate(),
-                    quien: data.completadaPor
-                };
-            } catch (error) {
-                console.error('Error:', error);
-                return null;
-            }
-        }
-
+        // Función de login mejorada
         async function login() {
-            const email = document.getElementById('email').value;
+            const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
-            const loginStatus = document.getElementById('loginStatus');
+            const msgDiv = document.getElementById('loginMsg');
             
-            loginStatus.style.display = 'block';
-            loginStatus.className = 'status info';
-            loginStatus.textContent = '🔄 Autenticando...';
+            if (!email || !password) {
+                msgDiv.innerHTML = '<div class="error">❌ Por favor ingrese email y contraseña</div>';
+                return;
+            }
+            
+            msgDiv.innerHTML = '<div class="info">🔄 Autenticando...</div>';
             
             try {
                 const userCredential = await auth.signInWithEmailAndPassword(email, password);
                 currentUser = userCredential.user;
-                loginStatus.className = 'status success';
-                loginStatus.textContent = '✅ Login exitoso. Cargando tareas...';
-                await cargarYClasificarTareas();
+                msgDiv.innerHTML = `<div class="success">✅ Sesión iniciada: ${currentUser.email}</div>`;
+                document.getElementById('resultados').style.display = 'block';
+                await cargarUsuarios();
+                await cargarHistorial();
             } catch (error) {
                 if (error.code === 'auth/user-not-found') {
+                    msgDiv.innerHTML = '<div class="info">📝 Usuario no encontrado, creando cuenta...</div>';
                     try {
                         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
                         currentUser = userCredential.user;
-                        loginStatus.className = 'status success';
-                        loginStatus.textContent = '✅ Usuario creado. Cargando tareas...';
-                        await cargarYClasificarTareas();
+                        msgDiv.innerHTML = `<div class="success">✅ Cuenta creada exitosamente: ${currentUser.email}</div>`;
+                        document.getElementById('resultados').style.display = 'block';
+                        await cargarUsuarios();
+                        await cargarHistorial();
                     } catch (createError) {
-                        loginStatus.className = 'status error';
-                        loginStatus.textContent = '❌ Error al crear usuario: ' + createError.message;
+                        msgDiv.innerHTML = `<div class="error">❌ Error al crear cuenta: ${createError.message}</div>`;
                     }
                 } else {
-                    loginStatus.className = 'status error';
-                    loginStatus.textContent = '❌ Error: ' + error.message;
+                    msgDiv.innerHTML = `<div class="error">❌ Error de autenticación: ${error.message}</div>`;
                 }
             }
         }
 
-        async function cargarYClasificarTareas() {
-            document.getElementById('testResults').style.display = 'block';
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('resultsTable').style.display = 'none';
+        // Cargar todos los usuarios de la colección "usuarios"
+        async function cargarUsuarios() {
+            try {
+                const snapshot = await db.collection('usuarios').get();
+                usuariosMap.clear();
+                
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const nombre = data.nombre || data.displayName || data.email?.split('@')[0] || 'Sin nombre';
+                    const email = data.email || '';
+                    
+                    usuariosMap.set(doc.id, {
+                        nombre: nombre,
+                        email: email,
+                        uid: doc.id
+                    });
+                    
+                    // También mantener en objeto para compatibilidad
+                    usuariosCache[doc.id] = { nombre, email };
+                });
+                
+                console.log(`✅ Usuarios cargados: ${usuariosMap.size}`);
+            } catch (error) {
+                console.error('Error cargando usuarios:', error);
+            }
+        }
+
+        // Obtener nombre de usuario por UID con caché
+        async function obtenerNombreUsuario(uid) {
+            if (!uid || uid === '') return '❌ Sin UID';
+            
+            // Buscar en caché
+            if (usuariosMap.has(uid)) {
+                return usuariosMap.get(uid).nombre;
+            }
+            
+            // Intentar buscar directamente en Firestore
+            try {
+                const doc = await db.collection('usuarios').doc(uid).get();
+                if (doc.exists) {
+                    const data = doc.data();
+                    const nombre = data.nombre || data.email?.split('@')[0] || uid.substring(0, 8);
+                    usuariosMap.set(uid, {
+                        nombre: nombre,
+                        email: data.email || ''
+                    });
+                    return nombre;
+                }
+                return `⚠️ Usuario no registrado (${uid.substring(0, 8)}...)`;
+            } catch(e) {
+                console.error('Error obteniendo usuario:', e);
+                return `❌ Error (${uid.substring(0, 8)}...)`;
+            }
+        }
+
+        // Cargar y mostrar el historial
+        async function cargarHistorial() {
+            const tbody = document.getElementById('historialBody');
+            const statsDiv = document.getElementById('stats');
+            
+            tbody.innerHTML = '<tr><td colspan="6" class="info">🔄 Cargando registros del historial...</td></tr>';
             
             try {
-                // Obtener todas las tareas activas
-                const tareasSnapshot = await db.collection('tareas').where('activa', '==', true).get();
-                const tareas = [];
-                tareasSnapshot.forEach(doc => tareas.push({ id: doc.id, ...doc.data() }));
+                // Obtener historial ordenado por fecha descendente
+                const snapshot = await db.collection('historial')
+                    .orderBy('fecha', 'desc')
+                    .limit(200)
+                    .get();
                 
-                // Obtener última realización de cada tarea
-                const tareasConUltima = await Promise.all(tareas.map(async tarea => {
-                    const ultima = await obtenerUltimaRealizacion(tarea.id);
-                    return { ...tarea, ultimaRealizacion: ultima };
-                }));
+                const registros = [];
                 
-                // Clasificar
-                const ahora = new Date();
-                const pendientes = [];
-                const recientes = [];
-                
-                for (const tarea of tareasConUltima) {
-                    let esReciente = false;
-                    let ultimaInfo = '';
-                    let diasDiferencia = null;
-                    let espaciadoMinimo = getEspaciadoMinimo(tarea.recurrencia);
-                    
-                    if (tarea.ultimaRealizacion) {
-                        diasDiferencia = Math.floor((ahora - tarea.ultimaRealizacion.fecha) / (1000 * 60 * 60 * 24));
-                        ultimaInfo = `${tarea.ultimaRealizacion.fecha.toLocaleDateString()} por ${tarea.ultimaRealizacion.quien}`;
-                        
-                        if (espaciadoMinimo > 0 && diasDiferencia < espaciadoMinimo) {
-                            esReciente = true;
-                        }
-                    } else {
-                        ultimaInfo = 'Nunca realizada';
-                        diasDiferencia = '-';
-                    }
-                    
-                    const clasificacion = esReciente ? '🔴 RECIENTE (tachada)' : '🟢 PENDIENTE';
-                    
-                    recientes.push({
-                        id: tarea.id,
-                        titulo: tarea.titulo,
-                        recurrencia: getRecurrenciaTexto(tarea.recurrencia),
-                        espaciado: espaciadoMinimo,
-                        ultimaInfo: ultimaInfo,
-                        diasDiferencia: diasDiferencia,
-                        clasificacion: clasificacion,
-                        esReciente: esReciente
+                for (const doc of snapshot.docs) {
+                    const data = doc.data();
+                    registros.push({
+                        id: doc.id,
+                        fecha: data.fecha,
+                        titulo: data.titulo || data.nombre || 'Tarea sin título',
+                        completadaPor: data.completadaPor || data.userId || '',
+                        completadaPorEmail: data.completadaPorEmail || data.userEmail || '',
+                        timestamp: data.timestamp
                     });
                 }
                 
-                // Ordenar: pendientes arriba, recientes abajo
-                recientes.sort((a, b) => {
-                    if (a.esReciente === b.esReciente) return 0;
-                    return a.esReciente ? 1 : -1;
-                });
+                // Mostrar estadísticas
+                const statsHTML = `
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-number">${registros.length}</div>
+                            <div class="stat-label">Total Registros</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${registros.filter(r => r.completadaPor && r.completadaPor.length > 5).length}</div>
+                            <div class="stat-label">Con UID Válido</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${registros.filter(r => r.completadaPorEmail).length}</div>
+                            <div class="stat-label">Con Email Backup</div>
+                        </div>
+                    </div>
+                `;
                 
-                mostrarTabla(recientes);
+                statsDiv.innerHTML = statsHTML;
+                
+                if (registros.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="info">📭 No hay registros en el historial. Complete algunas tareas para verlos aquí.</td></tr>';
+                    return;
+                }
+                
+                // Construir tabla con nombres de usuario
+                let html = '';
+                let contador = 0;
+                
+                for (const reg of registros) {
+                    contador++;
+                    
+                    // Formatear fecha
+                    let fechaStr = 'Fecha no disponible';
+                    if (reg.fecha) {
+                        try {
+                            if (reg.fecha.toDate) {
+                                fechaStr = reg.fecha.toDate().toLocaleString('es-ES', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    second: '2-digit'
+                                });
+                            } else if (reg.timestamp) {
+                                fechaStr = new Date(reg.timestamp).toLocaleString('es-ES');
+                            } else {
+                                fechaStr = new Date(reg.fecha).toLocaleString('es-ES');
+                            }
+                        } catch(e) {
+                            fechaStr = 'Fecha inválida';
+                        }
+                    }
+                    
+                    const uid = reg.completadaPor || '';
+                    const nombre = await obtenerNombreUsuario(uid);
+                    const emailBackup = reg.completadaPorEmail || '-';
+                    
+                    // Estilos condicionales
+                    const tieneUID = uid && uid.length > 8;
+                    const uidDisplay = tieneUID ? `${uid.substring(0, 12)}...${uid.substring(uid.length-4)}` : '❌ No especificado';
+                    const nombreClass = usuariosMap.has(uid) ? 'nombre' : '';
+                    
+                    html += `
+                        <tr style="transition: background 0.2s;" onmouseover="this.style.background='rgba(0,255,0,0.1)'" onmouseout="this.style.background=''">
+                            <td style="font-weight: bold;">${contador}</td>
+                            <td><small>${fechaStr}</small></td>
+                            <td><strong>${escapeHtml(reg.titulo)}</strong></td>
+                            <td><span class="uid-badge" title="${uid}">${uidDisplay}</span></td>
+                            <td><span class="${nombreClass}">${escapeHtml(nombre)}</span></td>
+                            <td><small>${escapeHtml(emailBackup)}</small></td>
+                        </tr>
+                    `;
+                }
+                
+                tbody.innerHTML = html;
+                
+                // Agregar información adicional
+                const usuariosEncontrados = registros.filter(r => usuariosMap.has(r.completadaPor)).length;
+                if (usuariosEncontrados < registros.length) {
+                    statsDiv.innerHTML += `
+                        <div class="info" style="margin-top: 15px;">
+                            ℹ️ Información: ${usuariosEncontrados} de ${registros.length} registros tienen nombre de usuario identificado.
+                            ${registros.length - usuariosEncontrados} registros corresponden a usuarios no registrados en la colección "usuarios".
+                        </div>
+                    `;
+                }
                 
             } catch (error) {
-                console.error('Error:', error);
-                document.getElementById('loading').innerHTML = `<div class="status error">❌ Error: ${error.message}</div>`;
+                console.error('Error al cargar historial:', error);
+                tbody.innerHTML = `<tr><td colspan="6" class="error">❌ Error al cargar datos: ${error.message}</td></tr>`;
+                statsDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
             }
         }
-        
-        function mostrarTabla(tareas) {
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('resultsTable').style.display = 'block';
-            
-            let html = `
-                <h2 style="margin: 20px 0 10px 0;">📋 Resultado de clasificación</h2>
-                <p style="margin-bottom: 15px; color: #aaa;">✅ Las tareas PENDIENTES están disponibles para marcar.<br>
-                🔴 Las tareas RECIENTES aparecerán tachadas al final de la lista con información de última vez.</p>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Tarea</th>
-                            <th>Frecuencia</th>
-                            <th>Espaciado mínimo</th>
-                            <th>Última realización</th>
-                            <th>Días desde última</th>
-                            <th>Clasificación</th>
-                        </thead>
-                    </thead>
-                    <tbody>
-            `;
-            
-            for (const tarea of tareas) {
-                const rowClass = tarea.esReciente ? 'reciente' : 'pendiente';
-                html += `
-                    <tr class="${rowClass}">
-                        <td><strong>${escapeHtml(tarea.titulo)}</strong></td>
-                        <td>${escapeHtml(tarea.recurrencia)}</td>
-                        <td>${tarea.espaciado} días</td>
-                        <td>${escapeHtml(tarea.ultimaInfo)}</td>
-                        <td>${tarea.diasDiferencia !== '-' ? tarea.diasDiferencia + ' días' : '-'}</td>
-                        <td>${tarea.clasificacion}</td>
-                    </tr>
-                `;
-            }
-            
-            if (tareas.length === 0) {
-                html += `<tr><td colspan="6" style="text-align:center;">No hay tareas activas</td></tr>`;
-            }
-            
-            html += `
-                    </tbody>
-                </table>
-                <p style="margin-top: 20px; padding: 12px; background: #2a2a3a; border-radius: 8px;">
-                    <strong>📌 Resumen:</strong><br>
-                    🟢 Pendientes: ${tareas.filter(t => !t.esReciente).length}<br>
-                    🔴 Recientes (tachadas): ${tareas.filter(t => t.esReciente).length}
-                </p>
-            `;
-            
-            document.getElementById('resultsTable').innerHTML = html;
-        }
-        
+
+        // Función para escapar HTML
         function escapeHtml(str) {
             if (!str) return '';
-            return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
         
-        // Autologin si ya hay sesión
+        // Autenticación automática si ya hay sesión
         auth.onAuthStateChanged(async (user) => {
             if (user) {
                 currentUser = user;
-                document.getElementById('loginStatus').style.display = 'block';
-                document.getElementById('loginStatus').className = 'status success';
-                document.getElementById('loginStatus').textContent = `✅ Sesión activa: ${user.email}`;
-                await cargarYClasificarTareas();
-                document.getElementById('testResults').style.display = 'block';
+                document.getElementById('resultados').style.display = 'block';
+                document.getElementById('loginMsg').innerHTML = `<div class="success">✅ Sesión activa: ${user.email}</div>`;
+                await cargarUsuarios();
+                await cargarHistorial();
+            }
+        });
+        
+        // Soporte para Enter en campos de login
+        document.getElementById('password').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                login();
             }
         });
     </script>
