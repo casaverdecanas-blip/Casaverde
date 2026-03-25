@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prueba - Tareas Pendientes por Fecha</title>
+    <title>Migración de Base de Datos - Nuevo Sistema de Tareas</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -14,13 +14,14 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Courier New', monospace;
+            font-family: 'Segoe UI', monospace;
         }
         
         body {
-            background: #0a0a0f;
+            background: linear-gradient(135deg, #1a1a2a 0%, #0a0a0f 100%);
             padding: 20px;
             color: #0f0;
+            min-height: 100vh;
         }
         
         .container {
@@ -35,7 +36,12 @@
             padding-bottom: 10px;
         }
         
-        .login-box {
+        h2, h3 {
+            color: #0f0;
+            margin: 20px 0 10px 0;
+        }
+        
+        .card {
             background: #1a1a2a;
             padding: 20px;
             border-radius: 8px;
@@ -43,99 +49,72 @@
             border: 1px solid #0f0;
         }
         
-        input, button {
-            padding: 8px 12px;
-            margin: 5px;
-            border-radius: 4px;
-            border: none;
-            font-family: monospace;
-        }
-        
-        button {
-            background: #0f0;
-            color: #000;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        
-        button:hover {
-            background: #0c0;
-        }
-        
-        .error {
-            color: #f66;
-            background: #2a1a1a;
-            padding: 10px;
-            border-radius: 4px;
-            border-left: 4px solid #f00;
-            margin: 10px 0;
-        }
-        
         .success {
-            color: #0f0;
             background: #1a2a1a;
-            padding: 10px;
-            border-radius: 4px;
-            border-left: 4px solid #0f0;
-        }
-        
-        .info {
-            color: #ff0;
-            background: #2a2a1a;
-            padding: 10px;
-            border-radius: 4px;
-            border-left: 4px solid #ff0;
-        }
-        
-        .task-card {
-            background: #1a1a2a;
             border-left: 4px solid #0f0;
             padding: 15px;
             margin: 10px 0;
             border-radius: 4px;
         }
         
-        .task-title {
-            font-size: 16px;
-            font-weight: bold;
-            color: #0f0;
-        }
-        
-        .task-date {
-            color: #888;
-            font-size: 12px;
-            margin-top: 5px;
-        }
-        
-        .task-status {
-            display: inline-block;
-            padding: 2px 8px;
+        .error {
+            background: #2a1a1a;
+            border-left: 4px solid #f00;
+            padding: 15px;
+            margin: 10px 0;
             border-radius: 4px;
-            font-size: 11px;
-            margin-top: 8px;
+            color: #f66;
         }
         
-        .status-pending {
-            background: #ff6600;
+        .info {
+            background: #2a2a1a;
+            border-left: 4px solid #ff0;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            color: #ff0;
+        }
+        
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            background: #2a2a3a;
+            border: 1px solid #0f0;
+            color: #0f0;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        
+        button {
+            background: #0f0;
             color: #000;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 5px;
         }
         
-        .status-completed {
-            background: #00ff00;
-            color: #000;
+        button:hover {
+            background: #0c0;
+            transform: translateY(-1px);
         }
         
-        .table-wrapper {
-            max-height: 500px;
-            overflow-y: auto;
-            border: 1px solid #333;
-            border-radius: 8px;
-            margin-top: 15px;
+        button.danger {
+            background: #f00;
+            color: white;
+        }
+        
+        button.danger:hover {
+            background: #c00;
         }
         
         table {
             width: 100%;
             border-collapse: collapse;
+            margin-top: 15px;
         }
         
         th, td {
@@ -147,88 +126,170 @@
         th {
             background: #0f0;
             color: #000;
-            position: sticky;
-            top: 0;
         }
         
-        .pending-badge {
+        .table-wrapper {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #333;
+            border-radius: 8px;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin: 2px;
+        }
+        
+        .badge-pending {
             background: #ff6600;
             color: #000;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: bold;
         }
         
-        .completed-badge {
+        .badge-completed {
             background: #00cc00;
             color: #000;
-            padding: 2px 8px;
+        }
+        
+        .dependency-item {
+            background: #2a2a3a;
+            padding: 8px;
+            margin: 5px;
             border-radius: 4px;
-            font-size: 11px;
-            font-weight: bold;
+            display: inline-block;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #0f0;
+        }
+        
+        .flex-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .task-preview {
+            background: #0a0a0f;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 5px 0;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📋 PRUEBA: TAREAS PENDIENTES POR FECHA</h1>
-        <p style="margin-bottom: 20px; color: #aaa;">
-            🔍 Mostrará las tareas donde la fecha de inicio es MENOR o IGUAL a la fecha actual (pendientes por fecha)
+        <h1>🔄 MIGRACIÓN DE BASE DE DATOS</h1>
+        <p style="color: #aaa; margin-bottom: 20px;">
+            Nueva estructura: tareas con frecuencia en días, fecha próxima (prox), y dependencias (dep)
         </p>
         
-        <div class="login-box">
-            <h3>🔐 Acceso</h3>
+        <div class="card">
+            <h3>🔐 Autenticación (Admin)</h3>
             <input type="email" id="email" placeholder="Email" value="casaverdecanas@gmail.com">
             <input type="password" id="password" placeholder="Contraseña">
             <button onclick="login()">Iniciar Sesión</button>
             <div id="loginMsg"></div>
         </div>
         
-        <div id="results" style="display: none;">
-            <div class="info" id="dateInfo"></div>
-            
-            <div style="margin: 20px 0;">
-                <button onclick="cargarTareasPendientes()" style="background: #00ff00; margin-right: 10px;">🔄 Actualizar</button>
-                <button onclick="cargarTodasLasTareas()" style="background: #ff6600;">📊 Ver Todas las Tareas</button>
-            </div>
-            
-            <div id="stats"></div>
-            
-            <div class="table-wrapper">
-                <table id="tasksTable">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>ID Tarea</th>
-                            <th>Título</th>
-                            <th>Fecha Inicio</th>
-                            <th>Fecha Actual</th>
-                            <th>Estado</th>
-                            <th>Prioridad</th>
-                            <th>Recurrencia</th>
-                            <th>Activa</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tasksBody">
-                        <tr><td colspan="9" class="info">🔄 Esperando autenticación...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-            
-            <div id="explicacion" style="margin-top: 20px; padding: 15px; background: #1a1a2a; border-radius: 8px;">
-                <h3>📌 Regla de negocio:</h3>
-                <p style="color: #aaa; margin-top: 10px;">
-                    <strong>Tarea PENDIENTE</strong> = fechaInicio ≤ fechaActual<br>
-                    <strong>Tarea COMPLETADA</strong> = si existe en el historial de hoy<br>
-                    <strong>Tarea FUTURA</strong> = fechaInicio > fechaActual<br>
-                    <strong>Tarea SIN FECHA</strong> = se considera pendiente siempre
+        <div id="adminArea" style="display: none;">
+            <!-- Panel de Migración -->
+            <div class="card">
+                <h2>📦 MIGRAR BASE DE DATOS</h2>
+                <p style="color: #aaa; margin-bottom: 15px;">
+                    Esto convertirá todas las tareas existentes al nuevo formato:
                 </p>
+                <ul style="color: #aaa; margin-left: 20px; margin-bottom: 15px;">
+                    <li>📅 <strong>frecuencia</strong>: número de días (1 = diaria, 2 = cada 2 días, 0 = única vez)</li>
+                    <li>📆 <strong>prox</strong>: fecha próxima de realización</li>
+                    <li>🔗 <strong>dep</strong>: array de IDs de tareas que se activan al completar esta</li>
+                </ul>
+                <button onclick="migrarBaseDeDatos()" style="background: #ff6600;">🚀 Iniciar Migración</button>
+                <button onclick="verificarEstructura()" style="background: #0099ff;">🔍 Verificar Estructura</button>
+                <div id="migracionMsg"></div>
+            </div>
+            
+            <!-- Panel para Crear Tareas con Dependencias -->
+            <div class="card">
+                <h2>➕ CREAR NUEVA TAREA (con dependencias)</h2>
+                
+                <div class="form-group">
+                    <label>📝 Nombre de la tarea:</label>
+                    <input type="text" id="nuevoTitulo" placeholder="Ej: Aspirar piscina">
+                </div>
+                
+                <div class="form-group">
+                    <label>📄 Descripción:</label>
+                    <textarea id="nuevaDescripcion" rows="2" placeholder="Descripción detallada..."></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>⏱️ Frecuencia (días):</label>
+                    <input type="number" id="nuevaFrecuencia" value="1" min="0" step="1">
+                    <small style="color: #aaa;">0 = única vez | 1 = diaria | 2 = cada 2 días | etc.</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>📅 Próxima fecha (prox):</label>
+                    <input type="date" id="nuevaProx">
+                </div>
+                
+                <div class="form-group">
+                    <label>🔗 Dependencias (IDs de tareas que se activan al completar esta):</label>
+                    <input type="text" id="nuevasDeps" placeholder="Ej: tarea_id_1, tarea_id_2 (separados por coma)">
+                    <small style="color: #aaa;">Cuando se marque esta tarea como realizada, estas tareas se activarán como pendientes</small>
+                </div>
+                
+                <button onclick="crearTareaConDeps()" style="background: #00cc00;">✅ Crear Tarea</button>
+                <div id="crearTareaMsg"></div>
+            </div>
+            
+            <!-- Lista de Tareas Actuales -->
+            <div class="card">
+                <h2>📋 TAREAS EN BASE DE DATOS</h2>
+                <button onclick="cargarTareas()" style="background: #0099ff;">🔄 Actualizar Lista</button>
+                <div class="table-wrapper">
+                    <table id="tareasTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Título</th>
+                                <th>Frecuencia (días)</th>
+                                <th>Próxima fecha</th>
+                                <th>Dependencias</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tareasBody">
+                            <tr><td colspan="6" class="info">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Simulador de Completado de Tarea -->
+            <div class="card">
+                <h2>✅ SIMULAR COMPLETADO DE TAREA</h2>
+                <p style="color: #aaa;">Esto probará la lógica de dependencias:</p>
+                <div class="flex-row">
+                    <input type="text" id="tareaACompletar" placeholder="ID de la tarea a completar" style="flex: 1;">
+                    <button onclick="simularCompletarTarea()" style="background: #ff6600;">🎯 Completar Tarea</button>
+                </div>
+                <div id="simulacionMsg"></div>
             </div>
         </div>
     </div>
 
     <script>
+        // Configuración Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
             authDomain: "tatareas-d8a80.firebaseapp.com",
@@ -243,308 +304,6 @@
         const db = firebase.firestore();
 
         let currentUser = null;
-        let todasLasTareas = [];
-        let historialHoyMap = new Map(); // tareaId -> info de completado
-
-        // Función para obtener el inicio del día actual
-        function getTodayStart() {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            return today;
-        }
-
-        // Función para obtener el fin del día actual
-        function getTodayEnd() {
-            const today = new Date();
-            today.setHours(23, 59, 59, 999);
-            return today;
-        }
-
-        // Formatear fecha para mostrar
-        function formatDate(dateValue) {
-            if (!dateValue) return 'Sin fecha';
-            
-            try {
-                let date;
-                if (dateValue.toDate) {
-                    date = dateValue.toDate();
-                } else if (dateValue instanceof Date) {
-                    date = dateValue;
-                } else if (typeof dateValue === 'string') {
-                    date = new Date(dateValue);
-                } else {
-                    return 'Fecha inválida';
-                }
-                
-                return date.toLocaleDateString('es-ES', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit'
-                });
-            } catch(e) {
-                return 'Error';
-            }
-        }
-
-        // Comparar fecha (solo día, sin hora)
-        function compareDates(date1, date2) {
-            if (!date1 || !date2) return false;
-            
-            try {
-                const d1 = new Date(date1);
-                const d2 = new Date(date2);
-                d1.setHours(0, 0, 0, 0);
-                d2.setHours(0, 0, 0, 0);
-                return d1 <= d2;
-            } catch(e) {
-                return false;
-            }
-        }
-
-        // Cargar historial de hoy
-        async function cargarHistorialHoy() {
-            const todayStart = getTodayStart();
-            const todayEnd = getTodayEnd();
-            
-            try {
-                const snapshot = await db.collection('historial')
-                    .where('fecha', '>=', todayStart)
-                    .where('fecha', '<=', todayEnd)
-                    .get();
-                
-                historialHoyMap.clear();
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    if (data.tareaId) {
-                        historialHoyMap.set(data.tareaId, {
-                            id: doc.id,
-                            fecha: data.fecha,
-                            completadaPor: data.completadaPor
-                        });
-                    }
-                });
-                
-                console.log(`📊 Historial hoy: ${historialHoyMap.size} tareas completadas`);
-                return historialHoyMap;
-            } catch (error) {
-                console.error('Error cargando historial:', error);
-                return historialHoyMap;
-            }
-        }
-
-        // Cargar todas las tareas activas
-        async function cargarTodasLasTareas() {
-            const tbody = document.getElementById('tasksBody');
-            const statsDiv = document.getElementById('stats');
-            
-            tbody.innerHTML = '<tr><td colspan="9" class="info">🔄 Cargando tareas...</td></tr>';
-            
-            try {
-                const snapshot = await db.collection('tareas')
-                    .where('activa', '==', true)
-                    .get();
-                
-                todasLasTareas = [];
-                snapshot.forEach(doc => {
-                    todasLasTareas.push({
-                        id: doc.id,
-                        ...doc.data()
-                    });
-                });
-                
-                await cargarHistorialHoy();
-                mostrarTareasEnTabla(todasLasTareas, 'todas');
-                
-            } catch (error) {
-                console.error('Error:', error);
-                tbody.innerHTML = `<tr><td colspan="9" class="error">❌ Error: ${error.message}</td></tr>`;
-            }
-        }
-
-        // Cargar solo tareas pendientes (fechaInicio <= fechaActual)
-        async function cargarTareasPendientes() {
-            const tbody = document.getElementById('tasksBody');
-            const statsDiv = document.getElementById('stats');
-            const dateInfo = document.getElementById('dateInfo');
-            
-            const hoy = new Date();
-            const hoyStr = hoy.toLocaleDateString('es-ES', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            });
-            
-            dateInfo.innerHTML = `📅 Fecha actual: <strong>${hoyStr}</strong> | Comparando fechaInicio ≤ fechaActual`;
-            
-            tbody.innerHTML = '<tr><td colspan="9" class="info">🔄 Cargando tareas pendientes...</td></tr>';
-            
-            try {
-                // Cargar todas las tareas activas
-                const snapshot = await db.collection('tareas')
-                    .where('activa', '==', true)
-                    .get();
-                
-                todasLasTareas = [];
-                snapshot.forEach(doc => {
-                    todasLasTareas.push({
-                        id: doc.id,
-                        ...doc.data()
-                    });
-                });
-                
-                await cargarHistorialHoy();
-                
-                // Filtrar tareas pendientes por fecha
-                const fechaActual = new Date();
-                fechaActual.setHours(0, 0, 0, 0);
-                
-                const pendientes = todasLasTareas.filter(tarea => {
-                    // Si ya está completada hoy, no es pendiente
-                    if (historialHoyMap.has(tarea.id)) {
-                        return false;
-                    }
-                    
-                    // Si no tiene fecha de inicio, se considera pendiente
-                    if (!tarea.fechaInicio) {
-                        return true;
-                    }
-                    
-                    // Comparar fecha de inicio con fecha actual
-                    try {
-                        let fechaInicio;
-                        if (tarea.fechaInicio.toDate) {
-                            fechaInicio = tarea.fechaInicio.toDate();
-                        } else if (tarea.fechaInicio instanceof Date) {
-                            fechaInicio = tarea.fechaInicio;
-                        } else if (typeof tarea.fechaInicio === 'string') {
-                            fechaInicio = new Date(tarea.fechaInicio);
-                        } else {
-                            return true; // Si no se puede parsear, considerar pendiente
-                        }
-                        
-                        fechaInicio.setHours(0, 0, 0, 0);
-                        
-                        // Pendiente si fechaInicio <= fechaActual
-                        return fechaInicio <= fechaActual;
-                    } catch(e) {
-                        console.warn('Error parseando fecha:', tarea.fechaInicio);
-                        return true;
-                    }
-                });
-                
-                mostrarTareasEnTabla(pendientes, 'pendientes');
-                
-            } catch (error) {
-                console.error('Error:', error);
-                tbody.innerHTML = `<tr><td colspan="9" class="error">❌ Error: ${error.message}</td></tr>`;
-            }
-        }
-
-        // Mostrar tareas en la tabla
-        function mostrarTareasEnTabla(tareas, tipo) {
-            const tbody = document.getElementById('tasksBody');
-            const statsDiv = document.getElementById('stats');
-            
-            const fechaActual = new Date();
-            fechaActual.setHours(0, 0, 0, 0);
-            
-            let html = '';
-            let contador = 0;
-            let pendientesCount = 0;
-            let futurasCount = 0;
-            let completadasCount = 0;
-            
-            for (const tarea of tareas) {
-                contador++;
-                
-                // Determinar estado
-                let estado = '';
-                let estadoClass = '';
-                
-                // Verificar si está completada hoy
-                if (historialHoyMap.has(tarea.id)) {
-                    estado = 'COMPLETADA HOY';
-                    estadoClass = 'completed-badge';
-                    completadasCount++;
-                } else {
-                    // Verificar si es pendiente por fecha
-                    let esPendiente = true;
-                    if (tarea.fechaInicio) {
-                        try {
-                            let fechaInicio;
-                            if (tarea.fechaInicio.toDate) {
-                                fechaInicio = tarea.fechaInicio.toDate();
-                            } else if (tarea.fechaInicio instanceof Date) {
-                                fechaInicio = tarea.fechaInicio;
-                            } else if (typeof tarea.fechaInicio === 'string') {
-                                fechaInicio = new Date(tarea.fechaInicio);
-                            }
-                            
-                            if (fechaInicio) {
-                                fechaInicio.setHours(0, 0, 0, 0);
-                                if (fechaInicio > fechaActual) {
-                                    esPendiente = false;
-                                    estado = 'FECHA FUTURA';
-                                    estadoClass = 'pending-badge';
-                                    futurasCount++;
-                                }
-                            }
-                        } catch(e) {}
-                    }
-                    
-                    if (esPendiente) {
-                        estado = 'PENDIENTE';
-                        estadoClass = 'pending-badge';
-                        pendientesCount++;
-                    }
-                }
-                
-                const fechaInicioStr = formatDate(tarea.fechaInicio);
-                const fechaActualStr = new Date().toLocaleDateString('es-ES');
-                
-                html += `
-                    <tr style="background: ${estado === 'COMPLETADA HOY' ? '#1a2a1a' : '#1a1a2a'}">
-                        <td>${contador}</td>
-                        <td><small>${tarea.id.substring(0, 8)}...</small></td>
-                        <td><strong>${escapeHtml(tarea.titulo || 'Sin título')}</strong></td>
-                        <td>${fechaInicioStr}</td>
-                        <td>${fechaActualStr}</td>
-                        <td><span class="${estadoClass}">${estado}</span></td>
-                        <td>${tarea.prioridad || 'media'}</td>
-                        <td>${tarea.recurrencia || 'none'}</td>
-                        <td>${tarea.activa ? '✅ Sí' : '❌ No'}</td>
-                    </tr>
-                `;
-            }
-            
-            if (tareas.length === 0) {
-                html = '<tr><td colspan="9" class="info">📭 No hay tareas que cumplan el criterio</td></tr>';
-            }
-            
-            tbody.innerHTML = html;
-            
-            // Mostrar estadísticas
-            if (tipo === 'pendientes') {
-                statsDiv.innerHTML = `
-                    <div class="success" style="margin-bottom: 15px;">
-                        📊 <strong>TAREAS PENDIENTES (fechaInicio ≤ hoy):</strong> ${pendientesCount} tareas pendientes
-                        ${futurasCount > 0 ? `<br>📅 Tareas con fecha futura (no incluidas): ${futurasCount}` : ''}
-                        ${completadasCount > 0 ? `<br>✅ Tareas completadas hoy: ${completadasCount}` : ''}
-                    </div>
-                `;
-            } else {
-                const totalActivas = todasLasTareas.length;
-                const completadasHoy = historialHoyMap.size;
-                statsDiv.innerHTML = `
-                    <div class="success" style="margin-bottom: 15px;">
-                        📊 <strong>TODAS LAS TAREAS ACTIVAS:</strong> ${totalActivas} total
-                        <br>📌 Pendientes por fecha: ${pendientesCount}
-                        <br>📅 Con fecha futura: ${futurasCount}
-                        <br>✅ Completadas hoy: ${completadasHoy}
-                    </div>
-                `;
-            }
-        }
 
         // Login
         async function login() {
@@ -558,25 +317,311 @@
                 const userCredential = await auth.signInWithEmailAndPassword(email, password);
                 currentUser = userCredential.user;
                 msgDiv.innerHTML = `<div class="success">✅ Login exitoso: ${currentUser.email}</div>`;
-                document.getElementById('results').style.display = 'block';
+                document.getElementById('adminArea').style.display = 'block';
+                cargarTareas();
+            } catch (error) {
+                msgDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        // Verificar estructura actual
+        async function verificarEstructura() {
+            const msgDiv = document.getElementById('migracionMsg');
+            msgDiv.innerHTML = '<div class="info">🔍 Verificando estructura...</div>';
+            
+            try {
+                const snapshot = await db.collection('tareas').limit(5).get();
+                let estructuraMsg = '';
                 
-                // Cargar tareas pendientes automáticamente
-                await cargarTareasPendientes();
+                if (snapshot.empty) {
+                    estructuraMsg = '📭 No hay tareas en la base de datos.';
+                } else {
+                    estructuraMsg = '📊 Estructura actual de las tareas:<br><br>';
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        estructuraMsg += `<div class="task-preview">
+                            <strong>${doc.id}</strong><br>
+                            Campos: ${Object.keys(data).join(', ')}<br>
+                            Tiene prox: ${data.prox ? '✅' : '❌'}<br>
+                            Tiene frecuencia: ${data.frecuencia !== undefined ? '✅' : '❌'}<br>
+                            Tiene dep: ${data.dep ? '✅' : '❌'}
+                        </div>`;
+                    });
+                }
+                
+                msgDiv.innerHTML = `<div class="info">${estructuraMsg}</div>`;
+            } catch (error) {
+                msgDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        // Migrar base de datos
+        async function migrarBaseDeDatos() {
+            const msgDiv = document.getElementById('migracionMsg');
+            msgDiv.innerHTML = '<div class="info">🔄 Iniciando migración...</div>';
+            
+            try {
+                const snapshot = await db.collection('tareas').get();
+                let migrados = 0;
+                let errores = 0;
+                
+                for (const doc of snapshot.docs) {
+                    const data = doc.data();
+                    const updates = {};
+                    let necesitaUpdate = false;
+                    
+                    // Convertir recurrencia a frecuencia en días
+                    if (data.recurrencia !== undefined && data.frecuencia === undefined) {
+                        const recurrenciaMap = {
+                            'none': 0,
+                            'daily': 1,
+                            'biweekly': 3,
+                            'weekly': 7,
+                            'monthly': 30
+                        };
+                        updates.frecuencia = recurrenciaMap[data.recurrencia] || 0;
+                        necesitaUpdate = true;
+                    }
+                    
+                    // Crear prox si no existe
+                    if (data.prox === undefined) {
+                        if (data.fechaInicio) {
+                            updates.prox = data.fechaInicio;
+                        } else {
+                            updates.prox = new Date();
+                        }
+                        necesitaUpdate = true;
+                    }
+                    
+                    // Crear dep si no existe
+                    if (data.dep === undefined) {
+                        updates.dep = [];
+                        necesitaUpdate = true;
+                    }
+                    
+                    if (necesitaUpdate) {
+                        await db.collection('tareas').doc(doc.id).update(updates);
+                        migrados++;
+                        console.log(`✅ Migrada tarea: ${doc.id}`);
+                    }
+                }
+                
+                msgDiv.innerHTML = `<div class="success">
+                    ✅ Migración completada!<br>
+                    📊 Tareas migradas: ${migrados}<br>
+                    ❌ Errores: ${errores}
+                </div>`;
+                
+                cargarTareas();
                 
             } catch (error) {
-                if (error.code === 'auth/user-not-found') {
-                    try {
-                        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-                        currentUser = userCredential.user;
-                        msgDiv.innerHTML = `<div class="success">✅ Usuario creado: ${currentUser.email}</div>`;
-                        document.getElementById('results').style.display = 'block';
-                        await cargarTareasPendientes();
-                    } catch (createError) {
-                        msgDiv.innerHTML = `<div class="error">❌ Error: ${createError.message}</div>`;
-                    }
-                } else {
-                    msgDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                msgDiv.innerHTML = `<div class="error">❌ Error en migración: ${error.message}</div>`;
+            }
+        }
+
+        // Crear nueva tarea con dependencias
+        async function crearTareaConDeps() {
+            const titulo = document.getElementById('nuevoTitulo').value;
+            const descripcion = document.getElementById('nuevaDescripcion').value;
+            const frecuencia = parseInt(document.getElementById('nuevaFrecuencia').value);
+            const proxRaw = document.getElementById('nuevaProx').value;
+            const depsRaw = document.getElementById('nuevasDeps').value;
+            const msgDiv = document.getElementById('crearTareaMsg');
+            
+            if (!titulo) {
+                msgDiv.innerHTML = '<div class="error">❌ El título es obligatorio</div>';
+                return;
+            }
+            
+            // Procesar dependencias
+            let deps = [];
+            if (depsRaw.trim()) {
+                deps = depsRaw.split(',').map(d => d.trim()).filter(d => d);
+            }
+            
+            // Procesar fecha prox
+            let prox = null;
+            if (proxRaw) {
+                prox = new Date(proxRaw);
+            } else {
+                prox = new Date();
+            }
+            
+            try {
+                const nuevaTarea = {
+                    titulo: titulo,
+                    descripcion: descripcion || '',
+                    frecuencia: frecuencia,
+                    prox: prox,
+                    dep: deps,
+                    activa: true,
+                    creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                
+                const docRef = await db.collection('tareas').add(nuevaTarea);
+                
+                msgDiv.innerHTML = `<div class="success">
+                    ✅ Tarea creada exitosamente!<br>
+                    ID: ${docRef.id}<br>
+                    📅 Frecuencia: ${frecuencia} días<br>
+                    🔗 Dependencias: ${deps.length > 0 ? deps.join(', ') : 'Ninguna'}
+                </div>`;
+                
+                // Limpiar campos
+                document.getElementById('nuevoTitulo').value = '';
+                document.getElementById('nuevaDescripcion').value = '';
+                document.getElementById('nuevaFrecuencia').value = '1';
+                document.getElementById('nuevaProx').value = '';
+                document.getElementById('nuevasDeps').value = '';
+                
+                cargarTareas();
+                
+            } catch (error) {
+                msgDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        // Cargar y mostrar todas las tareas
+        async function cargarTareas() {
+            const tbody = document.getElementById('tareasBody');
+            tbody.innerHTML = '<tr><td colspan="6" class="info">🔄 Cargando...</td></tr>';
+            
+            try {
+                const snapshot = await db.collection('tareas').orderBy('creadoEn', 'desc').get();
+                
+                if (snapshot.empty) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="info">📭 No hay tareas en la base de datos</td></tr>';
+                    return;
                 }
+                
+                let html = '';
+                for (const doc of snapshot.docs) {
+                    const data = doc.data();
+                    
+                    // Formatear fecha prox
+                    let proxStr = 'No definida';
+                    if (data.prox) {
+                        try {
+                            const fecha = data.prox.toDate ? data.prox.toDate() : new Date(data.prox);
+                            proxStr = fecha.toLocaleDateString('es-ES');
+                        } catch(e) {
+                            proxStr = 'Fecha inválida';
+                        }
+                    }
+                    
+                    // Mostrar dependencias
+                    let depsStr = 'Ninguna';
+                    if (data.dep && data.dep.length > 0) {
+                        depsStr = data.dep.map(d => `<span class="badge">${d.substring(0, 8)}...</span>`).join(' ');
+                    }
+                    
+                    html += `
+                        <tr>
+                            <td><small>${doc.id.substring(0, 12)}...</small></td>
+                            <td><strong>${escapeHtml(data.titulo || 'Sin título')}</strong><br>
+                                <small>${escapeHtml((data.descripcion || '').substring(0, 50))}</small>
+                            </td>
+                            <td>${data.frecuencia !== undefined ? data.frecuencia + ' días' : '❌ No definida'}</td>
+                            <td>${proxStr}</td>
+                            <td>${depsStr}</td>
+                            <td>
+                                <button onclick="eliminarTarea('${doc.id}')" class="danger" style="padding: 4px 8px;">🗑️</button>
+                            </td>
+                        </tr>
+                    `;
+                }
+                
+                tbody.innerHTML = html;
+                
+            } catch (error) {
+                tbody.innerHTML = `<tr><td colspan="6" class="error">❌ Error: ${error.message}</td></tr>`;
+            }
+        }
+
+        // Eliminar tarea
+        async function eliminarTarea(id) {
+            if (!confirm('¿Eliminar esta tarea permanentemente?')) return;
+            
+            try {
+                await db.collection('tareas').doc(id).delete();
+                cargarTareas();
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        // Simular completado de tarea (prueba de dependencias)
+        async function simularCompletarTarea() {
+            const tareaId = document.getElementById('tareaACompletar').value.trim();
+            const msgDiv = document.getElementById('simulacionMsg');
+            
+            if (!tareaId) {
+                msgDiv.innerHTML = '<div class="error">❌ Ingresa un ID de tarea</div>';
+                return;
+            }
+            
+            msgDiv.innerHTML = '<div class="info">🔄 Procesando...</div>';
+            
+            try {
+                // Obtener la tarea
+                const tareaDoc = await db.collection('tareas').doc(tareaId).get();
+                if (!tareaDoc.exists) {
+                    msgDiv.innerHTML = '<div class="error">❌ Tarea no encontrada</div>';
+                    return;
+                }
+                
+                const tarea = tareaDoc.data();
+                const frecuencia = tarea.frecuencia || 0;
+                const dependencias = tarea.dep || [];
+                
+                // Calcular nueva fecha próxima
+                let nuevaProx = null;
+                if (frecuencia > 0) {
+                    nuevaProx = new Date();
+                    nuevaProx.setDate(nuevaProx.getDate() + frecuencia);
+                }
+                
+                // Registrar en historial
+                await db.collection('historial').add({
+                    tareaId: tareaId,
+                    titulo: tarea.titulo,
+                    completadaPor: currentUser?.uid || 'admin',
+                    completadaPorEmail: currentUser?.email || 'admin@test.com',
+                    fecha: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // Actualizar la tarea con nueva prox
+                if (nuevaProx) {
+                    await db.collection('tareas').doc(tareaId).update({
+                        prox: nuevaProx
+                    });
+                }
+                
+                // Activar tareas dependientes
+                let activadas = [];
+                for (const depId of dependencias) {
+                    const depDoc = await db.collection('tareas').doc(depId).get();
+                    if (depDoc.exists) {
+                        // Asegurar que la tarea dependiente esté activa
+                        await db.collection('tareas').doc(depId).update({
+                            activa: true,
+                            prox: new Date() // Se activa inmediatamente
+                        });
+                        activadas.push(depId);
+                    }
+                }
+                
+                msgDiv.innerHTML = `<div class="success">
+                    ✅ Tarea completada exitosamente!<br>
+                    📅 Frecuencia: ${frecuencia} días<br>
+                    ${nuevaProx ? `📆 Nueva fecha próxima: ${nuevaProx.toLocaleDateString()}` : '⏹️ Tarea única (no se reprograma)'}<br>
+                    ${activadas.length > 0 ? `🔗 Tareas dependientes activadas: ${activadas.length}` : '🔗 Sin dependencias'}
+                </div>`;
+                
+                cargarTareas();
+                
+            } catch (error) {
+                msgDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
             }
         }
 
@@ -584,16 +629,6 @@
             if (!str) return '';
             return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
         }
-
-        // Autenticación automática
-        auth.onAuthStateChanged(async (user) => {
-            if (user) {
-                currentUser = user;
-                document.getElementById('results').style.display = 'block';
-                document.getElementById('loginMsg').innerHTML = `<div class="success">✅ Sesión activa: ${user.email}</div>`;
-                await cargarTareasPendientes();
-            }
-        });
     </script>
 </body>
 </html>
