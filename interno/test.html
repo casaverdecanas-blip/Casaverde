@@ -3,42 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verificar Datos - Firestore</title>
+    <title>Ver Base de Datos - Tareas, Historial, Usuarios</title>
+    
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
     <style>
-        body { background: #0a0a0f; color: #0f0; font-family: monospace; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        h1 { color: #0f0; border-bottom: 1px solid #0f0; padding-bottom: 10px; }
-        .panel { background: #1a1a2a; padding: 15px; border-radius: 8px; margin: 20px 0; }
-        button { background: #0f0; color: #000; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; margin: 5px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #333; }
-        th { color: #ff0; }
-        .error { color: #f66; }
-        .success { color: #0f0; }
-        .warning { color: #f90; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', monospace; }
+        body { background: #0a0a0f; padding: 20px; color: #0f0; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { color: #0f0; margin-bottom: 20px; border-bottom: 1px solid #0f0; padding-bottom: 10px; }
+        h2 { color: #ff0; margin: 20px 0 10px 0; font-size: 1.2rem; }
+        .login-box { background: #1a1a2a; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        input, button { padding: 8px 12px; margin: 5px; border-radius: 4px; border: none; }
+        button { background: #0f0; color: #000; cursor: pointer; font-weight: bold; }
+        button:hover { background: #0c0; }
+        .error { color: #f66; background: #2a1a1a; padding: 10px; border-radius: 4px; }
+        .success { color: #0f0; background: #1a2a1a; padding: 10px; border-radius: 4px; }
+        .info { color: #ff0; background: #2a2a1a; padding: 10px; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: #1a1a2a; font-size: 12px; }
+        th, td { padding: 8px 6px; text-align: left; border-bottom: 1px solid #333; vertical-align: top; }
+        th { background: #0f0; color: #000; position: sticky; top: 0; }
+        .table-wrapper { max-height: 400px; overflow-y: auto; border: 1px solid #333; border-radius: 8px; margin-bottom: 20px; }
+        .badge { background: #2a2a3a; padding: 2px 6px; border-radius: 4px; font-size: 10px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🔍 Verificador de Datos - Firestore</h1>
-        <div class="panel">
-            <h3>🔐 Autenticación</h3>
-            <input type="email" id="email" placeholder="Email" style="width: 300px; padding: 8px;">
-            <input type="password" id="password" placeholder="Contraseña" style="width: 300px; padding: 8px;">
-            <button onclick="login()">Iniciar sesión</button>
-            <div id="loginStatus"></div>
+        <h1>📊 VISOR DE BASE DE DATOS</h1>
+        
+        <div class="login-box">
+            <input type="email" id="email" placeholder="Email" value="casaverdecanas@gmail.com">
+            <input type="password" id="password" placeholder="Contraseña">
+            <button onclick="login()">Iniciar Sesión</button>
+            <div id="loginMsg"></div>
         </div>
-
+        
         <div id="dataPanel" style="display: none;">
-            <div class="panel">
-                <h3>📚 Colección: <span id="coleccionActual">tareas</span></h3>
-                <button onclick="cargarColeccion('tareas')">Ver Tareas</button>
-                <button onclick="cargarColeccion('historial')">Ver Historial</button>
-                <button onclick="cargarColeccion('usuarios')">Ver Usuarios</button>
-                <div id="dataContent"></div>
+            <div class="table-wrapper">
+                <h2>📁 COLECCIÓN: TAREAS</h2>
+                <div id="tareasTable"></div>
+            </div>
+            
+            <div class="table-wrapper">
+                <h2>📜 COLECCIÓN: HISTORIAL</h2>
+                <div id="historialTable"></div>
+            </div>
+            
+            <div class="table-wrapper">
+                <h2>👥 COLECCIÓN: USUARIOS</h2>
+                <div id="usuariosTable"></div>
             </div>
         </div>
     </div>
@@ -62,63 +77,82 @@
         async function login() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
-            const statusDiv = document.getElementById('loginStatus');
+            const msgDiv = document.getElementById('loginMsg');
+            
+            msgDiv.innerHTML = '<div class="info">🔄 Autenticando...</div>';
             
             try {
                 const userCredential = await auth.signInWithEmailAndPassword(email, password);
                 currentUser = userCredential.user;
-                statusDiv.innerHTML = `<div class="success">✅ Conectado como: ${currentUser.email}</div>`;
+                msgDiv.innerHTML = `<div class="success">✅ Conectado: ${currentUser.email}</div>`;
                 document.getElementById('dataPanel').style.display = 'block';
-                // Cargar tareas por defecto
-                cargarColeccion('tareas');
-            } catch (error) {
-                statusDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                await cargarTodasColecciones();
+            } catch(error) {
+                msgDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
             }
         }
 
-        async function cargarColeccion(coleccion) {
-            const contentDiv = document.getElementById('dataContent');
-            contentDiv.innerHTML = '<div class="warning">🔄 Cargando...</div>';
-            document.getElementById('coleccionActual').innerText = coleccion;
+        async function cargarTodasColecciones() {
+            await Promise.all([
+                cargarColeccion('tareas', 'tareasTable'),
+                cargarColeccion('historial', 'historialTable'),
+                cargarColeccion('usuarios', 'usuariosTable')
+            ]);
+        }
 
+        async function cargarColeccion(coleccion, elementoId) {
+            const container = document.getElementById(elementoId);
+            container.innerHTML = '<div class="info">🔄 Cargando...</div>';
+            
             try {
                 const snapshot = await db.collection(coleccion).get();
+                
                 if (snapshot.empty) {
-                    contentDiv.innerHTML = `<div class="warning">⚠️ La colección "${coleccion}" está vacía.</div>`;
+                    container.innerHTML = '<div class="info">📭 Colección vacía</div>';
                     return;
                 }
-
-                let html = `<table><thead><tr>`;
-                // Obtener todos los campos únicos de todos los documentos
-                const allFields = new Set();
+                
+                // Obtener todos los campos de todos los documentos
+                const todosCampos = new Set();
                 snapshot.forEach(doc => {
-                    Object.keys(doc.data()).forEach(key => allFields.add(key));
+                    Object.keys(doc.data()).forEach(campo => todosCampos.add(campo));
                 });
-                html += `<th>ID</th>`;
-                allFields.forEach(field => html += `<th>${field}</th>`);
-                html += `</tr></thead><tbody>`;
-
+                
+                // Crear tabla
+                let html = '<table><thead><tr>';
+                html += '<th>ID</th>';
+                todosCampos.forEach(campo => html += `<th>${campo}</th>`);
+                html += '</tr></thead><tbody>';
+                
                 snapshot.forEach(doc => {
-                    html += `<tr><td><small>${doc.id.substring(0,12)}...</small></td>`;
                     const data = doc.data();
-                    allFields.forEach(field => {
-                        let value = data[field];
-                        if (value && value.toDate) {
-                            value = value.toDate().toLocaleString();
-                        } else if (typeof value === 'object') {
-                            value = JSON.stringify(value);
+                    html += '<tr>';
+                    html += `<td><small>${doc.id.substring(0, 12)}...</small></td>`;
+                    todosCampos.forEach(campo => {
+                        let valor = data[campo];
+                        if (valor === undefined) {
+                            valor = '-';
+                        } else if (valor && valor.toDate) {
+                            // Es un timestamp
+                            valor = valor.toDate().toLocaleString();
+                        } else if (typeof valor === 'object') {
+                            valor = JSON.stringify(valor);
+                        } else if (typeof valor === 'string' && valor.length > 50) {
+                            valor = valor.substring(0, 50) + '...';
                         }
-                        html += `<td>${escapeHtml(String(value || '-'))}</td>`;
+                        html += `<td><small>${escapeHtml(String(valor))}</small></td>`;
                     });
-                    html += `</tr>`;
+                    html += '</tr>';
                 });
-                html += `</tbody></table>`;
-                contentDiv.innerHTML = html;
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+                
             } catch (error) {
-                contentDiv.innerHTML = `<div class="error">❌ Error al cargar: ${error.message}</div>`;
+                container.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
             }
         }
-
+        
         function escapeHtml(str) {
             if (!str) return '';
             return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
