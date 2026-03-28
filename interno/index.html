@@ -2,53 +2,722 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Mis Tareas - CasaVerdeCanas</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
     <style>
-        body { font-family: monospace; background: #0a0a0f; color: #0f0; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .login-box { background: #1a1a2a; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-        input, button { padding: 8px 12px; margin: 5px; border-radius: 4px; border: none; }
-        button { background: #0f0; color: #000; cursor: pointer; }
-        .success { color: #0f0; background: #1a2a1a; padding: 10px; border-radius: 4px; }
-        .error { color: #f66; background: #2a1a1a; padding: 10px; border-radius: 4px; }
-        .info { color: #ff0; background: #2a2a1a; padding: 10px; border-radius: 4px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: #1a1a2a; }
-        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #333; }
-        th { background: #0f0; color: #000; }
-        .pendiente { background: #1a2a1a; }
-        .reciente { background: #2a1a1a; }
-        .task-row { cursor: pointer; }
-        .task-row:hover { background: #2a2a3a; }
-        .badge { background: #2a2a3a; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 5px; }
-        .table-wrapper { overflow-x: auto; }
-        h2 { color: #ff0; margin: 20px 0 10px 0; font-size: 1.2rem; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1e3c2c 0%, #2d5a27 100%);
+            min-height: 100vh;
+        }
+
+        /* ===== LOGIN ===== */
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            width: 380px;
+            text-align: center;
+        }
+
+        .login-box h2 {
+            color: #2d5a27;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 24px;
+        }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .input-group span {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9aa6b5;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 14px 14px 14px 48px;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #2d5a27;
+            box-shadow: 0 0 0 3px rgba(45,90,39,0.1);
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #2d5a27 0%, #1e3f1a 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .error-message {
+            color: #e74c3c;
+            text-align: center;
+            margin-top: 10px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .info-message {
+            color: #6c757d;
+            text-align: center;
+            margin-top: 15px;
+            font-size: 13px;
+        }
+
+        /* ===== ÁREA PRINCIPAL ===== */
+        .private-area {
+            min-height: 100vh;
+            display: none;
+            background: #f5f7fa;
+        }
+
+        .app-header {
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .header-content h1 {
+            color: #2d5a27;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: #f0f2f5;
+            padding: 8px 16px;
+            border-radius: 40px;
+        }
+
+        .user-info .material-icons {
+            color: #2d5a27;
+        }
+
+        .logout-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 40px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+
+        .logout-btn:hover {
+            background: #c0392b;
+        }
+
+        .main-content {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 0 24px;
+        }
+
+        /* ===== DASHBOARD ===== */
+        .today-dashboard {
+            background: linear-gradient(135deg, #2d5a27 0%, #1e3f1a 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+        }
+
+        .today-dashboard h2 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            font-size: 20px;
+            font-weight: 500;
+        }
+
+        .today-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 20px;
+        }
+
+        .stat-card {
+            background: rgba(255,255,255,0.15);
+            padding: 20px;
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+            text-align: center;
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+        }
+
+        .stat-card .number {
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .stat-card div:last-child {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+
+        /* ===== MENSAJE DE BIENVENIDA ===== */
+        .welcome-message {
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+            padding: 20px 25px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            color: #2d5a27;
+        }
+
+        .welcome-message .material-icons {
+            font-size: 32px;
+        }
+
+        .welcome-content {
+            flex: 1;
+        }
+
+        .welcome-stats {
+            background: white;
+            border-radius: 12px;
+            padding: 12px 18px;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-left: 4px solid #2d5a27;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            margin-top: 12px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #2d5a27, #1e3f1a);
+            transition: width 0.3s;
+            border-radius: 10px;
+        }
+
+        /* ===== TABS ===== */
+        .tabs-section {
+            background: white;
+            padding: 8px 20px;
+            border-radius: 60px;
+            margin-bottom: 30px;
+            display: inline-flex;
+            gap: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            border: none;
+            background: transparent;
+            border-radius: 40px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.3s;
+            color: #6c757d;
+        }
+
+        .tab-btn:hover {
+            background: #f0f2f5;
+        }
+
+        .tab-btn.active {
+            background: #2d5a27;
+            color: white;
+        }
+
+        .tab-badge {
+            background: rgba(0,0,0,0.1);
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 11px;
+        }
+
+        .tab-btn.active .tab-badge {
+            background: rgba(255,255,255,0.2);
+        }
+
+        /* ===== LISTA DE TAREAS ===== */
+        .tasks-container {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        .tasks-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .tasks-header h2 {
+            color: #2d5a27;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .tasks-list {
+            padding: 16px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* Tarjetas de tareas */
+        .task-card {
+            background: #ffffff;
+            border: 1px solid #e9ecef;
+            border-radius: 16px;
+            padding: 16px 20px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .task-card:not(.completed):hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-color: #c8e6c9;
+        }
+
+        .task-card.completed {
+            background: #f8f9fa;
+            opacity: 0.8;
+            cursor: default;
+        }
+
+        .task-card.completed:hover {
+            transform: none;
+        }
+
+        .task-card.completed .task-title {
+            text-decoration: line-through;
+            color: #adb5bd;
+        }
+
+        .task-priority {
+            width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-right: 10px;
+        }
+
+        .priority-alta { background: #e74c3c; }
+        .priority-media { background: #f39c12; }
+        .priority-baja { background: #27ae60; }
+
+        .task-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .recurrence-badge {
+            background: #e8f4fd;
+            color: #2d5a27;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .task-description {
+            color: #6c757d;
+            font-size: 13px;
+            margin: 8px 0 0 18px;
+            line-height: 1.4;
+        }
+
+        .task-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
+            color: #9aa6b5;
+            margin-top: 10px;
+            margin-left: 18px;
+            flex-wrap: wrap;
+        }
+
+        .task-meta span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .last-done-info {
+            margin-top: 10px;
+            margin-left: 18px;
+            padding-top: 8px;
+            border-top: 1px dashed #e9ecef;
+            font-size: 11px;
+            color: #6c757d;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .last-done-info .material-icons {
+            font-size: 14px;
+            color: #9aa6b5;
+        }
+
+        .recientes-divider {
+            margin: 16px 0 8px 0;
+            padding: 12px 0 4px 0;
+            font-size: 13px;
+            color: #6c757d;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: #9aa6b5;
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 3px solid #e9ecef;
+            border-top-color: #2d5a27;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ===== VISTA SEMANA ===== */
+        .week-container {
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+        }
+
+        .day-card {
+            background: #f8f9fa;
+            border-radius: 16px;
+            padding: 16px;
+            border-left: 4px solid #2d5a27;
+            margin-bottom: 12px;
+        }
+
+        .day-card h3 {
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: #495057;
+            font-weight: 600;
+        }
+
+        .day-task {
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 13px;
+        }
+
+        .day-task:last-child {
+            border-bottom: none;
+        }
+
+        .day-task-user {
+            color: #2d5a27;
+            font-size: 12px;
+        }
+
+        /* ===== HISTORIAL ===== */
+        .history-container {
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+        }
+
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .history-table th {
+            background: #f8f9fa;
+            color: #495057;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .history-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e9ecef;
+            font-size: 13px;
+        }
+
+        .history-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .user-info {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .tabs-section {
+                width: 100%;
+                justify-content: center;
+                flex-wrap: wrap;
+                border-radius: 20px;
+            }
+            
+            .task-card {
+                padding: 14px 16px;
+            }
+            
+            .task-description,
+            .task-meta,
+            .last-done-info {
+                margin-left: 0;
+            }
+            
+            .today-stats {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📋 Mis Tareas</h1>
-        
+    <!-- Pantalla de Login -->
+    <div id="loginContainer" class="login-container">
         <div class="login-box">
-            <input type="email" id="email" placeholder="Email" value="casaverdecanas@gmail.com">
-            <input type="password" id="password" placeholder="Contraseña">
-            <button onclick="login()">Iniciar Sesión</button>
-            <div id="loginMsg"></div>
-        </div>
-        
-        <div id="tareasPanel" style="display: none;">
-            <div id="stats"></div>
-            <div id="tareasList"></div>
+            <h2>
+                <span class="material-icons">eco</span>
+                Mis Tareas
+            </h2>
+            <form id="loginForm">
+                <div class="input-group">
+                    <span class="material-icons">email</span>
+                    <input type="email" id="username" placeholder="Email" required>
+                </div>
+                <div class="input-group">
+                    <span class="material-icons">lock</span>
+                    <input type="password" id="password" placeholder="Contraseña" required>
+                </div>
+                <button type="submit" class="login-btn">
+                    <span class="material-icons">login</span> Ingresar
+                </button>
+                <div id="loginError" class="error-message"></div>
+                <div class="info-message">
+                    💡 Usa cualquier email (mínimo 6 caracteres). Si es nuevo, se creará automáticamente.
+                </div>
+            </form>
         </div>
     </div>
 
+    <!-- Área Principal -->
+    <div id="privateArea" class="private-area">
+        <header class="app-header">
+            <div class="header-content">
+                <h1>
+                    <span class="material-icons">checklist</span>
+                    Mis Tareas
+                </h1>
+                <div class="user-info">
+                    <span class="material-icons">account_circle</span>
+                    <span id="userEmail"></span>
+                    <button id="logoutBtn" class="logout-btn">
+                        <span class="material-icons">logout</span> Salir
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- Dashboard -->
+            <div class="today-dashboard">
+                <h2>
+                    <span class="material-icons">today</span>
+                    Resumen de hoy - <span id="todayDate"></span>
+                </h2>
+                <div class="today-stats">
+                    <div class="stat-card">
+                        <div class="number" id="pendingToday">0</div>
+                        <div>Pendientes hoy</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="number" id="completedToday">0</div>
+                        <div>Completadas hoy</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="number" id="totalActive">0</div>
+                        <div>Tareas activas</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mensaje de bienvenida -->
+            <div class="welcome-message">
+                <span class="material-icons">celebration</span>
+                <div class="welcome-content">
+                    <strong>✨ Haz clic en las tareas que realizaste</strong>
+                    <div class="welcome-stats">
+                        <span class="material-icons">bar_chart</span>
+                        <span id="weeklyStatsText">Cargando estadísticas...</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="weeklyProgress" class="progress-fill" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs-section">
+                <button class="tab-btn active" data-filter="tareas">
+                    <span class="material-icons">list</span> Tareas
+                    <span class="tab-badge" id="tareasCount">0</span>
+                </button>
+                <button class="tab-btn" data-filter="semana">
+                    <span class="material-icons">calendar_today</span> Realizadas esta semana
+                    <span class="tab-badge" id="semanaCount">0</span>
+                </button>
+                <button class="tab-btn" data-filter="historial">
+                    <span class="material-icons">history</span> Histórico
+                    <span class="tab-badge" id="historialCount">0</span>
+                </button>
+            </div>
+
+            <!-- Contenido Dinámico -->
+            <div id="contentArea"></div>
+        </main>
+    </div>
+
     <script>
-        // Configuración Firebase
+        // ============================================
+        // CONFIGURACIÓN FIREBASE
+        // ============================================
         const firebaseConfig = {
             apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
             authDomain: "tatareas-d8a80.firebaseapp.com",
@@ -61,17 +730,48 @@
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
+        auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
+        // ============================================
+        // VARIABLES GLOBALES
+        // ============================================
         let currentUser = null;
+        let currentFilter = 'tareas';
+        let unsubscribeTasks = null;
+        let unsubscribeHistorial = null;
         let tareasCache = [];
         let historialCache = [];
         let usuariosCache = {};
 
         // ============================================
+        // ELEMENTOS DOM
+        // ============================================
+        const loginContainer = document.getElementById('loginContainer');
+        const privateArea = document.getElementById('privateArea');
+        const loginForm = document.getElementById('loginForm');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const userEmailSpan = document.getElementById('userEmail');
+        const loginErrorDiv = document.getElementById('loginError');
+        const todayDateSpan = document.getElementById('todayDate');
+        const filterTabs = document.querySelectorAll('.tab-btn');
+        const contentAreaDiv = document.getElementById('contentArea');
+        const pendingTodaySpan = document.getElementById('pendingToday');
+        const completedTodaySpan = document.getElementById('completedToday');
+        const totalActiveSpan = document.getElementById('totalActive');
+        const weeklyStatsTextSpan = document.getElementById('weeklyStatsText');
+        const weeklyProgressDiv = document.getElementById('weeklyProgress');
+        const tareasCountSpan = document.getElementById('tareasCount');
+        const semanaCountSpan = document.getElementById('semanaCount');
+        const historialCountSpan = document.getElementById('historialCount');
+
+        // ============================================
         // FUNCIONES AUXILIARES
         // ============================================
-        
-        // Traducir recurrencia (número → texto)
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
+        }
+
         function traducirRecurrencia(numero) {
             const mapa = {
                 0: 'Una vez',
@@ -86,17 +786,24 @@
             return mapa[numero] || (numero ? `Cada ${numero} días` : 'Una vez');
         }
 
-        // Espaciado mínimo (días) para poder marcar de nuevo
         function getEspaciadoMinimo(recurrencia) {
-            if (recurrencia === 0) return 0;      // Única vez
-            if (recurrencia === 1) return 1;      // Diaria
-            if (recurrencia === 3) return 3;      // Cada 3 días
-            if (recurrencia === 6) return 6;      // Semanal
-            if (recurrencia === 28) return 28;    // Mensual
-            return recurrencia;                    // Cualquier otro número
+            if (recurrencia === 0) return 0;
+            if (recurrencia === 1) return 1;
+            if (recurrencia === 3) return 3;
+            if (recurrencia === 6) return 6;
+            if (recurrencia === 28) return 28;
+            return recurrencia;
         }
 
-        // Obtener nombre de usuario por UID
+        function getInicioSemana() {
+            const fecha = new Date();
+            fecha.setHours(0, 0, 0, 0);
+            const dia = fecha.getDay();
+            const diff = dia === 0 ? 6 : dia - 1;
+            fecha.setDate(fecha.getDate() - diff);
+            return fecha;
+        }
+
         async function obtenerNombre(uid) {
             if (!uid) return 'Desconocido';
             if (usuariosCache[uid]) return usuariosCache[uid];
@@ -113,7 +820,6 @@
             }
         }
 
-        // Obtener la última realización de una tarea (usando nueva estructura)
         async function obtenerUltimaRealizacion(tareaId) {
             try {
                 const snap = await db.collection('historial')
@@ -135,22 +841,68 @@
         }
 
         // ============================================
-        // AUTENTICACIÓN
+        // INICIALIZACIÓN
         // ============================================
-        async function login() {
-            const email = document.getElementById('email').value;
+        const hoy = new Date();
+        todayDateSpan.textContent = hoy.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+        function showPrivateArea() {
+            loginContainer.style.display = 'none';
+            privateArea.style.display = 'block';
+        }
+
+        function showLoginArea() {
+            loginContainer.style.display = 'flex';
+            privateArea.style.display = 'none';
+        }
+
+        // ============================================
+        // AUTENTICACIÓN CON REDIRECCIÓN DE ADMIN
+        // ============================================
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                currentUser = user;
+                userEmailSpan.textContent = user.email;
+                
+                let esAdmin = false;
+                try {
+                    const userDoc = await db.collection('usuarios').doc(user.uid).get();
+                    if (userDoc.exists && userDoc.data().rol === 'admin') {
+                        esAdmin = true;
+                    }
+                } catch(e) {}
+                
+                if (esAdmin) {
+                    window.location.href = 'admin-tareas.html';
+                    return;
+                }
+                
+                showPrivateArea();
+                await cargarDatosIniciales();
+                configurarListenersTiempoReal();
+            } else {
+                currentUser = null;
+                showLoginArea();
+                if (unsubscribeTasks) unsubscribeTasks();
+                if (unsubscribeHistorial) unsubscribeHistorial();
+            }
+        });
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('username').value;
             const password = document.getElementById('password').value;
-            const msgDiv = document.getElementById('loginMsg');
             
-            msgDiv.innerHTML = '<div class="info">🔄 Autenticando...</div>';
+            if (password.length < 6) {
+                loginErrorDiv.textContent = 'La contraseña debe tener al menos 6 caracteres';
+                loginErrorDiv.style.display = 'block';
+                return;
+            }
             
             try {
-                const userCredential = await auth.signInWithEmailAndPassword(email, password);
-                currentUser = userCredential.user;
-                msgDiv.innerHTML = `<div class="success">✅ Conectado: ${currentUser.email}</div>`;
-                document.getElementById('tareasPanel').style.display = 'block';
-                await cargarDatos();
-            } catch(error) {
+                await auth.signInWithEmailAndPassword(email, password);
+                loginErrorDiv.style.display = 'none';
+            } catch (error) {
                 if (error.code === 'auth/user-not-found') {
                     try {
                         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
@@ -158,152 +910,247 @@
                             email: email, nombre: '', rol: 'user', telefono: '',
                             creadoEn: firebase.firestore.FieldValue.serverTimestamp()
                         });
-                        currentUser = userCredential.user;
-                        msgDiv.innerHTML = `<div class="success">✅ Usuario creado: ${email}</div>`;
-                        document.getElementById('tareasPanel').style.display = 'block';
-                        await cargarDatos();
-                    } catch(e) {
-                        msgDiv.innerHTML = `<div class="error">❌ Error: ${e.message}</div>`;
+                        loginErrorDiv.style.display = 'none';
+                    } catch (createError) {
+                        loginErrorDiv.textContent = 'Error al crear usuario';
+                        loginErrorDiv.style.display = 'block';
                     }
                 } else {
-                    msgDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                    loginErrorDiv.textContent = 'Email o contraseña incorrectos';
+                    loginErrorDiv.style.display = 'block';
                 }
+            }
+        });
+
+        logoutBtn.addEventListener('click', () => auth.signOut());
+
+        // ============================================
+        // LISTENERS EN TIEMPO REAL
+        // ============================================
+        function configurarListenersTiempoReal() {
+            if (unsubscribeTasks) unsubscribeTasks();
+            unsubscribeTasks = db.collection('tareas').where('activa', '==', true).onSnapshot((snapshot) => {
+                tareasCache = [];
+                snapshot.forEach(doc => tareasCache.push({ id: doc.id, ...doc.data() }));
+                actualizarDashboard();
+                actualizarVista();
+            });
+
+            if (unsubscribeHistorial) unsubscribeHistorial();
+            unsubscribeHistorial = db.collection('historial').orderBy('timestamp', 'desc').limit(1000).onSnapshot((snapshot) => {
+                historialCache = [];
+                snapshot.forEach(doc => historialCache.push({ id: doc.id, ...doc.data() }));
+                actualizarDashboard();
+                actualizarVista();
+            });
+        }
+
+        async function cargarDatosIniciales() {
+            try {
+                const tareasSnapshot = await db.collection('tareas').where('activa', '==', true).get();
+                tareasCache = [];
+                tareasSnapshot.forEach(doc => tareasCache.push({ id: doc.id, ...doc.data() }));
+                
+                const historialSnapshot = await db.collection('historial').orderBy('timestamp', 'desc').limit(1000).get();
+                historialCache = [];
+                historialSnapshot.forEach(doc => historialCache.push({ id: doc.id, ...doc.data() }));
+                
+                actualizarDashboard();
+                actualizarVista();
+            } catch (error) {
+                console.error('Error cargando datos:', error);
             }
         }
 
-        // ============================================
-        // CARGA Y CLASIFICACIÓN DE TAREAS
-        // ============================================
-        async function cargarDatos() {
-            // Cargar tareas activas
-            const tareasSnap = await db.collection('tareas').where('activa', '==', true).get();
-            tareasCache = [];
-            tareasSnap.forEach(doc => {
-                tareasCache.push({ id: doc.id, ...doc.data() });
-            });
+        function calcularOcurrenciasSemanales(tarea) {
+            if (!tarea.activa || !tarea.fechaInicio) return 0;
+            try {
+                const fechaInicio = new Date(tarea.fechaInicio + 'T00:00:00');
+                const inicioSemana = getInicioSemana();
+                const finSemana = new Date(inicioSemana);
+                finSemana.setDate(inicioSemana.getDate() + 6);
+                finSemana.setHours(23, 59, 59, 999);
+                
+                if (tarea.recurrencia === 0) {
+                    return (fechaInicio >= inicioSemana && fechaInicio <= finSemana) ? 1 : 0;
+                }
+                
+                let ocurrencias = 0;
+                let fecha = new Date(fechaInicio);
+                let intentos = 0;
+                while (fecha < inicioSemana && intentos < 100) {
+                    fecha.setDate(fecha.getDate() + tarea.recurrencia);
+                    intentos++;
+                }
+                intentos = 0;
+                while (fecha <= finSemana && intentos < 100) {
+                    if (fecha >= inicioSemana) ocurrencias++;
+                    fecha.setDate(fecha.getDate() + tarea.recurrencia);
+                    intentos++;
+                }
+                return ocurrencias;
+            } catch (error) {
+                return 0;
+            }
+        }
+
+        function actualizarDashboard() {
+            totalActiveSpan.textContent = tareasCache.length;
+            tareasCountSpan.textContent = tareasCache.length;
+            historialCountSpan.textContent = historialCache.length;
             
-            // Cargar historial
-            const historialSnap = await db.collection('historial').get();
-            historialCache = [];
-            historialSnap.forEach(doc => {
-                historialCache.push({ id: doc.id, ...doc.data() });
-            });
-            
-            // Crear mapa de última realización por tareaId
-            const ultimaPorTarea = new Map();
+            const inicioSemana = getInicioSemana();
+            const tareasSemanaUnicas = new Set();
             historialCache.forEach(h => {
-                const tareaId = h.tareaId;
-                if (tareaId) {
-                    const fecha = h.timestamp ? h.timestamp.toDate() : null;
-                    if (!ultimaPorTarea.has(tareaId) || (fecha && fecha > ultimaPorTarea.get(tareaId).fecha)) {
-                        ultimaPorTarea.set(tareaId, {
-                            fecha: fecha,
-                            usuarioId: h.usuarioId
-                        });
-                    }
+                if (h.timestamp && h.usuarioId === currentUser?.uid) {
+                    try {
+                        if (h.timestamp.toDate() >= inicioSemana) tareasSemanaUnicas.add(h.tareaId);
+                    } catch(e) {}
                 }
             });
+            semanaCountSpan.textContent = tareasSemanaUnicas.size;
             
-            // Clasificar tareas
+            const hoyInicio = new Date();
+            hoyInicio.setHours(0, 0, 0, 0);
+            let completadasHoy = 0;
+            historialCache.forEach(h => {
+                if (h.timestamp && h.usuarioId === currentUser?.uid) {
+                    try {
+                        if (h.timestamp.toDate() >= hoyInicio) completadasHoy++;
+                    } catch(e) {}
+                }
+            });
+            completedTodaySpan.textContent = completadasHoy;
+            
+            if (currentUser) {
+                let totalOcurrenciasSemana = 0;
+                tareasCache.forEach(t => totalOcurrenciasSemana += calcularOcurrenciasSemanales(t));
+                
+                let realizadasSemana = 0;
+                historialCache.forEach(h => {
+                    if (h.usuarioId === currentUser.uid && h.timestamp) {
+                        try {
+                            if (h.timestamp.toDate() >= inicioSemana) realizadasSemana++;
+                        } catch(e) {}
+                    }
+                });
+                
+                weeklyStatsTextSpan.textContent = `Llevas realizadas ${realizadasSemana} de ${totalOcurrenciasSemana} programadas esta semana`;
+                const porcentaje = totalOcurrenciasSemana > 0 ? (realizadasSemana / totalOcurrenciasSemana) * 100 : 0;
+                weeklyProgressDiv.style.width = `${porcentaje}%`;
+            }
+        }
+
+        function actualizarVista() {
+            if (currentFilter === 'tareas') mostrarVistaTareas();
+            else if (currentFilter === 'semana') mostrarVistaSemana();
+            else if (currentFilter === 'historial') mostrarHistorial();
+        }
+
+        // ============================================
+        // VISTA TAREAS PRINCIPAL
+        // ============================================
+        async function mostrarVistaTareas() {
+            contentAreaDiv.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Cargando tareas...</p></div>';
+            
+            const tareasConUltima = await Promise.all(tareasCache.map(async tarea => {
+                const ultima = await obtenerUltimaRealizacion(tarea.id);
+                return { ...tarea, ultimaRealizacion: ultima };
+            }));
+            
             const pendientes = [];
-            const recientes = [];
+            const realizadasRecientes = [];
             const ahora = new Date();
             
-            for (const tarea of tareasCache) {
-                const ultima = ultimaPorTarea.get(tarea.id);
+            for (const tarea of tareasConUltima) {
                 let esReciente = false;
-                
-                if (ultima && ultima.fecha) {
-                    const dias = Math.floor((ahora - ultima.fecha) / 86400000);
+                if (tarea.ultimaRealizacion) {
+                    const dias = Math.floor((ahora - tarea.ultimaRealizacion.fecha) / 86400000);
                     const espaciado = getEspaciadoMinimo(tarea.recurrencia);
                     if (espaciado > 0 && dias < espaciado) {
                         esReciente = true;
                     }
                 }
-                
                 if (esReciente) {
-                    recientes.push({ ...tarea, ultimaFecha: ultima.fecha, ultimoUsuarioId: ultima.usuarioId });
+                    realizadasRecientes.push(tarea);
                 } else {
                     pendientes.push(tarea);
                 }
             }
             
-            // Mostrar resultados
-            await mostrarResultados(pendientes, recientes);
-        }
-        
-        async function mostrarResultados(pendientes, recientes) {
-            const statsDiv = document.getElementById('stats');
-            statsDiv.innerHTML = `
-                <div class="success">
-                    📊 Total tareas: ${tareasCache.length} | 
-                    🟢 Pendientes: ${pendientes.length} | 
-                    🔴 Realizadas recientemente: ${recientes.length}
-                </div>
+            const ordenPrioridad = { 'alta': 1, 'media': 2, 'baja': 3 };
+            pendientes.sort((a, b) => ordenPrioridad[a.prioridad] - ordenPrioridad[b.prioridad]);
+            realizadasRecientes.sort((a, b) => ordenPrioridad[a.prioridad] - ordenPrioridad[b.prioridad]);
+            pendingTodaySpan.textContent = pendientes.length;
+            
+            let html = `
+                <div class="tasks-container">
+                    <div class="tasks-header">
+                        <h2><span class="material-icons">list</span> Mis Tareas <span class="tab-badge">${tareasCache.length}</span></h2>
+                    </div>
+                    <div class="tasks-list">
             `;
             
-            // Tabla de pendientes
-            let html = '<h2>📋 Tareas Pendientes (click para marcar)</h2>';
-            html += '<div class="table-wrapper">';
-            html += '<table><thead><tr><th>Nombre</th><th>Recurrencia</th><th>Prioridad</th><th>Fecha inicio</th></tr></thead><tbody>';
-            
-            for (const t of pendientes) {
-                const recurrenciaTexto = traducirRecurrencia(t.recurrencia);
-                html += `<tr class="task-row pendiente" data-id="${t.id}" data-nombre="${escapeHtml(t.nombre)}">
-                    <td><strong>${escapeHtml(t.nombre)}</strong><br><small>${escapeHtml(t.descripcion?.substring(0, 60) || '')}</small></td>
-                    <td>${recurrenciaTexto}</td>
-                    <td>${t.prioridad || 'media'}</td>
-                    <td>${t.fechaInicio || '-'}</td>
-                </tr>`;
-            }
-            html += '</tbody></table></div>';
-            
-            // Tabla de realizadas recientemente
-            if (recientes.length > 0) {
-                html += '<h2>🔴 Tareas Realizadas Recientemente</h2>';
-                html += '<div class="table-wrapper">';
-                html += '<table><thead><tr><th>Nombre</th><th>Recurrencia</th><th>Última realización</th><th>Realizada por</th></tr></thead><tbody>';
-                
-                for (const t of recientes) {
-                    let fechaStr = t.ultimaFecha ? t.ultimaFecha.toLocaleDateString() : '-';
-                    let nombreUsuario = await obtenerNombre(t.ultimoUsuarioId);
-                    const recurrenciaTexto = traducirRecurrencia(t.recurrencia);
-                    html += `<tr class="reciente">
-                        <td><s>${escapeHtml(t.nombre)}</s></td>
-                        <td>${recurrenciaTexto}</td>
-                        <td>${fechaStr}</td>
-                        <td>${escapeHtml(nombreUsuario)}</td>
-                    </tr>`;
-                }
-                html += '</tbody></table></div>';
+            if (pendientes.length > 0) {
+                html += pendientes.map(t => renderizarTarjeta(t, false)).join('');
+            } else if (realizadasRecientes.length === 0) {
+                html += `<div class="empty-state"><span class="material-icons empty-icon">check_circle</span><p>🎉 No hay tareas pendientes</p></div>`;
             }
             
-            const container = document.getElementById('tareasList');
-            container.innerHTML = html;
+            if (realizadasRecientes.length > 0) {
+                html += `<div class="recientes-divider"><span class="material-icons">history</span> Realizadas recientemente</div>`;
+                html += realizadasRecientes.map(t => renderizarTarjeta(t, true)).join('');
+            }
             
-            // Agregar event listeners a las filas pendientes
-            document.querySelectorAll('.task-row.pendiente').forEach(row => {
-                row.addEventListener('click', async () => {
-                    const tareaId = row.dataset.id;
-                    const nombre = row.dataset.nombre;
-                    if (confirm(`✅ ¿Marcar "${nombre}" como realizada?`)) {
-                        await completarTarea(tareaId, nombre);
+            html += `</div></div>`;
+            contentAreaDiv.innerHTML = html;
+            
+            document.querySelectorAll('.task-card:not(.completed)').forEach(card => {
+                card.addEventListener('click', () => {
+                    const tarea = tareasCache.find(t => t.id === card.dataset.id);
+                    if (tarea && confirm(`✅ ¿Marcar "${tarea.nombre}" como realizada?`)) {
+                        completarTarea(tarea.id, tarea.nombre);
                     }
                 });
             });
         }
-        
-        // ============================================
-        // COMPLETAR TAREA (con validación)
-        // ============================================
+
+        function renderizarTarjeta(tarea, completadaRecientemente = false) {
+            const prioridadClass = tarea.prioridad === 'alta' ? 'priority-alta' : (tarea.prioridad === 'baja' ? 'priority-baja' : 'priority-media');
+            let infoExtra = '';
+            
+            if (completadaRecientemente && tarea.ultimaRealizacion) {
+                const fecha = tarea.ultimaRealizacion.fecha.toLocaleDateString();
+                const quien = tarea.ultimaRealizacion.quien;
+                infoExtra = `<div class="last-done-info">
+                    <span class="material-icons">schedule</span> 
+                    Realizada el ${fecha} por ${quien}
+                </div>`;
+            }
+            
+            return `
+                <div class="task-card ${completadaRecientemente ? 'completed' : ''}" data-id="${tarea.id}">
+                    <div class="task-title">
+                        <span class="task-priority ${prioridadClass}"></span>
+                        ${escapeHtml(tarea.nombre)}
+                        ${tarea.recurrencia !== undefined ? `<span class="recurrence-badge">${traducirRecurrencia(tarea.recurrencia)}</span>` : ''}
+                    </div>
+                    ${tarea.descripcion ? `<div class="task-description">${escapeHtml(tarea.descripcion)}</div>` : ''}
+                    <div class="task-meta">
+                        <span><span class="material-icons">event</span> ${tarea.fechaInicio || 'Sin fecha'}</span>
+                        <span><span class="material-icons">flag</span> Prioridad: ${tarea.prioridad || 'media'}</span>
+                    </div>
+                    ${infoExtra}
+                </div>
+            `;
+        }
+
         async function completarTarea(tareaId, nombre) {
             try {
-                // Obtener la tarea para saber su recurrencia
                 const tareaDoc = await db.collection('tareas').doc(tareaId).get();
                 const tarea = tareaDoc.data();
                 const espaciado = getEspaciadoMinimo(tarea.recurrencia);
                 
-                // Verificar última realización
                 const ultimaSnap = await db.collection('historial')
                     .where('tareaId', '==', tareaId)
                     .orderBy('timestamp', 'desc')
@@ -316,12 +1163,11 @@
                     const dias = Math.floor((new Date() - ultimaFecha) / 86400000);
                     if (dias < espaciado) {
                         const nombreUsuario = await obtenerNombre(ultima.usuarioId);
-                        alert(`⚠️ No puedes realizar esta tarea todavía.\nÚltima vez: ${ultimaFecha.toLocaleDateString()} por ${nombreUsuario}\nEspaciado mínimo: ${espaciado} días.`);
+                        alert(`⚠️ No puedes realizar esta tarea todavía.\n\n📅 Última vez: ${ultimaFecha.toLocaleDateString()}\n👤 Realizada por: ${nombreUsuario}\n⏱️ Espaciado mínimo: ${espaciado} días.`);
                         return;
                     }
                 }
                 
-                // Guardar en historial
                 await db.collection('historial').add({
                     tareaId: tareaId,
                     usuarioId: currentUser.uid,
@@ -329,16 +1175,119 @@
                 });
                 
                 alert(`✅ Tarea "${nombre}" registrada como realizada.`);
-                await cargarDatos(); // Recargar la lista
+                actualizarDashboard();
+                actualizarVista();
             } catch(e) {
                 alert('Error: ' + e.message);
             }
         }
-        
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
+
+        // ============================================
+        // VISTA SEMANA
+        // ============================================
+        async function mostrarVistaSemana() {
+            const inicioSemana = getInicioSemana();
+            const dias = [];
+            for (let i = 0; i < 7; i++) {
+                let d = new Date(inicioSemana);
+                d.setDate(inicioSemana.getDate() + i);
+                dias.push(d);
+            }
+            
+            const porDia = {};
+            historialCache.forEach(h => {
+                if (h.timestamp && h.usuarioId === currentUser?.uid) {
+                    try {
+                        let d = h.timestamp.toDate();
+                        let f = d.toISOString().slice(0, 10);
+                        if (!porDia[f]) porDia[f] = [];
+                        const tarea = tareasCache.find(t => t.id === h.tareaId);
+                        porDia[f].push({
+                            titulo: tarea?.nombre || 'Tarea eliminada',
+                            usuarioId: h.usuarioId
+                        });
+                    } catch(e) {}
+                }
+            });
+            
+            let html = `<div class="week-container"><h2 style="margin-bottom: 20px;"><span class="material-icons">calendar_view_week</span> Realizadas esta semana <span class="tab-badge">${semanaCountSpan.textContent}</span></h2>`;
+            
+            for (let d of dias) {
+                let f = d.toISOString().slice(0, 10);
+                let lista = porDia[f] || [];
+                let nombreDia = d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+                html += `<div class="day-card"><h3>${nombreDia}</h3>`;
+                if (lista.length) {
+                    for (let t of lista) {
+                        let nombreUsuario = await obtenerNombre(t.usuarioId);
+                        html += `<div class="day-task">
+                            <span>📋 ${escapeHtml(t.titulo)}</span>
+                            <span class="day-task-user">👤 ${nombreUsuario}</span>
+                        </div>`;
+                    }
+                } else {
+                    html += '<div class="day-task">✨ Sin tareas realizadas</div>';
+                }
+                html += `</div>`;
+            }
+            
+            html += `</div>`;
+            contentAreaDiv.innerHTML = html;
         }
+
+        // ============================================
+        // VISTA HISTORIAL
+        // ============================================
+        async function mostrarHistorial() {
+            const misHistorial = historialCache.filter(h => h.usuarioId === currentUser?.uid);
+            
+            let html = `
+                <div class="history-container">
+                    <h2 style="margin-bottom: 20px;"><span class="material-icons">history</span> Mi Historial <span class="tab-badge">${misHistorial.length}</span></h2>
+                    <div style="overflow-x: auto;">
+                        <table class="history-table">
+                            <thead>
+                                <th>Fecha</th>
+                                <th>Tarea</th>
+                                <th>Realizada por</th>
+                            </thead>
+                            <tbody>
+            `;
+            
+            if (misHistorial.length === 0) {
+                html += ` <td colspan="3" style="text-align:center; padding:40px;">📭 No tienes tareas realizadas aún</td> `;
+            } else {
+                for (const h of misHistorial.slice(0, 200)) {
+                    let fechaStr = '';
+                    if (h.timestamp) {
+                        try { fechaStr = h.timestamp.toDate().toLocaleString(); } catch(e) {}
+                    }
+                    const tarea = tareasCache.find(t => t.id === h.tareaId);
+                    const titulo = tarea?.nombre || 'Tarea eliminada';
+                    let nombreUsuario = await obtenerNombre(h.usuarioId);
+                    html += ` 
+                        <td class="fecha-col">${fechaStr}</td>
+                        <td class="tarea-col">${escapeHtml(titulo)}</td>
+                        <td class="usuario-col">${escapeHtml(nombreUsuario)}</td>
+                     `;
+                }
+            }
+            
+            html += `</tbody> </table> </div></div>`;
+            contentAreaDiv.innerHTML = html;
+        }
+
+        // ============================================
+        // FILTROS
+        // ============================================
+        filterTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                filterTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentFilter = tab.dataset.filter;
+                actualizarVista();
+            });
+        });
     </script>
 </body>
 </html>
