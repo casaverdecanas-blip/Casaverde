@@ -470,6 +470,126 @@
             border-top: 1px solid #e9ecef;
         }
 
+        /* Botón agregar tarea */
+        .add-task-button {
+            margin-top: 20px;
+            padding: 16px;
+            background: linear-gradient(135deg, #2d5a27 0%, #1e3f1a 100%);
+            color: white;
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .add-task-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        /* Modal para nueva tarea */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 24px;
+            padding: 32px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-content h3 {
+            color: #2d5a27;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #495057;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #2d5a27;
+            box-shadow: 0 0 0 3px rgba(45,90,39,0.1);
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .modal-buttons button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn-submit {
+            background: #2d5a27;
+            color: white;
+        }
+
+        .btn-submit:hover {
+            background: #1e3f1a;
+        }
+
+        .btn-cancel {
+            background: #e9ecef;
+            color: #495057;
+        }
+
+        .btn-cancel:hover {
+            background: #dee2e6;
+        }
+
         .empty-state {
             text-align: center;
             padding: 50px 20px;
@@ -637,6 +757,55 @@
         </div>
     </div>
 
+    <!-- Modal para agregar tarea -->
+    <div id="addTaskModal" class="modal">
+        <div class="modal-content">
+            <h3>
+                <span class="material-icons">add_task</span>
+                Agregar Nueva Tarea
+            </h3>
+            <form id="addTaskForm">
+                <div class="form-group">
+                    <label>Nombre de la tarea *</label>
+                    <input type="text" id="taskName" required maxlength="100">
+                </div>
+                <div class="form-group">
+                    <label>Descripción</label>
+                    <textarea id="taskDescription" rows="3" maxlength="500"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Prioridad *</label>
+                    <select id="taskPriority">
+                        <option value="baja">Baja</option>
+                        <option value="media" selected>Media</option>
+                        <option value="alta">Alta</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Fecha de inicio *</label>
+                    <input type="date" id="taskStartDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Recurrencia *</label>
+                    <select id="taskRecurrence">
+                        <option value="0">Una vez</option>
+                        <option value="1">Diaria</option>
+                        <option value="2">Cada 2 días</option>
+                        <option value="3">Cada 3 días</option>
+                        <option value="4">Cada 4 días</option>
+                        <option value="5">Cada 5 días</option>
+                        <option value="6">Semanal</option>
+                        <option value="28">Mensual</option>
+                    </select>
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" class="btn-cancel" onclick="cerrarModal()">Cancelar</button>
+                    <button type="submit" class="btn-submit">Crear Tarea</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Área Principal -->
     <div id="privateArea" class="private-area">
         <header class="app-header">
@@ -765,8 +934,31 @@
         const historialCountSpan = document.getElementById('historialCount');
 
         // ============================================
-        // FUNCIONES AUXILIARES
+        // FUNCIONES AUXILIARES - FECHAS SIN HORA
         // ============================================
+        
+        // Obtener fecha sin hora (para comparaciones por día calendario)
+        function getFechaSinHora(fecha) {
+            const nuevaFecha = new Date(fecha);
+            nuevaFecha.setHours(0, 0, 0, 0);
+            return nuevaFecha;
+        }
+
+        // Comparar si dos fechas son el mismo día calendario
+        function esMismoDia(fecha1, fecha2) {
+            const f1 = getFechaSinHora(fecha1);
+            const f2 = getFechaSinHora(fecha2);
+            return f1.getTime() === f2.getTime();
+        }
+
+        // Calcular diferencia en días calendario (no horas)
+        function diferenciaDiasCalendario(fecha1, fecha2) {
+            const f1 = getFechaSinHora(fecha1);
+            const f2 = getFechaSinHora(fecha2);
+            const diffTime = Math.abs(f2 - f1);
+            return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        }
+
         function escapeHtml(str) {
             if (!str) return '';
             return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
@@ -793,6 +985,23 @@
             if (recurrencia === 6) return 6;
             if (recurrencia === 28) return 28;
             return recurrencia;
+        }
+
+        // Versión mejorada: verifica si se puede realizar la tarea HOY según día calendario
+        function sePuedeRealizarHoy(tarea, ultimaRealizacion) {
+            if (!ultimaRealizacion) return true; // Nunca se realizó
+            
+            const espaciado = getEspaciadoMinimo(tarea.recurrencia);
+            if (espaciado === 0) return true; // Una vez, ya se realizó pero no se vuelve a mostrar
+            
+            const hoy = getFechaSinHora(new Date());
+            const ultima = getFechaSinHora(ultimaRealizacion.fecha);
+            
+            // Calcular diferencia en días calendario
+            const diffDias = Math.floor((hoy - ultima) / (1000 * 60 * 60 * 24));
+            
+            // Para recurrencia diaria (espaciado=1): se puede realizar si pasó al menos 1 día calendario
+            return diffDias >= espaciado;
         }
 
         function getInicioSemana() {
@@ -857,7 +1066,7 @@
         }
 
         // ============================================
-        // AUTENTICACIÓN CON REDIRECCIÓN DE ADMIN
+        // AUTENTICACIÓN
         // ============================================
         auth.onAuthStateChanged(async (user) => {
             if (user) {
@@ -1010,13 +1219,13 @@
             });
             semanaCountSpan.textContent = tareasSemanaUnicas.size;
             
-            const hoyInicio = new Date();
-            hoyInicio.setHours(0, 0, 0, 0);
+            const hoyInicio = getFechaSinHora(new Date());
             let completadasHoy = 0;
             historialCache.forEach(h => {
                 if (h.timestamp && h.usuarioId === currentUser?.uid) {
                     try {
-                        if (h.timestamp.toDate() >= hoyInicio) completadasHoy++;
+                        const fechaHistorial = getFechaSinHora(h.timestamp.toDate());
+                        if (fechaHistorial.getTime() === hoyInicio.getTime()) completadasHoy++;
                     } catch(e) {}
                 }
             });
@@ -1048,7 +1257,70 @@
         }
 
         // ============================================
-        // VISTA TAREAS PRINCIPAL
+        // AGREGAR NUEVA TAREA
+        // ============================================
+        function abrirModalAgregarTarea() {
+            const modal = document.getElementById('addTaskModal');
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('taskStartDate').value = today;
+            document.getElementById('addTaskForm').reset();
+            document.getElementById('taskStartDate').value = today;
+            modal.style.display = 'flex';
+        }
+
+        function cerrarModal() {
+            document.getElementById('addTaskModal').style.display = 'none';
+        }
+
+        document.getElementById('addTaskForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const nombre = document.getElementById('taskName').value.trim();
+            const descripcion = document.getElementById('taskDescription').value.trim();
+            const prioridad = document.getElementById('taskPriority').value;
+            const fechaInicio = document.getElementById('taskStartDate').value;
+            const recurrencia = parseInt(document.getElementById('taskRecurrence').value);
+            
+            if (!nombre) {
+                alert('Por favor ingresa un nombre para la tarea');
+                return;
+            }
+            
+            if (!fechaInicio) {
+                alert('Por favor ingresa una fecha de inicio');
+                return;
+            }
+            
+            try {
+                await db.collection('tareas').add({
+                    nombre: nombre,
+                    descripcion: descripcion,
+                    prioridad: prioridad,
+                    fechaInicio: fechaInicio,
+                    recurrencia: recurrencia,
+                    activa: true,
+                    creadoPor: currentUser.uid,
+                    creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                cerrarModal();
+                alert('✅ Tarea creada exitosamente');
+            } catch (error) {
+                console.error('Error al crear tarea:', error);
+                alert('Error al crear la tarea: ' + error.message);
+            }
+        });
+
+        // Cerrar modal al hacer clic fuera
+        window.onclick = function(event) {
+            const modal = document.getElementById('addTaskModal');
+            if (event.target === modal) {
+                cerrarModal();
+            }
+        }
+
+        // ============================================
+        // VISTA TAREAS PRINCIPAL CON BOTÓN AGREGAR
         // ============================================
         async function mostrarVistaTareas() {
             contentAreaDiv.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Cargando tareas...</p></div>';
@@ -1060,21 +1332,15 @@
             
             const pendientes = [];
             const realizadasRecientes = [];
-            const ahora = new Date();
             
             for (const tarea of tareasConUltima) {
-                let esReciente = false;
-                if (tarea.ultimaRealizacion) {
-                    const dias = Math.floor((ahora - tarea.ultimaRealizacion.fecha) / 86400000);
-                    const espaciado = getEspaciadoMinimo(tarea.recurrencia);
-                    if (espaciado > 0 && dias < espaciado) {
-                        esReciente = true;
-                    }
-                }
-                if (esReciente) {
-                    realizadasRecientes.push(tarea);
-                } else {
+                // Verificar si la tarea se puede realizar HOY según día calendario
+                const sePuedeHoy = sePuedeRealizarHoy(tarea, tarea.ultimaRealizacion);
+                
+                if (sePuedeHoy) {
                     pendientes.push(tarea);
+                } else if (tarea.ultimaRealizacion) {
+                    realizadasRecientes.push(tarea);
                 }
             }
             
@@ -1098,11 +1364,19 @@
             }
             
             if (realizadasRecientes.length > 0) {
-                html += `<div class="recientes-divider"><span class="material-icons">history</span> Realizadas recientemente</div>`;
+                html += `<div class="recientes-divider"><span class="material-icons">history</span> Realizadas recientemente (aún no disponibles)</div>`;
                 html += realizadasRecientes.map(t => renderizarTarjeta(t, true)).join('');
             }
             
-            html += `</div></div>`;
+            // Botón para agregar tarea al final
+            html += `
+                    </div>
+                    <button class="add-task-button" onclick="abrirModalAgregarTarea()">
+                        <span class="material-icons">add</span> Agregar Nueva Tarea
+                    </button>
+                </div>
+            `;
+            
             contentAreaDiv.innerHTML = html;
             
             document.querySelectorAll('.task-card:not(.completed)').forEach(card => {
@@ -1160,10 +1434,16 @@
                 if (!ultimaSnap.empty && espaciado > 0) {
                     const ultima = ultimaSnap.docs[0].data();
                     const ultimaFecha = ultima.timestamp.toDate();
-                    const dias = Math.floor((new Date() - ultimaFecha) / 86400000);
-                    if (dias < espaciado) {
+                    const hoy = getFechaSinHora(new Date());
+                    const ultimaSinHora = getFechaSinHora(ultimaFecha);
+                    
+                    // Calcular diferencia en días calendario
+                    const diffDias = Math.floor((hoy - ultimaSinHora) / (1000 * 60 * 60 * 24));
+                    
+                    if (diffDias < espaciado) {
                         const nombreUsuario = await obtenerNombre(ultima.usuarioId);
-                        alert(`⚠️ No puedes realizar esta tarea todavía.\n\n📅 Última vez: ${ultimaFecha.toLocaleDateString()}\n👤 Realizada por: ${nombreUsuario}\n⏱️ Espaciado mínimo: ${espaciado} días.`);
+                        const fechaStr = ultimaFecha.toLocaleDateString();
+                        alert(`⚠️ No puedes realizar esta tarea todavía.\n\n📅 Última vez: ${fechaStr}\n👤 Realizada por: ${nombreUsuario}\n⏱️ Espaciado mínimo: ${espaciado} día(s) calendario.\n\n💡 Debes esperar al menos ${espaciado} día(s) después de la última realización.`);
                         return;
                     }
                 }
@@ -1255,7 +1535,7 @@
             `;
             
             if (misHistorial.length === 0) {
-                html += ` <td colspan="3" style="text-align:center; padding:40px;">📭 No tienes tareas realizadas aún</td> `;
+                html += `<tr><td colspan="3" style="text-align:center; padding:40px;">📭 No tienes tareas realizadas aún</td></tr>`;
             } else {
                 for (const h of misHistorial.slice(0, 200)) {
                     let fechaStr = '';
@@ -1266,14 +1546,16 @@
                     const titulo = tarea?.nombre || 'Tarea eliminada';
                     let nombreUsuario = await obtenerNombre(h.usuarioId);
                     html += ` 
-                        <td class="fecha-col">${fechaStr}</td>
-                        <td class="tarea-col">${escapeHtml(titulo)}</td>
-                        <td class="usuario-col">${escapeHtml(nombreUsuario)}</td>
-                     `;
+                        <tr>
+                            <td class="fecha-col">${fechaStr}</td>
+                            <td class="tarea-col">${escapeHtml(titulo)}</td>
+                            <td class="usuario-col">${escapeHtml(nombreUsuario)}</td>
+                        </tr>
+                    `;
                 }
             }
             
-            html += `</tbody> </table> </div></div>`;
+            html += `</tbody></table></div></div>`;
             contentAreaDiv.innerHTML = html;
         }
 
