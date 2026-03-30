@@ -9,9 +9,6 @@
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
     
-    <!-- Plugin de Google Calendar - NECESARIO -->
-    <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/google-calendar@6.1.15/index.global.min.js"></script>
-    
     <!-- Eruda para depuración -->
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
@@ -64,6 +61,12 @@
         }
         footer { text-align: center; margin-top: 25px; color: #666; font-size: 0.75rem; }
         @media (max-width: 768px) { .header h1 { font-size: 1.3rem; } }
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.2rem;
+            color: #2d5a27;
+        }
     </style>
 </head>
 <body>
@@ -90,9 +93,87 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var calendarEl = document.getElementById('calendar');
-            var calendar = new FullCalendar.Calendar(calendarEl, {
+        // Configuración
+        const API_KEY = 'AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs';
+        
+        const CALENDARS = [
+            {
+                id: 'h5a1h0a8dg9rl0oufvq19hn05r4gbubg@import.calendar.google.com',
+                color: '#FF9800',
+                title: 'Cabaña frente'
+            },
+            {
+                id: '60n7foetdu2qvsn16mi7is8j6i4ugm66@import.calendar.google.com',
+                color: '#3498db',
+                title: 'Depa abajo'
+            },
+            {
+                id: '8i3hl5ppqi6al50kf7casj5n5vl9sp1j@import.calendar.google.com',
+                color: '#2ecc71',
+                title: 'Loft'
+            }
+        ];
+
+        // Función para obtener eventos de un calendario
+        async function fetchCalendarEvents(calendarId, apiKey, color, title) {
+            const now = new Date();
+            const startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString();
+            const endDate = new Date(now.getFullYear(), now.getMonth() + 3, 0).toISOString();
+            
+            const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?key=${apiKey}&timeMin=${startDate}&timeMax=${endDate}&singleEvents=true&orderBy=startTime`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error(`Error en calendario ${calendarId}:`, data.error);
+                    return [];
+                }
+                
+                // Convertir eventos al formato de FullCalendar
+                return data.items.map(event => ({
+                    title: event.summary || title,
+                    start: event.start.dateTime || event.start.date,
+                    end: event.end.dateTime || event.end.date,
+                    color: color,
+                    textColor: 'white',
+                    extendedProps: {
+                        calendarTitle: title
+                    }
+                }));
+            } catch (error) {
+                console.error(`Error fetching calendar ${calendarId}:`, error);
+                return [];
+            }
+        }
+
+        // Función principal
+        async function loadAllCalendars() {
+            const allEvents = [];
+            
+            for (const cal of CALENDARS) {
+                console.log(`Cargando ${cal.title}...`);
+                const events = await fetchCalendarEvents(cal.id, API_KEY, cal.color, cal.title);
+                allEvents.push(...events);
+                console.log(`${cal.title}: ${events.length} eventos cargados`);
+            }
+            
+            return allEvents;
+        }
+
+        // Inicializar FullCalendar
+        document.addEventListener('DOMContentLoaded', async function() {
+            const calendarEl = document.getElementById('calendar');
+            
+            // Mostrar loading
+            calendarEl.innerHTML = '<div class="loading">🔄 Cargando reservas...</div>';
+            
+            // Cargar eventos
+            const events = await loadAllCalendars();
+            
+            // Inicializar calendario
+            const calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
                 locale: 'es',
                 headerToolbar: {
@@ -103,33 +184,17 @@
                 firstDay: 1,
                 height: 'auto',
                 timeZone: 'America/Sao_Paulo',
-                plugins: ['googleCalendar'],  // <-- PLUGIN REGISTRADO AQUÍ
-                eventSources: [
-                    {
-                        googleCalendarApiKey: 'AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs',
-                        googleCalendarId: 'h5a1h0a8dg9rl0oufvq19hn05r4gbubg@import.calendar.google.com',
-                        color: '#FF9800',
-                        textColor: 'white'
-                    },
-                    {
-                        googleCalendarApiKey: 'AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs',
-                        googleCalendarId: '60n7foetdu2qvsn16mi7is8j6i4ugm66@import.calendar.google.com',
-                        color: '#3498db',
-                        textColor: 'white'
-                    },
-                    {
-                        googleCalendarApiKey: 'AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs',
-                        googleCalendarId: '8i3hl5ppqi6al50kf7casj5n5vl9sp1j@import.calendar.google.com',
-                        color: '#2ecc71',
-                        textColor: 'white'
-                    }
-                ],
+                events: events,
                 eventClick: function(info) {
                     info.jsEvent.preventDefault();
-                    alert('Reserva: ' + info.event.title);
+                    alert(`📅 ${info.event.title}\n📆 ${info.event.start.toLocaleDateString('es-ES')}`);
                 }
             });
+            
             calendar.render();
+            
+            // Mensaje en consola
+            console.log(`✅ Calendario cargado con ${events.length} eventos totales`);
         });
     </script>
 </body>
