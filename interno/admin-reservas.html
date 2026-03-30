@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>CasaVerdeCanas - Sistema Unificado</title>
     
+    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -51,12 +52,11 @@
         .tab-btn { padding: 12px 24px; border: none; background: transparent; border-radius: 40px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500; transition: all 0.3s; color: #6c757d; }
         .tab-btn:hover { background: #f0f2f5; }
         .tab-btn.active { background: #2d5a27; color: white; }
-        .tab-badge { background: rgba(0,0,0,0.1); padding: 2px 8px; border-radius: 20px; font-size: 11px; }
 
         /* Tarjetas de reservas */
-        .tasks-container, .reservas-container { background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-        .tasks-header { padding: 20px 24px; border-bottom: 1px solid #e9ecef; }
-        .tasks-list, .reservas-list { padding: 16px 24px; display: flex; flex-direction: column; gap: 12px; }
+        .reservas-container { background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .reservas-header { padding: 20px 24px; border-bottom: 1px solid #e9ecef; }
+        .reservas-list { padding: 16px 24px; display: flex; flex-direction: column; gap: 12px; }
         .reserva-card { background: white; border-left: 4px solid; border-radius: 16px; padding: 20px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .reserva-card.cabana-frente { border-left-color: #FF9800; }
         .reserva-card.depa-abajo { border-left-color: #3498db; }
@@ -66,7 +66,6 @@
         .origen-badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
         .origen-google { background: #e3f2fd; color: #1976d2; }
         .origen-manual { background: #f3e5f5; color: #7b1fa2; }
-        .cabaña-badge { padding: 4px 12px; border-radius: 20px; font-size: 11px; background: #f8f9fa; }
         .reserva-fechas { display: flex; gap: 20px; margin: 12px 0; flex-wrap: wrap; }
         .btn-edit, .btn-delete, .btn-sync { padding: 6px 12px; border: none; border-radius: 20px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
         .btn-edit { background: #3498db; color: white; }
@@ -228,7 +227,6 @@
         let reservasCache = [];
         let editingReservaId = null;
         let fullCalendar = null;
-        let currentTab = 'calendario';
 
         const GOOGLE_API_KEY = 'AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs';
         const CALENDARS_GOOGLE = [
@@ -246,7 +244,39 @@
         function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m)); }
         function mostrarMensaje(msg, tipo) { alert(msg); }
 
-        // Autenticación
+        // ========== FUNCIÓN CLAVE: FETCH DE GOOGLE CALENDAR ==========
+        async function fetchCalendarEvents(calendarId, apiKey, color, title) {
+            const now = new Date();
+            const startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString();
+            const endDate = new Date(now.getFullYear(), now.getMonth() + 6, 0).toISOString();
+            
+            const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?key=${apiKey}&timeMin=${startDate}&timeMax=${endDate}&singleEvents=true&orderBy=startTime`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error(`Error en calendario ${calendarId}:`, data.error);
+                    return [];
+                }
+                
+                return data.items.map(event => ({
+                    id: event.id,
+                    title: event.summary || title,
+                    start: event.start.dateTime || event.start.date,
+                    end: event.end.dateTime || event.end.date,
+                    color: color,
+                    textColor: 'white',
+                    extendedProps: { calendarTitle: title, origen: 'google', eventoId: event.id }
+                }));
+            } catch (error) {
+                console.error(`Error fetching calendar ${calendarId}:`, error);
+                return [];
+            }
+        }
+
+        // ========== AUTENTICACIÓN ==========
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('username').value;
@@ -291,7 +321,7 @@
 
         document.getElementById('logoutBtn').addEventListener('click', () => auth.signOut());
 
-        // CRUD Reservas
+        // ========== CRUD RESERVAS EN FIRESTORE ==========
         async function cargarReservas() {
             try {
                 const snapshot = await db.collection('reservas').orderBy('checkIn', 'asc').get();
@@ -333,7 +363,6 @@
                         <div class="reserva-header">
                             <div class="reserva-nombre">
                                 ${escapeHtml(reserva.nombreCliente)}
-                                <span class="cabaña-badge">${reserva.cabaña}</span>
                                 <span class="origen-badge ${origenClass}">${origenTexto}</span>
                             </div>
                             <div>👥 ${reserva.cantidadPasajeros || 1} | ${dias} días</div>
@@ -417,40 +446,43 @@
             await cargarReservas();
         });
 
-        // Sincronización con Google
+        // ========== SINCRONIZACIÓN CON GOOGLE ==========
         async function sincronizarDesdeGoogle() {
             let nuevos = 0, actualizados = 0;
             mostrarMensaje('🔄 Sincronizando con Google Calendar...', 'info');
+            
             for (const cal of CALENDARS_GOOGLE) {
-                const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?key=${GOOGLE_API_KEY}&singleEvents=true&orderBy=startTime&timeMin=${new Date(Date.now() - 30*24*60*60*1000).toISOString()}&timeMax=${new Date(Date.now() + 180*24*60*60*1000).toISOString()}`;
-                try {
-                    const response = await fetch(url);
-                    const data = await response.json();
-                    console.log(`📡 ${cal.name}:`, data.items?.length || 0, 'eventos');
-                    if (data.items) {
-                        for (const event of data.items) {
-                            if (event.summary && (event.start?.date || event.start?.dateTime)) {
-                                const startDate = event.start.date || event.start.dateTime.split('T')[0];
-                                const endDate = event.end.date || event.end.dateTime.split('T')[0];
-                                const existing = await db.collection('reservas').where('eventoId', '==', event.id).where('calendarioId', '==', cal.id).get();
-                                const eventData = {
-                                    eventoId: event.id, calendarioId: cal.id, cabaña: cal.name,
-                                    nombreCliente: event.summary, checkIn: firebase.firestore.Timestamp.fromDate(new Date(startDate)),
-                                    checkOut: firebase.firestore.Timestamp.fromDate(new Date(endDate)), cantidadPasajeros: 2,
-                                    observaciones: event.description || '', origen: 'google', sincronizado: true,
-                                    ultimaSincronizacion: firebase.firestore.FieldValue.serverTimestamp()
-                                };
-                                if (existing.empty) { 
-                                    await db.collection('reservas').add({ ...eventData, creadoEn: firebase.firestore.FieldValue.serverTimestamp() }); 
-                                    nuevos++; 
-                                } else { 
-                                    await db.collection('reservas').doc(existing.docs[0].id).update(eventData); 
-                                    actualizados++; 
-                                }
-                            }
-                        }
+                console.log(`📡 Obteniendo eventos de ${cal.name}...`);
+                const events = await fetchCalendarEvents(cal.id, GOOGLE_API_KEY, cal.color, cal.name);
+                
+                for (const event of events) {
+                    const existing = await db.collection('reservas')
+                        .where('eventoId', '==', event.id)
+                        .where('calendarioId', '==', cal.id)
+                        .get();
+                    
+                    const eventData = {
+                        eventoId: event.id,
+                        calendarioId: cal.id,
+                        cabaña: cal.name,
+                        nombreCliente: event.title,
+                        checkIn: firebase.firestore.Timestamp.fromDate(new Date(event.start)),
+                        checkOut: firebase.firestore.Timestamp.fromDate(new Date(event.end)),
+                        cantidadPasajeros: 2,
+                        observaciones: '',
+                        origen: 'google',
+                        sincronizado: true,
+                        ultimaSincronizacion: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+                    
+                    if (existing.empty) {
+                        await db.collection('reservas').add({ ...eventData, creadoEn: firebase.firestore.FieldValue.serverTimestamp() });
+                        nuevos++;
+                    } else {
+                        await db.collection('reservas').doc(existing.docs[0].id).update(eventData);
+                        actualizados++;
                     }
-                } catch (error) { console.error(`Error con ${cal.name}:`, error); }
+                }
             }
             alert(`✅ Sincronizado: ${nuevos} nuevas, ${actualizados} actualizadas`);
             await cargarReservas();
@@ -458,25 +490,28 @@
 
         async function sincronizarCompleto() { await sincronizarDesdeGoogle(); }
 
-        // FullCalendar
+        // ========== FULLCALENDAR ==========
         function actualizarCalendario() {
             if (!fullCalendar) return;
-            const eventos = reservasCache.map(reserva => {
+            
+            // Combinar reservas de Firestore con eventos de Google (para mostrar todo)
+            const eventosCalendario = reservasCache.map(reserva => {
                 const checkIn = reserva.checkIn?.toDate ? reserva.checkIn.toDate() : new Date(reserva.checkIn);
                 const checkOut = reserva.checkOut?.toDate ? reserva.checkOut.toDate() : new Date(reserva.checkOut);
                 const cabañaInfo = cabañaMap[reserva.cabaña] || cabañaMap['Cabaña frente'];
                 return {
-                    id: reserva.id, 
+                    id: reserva.id,
                     title: `${reserva.nombreCliente} (${reserva.cabaña})${reserva.origen === 'manual' ? ' ✏️' : ''}`,
-                    start: checkIn, 
-                    end: checkOut, 
-                    color: reserva.origen === 'manual' ? '#9b59b6' : cabañaInfo.color, 
+                    start: checkIn,
+                    end: checkOut,
+                    color: reserva.origen === 'manual' ? '#9b59b6' : cabañaInfo.color,
                     textColor: 'white'
                 };
             });
-            console.log(`📅 Actualizando calendario con ${eventos.length} eventos`);
+            
+            console.log(`📅 Actualizando calendario con ${eventosCalendario.length} eventos`);
             fullCalendar.removeAllEvents();
-            fullCalendar.addEventSource(eventos);
+            fullCalendar.addEventSource(eventosCalendario);
         }
 
         function iniciarFullCalendar() {
@@ -487,15 +522,24 @@
             }
             console.log('🎨 Iniciando FullCalendar...');
             fullCalendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'dayGridMonth', 
-                locale: 'es', 
-                headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
-                firstDay: 1, 
-                height: 'auto', 
-                timeZone: 'America/Sao_Paulo', 
+                initialView: 'dayGridMonth',
+                locale: 'es',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek'
+                },
+                firstDay: 1,
+                height: 'auto',
+                timeZone: 'America/Sao_Paulo',
                 events: [],
-                eventClick: function(info) { 
-                    alert(`📅 ${info.event.title}\n📆 ${info.event.start.toLocaleDateString('es-ES')} - ${info.event.end.toLocaleDateString('es-ES')}`); 
+                eventClick: function(info) {
+                    const reserva = reservasCache.find(r => r.id === info.event.id);
+                    if (reserva) {
+                        alert(`📅 ${reserva.nombreCliente}\n🏠 ${reserva.cabaña}\n📆 ${info.event.start.toLocaleDateString('es-ES')} - ${info.event.end.toLocaleDateString('es-ES')}\n📝 ${reserva.observaciones || 'Sin observaciones'}\n🔖 Origen: ${reserva.origen === 'google' ? 'Google Calendar' : 'Manual'}`);
+                    } else {
+                        alert(`📅 ${info.event.title}\n📆 ${info.event.start.toLocaleDateString('es-ES')}`);
+                    }
                 }
             });
             fullCalendar.render();
@@ -510,7 +554,6 @@
                 document.querySelectorAll('.panel').forEach(p => p.style.display = 'none');
                 btn.classList.add('active');
                 const tab = btn.dataset.tab;
-                currentTab = tab;
                 document.getElementById(`${tab}Panel`).style.display = 'block';
                 if (tab === 'calendario' && fullCalendar) {
                     fullCalendar.updateSize();
@@ -529,7 +572,6 @@
         window.sincronizarDesdeGoogle = sincronizarDesdeGoogle;
         window.sincronizarCompleto = sincronizarCompleto;
         
-        // Inicialización
         console.log('🚀 Sistema iniciado');
     </script>
 </body>
