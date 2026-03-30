@@ -118,7 +118,7 @@
                 </div>
                 <button type="submit" class="login-btn"><span class="material-icons">login</span> Ingresar</button>
                 <div id="loginError" class="error-message"></div>
-                <div class="info-message">💡 Usa admin@casaverdecanas.com (o el email que configuraste)</div>
+                <div class="info-message">💡 Ingresa con tu email y contraseña de administrador</div>
             </form>
         </div>
     </div>
@@ -207,7 +207,9 @@
     </div>
 
     <script>
-        // Firebase Config
+        // ============================================
+        // CONFIGURACIÓN FIREBASE
+        // ============================================
         const firebaseConfig = {
             apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
             authDomain: "tatareas-d8a80.firebaseapp.com",
@@ -278,6 +280,7 @@
                     document.getElementById('privateArea').style.display = 'block';
                     document.getElementById('userEmail').textContent = user.email;
                     document.getElementById('todayDate').textContent = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                    console.log('✅ Admin logueado:', user.email);
                     cargarReservas();
                 } else { auth.signOut(); }
             } else {
@@ -294,10 +297,12 @@
                 const snapshot = await db.collection('reservas').orderBy('checkIn', 'asc').get();
                 reservasCache = [];
                 snapshot.forEach(doc => reservasCache.push({ id: doc.id, ...doc.data() }));
+                console.log(`📋 Reservas cargadas: ${reservasCache.length}`);
                 renderizarReservas();
                 actualizarContadores();
                 if (fullCalendar) actualizarCalendario();
-            } catch (error) { console.error(error); }
+                else iniciarFullCalendar();
+            } catch (error) { console.error('Error cargando reservas:', error); }
         }
 
         function actualizarContadores() {
@@ -315,7 +320,7 @@
 
         function renderizarReservas() {
             const container = document.getElementById('reservasList');
-            if (reservasCache.length === 0) { container.innerHTML = '<div class="empty-state"><span class="material-icons">hotel</span><p>No hay reservas</p></div>'; return; }
+            if (reservasCache.length === 0) { container.innerHTML = '<div class="empty-state"><span class="material-icons">hotel</span><p>No hay reservas</p><p>Usa el botón "Importar desde Google" para sincronizar</p></div>'; return; }
             container.innerHTML = reservasCache.map(reserva => {
                 const cabañaInfo = cabañaMap[reserva.cabaña] || cabañaMap['Cabaña frente'];
                 const checkIn = reserva.checkIn?.toDate ? reserva.checkIn.toDate() : new Date(reserva.checkIn);
@@ -415,11 +420,13 @@
         // Sincronización con Google
         async function sincronizarDesdeGoogle() {
             let nuevos = 0, actualizados = 0;
+            mostrarMensaje('🔄 Sincronizando con Google Calendar...', 'info');
             for (const cal of CALENDARS_GOOGLE) {
                 const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?key=${GOOGLE_API_KEY}&singleEvents=true&orderBy=startTime&timeMin=${new Date(Date.now() - 30*24*60*60*1000).toISOString()}&timeMax=${new Date(Date.now() + 180*24*60*60*1000).toISOString()}`;
                 try {
                     const response = await fetch(url);
                     const data = await response.json();
+                    console.log(`📡 ${cal.name}:`, data.items?.length || 0, 'eventos');
                     if (data.items) {
                         for (const event of data.items) {
                             if (event.summary && (event.start?.date || event.start?.dateTime)) {
@@ -433,12 +440,17 @@
                                     observaciones: event.description || '', origen: 'google', sincronizado: true,
                                     ultimaSincronizacion: firebase.firestore.FieldValue.serverTimestamp()
                                 };
-                                if (existing.empty) { await db.collection('reservas').add({ ...eventData, creadoEn: firebase.firestore.FieldValue.serverTimestamp() }); nuevos++; }
-                                else { await db.collection('reservas').doc(existing.docs[0].id).update(eventData); actualizados++; }
+                                if (existing.empty) { 
+                                    await db.collection('reservas').add({ ...eventData, creadoEn: firebase.firestore.FieldValue.serverTimestamp() }); 
+                                    nuevos++; 
+                                } else { 
+                                    await db.collection('reservas').doc(existing.docs[0].id).update(eventData); 
+                                    actualizados++; 
+                                }
                             }
                         }
                     }
-                } catch (error) { console.error(error); }
+                } catch (error) { console.error(`Error con ${cal.name}:`, error); }
             }
             alert(`✅ Sincronizado: ${nuevos} nuevas, ${actualizados} actualizadas`);
             await cargarReservas();
@@ -454,23 +466,40 @@
                 const checkOut = reserva.checkOut?.toDate ? reserva.checkOut.toDate() : new Date(reserva.checkOut);
                 const cabañaInfo = cabañaMap[reserva.cabaña] || cabañaMap['Cabaña frente'];
                 return {
-                    id: reserva.id, title: `${reserva.nombreCliente} (${reserva.cabaña})${reserva.origen === 'manual' ? ' ✏️' : ''}`,
-                    start: checkIn, end: checkOut, color: reserva.origen === 'manual' ? '#9b59b6' : cabañaInfo.color, textColor: 'white'
+                    id: reserva.id, 
+                    title: `${reserva.nombreCliente} (${reserva.cabaña})${reserva.origen === 'manual' ? ' ✏️' : ''}`,
+                    start: checkIn, 
+                    end: checkOut, 
+                    color: reserva.origen === 'manual' ? '#9b59b6' : cabañaInfo.color, 
+                    textColor: 'white'
                 };
             });
+            console.log(`📅 Actualizando calendario con ${eventos.length} eventos`);
             fullCalendar.removeAllEvents();
             fullCalendar.addEventSource(eventos);
         }
 
         function iniciarFullCalendar() {
             const calendarEl = document.getElementById('calendarPreview');
-            if (!calendarEl) return;
+            if (!calendarEl) {
+                console.error('❌ Elemento calendarPreview no encontrado');
+                return;
+            }
+            console.log('🎨 Iniciando FullCalendar...');
             fullCalendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'dayGridMonth', locale: 'es', headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
-                firstDay: 1, height: 'auto', timeZone: 'America/Sao_Paulo', events: [],
-                eventClick: function(info) { alert(`📅 ${info.event.title}\n📆 ${info.event.start.toLocaleDateString('es-ES')} - ${info.event.end.toLocaleDateString('es-ES')}`); }
+                initialView: 'dayGridMonth', 
+                locale: 'es', 
+                headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
+                firstDay: 1, 
+                height: 'auto', 
+                timeZone: 'America/Sao_Paulo', 
+                events: [],
+                eventClick: function(info) { 
+                    alert(`📅 ${info.event.title}\n📆 ${info.event.start.toLocaleDateString('es-ES')} - ${info.event.end.toLocaleDateString('es-ES')}`); 
+                }
             });
             fullCalendar.render();
+            console.log('✅ FullCalendar inicializado');
             actualizarCalendario();
         }
 
@@ -483,13 +512,14 @@
                 const tab = btn.dataset.tab;
                 currentTab = tab;
                 document.getElementById(`${tab}Panel`).style.display = 'block';
-                if (tab === 'calendario' && fullCalendar) fullCalendar.updateSize();
-                if (tab === 'calendario' && !fullCalendar) iniciarFullCalendar();
+                if (tab === 'calendario' && fullCalendar) {
+                    fullCalendar.updateSize();
+                    actualizarCalendario();
+                }
             });
         });
 
-        // Inicialización
-        window.addEventListener('load', () => { iniciarFullCalendar(); });
+        // Exponer funciones globales
         window.cargarReservas = cargarReservas;
         window.abrirModalReserva = abrirModalReserva;
         window.cerrarModalReserva = cerrarModalReserva;
@@ -498,6 +528,9 @@
         window.desvincularGoogle = desvincularGoogle;
         window.sincronizarDesdeGoogle = sincronizarDesdeGoogle;
         window.sincronizarCompleto = sincronizarCompleto;
+        
+        // Inicialización
+        console.log('🚀 Sistema iniciado');
     </script>
 </body>
 </html>
