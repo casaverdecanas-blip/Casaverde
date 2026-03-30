@@ -14,10 +14,6 @@
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
     
-    <!-- Eruda para depuración en móvil -->
-    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-    <script>eruda.init();</script>
-    
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     
     <style>
@@ -106,6 +102,53 @@
     </style>
 </head>
 <body>
+
+<!-- Panel de depuración visible (alternativa a Eruda) -->
+<div id="debugPanel" style="position: fixed; bottom: 10px; left: 10px; right: 10px; background: rgba(0,0,0,0.95); color: #0f0; font-family: monospace; font-size: 10px; padding: 8px; border-radius: 8px; z-index: 9999; max-height: 200px; overflow-y: auto; display: none;">
+    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+        <strong>🐛 CONSOLA DE DEPURACIÓN</strong>
+        <button onclick="document.getElementById('debugPanel').style.display='none'" style="background:red; color:white; border:none; border-radius:4px; padding:2px 8px;">✖ CERRAR</button>
+    </div>
+    <div id="debugConsole" style="font-size: 11px; line-height: 1.4;"></div>
+</div>
+
+<script>
+    // Función para mostrar mensajes en el panel de depuración
+    function debugLog(msg) {
+        const panel = document.getElementById('debugConsole');
+        if (panel) {
+            const time = new Date().toLocaleTimeString();
+            panel.innerHTML += `<div style="border-bottom:1px solid #333; padding:2px 0;">[${time}] ${msg}</div>`;
+            panel.scrollTop = panel.scrollHeight;
+        }
+        console.log(msg);
+    }
+    
+    // Botón flotante para abrir el panel
+    const debugBtn = document.createElement('button');
+    debugBtn.innerHTML = '🐛';
+    debugBtn.style.position = 'fixed';
+    debugBtn.style.bottom = '70px';
+    debugBtn.style.right = '10px';
+    debugBtn.style.background = '#2d5a27';
+    debugBtn.style.color = 'white';
+    debugBtn.style.border = 'none';
+    debugBtn.style.borderRadius = '50%';
+    debugBtn.style.width = '50px';
+    debugBtn.style.height = '50px';
+    debugBtn.style.fontSize = '24px';
+    debugBtn.style.zIndex = '9999';
+    debugBtn.style.cursor = 'pointer';
+    debugBtn.style.boxShadow = '0 2px 10px rgba(0,0,0,0.3)';
+    debugBtn.onclick = () => {
+        const panel = document.getElementById('debugPanel');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    };
+    document.body.appendChild(debugBtn);
+    
+    debugLog('🚀 Sistema iniciado - Haz clic en el botón 🐛 para ver la consola');
+</script>
+
     <!-- Pantalla de Login -->
     <div id="loginContainer" class="login-container">
         <div class="login-box">
@@ -247,7 +290,7 @@
 
         function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m)); }
         function mostrarMensaje(msg, tipo) { 
-            console.log(`📢 ${tipo}: ${msg}`);
+            debugLog(`📢 ${tipo}: ${msg}`);
             alert(msg); 
         }
 
@@ -259,18 +302,18 @@
             
             const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?key=${apiKey}&timeMin=${startDate}&timeMax=${endDate}&singleEvents=true&orderBy=startTime`;
             
-            console.log(`🌐 Fetching ${title}: ${url}`);
+            debugLog(`🌐 Fetching ${title}: ${url.substring(0, 100)}...`);
             
             try {
                 const response = await fetch(url);
                 const data = await response.json();
                 
                 if (data.error) {
-                    console.error(`❌ Error en ${title}:`, data.error);
+                    debugLog(`❌ Error en ${title}: ${data.error.message || JSON.stringify(data.error)}`);
                     return [];
                 }
                 
-                console.log(`✅ ${title}: ${data.items?.length || 0} eventos obtenidos`);
+                debugLog(`✅ ${title}: ${data.items?.length || 0} eventos obtenidos`);
                 return data.items.map(event => ({
                     id: event.id,
                     title: event.summary || title,
@@ -281,7 +324,7 @@
                     extendedProps: { calendarTitle: title, origen: 'google', eventoId: event.id }
                 }));
             } catch (error) {
-                console.error(`❌ Error en fetch ${title}:`, error);
+                debugLog(`❌ Error en fetch ${title}: ${error.message}`);
                 return [];
             }
         }
@@ -294,16 +337,20 @@
             const errorDiv = document.getElementById('loginError');
             if (password.length < 6) { errorDiv.textContent = 'Mínimo 6 caracteres'; errorDiv.style.display = 'block'; return; }
             try {
+                debugLog(`🔐 Intentando login: ${email}`);
                 const userCredential = await auth.signInWithEmailAndPassword(email, password);
                 const userDoc = await db.collection('usuarios').doc(userCredential.user.uid).get();
                 if (!userDoc.exists || userDoc.data().rol !== 'admin') {
                     await auth.signOut();
                     errorDiv.textContent = 'Acceso solo para administradores';
                     errorDiv.style.display = 'block';
+                    debugLog(`❌ Usuario no es admin: ${email}`);
                     return;
                 }
                 errorDiv.style.display = 'none';
+                debugLog(`✅ Login exitoso como admin: ${email}`);
             } catch (error) {
+                debugLog(`❌ Error login: ${error.message}`);
                 if (error.code === 'auth/user-not-found') {
                     errorDiv.textContent = 'Usuario no encontrado. Contacta al administrador.';
                 } else { errorDiv.textContent = 'Email o contraseña incorrectos'; }
@@ -320,12 +367,16 @@
                     document.getElementById('privateArea').style.display = 'block';
                     document.getElementById('userEmail').textContent = user.email;
                     document.getElementById('todayDate').textContent = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                    console.log('✅ Admin logueado:', user.email);
+                    debugLog('✅ Admin logueado:', user.email);
                     cargarReservas();
-                } else { auth.signOut(); }
+                } else { 
+                    debugLog('❌ Usuario no es admin, cerrando sesión');
+                    auth.signOut(); 
+                }
             } else {
                 document.getElementById('loginContainer').style.display = 'flex';
                 document.getElementById('privateArea').style.display = 'none';
+                debugLog('🔓 Usuario no autenticado');
             }
         });
 
@@ -337,12 +388,14 @@
                 const snapshot = await db.collection('reservas').orderBy('checkIn', 'asc').get();
                 reservasCache = [];
                 snapshot.forEach(doc => reservasCache.push({ id: doc.id, ...doc.data() }));
-                console.log(`📋 Reservas cargadas: ${reservasCache.length}`);
+                debugLog(`📋 Reservas cargadas: ${reservasCache.length}`);
                 renderizarReservas();
                 actualizarContadores();
                 if (fullCalendar) actualizarCalendario();
                 else iniciarFullCalendar();
-            } catch (error) { console.error('Error cargando reservas:', error); }
+            } catch (error) { 
+                debugLog(`❌ Error cargando reservas: ${error.message}`);
+            }
         }
 
         function actualizarContadores() {
@@ -462,7 +515,7 @@
             mostrarMensaje('🔄 Sincronizando con Google Calendar...', 'info');
             
             for (const cal of CALENDARS_GOOGLE) {
-                console.log(`📡 Obteniendo eventos de ${cal.name}...`);
+                debugLog(`📡 Obteniendo eventos de ${cal.name}...`);
                 const events = await fetchCalendarEvents(cal.id, GOOGLE_API_KEY, cal.color, cal.name);
                 
                 for (const event of events) {
@@ -518,7 +571,7 @@
                 };
             });
             
-            console.log(`📅 Actualizando calendario con ${eventosCalendario.length} eventos`);
+            debugLog(`📅 Actualizando calendario con ${eventosCalendario.length} eventos`);
             fullCalendar.removeAllEvents();
             fullCalendar.addEventSource(eventosCalendario);
         }
@@ -526,10 +579,10 @@
         function iniciarFullCalendar() {
             const calendarEl = document.getElementById('calendarPreview');
             if (!calendarEl) {
-                console.error('❌ Elemento calendarPreview no encontrado');
+                debugLog('❌ Elemento calendarPreview no encontrado');
                 return;
             }
-            console.log('🎨 Iniciando FullCalendar...');
+            debugLog('🎨 Iniciando FullCalendar...');
             
             // Eventos de prueba para verificar que el calendario funciona
             const eventosPrueba = [
@@ -556,7 +609,7 @@
                 }
             });
             fullCalendar.render();
-            console.log('✅ FullCalendar inicializado con eventos de prueba');
+            debugLog('✅ FullCalendar inicializado con eventos de prueba');
         }
 
         // Tabs
@@ -584,7 +637,7 @@
         window.sincronizarDesdeGoogle = sincronizarDesdeGoogle;
         window.sincronizarCompleto = sincronizarCompleto;
         
-        console.log('🚀 Sistema iniciado - Usa Eruda para ver la consola');
+        debugLog('🚀 Sistema listo - Botón 🐛 en esquina inferior derecha');
     </script>
 </body>
 </html>
