@@ -14,6 +14,10 @@
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
     
+    <!-- Eruda para depuración en móvil -->
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
+    
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     
     <style>
@@ -242,9 +246,12 @@
         };
 
         function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m)); }
-        function mostrarMensaje(msg, tipo) { alert(msg); }
+        function mostrarMensaje(msg, tipo) { 
+            console.log(`📢 ${tipo}: ${msg}`);
+            alert(msg); 
+        }
 
-        // ========== FUNCIÓN CLAVE: FETCH DE GOOGLE CALENDAR ==========
+        // ========== FUNCIÓN PARA OBTENER EVENTOS DE GOOGLE ==========
         async function fetchCalendarEvents(calendarId, apiKey, color, title) {
             const now = new Date();
             const startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString();
@@ -252,15 +259,18 @@
             
             const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?key=${apiKey}&timeMin=${startDate}&timeMax=${endDate}&singleEvents=true&orderBy=startTime`;
             
+            console.log(`🌐 Fetching ${title}: ${url}`);
+            
             try {
                 const response = await fetch(url);
                 const data = await response.json();
                 
                 if (data.error) {
-                    console.error(`Error en calendario ${calendarId}:`, data.error);
+                    console.error(`❌ Error en ${title}:`, data.error);
                     return [];
                 }
                 
+                console.log(`✅ ${title}: ${data.items?.length || 0} eventos obtenidos`);
                 return data.items.map(event => ({
                     id: event.id,
                     title: event.summary || title,
@@ -271,7 +281,7 @@
                     extendedProps: { calendarTitle: title, origen: 'google', eventoId: event.id }
                 }));
             } catch (error) {
-                console.error(`Error fetching calendar ${calendarId}:`, error);
+                console.error(`❌ Error en fetch ${title}:`, error);
                 return [];
             }
         }
@@ -484,7 +494,7 @@
                     }
                 }
             }
-            alert(`✅ Sincronizado: ${nuevos} nuevas, ${actualizados} actualizadas`);
+            mostrarMensaje(`✅ Sincronizado: ${nuevos} nuevas, ${actualizados} actualizadas`, 'success');
             await cargarReservas();
         }
 
@@ -494,7 +504,6 @@
         function actualizarCalendario() {
             if (!fullCalendar) return;
             
-            // Combinar reservas de Firestore con eventos de Google (para mostrar todo)
             const eventosCalendario = reservasCache.map(reserva => {
                 const checkIn = reserva.checkIn?.toDate ? reserva.checkIn.toDate() : new Date(reserva.checkIn);
                 const checkOut = reserva.checkOut?.toDate ? reserva.checkOut.toDate() : new Date(reserva.checkOut);
@@ -521,6 +530,15 @@
                 return;
             }
             console.log('🎨 Iniciando FullCalendar...');
+            
+            // Eventos de prueba para verificar que el calendario funciona
+            const eventosPrueba = [
+                { title: '🔴 PRUEBA - CABAÑA', start: '2026-03-30', end: '2026-04-02', color: '#FF9800', textColor: 'white' },
+                { title: '🔵 PRUEBA - DEPA', start: '2026-04-05', end: '2026-04-08', color: '#3498db', textColor: 'white' },
+                { title: '🟢 PRUEBA - LOFT', start: '2026-04-10', end: '2026-04-12', color: '#2ecc71', textColor: 'white' },
+                { title: '🟣 PRUEBA MANUAL', start: '2026-03-28', end: '2026-03-29', color: '#9b59b6', textColor: 'white' }
+            ];
+            
             fullCalendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
                 locale: 'es',
@@ -532,19 +550,13 @@
                 firstDay: 1,
                 height: 'auto',
                 timeZone: 'America/Sao_Paulo',
-                events: [],
+                events: eventosPrueba,
                 eventClick: function(info) {
-                    const reserva = reservasCache.find(r => r.id === info.event.id);
-                    if (reserva) {
-                        alert(`📅 ${reserva.nombreCliente}\n🏠 ${reserva.cabaña}\n📆 ${info.event.start.toLocaleDateString('es-ES')} - ${info.event.end.toLocaleDateString('es-ES')}\n📝 ${reserva.observaciones || 'Sin observaciones'}\n🔖 Origen: ${reserva.origen === 'google' ? 'Google Calendar' : 'Manual'}`);
-                    } else {
-                        alert(`📅 ${info.event.title}\n📆 ${info.event.start.toLocaleDateString('es-ES')}`);
-                    }
+                    alert(`📅 ${info.event.title}\n📆 ${info.event.start.toLocaleDateString('es-ES')} - ${info.event.end.toLocaleDateString('es-ES')}`);
                 }
             });
             fullCalendar.render();
-            console.log('✅ FullCalendar inicializado');
-            actualizarCalendario();
+            console.log('✅ FullCalendar inicializado con eventos de prueba');
         }
 
         // Tabs
@@ -572,7 +584,7 @@
         window.sincronizarDesdeGoogle = sincronizarDesdeGoogle;
         window.sincronizarCompleto = sincronizarCompleto;
         
-        console.log('🚀 Sistema iniciado');
+        console.log('🚀 Sistema iniciado - Usa Eruda para ver la consola');
     </script>
 </body>
 </html>
