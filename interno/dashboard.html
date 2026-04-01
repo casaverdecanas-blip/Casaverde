@@ -3,123 +3,319 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - CasaVerdeCanas</title>
+    <title>Dashboard Admin - CasaVerdeCanas</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     
+    <!-- FullCalendar para el calendario -->
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+    
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <link rel="stylesheet" href="/css/admin-style.css">
     
     <style>
-        .kpi-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .kpi-card {
-            background: white;
-            padding: 20px;
-            border-radius: 16px;
-            text-align: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            border-left: 4px solid #2d5a27;
-        }
-        .kpi-number {
-            font-size: 32px;
-            font-weight: bold;
-            color: #2d5a27;
-        }
-        .kpi-label {
-            color: #6c757d;
-            margin-top: 5px;
-        }
-        .recent-item {
-            padding: 12px 0;
-            border-bottom: 1px solid #e9ecef;
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: #f5f7fa; min-height: 100vh; }
+        
+        /* Header */
+        .admin-header {
+            background: #2d5a27;
+            color: white;
+            padding: 15px 25px;
             display: flex;
             justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .admin-header h1 { display: flex; align-items: center; gap: 10px; font-size: 1.3rem; }
+        .user-info { display: flex; align-items: center; gap: 15px; background: rgba(255,255,255,0.2); padding: 6px 15px; border-radius: 40px; }
+        .logout-btn { background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 30px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+        
+        /* Navegación */
+        .admin-nav {
+            background: white;
+            padding: 0 25px;
+            display: flex;
+            gap: 5px;
+            border-bottom: 1px solid #e0e0e0;
+            flex-wrap: wrap;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .nav-item {
+            padding: 14px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #6c757d;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .nav-item:hover { background: #f0f2f5; color: #2d5a27; }
+        .nav-item.active { color: #2d5a27; border-bottom: 3px solid #2d5a27; background: white; }
+        
+        /* Contenido */
+        .admin-content { max-width: 1400px; margin: 30px auto; padding: 0 25px; }
+        .card { background: white; border-radius: 20px; padding: 25px; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .card h2 { color: #2d5a27; display: flex; align-items: center; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #e8f5e9; padding-bottom: 12px; font-size: 1.2rem; }
+        
+        /* KPIs */
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .kpi-card { background: white; padding: 20px; border-radius: 16px; text-align: center; border-left: 4px solid #2d5a27; }
+        .kpi-number { font-size: 32px; font-weight: bold; color: #2d5a27; }
+        .kpi-label { color: #6c757d; margin-top: 5px; }
+        
+        /* Tabla de tareas editable */
+        .task-edit-card {
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .task-edit-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 2px solid #2d5a27;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             flex-wrap: wrap;
             gap: 10px;
+        }
+        .task-edit-fields {
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        .field-group { display: flex; flex-direction: column; gap: 5px; }
+        .field-group label { font-size: 0.8rem; font-weight: 600; color: #495057; }
+        .field-group input, .field-group textarea, .field-group select {
+            padding: 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+        .task-edit-actions {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            border-top: 1px solid #e9ecef;
+        }
+        .btn-save { background: #2d5a27; color: white; padding: 8px 20px; border: none; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+        .btn-cancel-edit { background: #95a5a6; color: white; padding: 8px 20px; border: none; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+        .edit-mode-toggle { background: #3498db; color: white; border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+        
+        /* Badges */
+        .badge-pendiente { background: #fff3e0; color: #f39c12; padding: 4px 10px; border-radius: 20px; font-size: 11px; }
+        .badge-aprobado { background: #e8f5e9; color: #27ae60; padding: 4px 10px; border-radius: 20px; font-size: 11px; }
+        
+        /* Loading */
+        .loading { text-align: center; padding: 50px; }
+        .loading-spinner { display: inline-block; width: 40px; height: 40px; border: 3px solid #e9ecef; border-top-color: #2d5a27; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .empty-state { text-align: center; padding: 50px; color: #9aa6b5; }
+        
+        @media (max-width: 768px) {
+            .admin-header { flex-direction: column; text-align: center; }
+            .admin-nav { justify-content: center; }
+            .admin-content { padding: 0 15px; }
         }
     </style>
 </head>
 <body>
 
-<div id="loginContainer" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #1e3c2c 0%, #2d5a27 100%);">
-    <div style="background: white; padding: 40px; border-radius: 24px; width: 350px; text-align: center;">
-        <h2 style="color: #2d5a27;">📊 Dashboard</h2>
-        <input type="email" id="email" placeholder="Email" style="width:100%; padding:12px; margin:10px 0; border:1px solid #ddd; border-radius:12px;">
-        <input type="password" id="password" placeholder="Contraseña" style="width:100%; padding:12px; margin:10px 0; border:1px solid #ddd; border-radius:12px;">
-        <button onclick="login()" style="width:100%; padding:12px; background:#2d5a27; color:white; border:none; border-radius:12px;">Ingresar</button>
-        <div id="loginError" style="color:red; margin-top:10px;"></div>
-    </div>
-</div>
-
-<div id="mainPanel" style="display: none;">
+<div id="mainPanel">
     <div class="admin-header">
-        <h1><span class="material-icons">dashboard</span> Dashboard</h1>
+        <h1><span class="material-icons">dashboard</span> Dashboard Admin</h1>
         <div class="user-info">
             <span class="material-icons">account_circle</span>
-            <span id="userEmail"></span>
+            <span id="userNameDisplay"></span>
             <button class="logout-btn" onclick="logout()"><span class="material-icons">logout</span> Salir</button>
         </div>
     </div>
     
     <div class="admin-nav">
-        <a href="dashboard.html" class="nav-item active"><span class="material-icons">dashboard</span> Dashboard</a>
-        <a href="calendario.html" class="nav-item"><span class="material-icons">calendar_month</span> Calendario</a>
-        <a href="reservas.html" class="nav-item"><span class="material-icons">add_circle</span> Nueva Reserva</a>
-        <a href="clientes.html" class="nav-item"><span class="material-icons">people</span> Clientes</a>
-        <a href="pagos.html" class="nav-item"><span class="material-icons">payments</span> Pagos</a>
+        <button class="nav-item active" data-tab="dashboard"><span class="material-icons">dashboard</span> Dashboard</button>
+        <button class="nav-item" data-tab="tareas"><span class="material-icons">assignment</span> 📋 Tareas</button>
+        <button class="nav-item" data-tab="calendario"><span class="material-icons">calendar_month</span> Calendario</button>
+        <button class="nav-item" data-tab="reservas"><span class="material-icons">add_circle</span> Reservas</button>
+        <button class="nav-item" data-tab="clientes"><span class="material-icons">people</span> Clientes</button>
+        <button class="nav-item" data-tab="pagos"><span class="material-icons">payments</span> Pagos</button>
     </div>
     
     <div class="admin-content">
-        <div class="kpi-grid" id="kpiContainer">
-            <div class="kpi-card"><div class="kpi-number">-</div><div class="kpi-label">Total Reservas</div></div>
-            <div class="kpi-card"><div class="kpi-number">-</div><div class="kpi-label">Reservas Activas</div></div>
-            <div class="kpi-card"><div class="kpi-number">-</div><div class="kpi-label">Clientes</div></div>
-            <div class="kpi-card"><div class="kpi-number">-</div><div class="kpi-label">Pagos (BRL)</div></div>
+        <!-- Panel Dashboard -->
+        <div id="dashboardPanel" class="panel active">
+            <div class="kpi-grid" id="kpiContainer">
+                <div class="kpi-card"><div class="kpi-number">-</div><div class="kpi-label">Total Reservas</div></div>
+                <div class="kpi-card"><div class="kpi-number">-</div><div class="kpi-label">Reservas Activas</div></div>
+                <div class="kpi-card"><div class="kpi-number">-</div><div class="kpi-label">Clientes</div></div>
+                <div class="kpi-card"><div class="kpi-number">-</div><div class="kpi-label">Tareas Activas</div></div>
+            </div>
+            
+            <div class="card">
+                <h2><span class="material-icons">event</span> Próximos Check-ins</h2>
+                <div id="proximosCheckins"></div>
+            </div>
+            
+            <div class="card">
+                <h2><span class="material-icons">receipt</span> Últimos Pagos</h2>
+                <div id="ultimosPagos"></div>
+            </div>
         </div>
         
-        <div class="card">
-            <h2><span class="material-icons">event</span> Próximos Check-ins</h2>
-            <div id="proximosCheckins"></div>
+        <!-- Panel Tareas (Edición y gestión) -->
+        <div id="tareasPanel" class="panel" style="display: none;">
+            <div class="card">
+                <h2><span class="material-icons">edit</span> Gestión de Tareas</h2>
+                <div id="tasksEditList"></div>
+                <button class="btn-save" onclick="agregarNuevaTarea()" style="margin-top: 20px; width: 100%;">
+                    <span class="material-icons">add</span> Agregar Nueva Tarea
+                </button>
+            </div>
         </div>
         
-        <div class="card">
-            <h2><span class="material-icons">receipt</span> Últimos Pagos</h2>
-            <div id="ultimosPagos"></div>
+        <!-- Panel Calendario -->
+        <div id="calendarioPanel" class="panel" style="display: none;">
+            <div class="card">
+                <div id="calendar"></div>
+                <div class="calendar-legend" style="display: flex; justify-content: center; gap: 30px; margin-top: 20px;">
+                    <div><span style="display:inline-block; width:20px; height:20px; background:#FF9800; border-radius:4px;"></span> Cabaña 1</div>
+                    <div><span style="display:inline-block; width:20px; height:20px; background:#3498db; border-radius:4px;"></span> Cabaña 2</div>
+                    <div><span style="display:inline-block; width:20px; height:20px; background:#2ecc71; border-radius:4px;"></span> Cabaña 3</div>
+                    <div><span style="display:inline-block; width:20px; height:20px; background:#9b59b6; border-radius:4px;"></span> Manuales</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Panel Reservas -->
+        <div id="reservasPanel" class="panel" style="display: none;">
+            <div class="card">
+                <h2><span class="material-icons">add_circle</span> Nueva Reserva Directa</h2>
+                <div class="form-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+                    <div class="form-group"><label>👤 Nombre del cliente *</label><input type="text" id="reservaNombre" placeholder="Nombre completo"></div>
+                    <div class="form-group"><label>📱 WhatsApp</label><input type="text" id="reservaWhatsapp" placeholder="+55 11 99999-9999"></div>
+                    <div class="form-group"><label>🌎 Nacionalidad</label><input type="text" id="reservaNacionalidad" placeholder="Ej: Argentina"></div>
+                    <div class="form-group"><label>🏠 Cabaña *</label><select id="reservaCabaña"><option value="1">Cabaña 1 (Naranja)</option><option value="2">Cabaña 2 (Azul)</option><option value="3">Cabaña 3 (Verde)</option></select></div>
+                    <div class="form-group"><label>📅 Check-in *</label><input type="date" id="reservaCheckIn"></div>
+                    <div class="form-group"><label>📅 Check-out *</label><input type="date" id="reservaCheckOut"></div>
+                    <div class="form-group"><label>👥 Huéspedes</label><input type="number" id="reservaHuespedes" value="2" min="1"></div>
+                    <div class="form-group"><label>💰 Precio día (BRL)</label><input type="number" id="reservaPrecio" value="250"></div>
+                </div>
+                <div class="form-group"><label>📝 Observaciones</label><textarea id="reservaObservaciones" rows="2"></textarea></div>
+                <button class="btn-save" onclick="guardarReservaDirecta()" style="margin-top: 15px;"><span class="material-icons">save</span> Guardar Reserva</button>
+            </div>
+        </div>
+        
+        <!-- Panel Clientes -->
+        <div id="clientesPanel" class="panel" style="display: none;">
+            <div class="card">
+                <h2><span class="material-icons">people</span> Lista de Clientes</h2>
+                <div id="clientesList"></div>
+                <button class="btn-save" onclick="abrirModalNuevoCliente()" style="margin-top: 20px;"><span class="material-icons">add</span> Nuevo Cliente</button>
+            </div>
+        </div>
+        
+        <!-- Panel Pagos -->
+        <div id="pagosPanel" class="panel" style="display: none;">
+            <div class="card">
+                <h2><span class="material-icons">receipt</span> Registro de Pagos</h2>
+                <div id="pagosList"></div>
+                <button class="btn-save" onclick="abrirModalPago()" style="margin-top: 20px;"><span class="material-icons">add</span> Nuevo Pago</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nuevo Cliente -->
+<div id="modalCliente" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center;">
+    <div style="background:white; padding:30px; border-radius:20px; width:90%; max-width:450px;">
+        <h3 style="color:#2d5a27;">➕ Nuevo Cliente</h3>
+        <div class="form-group"><label>👤 Nombre *</label><input type="text" id="nuevoClienteNombre"></div>
+        <div class="form-group"><label>📱 WhatsApp</label><input type="text" id="nuevoClienteWhatsapp"></div>
+        <div class="form-group"><label>🌎 Nacionalidad</label><input type="text" id="nuevoClienteNacionalidad"></div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn-cancel-edit" onclick="cerrarModalCliente()">Cancelar</button>
+            <button class="btn-save" onclick="guardarNuevoCliente()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nuevo Pago -->
+<div id="modalPago" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center;">
+    <div style="background:white; padding:30px; border-radius:20px; width:90%; max-width:450px;">
+        <h3 style="color:#2d5a27;">💰 Registrar Pago</h3>
+        <div class="form-group"><label>👤 Cliente</label><select id="pagoClienteSelect"></select></div>
+        <div class="form-group"><label>💰 Monto *</label><input type="number" id="pagoMonto" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>💵 Moneda</label><select id="pagoMoneda"><option value="BRL">BRL</option><option value="USD">USD</option></select></div>
+        <div class="form-group"><label>💳 Método</label><select id="pagoMetodo"><option value="pix">PIX</option><option value="transferencia">Transferencia</option><option value="efectivo">Efectivo</option></select></div>
+        <div class="form-group"><label>📝 Tipo</label><select id="pagoTipo"><option value="seña">Seña</option><option value="total">Pago Total</option></select></div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn-cancel-edit" onclick="cerrarModalPago()">Cancelar</button>
+            <button class="btn-save" onclick="guardarNuevoPago()">Guardar</button>
         </div>
     </div>
 </div>
 
 <script src="/js/auth-core.js"></script>
 <script>
+    // ========== CONFIGURACIÓN ==========
+    let currentUser = null;
+    let calendar = null;
+    let tareasCache = [];
+    let editStates = {};
+    let clientesList = [];
+    
+    const GOOGLE_API_KEY = 'AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs';
+    const GOOGLE_CALENDARS = [
+        { id: 'h5a1h0a8dg9rl0oufvq19hn05r4gbubg@import.calendar.google.com', color: '#FF9800', title: 'Cabaña 1' },
+        { id: '60n7foetdu2qvsn16mi7is8j6i4ugm66@import.calendar.google.com', color: '#3498db', title: 'Cabaña 2' },
+        { id: '8i3hl5ppqi6al50kf7casj5n5vl9sp1j@import.calendar.google.com', color: '#2ecc71', title: 'Cabaña 3' }
+    ];
+    
+    // ========== AUTENTICACIÓN ==========
+    async function verificarAdmin() {
+        const user = auth.currentUser;
+        if (!user) { window.location.href = 'login.html'; return false; }
+        const userDoc = await db.collection('usuarios').doc(user.uid).get();
+        if (!userDoc.exists || userDoc.data().rol !== 'admin') {
+            window.location.href = 'colaborador.html';
+            return false;
+        }
+        currentUser = user;
+        document.getElementById('userNameDisplay').textContent = userDoc.data().nombre || user.email;
+        return true;
+    }
+    
+    async function logout() {
+        await auth.signOut();
+        sessionStorage.clear();
+        window.location.href = 'login.html';
+    }
+    
+    // ========== DASHBOARD ==========
     async function cargarDashboard() {
-        // Reservas
         const reservasSnap = await db.collection('reservas').get();
         const reservasActivas = await db.collection('reservas').where('checkOut', '>=', new Date()).get();
-        
-        // Clientes
         const clientesSnap = await db.collection('clientes').get();
-        
-        // Pagos
-        const pagosSnap = await db.collection('pagos').get();
-        let totalPagosBRL = 0;
-        pagosSnap.forEach(p => {
-            const data = p.data();
-            if (data.moneda === 'BRL') totalPagosBRL += data.monto;
-            else totalPagosBRL += (data.monto * data.tipoCambio);
-        });
+        const tareasSnap = await db.collection('tareas').where('activa', '==', true).get();
         
         document.getElementById('kpiContainer').innerHTML = `
             <div class="kpi-card"><div class="kpi-number">${reservasSnap.size}</div><div class="kpi-label">Total Reservas</div></div>
             <div class="kpi-card"><div class="kpi-number">${reservasActivas.size}</div><div class="kpi-label">Reservas Activas</div></div>
             <div class="kpi-card"><div class="kpi-number">${clientesSnap.size}</div><div class="kpi-label">Clientes</div></div>
-            <div class="kpi-card"><div class="kpi-number">R$ ${totalPagosBRL.toFixed(0)}</div><div class="kpi-label">Pagos (BRL)</div></div>
+            <div class="kpi-card"><div class="kpi-number">${tareasSnap.size}</div><div class="kpi-label">Tareas Activas</div></div>
         `;
         
         // Próximos check-ins
@@ -137,7 +333,7 @@
             container.innerHTML = '<div class="empty-state">📭 No hay check-ins próximos</div>';
         } else {
             container.innerHTML = proximos.slice(0, 10).map(r => `
-                <div class="recent-item">
+                <div style="padding: 12px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between;">
                     <span><strong>${escapeHtml(r.nombre)}</strong> - Cabaña ${r.caba}</span>
                     <span>📅 ${formatDate(r.checkIn)}</span>
                 </div>
@@ -145,57 +341,360 @@
         }
         
         // Últimos pagos
+        const pagosSnap = await db.collection('pagos').orderBy('creadoEn', 'desc').limit(10).get();
         const pagos = [];
-        pagosSnap.forEach(doc => pagos.push({ id: doc.id, ...doc.data() }));
-        pagos.sort((a, b) => (b.creadoEn?.toDate?.() || 0) - (a.creadoEn?.toDate?.() || 0));
+        pagosSnap.forEach(doc => pagos.push(doc.data()));
         
         const pagosContainer = document.getElementById('ultimosPagos');
         if (pagos.length === 0) {
             pagosContainer.innerHTML = '<div class="empty-state">💰 No hay pagos registrados</div>';
         } else {
-            pagosContainer.innerHTML = pagos.slice(0, 10).map(p => {
-                const montoStr = p.moneda === 'USD' ? `USD ${p.monto.toFixed(2)}` : `R$ ${p.monto.toFixed(2)}`;
-                return `
-                    <div class="recent-item">
-                        <span><strong>${escapeHtml(p.clienteNombre)}</strong> - ${p.tipo}</span>
-                        <span>${montoStr} | ${p.metodo}</span>
+            pagosContainer.innerHTML = pagos.map(p => `
+                <div style="padding: 12px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between;">
+                    <span><strong>${escapeHtml(p.clienteNombre)}</strong> - ${p.tipo}</span>
+                    <span>${p.moneda === 'USD' ? 'USD' : 'R$'} ${p.monto.toFixed(2)} | ${p.metodo}</span>
+                </div>
+            `).join('');
+        }
+    }
+    
+    // ========== GESTIÓN DE TAREAS ==========
+    async function cargarTareas() {
+        const snapshot = await db.collection('tareas').get();
+        tareasCache = [];
+        snapshot.forEach(doc => tareasCache.push({ id: doc.id, ...doc.data() }));
+        renderizarTareasEditables();
+    }
+    
+    function renderizarTareasEditables() {
+        const container = document.getElementById('tasksEditList');
+        if (tareasCache.length === 0) {
+            container.innerHTML = '<div class="empty-state"><span class="material-icons">assignment</span><p>No hay tareas creadas</p></div>';
+            return;
+        }
+        
+        let html = '';
+        for (const tarea of tareasCache) {
+            const isEditing = editStates[tarea.id] || false;
+            if (isEditing) {
+                html += `
+                    <div class="task-edit-card">
+                        <div class="task-edit-header"><div class="task-edit-title">✏️ Editando: ${escapeHtml(tarea.nombre)}</div></div>
+                        <div class="task-edit-fields">
+                            <div class="field-group"><label>Nombre *</label><input type="text" id="edit_name_${tarea.id}" value="${escapeHtml(tarea.nombre)}"></div>
+                            <div class="field-group"><label>Descripción</label><textarea id="edit_desc_${tarea.id}" rows="2">${escapeHtml(tarea.descripcion || '')}</textarea></div>
+                            <div class="field-group"><label>Prioridad</label><select id="edit_priority_${tarea.id}"><option value="baja" ${tarea.prioridad === 'baja' ? 'selected' : ''}>Baja</option><option value="media" ${tarea.prioridad === 'media' ? 'selected' : ''}>Media</option><option value="alta" ${tarea.prioridad === 'alta' ? 'selected' : ''}>Alta</option></select></div>
+                            <div class="field-group"><label>Fecha inicio</label><input type="date" id="edit_start_${tarea.id}" value="${tarea.fechaInicio || ''}"></div>
+                            <div class="field-group"><label>Recurrencia</label><select id="edit_recurrence_${tarea.id}"><option value="0" ${tarea.recurrencia === 0 ? 'selected' : ''}>Una vez</option><option value="1" ${tarea.recurrencia === 1 ? 'selected' : ''}>Diaria</option><option value="7" ${tarea.recurrencia === 7 ? 'selected' : ''}>Semanal</option><option value="30" ${tarea.recurrencia === 30 ? 'selected' : ''}>Mensual</option></select></div>
+                            <div class="field-group"><label>Estado</label><select id="edit_active_${tarea.id}"><option value="true" ${tarea.activa !== false ? 'selected' : ''}>Activa</option><option value="false" ${tarea.activa === false ? 'selected' : ''}>Inactiva</option></select></div>
+                        </div>
+                        <div class="task-edit-actions">
+                            <button class="btn-cancel-edit" onclick="cancelarEdicion('${tarea.id}')">Cancelar</button>
+                            <button class="btn-save" onclick="guardarEdicionTarea('${tarea.id}')">Guardar</button>
+                        </div>
                     </div>
                 `;
-            }).join('');
+            } else {
+                html += `
+                    <div class="task-edit-card">
+                        <div class="task-edit-header">
+                            <div class="task-edit-title"><span class="material-icons">assignment</span> ${escapeHtml(tarea.nombre)} ${!tarea.activa ? '<span class="badge-pendiente" style="background:#95a5a6;">Inactiva</span>' : ''}</div>
+                            <button class="edit-mode-toggle" onclick="activarEdicion('${tarea.id}')">✏️ Editar</button>
+                        </div>
+                        <div class="task-edit-fields" style="background:#fafbfc;">
+                            <div class="field-group"><strong>📝</strong> ${escapeHtml(tarea.descripcion || 'Sin descripción')}</div>
+                            <div class="field-group"><strong>⭐</strong> ${tarea.prioridad === 'alta' ? 'Alta' : (tarea.prioridad === 'baja' ? 'Baja' : 'Media')}</div>
+                            <div class="field-group"><strong>📅</strong> ${tarea.fechaInicio || 'No definida'}</div>
+                            <div class="field-group"><strong>🔄</strong> ${traducirRecurrencia(tarea.recurrencia)}</div>
+                        </div>
+                    </div>
+                `;
+            }
         }
+        container.innerHTML = html;
     }
     
-    async function login() {
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        const errorDiv = document.getElementById('loginError');
-        const result = await loginAdmin(email, password);
-        if (result.success) {
-            document.getElementById('loginContainer').style.display = 'none';
-            document.getElementById('mainPanel').style.display = 'block';
-            document.getElementById('userEmail').textContent = result.user.email;
-            cargarDashboard();
+    function traducirRecurrencia(num) {
+        if (num === 0) return 'Una vez';
+        if (num === 1) return 'Diaria';
+        if (num === 7) return 'Semanal';
+        if (num === 30) return 'Mensual';
+        return `Cada ${num} días`;
+    }
+    
+    function activarEdicion(id) { editStates[id] = true; renderizarTareasEditables(); }
+    function cancelarEdicion(id) { delete editStates[id]; renderizarTareasEditables(); }
+    
+    async function guardarEdicionTarea(id) {
+        const nombre = document.getElementById(`edit_name_${id}`).value.trim();
+        if (!nombre) { alert('El nombre es obligatorio'); return; }
+        await db.collection('tareas').doc(id).update({
+            nombre: nombre,
+            descripcion: document.getElementById(`edit_desc_${id}`).value,
+            prioridad: document.getElementById(`edit_priority_${id}`).value,
+            fechaInicio: document.getElementById(`edit_start_${id}`).value,
+            recurrencia: parseInt(document.getElementById(`edit_recurrence_${id}`).value),
+            activa: document.getElementById(`edit_active_${id}`).value === 'true'
+        });
+        delete editStates[id];
+        await cargarTareas();
+        alert('✅ Tarea actualizada');
+    }
+    
+    async function agregarNuevaTarea() {
+        const nombre = prompt('Nombre de la nueva tarea:');
+        if (!nombre) return;
+        await db.collection('tareas').add({
+            nombre: nombre,
+            descripcion: '',
+            prioridad: 'media',
+            fechaInicio: new Date().toISOString().split('T')[0],
+            recurrencia: 0,
+            activa: true,
+            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        await cargarTareas();
+        alert('✅ Tarea creada');
+    }
+    
+    // ========== CALENDARIO ==========
+    async function cargarCalendario() {
+        const calendarEl = document.getElementById('calendar');
+        if (!calendarEl) return;
+        
+        let allEvents = [];
+        for (const cal of GOOGLE_CALENDARS) {
+            const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?key=${GOOGLE_API_KEY}&singleEvents=true&orderBy=startTime`;
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.items) {
+                    data.items.forEach(event => {
+                        if (event.summary) {
+                            allEvents.push({
+                                title: event.summary,
+                                start: event.start.dateTime || event.start.date,
+                                end: event.end.dateTime || event.end.date,
+                                color: cal.color,
+                                textColor: 'white'
+                            });
+                        }
+                    });
+                }
+            } catch(e) { console.error(e); }
+        }
+        
+        const manualSnap = await db.collection('reservas').where('origen', '==', 'directa').get();
+        manualSnap.forEach(doc => {
+            const r = doc.data();
+            const checkIn = r.checkIn?.toDate?.() || new Date(r.checkIn);
+            const checkOut = r.checkOut?.toDate?.() || new Date(r.checkOut);
+            allEvents.push({
+                title: `${r.nombre} (Manual)`,
+                start: checkIn,
+                end: checkOut,
+                color: '#9b59b6',
+                textColor: 'white'
+            });
+        });
+        
+        if (calendar) {
+            calendar.removeAllEvents();
+            calendar.addEventSource(allEvents);
         } else {
-            errorDiv.textContent = result.error;
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'es',
+                headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
+                firstDay: 1,
+                height: 'auto',
+                events: allEvents,
+                eventClick: (info) => alert(`📅 ${info.event.title}\n📆 ${info.event.start.toLocaleDateString()}`)
+            });
+            calendar.render();
         }
     }
     
-    async function logout() {
-        await logoutAdmin();
-        window.location.reload();
+    // ========== RESERVAS ==========
+    async function guardarReservaDirecta() {
+        const nombre = document.getElementById('reservaNombre').value.trim();
+        if (!nombre) { alert('Ingresa el nombre del cliente'); return; }
+        const checkIn = document.getElementById('reservaCheckIn').value;
+        const checkOut = document.getElementById('reservaCheckOut').value;
+        if (!checkIn || !checkOut) { alert('Ingresa las fechas'); return; }
+        
+        await db.collection('reservas').add({
+            nombre: nombre,
+            caba: document.getElementById('reservaCabaña').value,
+            checkIn: firebase.firestore.Timestamp.fromDate(new Date(checkIn)),
+            checkOut: firebase.firestore.Timestamp.fromDate(new Date(checkOut)),
+            huespedes: document.getElementById('reservaHuespedes').value,
+            observaciones: document.getElementById('reservaObservaciones').value,
+            origen: 'directa',
+            precioDiarioBRL: parseFloat(document.getElementById('reservaPrecio').value),
+            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Guardar en clientes
+        await db.collection('clientes').add({
+            nombre: nombre,
+            whatsapp: document.getElementById('reservaWhatsapp').value,
+            nacionalidad: document.getElementById('reservaNacionalidad').value,
+            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        alert('✅ Reserva creada');
+        document.getElementById('reservaNombre').value = '';
+        document.getElementById('reservaWhatsapp').value = '';
+        document.getElementById('reservaNacionalidad').value = '';
+        document.getElementById('reservaObservaciones').value = '';
+        cargarDashboard();
+        cargarCalendario();
     }
     
-    checkAdmin().then(isAdmin => {
-        if (isAdmin) {
-            document.getElementById('loginContainer').style.display = 'none';
-            document.getElementById('mainPanel').style.display = 'block';
-            document.getElementById('userEmail').textContent = currentUser.email;
-            cargarDashboard();
+    // ========== CLIENTES ==========
+    async function cargarClientes() {
+        const snapshot = await db.collection('clientes').orderBy('nombre').get();
+        const clientes = [];
+        snapshot.forEach(doc => clientes.push({ id: doc.id, ...doc.data() }));
+        
+        const container = document.getElementById('clientesList');
+        if (clientes.length === 0) {
+            container.innerHTML = '<div class="empty-state">👥 No hay clientes registrados</div>';
+            return;
         }
+        
+        let html = '<table class="data-table" style="width:100%; border-collapse:collapse;"><thead><tr><th>Nombre</th><th>WhatsApp</th><th>Nacionalidad</th></tr></thead><tbody>';
+        clientes.forEach(c => {
+            html += `<tr><td><strong>${escapeHtml(c.nombre)}</strong></td><td>${escapeHtml(c.whatsapp || '-')}</td><td>${escapeHtml(c.nacionalidad || '-')}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }
+    
+    function abrirModalNuevoCliente() { document.getElementById('modalCliente').style.display = 'flex'; }
+    function cerrarModalCliente() { document.getElementById('modalCliente').style.display = 'none'; }
+    
+    async function guardarNuevoCliente() {
+        const nombre = document.getElementById('nuevoClienteNombre').value.trim();
+        if (!nombre) { alert('Ingresa el nombre'); return; }
+        await db.collection('clientes').add({
+            nombre: nombre,
+            whatsapp: document.getElementById('nuevoClienteWhatsapp').value,
+            nacionalidad: document.getElementById('nuevoClienteNacionalidad').value,
+            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        cerrarModalCliente();
+        cargarClientes();
+        alert('✅ Cliente agregado');
+    }
+    
+    // ========== PAGOS ==========
+    async function cargarPagos() {
+        const snapshot = await db.collection('pagos').orderBy('creadoEn', 'desc').get();
+        const pagos = [];
+        snapshot.forEach(doc => pagos.push(doc.data()));
+        
+        const container = document.getElementById('pagosList');
+        if (pagos.length === 0) {
+            container.innerHTML = '<div class="empty-state">💰 No hay pagos registrados</div>';
+            return;
+        }
+        
+        let html = '<table class="data-table" style="width:100%; border-collapse:collapse;"><thead><tr><th>Fecha</th><th>Cliente</th><th>Monto</th><th>Método</th><th>Tipo</th></tr></thead><tbody>';
+        pagos.forEach(p => {
+            const fecha = p.creadoEn?.toDate?.() || new Date();
+            html += `<tr><td>${fecha.toLocaleDateString()}</td><td>${escapeHtml(p.clienteNombre)}</td><td>${p.moneda === 'USD' ? 'USD' : 'R$'} ${p.monto.toFixed(2)}</td><td>${p.metodo}</td><td>${p.tipo}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }
+    
+    async function cargarClientesSelect() {
+        const snapshot = await db.collection('clientes').orderBy('nombre').get();
+        clientesList = [];
+        snapshot.forEach(doc => clientesList.push({ id: doc.id, ...doc.data() }));
+        const select = document.getElementById('pagoClienteSelect');
+        select.innerHTML = '<option value="">Seleccionar cliente...</option>';
+        clientesList.forEach(c => {
+            select.innerHTML += `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`;
+        });
+    }
+    
+    function abrirModalPago() { document.getElementById('modalPago').style.display = 'flex'; }
+    function cerrarModalPago() { document.getElementById('modalPago').style.display = 'none'; }
+    
+    async function guardarNuevoPago() {
+        const clienteId = document.getElementById('pagoClienteSelect').value;
+        if (!clienteId) { alert('Selecciona un cliente'); return; }
+        const monto = parseFloat(document.getElementById('pagoMonto').value);
+        if (!monto) { alert('Ingresa un monto'); return; }
+        
+        const cliente = clientesList.find(c => c.id === clienteId);
+        await db.collection('pagos').add({
+            clienteId: clienteId,
+            clienteNombre: cliente.nombre,
+            monto: monto,
+            moneda: document.getElementById('pagoMoneda').value,
+            metodo: document.getElementById('pagoMetodo').value,
+            tipo: document.getElementById('pagoTipo').value,
+            creadoPor: currentUser.uid,
+            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        cerrarModalPago();
+        cargarPagos();
+        alert('✅ Pago registrado');
+    }
+    
+    // ========== UTILIDADES ==========
+    function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m)); }
+    function formatDate(date) { if (!date) return '-'; const d = date.toDate ? date.toDate() : new Date(date); return d.toLocaleDateString('es-ES'); }
+    
+    // ========== TABS ==========
+    document.querySelectorAll('.nav-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.style.display = 'none');
+            btn.classList.add('active');
+            const tab = btn.dataset.tab;
+            document.getElementById(`${tab}Panel`).style.display = 'block';
+            if (tab === 'calendario') cargarCalendario();
+            if (tab === 'clientes') cargarClientes();
+            if (tab === 'pagos') { cargarPagos(); cargarClientesSelect(); }
+            if (tab === 'tareas') cargarTareas();
+        });
     });
     
-    window.login = login;
+    // ========== INICIALIZACIÓN ==========
+    auth.onAuthStateChanged(async (user) => {
+        if (!user) { window.location.href = 'login.html'; return; }
+        const userDoc = await db.collection('usuarios').doc(user.uid).get();
+        if (!userDoc.exists || userDoc.data().rol !== 'admin') {
+            window.location.href = 'colaborador.html';
+            return;
+        }
+        currentUser = user;
+        document.getElementById('userNameDisplay').textContent = userDoc.data().nombre || user.email;
+        cargarDashboard();
+        cargarTareas();
+        cargarCalendario();
+        cargarClientes();
+        cargarPagos();
+        cargarClientesSelect();
+    });
+    
     window.logout = logout;
+    window.activarEdicion = activarEdicion;
+    window.cancelarEdicion = cancelarEdicion;
+    window.guardarEdicionTarea = guardarEdicionTarea;
+    window.agregarNuevaTarea = agregarNuevaTarea;
+    window.guardarReservaDirecta = guardarReservaDirecta;
+    window.abrirModalNuevoCliente = abrirModalNuevoCliente;
+    window.cerrarModalCliente = cerrarModalCliente;
+    window.guardarNuevoCliente = guardarNuevoCliente;
+    window.abrirModalPago = abrirModalPago;
+    window.cerrarModalPago = cerrarModalPago;
+    window.guardarNuevoPago = guardarNuevoPago;
 </script>
 </body>
 </html>
