@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Calendario - Casa Verde</title>
+    <link rel="stylesheet" href="css/admin-style.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
+    <style>
+        body { display: flex; margin: 0; background: #f4f7f6; font-family: 'Segoe UI', sans-serif; }
+        .sidebar { width: 250px; position: fixed; height: 100vh; background: #2d5a27; color: white; }
+        .main-content { margin-left: 260px; width: calc(100% - 280px); padding: 20px; }
+        #calendar { background: white; padding: 20px; border-radius: 15px; shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        /* Colores por origen */
+        .fc-event-airbnb { background-color: #ff5a5f !important; border: none !important; }
+        .fc-event-directo { background-color: #2d5a27 !important; border: none !important; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2 style="text-align:center; padding:20px;">Casa Verde</h2>
+        <a href="dashboard.html" class="nav-link"><span class="material-icons">dashboard</span> Tareas</a>
+        <a href="calendario.html" class="nav-link active"><span class="material-icons">calendar_month</span> Calendario</a>
+        <a href="reservas.html" class="nav-link"><span class="material-icons">list</span> Lista Reservas</a>
+        <a href="clientes.html" class="nav-link"><span class="material-icons">people</span> Clientes</a>
+    </div>
+
+    <div class="main-content">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h1>Ocupación de Cabañas</h1>
+            <div>
+                <span style="display:inline-block; width:12px; height:12px; background:#ff5a5f; border-radius:50%;"></span> Airbnb
+                <span style="display:inline-block; width:12px; height:12px; background:#2d5a27; border-radius:50%; margin-left:15px;"></span> Directo
+            </div>
+        </div>
+
+        <div id="calendar"></div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/es.js"></script>
+    <script src="js/auth-core.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async function() {
+            const calendarEl = document.getElementById('calendar');
+            const calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'es',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek'
+                },
+                eventClick: function(info) {
+                    // Al hacer clic, te lleva directo a los pagos o edición
+                    const resId = info.event.id;
+                    const origen = info.event.extendedProps.origen;
+                    if(origen === 'Directo') {
+                        window.location.href = `pagos.html?id=${resId}`;
+                    } else {
+                        window.location.href = `reservas.html?edit=${resId}`;
+                    }
+                },
+                events: async function(info, successCallback, failureCallback) {
+                    try {
+                        const snap = await db.collection('reservas').get();
+                        const events = snap.docs.map(doc => {
+                            const data = doc.data();
+                            return {
+                                id: doc.id,
+                                title: `${data.cabana}: ${data.nombre}`,
+                                start: data.checkIn,
+                                end: data.checkOut,
+                                className: data.origen === 'Airbnb' ? 'fc-event-airbnb' : 'fc-event-directo',
+                                extendedProps: { origen: data.origen }
+                            };
+                        });
+                        successCallback(events);
+                    } catch (e) { failureCallback(e); }
+                }
+            });
+            calendar.render();
+        });
+    </script>
+</body>
+</html>
