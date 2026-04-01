@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Depurador de Base de Datos - Casa Verde</title>
+    <link rel="stylesheet" href="css/admin-style.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        .log-container { background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: 8px; font-family: monospace; height: 400px; overflow-y: auto; margin-top: 20px; border: 1px solid #333; }
+        .log-entry { margin-bottom: 5px; border-bottom: 1px solid #333; padding-bottom: 2px; }
+        .success { color: #4ec9b0; }
+        .warning { color: #ce9178; }
+        .error { color: #f44747; }
+        .info { color: #569cd6; }
+    </style>
+</head>
+<body>
+    <div class="main-content" style="margin-left:0; max-width: 900px; margin: 0 auto;">
+        <div class="card">
+            <h1><span class="material-icons" style="vertical-align: middle;">cleaning_services</span> Depurador de Historial</h1>
+            <p>Este proceso vincula los nombres de los colaboradores a los registros antiguos del historial para que el Admin los muestre correctamente.</p>
+            
+            <div style="margin-top: 20px; display: flex; gap: 10px;">
+                <button class="btn-cv" onclick="iniciarDepuracion()">
+                    <span class="material-icons">play_arrow</span> Iniciar Reparación
+                </button>
+                <button class="btn-cv" style="background:#64748b;" onclick="window.location.href='dashboard.html'">
+                    Volver al Dashboard
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Consola de Proceso</h3>
+            <div id="log" class="log-container">Esperando inicio...</div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="js/auth-core.js"></script>
+
+    <script>
+        const logDiv = document.getElementById('log');
+
+        function printLog(msg, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        async function iniciarDepuracion() {
+            logDiv.innerHTML = "";
+            printLog("Iniciando escaneo de historial...", "info");
+
+            try {
+                // 1. Obtener todos los registros del historial
+                const historialSnap = await db.collection('historial').get();
+                printLog(`Se encontraron ${historialSnap.size} registros totales.`, "info");
+
+                // 2. Cache de nombres de usuarios para no pedir lo mismo 20 veces
+                const nombresCache = {};
+                let actualizados = 0;
+                let omitidos = 0;
+
+                for (const doc of historialSnap.docs) {
+                    const data = doc.data();
+                    
+                    // Si ya tiene el nombre, lo saltamos
+                    if (data.colaboradorNombre) {
+                        omitidos++;
+                        continue;
+                    }
+
+                    const uid = data.usuarioId;
+                    if (!uid) {
+                        printLog(`Registro ${doc.id} no tiene usuarioId. Saltando.`, "warning");
+                        continue;
+                    }
+
+                    // Buscar el nombre si no está en cache
+                    if (!nombresCache[uid]) {
+                        const userDoc = await db.collection('usuarios').doc(uid).get();
+                        if (userDoc.exists) {
+                            nombresCache[uid] = userDoc.data().nombre;
+                        } else {
+                            nombresCache[uid] = "Usuario Desconocido";
+                        }
+                    }
+
+                    // 3. Actualizar el documento en Firestore
+                    await db.collection('historial').doc(doc.id).update({
+                        colaboradorNombre: nombresCache[uid]
+                    });
+
+                    actualizados++;
+                    printLog(`Reparado: Tarea del ID ${uid.substring(0,5)} -> ${nombresCache[uid]}`, "success");
+                }
+
+                printLog("--- PROCESO TERMINADO ---", "info");
+                printLog(`Resultados: ${actualizados} reparados, ${omitidos} ya estaban bien.`, "success");
+
+            } catch (error) {
+                printLog(`ERROR CRÍTICO: ${error.message}`, "error");
+                console.error(error);
+            }
+        }
+    </script>
+</body>
+</html>
