@@ -2,16 +2,20 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Dashboard Admin - CasaVerdeCanas</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     
-    <!-- FullCalendar para el calendario -->
+    <!-- FullCalendar -->
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+    
+    <!-- Eruda para depuración en móvil -->
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
     
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     
@@ -68,7 +72,7 @@
         
         /* KPIs */
         .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
-        .kpi-card { background: white; padding: 20px; border-radius: 16px; text-align: center; border-left: 4px solid #2d5a27; }
+        .kpi-card { background: white; padding: 20px; border-radius: 16px; text-align: center; border-left: 4px solid #2d5a27; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .kpi-number { font-size: 32px; font-weight: bold; color: #2d5a27; }
         .kpi-label { color: #6c757d; margin-top: 5px; }
         
@@ -126,10 +130,23 @@
         
         .empty-state { text-align: center; padding: 50px; color: #9aa6b5; }
         
+        /* Formulario */
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; color: #495057; font-size: 14px; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; }
+        
+        /* Tablas */
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table th, .data-table td { padding: 12px; text-align: left; border-bottom: 1px solid #e9ecef; }
+        .data-table th { background: #f8f9fa; font-weight: 600; color: #2d5a27; }
+        
         @media (max-width: 768px) {
             .admin-header { flex-direction: column; text-align: center; }
             .admin-nav { justify-content: center; }
             .admin-content { padding: 0 15px; }
+            .form-row { grid-template-columns: 1fr; }
+            .data-table { font-size: 12px; }
         }
     </style>
 </head>
@@ -179,7 +196,9 @@
         <div id="tareasPanel" class="panel" style="display: none;">
             <div class="card">
                 <h2><span class="material-icons">edit</span> Gestión de Tareas</h2>
-                <div id="tasksEditList"></div>
+                <div id="tasksEditList">
+                    <div class="loading"><div class="loading-spinner"></div><p>Cargando tareas...</p></div>
+                </div>
                 <button class="btn-save" onclick="agregarNuevaTarea()" style="margin-top: 20px; width: 100%;">
                     <span class="material-icons">add</span> Agregar Nueva Tarea
                 </button>
@@ -190,7 +209,7 @@
         <div id="calendarioPanel" class="panel" style="display: none;">
             <div class="card">
                 <div id="calendar"></div>
-                <div class="calendar-legend" style="display: flex; justify-content: center; gap: 30px; margin-top: 20px;">
+                <div class="calendar-legend" style="display: flex; justify-content: center; gap: 30px; margin-top: 20px; flex-wrap: wrap;">
                     <div><span style="display:inline-block; width:20px; height:20px; background:#FF9800; border-radius:4px;"></span> Cabaña 1</div>
                     <div><span style="display:inline-block; width:20px; height:20px; background:#3498db; border-radius:4px;"></span> Cabaña 2</div>
                     <div><span style="display:inline-block; width:20px; height:20px; background:#2ecc71; border-radius:4px;"></span> Cabaña 3</div>
@@ -203,7 +222,7 @@
         <div id="reservasPanel" class="panel" style="display: none;">
             <div class="card">
                 <h2><span class="material-icons">add_circle</span> Nueva Reserva Directa</h2>
-                <div class="form-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+                <div class="form-row">
                     <div class="form-group"><label>👤 Nombre del cliente *</label><input type="text" id="reservaNombre" placeholder="Nombre completo"></div>
                     <div class="form-group"><label>📱 WhatsApp</label><input type="text" id="reservaWhatsapp" placeholder="+55 11 99999-9999"></div>
                     <div class="form-group"><label>🌎 Nacionalidad</label><input type="text" id="reservaNacionalidad" placeholder="Ej: Argentina"></div>
@@ -222,7 +241,9 @@
         <div id="clientesPanel" class="panel" style="display: none;">
             <div class="card">
                 <h2><span class="material-icons">people</span> Lista de Clientes</h2>
-                <div id="clientesList"></div>
+                <div id="clientesList">
+                    <div class="loading"><div class="loading-spinner"></div><p>Cargando clientes...</p></div>
+                </div>
                 <button class="btn-save" onclick="abrirModalNuevoCliente()" style="margin-top: 20px;"><span class="material-icons">add</span> Nuevo Cliente</button>
             </div>
         </div>
@@ -231,7 +252,9 @@
         <div id="pagosPanel" class="panel" style="display: none;">
             <div class="card">
                 <h2><span class="material-icons">receipt</span> Registro de Pagos</h2>
-                <div id="pagosList"></div>
+                <div id="pagosList">
+                    <div class="loading"><div class="loading-spinner"></div><p>Cargando pagos...</p></div>
+                </div>
                 <button class="btn-save" onclick="abrirModalPago()" style="margin-top: 20px;"><span class="material-icons">add</span> Nuevo Pago</button>
             </div>
         </div>
@@ -268,9 +291,25 @@
     </div>
 </div>
 
-<script src="/js/auth-core.js"></script>
 <script>
+    console.log('🚀 Dashboard iniciado - Eruda disponible');
+    
     // ========== CONFIGURACIÓN ==========
+    const firebaseConfig = {
+        apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+        authDomain: "tatareas-d8a80.firebaseapp.com",
+        projectId: "tatareas-d8a80",
+        storageBucket: "tatareas-d8a80.firebasestorage.app",
+        messagingSenderId: "709332495480",
+        appId: "1:709332495480:web:7060b2c75984352354918d"
+    };
+    
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    
     let currentUser = null;
     let calendar = null;
     let tareasCache = [];
@@ -287,15 +326,28 @@
     // ========== AUTENTICACIÓN ==========
     async function verificarAdmin() {
         const user = auth.currentUser;
-        if (!user) { window.location.href = 'login.html'; return false; }
-        const userDoc = await db.collection('usuarios').doc(user.uid).get();
-        if (!userDoc.exists || userDoc.data().rol !== 'admin') {
-            window.location.href = 'colaborador.html';
+        console.log('🔐 Verificando usuario:', user?.email);
+        if (!user) { 
+            console.log('❌ No hay usuario, redirigiendo a login');
+            window.location.href = 'login.html'; 
+            return false; 
+        }
+        try {
+            const userDoc = await db.collection('usuarios').doc(user.uid).get();
+            console.log('📄 Documento usuario:', userDoc.exists ? userDoc.data() : 'No existe');
+            if (!userDoc.exists || userDoc.data().rol !== 'admin') {
+                console.log('❌ No es admin, redirigiendo a colaborador');
+                window.location.href = 'colaborador.html';
+                return false;
+            }
+            currentUser = user;
+            document.getElementById('userNameDisplay').textContent = userDoc.data().nombre || user.email;
+            console.log('✅ Admin autenticado:', user.email);
+            return true;
+        } catch (error) {
+            console.error('❌ Error verificando admin:', error);
             return false;
         }
-        currentUser = user;
-        document.getElementById('userNameDisplay').textContent = userDoc.data().nombre || user.email;
-        return true;
     }
     
     async function logout() {
@@ -306,64 +358,78 @@
     
     // ========== DASHBOARD ==========
     async function cargarDashboard() {
-        const reservasSnap = await db.collection('reservas').get();
-        const reservasActivas = await db.collection('reservas').where('checkOut', '>=', new Date()).get();
-        const clientesSnap = await db.collection('clientes').get();
-        const tareasSnap = await db.collection('tareas').where('activa', '==', true).get();
-        
-        document.getElementById('kpiContainer').innerHTML = `
-            <div class="kpi-card"><div class="kpi-number">${reservasSnap.size}</div><div class="kpi-label">Total Reservas</div></div>
-            <div class="kpi-card"><div class="kpi-number">${reservasActivas.size}</div><div class="kpi-label">Reservas Activas</div></div>
-            <div class="kpi-card"><div class="kpi-number">${clientesSnap.size}</div><div class="kpi-label">Clientes</div></div>
-            <div class="kpi-card"><div class="kpi-number">${tareasSnap.size}</div><div class="kpi-label">Tareas Activas</div></div>
-        `;
-        
-        // Próximos check-ins
-        const hoy = new Date();
-        const proximos = [];
-        reservasSnap.forEach(doc => {
-            const r = doc.data();
-            const checkIn = r.checkIn?.toDate?.() || new Date(r.checkIn);
-            if (checkIn >= hoy) proximos.push({ ...r, checkIn });
-        });
-        proximos.sort((a, b) => a.checkIn - b.checkIn);
-        
-        const container = document.getElementById('proximosCheckins');
-        if (proximos.length === 0) {
-            container.innerHTML = '<div class="empty-state">📭 No hay check-ins próximos</div>';
-        } else {
-            container.innerHTML = proximos.slice(0, 10).map(r => `
-                <div style="padding: 12px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between;">
-                    <span><strong>${escapeHtml(r.nombre)}</strong> - Cabaña ${r.caba}</span>
-                    <span>📅 ${formatDate(r.checkIn)}</span>
-                </div>
-            `).join('');
-        }
-        
-        // Últimos pagos
-        const pagosSnap = await db.collection('pagos').orderBy('creadoEn', 'desc').limit(10).get();
-        const pagos = [];
-        pagosSnap.forEach(doc => pagos.push(doc.data()));
-        
-        const pagosContainer = document.getElementById('ultimosPagos');
-        if (pagos.length === 0) {
-            pagosContainer.innerHTML = '<div class="empty-state">💰 No hay pagos registrados</div>';
-        } else {
-            pagosContainer.innerHTML = pagos.map(p => `
-                <div style="padding: 12px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between;">
-                    <span><strong>${escapeHtml(p.clienteNombre)}</strong> - ${p.tipo}</span>
-                    <span>${p.moneda === 'USD' ? 'USD' : 'R$'} ${p.monto.toFixed(2)} | ${p.metodo}</span>
-                </div>
-            `).join('');
+        console.log('📊 Cargando dashboard...');
+        try {
+            const reservasSnap = await db.collection('reservas').get();
+            const reservasActivas = await db.collection('reservas').where('checkOut', '>=', new Date()).get();
+            const clientesSnap = await db.collection('clientes').get();
+            const tareasSnap = await db.collection('tareas').where('activa', '==', true).get();
+            
+            console.log(`📋 Reservas: ${reservasSnap.size}, Activas: ${reservasActivas.size}, Clientes: ${clientesSnap.size}, Tareas: ${tareasSnap.size}`);
+            
+            document.getElementById('kpiContainer').innerHTML = `
+                <div class="kpi-card"><div class="kpi-number">${reservasSnap.size}</div><div class="kpi-label">Total Reservas</div></div>
+                <div class="kpi-card"><div class="kpi-number">${reservasActivas.size}</div><div class="kpi-label">Reservas Activas</div></div>
+                <div class="kpi-card"><div class="kpi-number">${clientesSnap.size}</div><div class="kpi-label">Clientes</div></div>
+                <div class="kpi-card"><div class="kpi-number">${tareasSnap.size}</div><div class="kpi-label">Tareas Activas</div></div>
+            `;
+            
+            // Próximos check-ins
+            const hoy = new Date();
+            const proximos = [];
+            reservasSnap.forEach(doc => {
+                const r = doc.data();
+                const checkIn = r.checkIn?.toDate?.() || new Date(r.checkIn);
+                if (checkIn >= hoy) proximos.push({ ...r, checkIn });
+            });
+            proximos.sort((a, b) => a.checkIn - b.checkIn);
+            
+            const container = document.getElementById('proximosCheckins');
+            if (proximos.length === 0) {
+                container.innerHTML = '<div class="empty-state">📭 No hay check-ins próximos</div>';
+            } else {
+                container.innerHTML = proximos.slice(0, 10).map(r => `
+                    <div style="padding: 12px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between;">
+                        <span><strong>${escapeHtml(r.nombre)}</strong> - Cabaña ${r.caba}</span>
+                        <span>📅 ${formatDate(r.checkIn)}</span>
+                    </div>
+                `).join('');
+            }
+            
+            // Últimos pagos
+            const pagosSnap = await db.collection('pagos').orderBy('creadoEn', 'desc').limit(10).get();
+            const pagos = [];
+            pagosSnap.forEach(doc => pagos.push(doc.data()));
+            
+            const pagosContainer = document.getElementById('ultimosPagos');
+            if (pagos.length === 0) {
+                pagosContainer.innerHTML = '<div class="empty-state">💰 No hay pagos registrados</div>';
+            } else {
+                pagosContainer.innerHTML = pagos.map(p => `
+                    <div style="padding: 12px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between;">
+                        <span><strong>${escapeHtml(p.clienteNombre || p.clienteId)}</strong> - ${p.tipo || 'Pago'}</span>
+                        <span>${p.moneda === 'USD' ? 'USD' : 'R$'} ${p.monto?.toFixed(2) || '0'}</span>
+                    </div>
+                `).join('');
+            }
+        } catch (error) {
+            console.error('❌ Error cargando dashboard:', error);
         }
     }
     
     // ========== GESTIÓN DE TAREAS ==========
     async function cargarTareas() {
-        const snapshot = await db.collection('tareas').get();
-        tareasCache = [];
-        snapshot.forEach(doc => tareasCache.push({ id: doc.id, ...doc.data() }));
-        renderizarTareasEditables();
+        console.log('📋 Cargando tareas...');
+        try {
+            const snapshot = await db.collection('tareas').get();
+            tareasCache = [];
+            snapshot.forEach(doc => tareasCache.push({ id: doc.id, ...doc.data() }));
+            console.log(`✅ ${tareasCache.length} tareas cargadas`);
+            renderizarTareasEditables();
+        } catch (error) {
+            console.error('❌ Error cargando tareas:', error);
+            document.getElementById('tasksEditList').innerHTML = '<div class="empty-state">❌ Error al cargar tareas</div>';
+        }
     }
     
     function renderizarTareasEditables() {
@@ -428,33 +494,43 @@
     async function guardarEdicionTarea(id) {
         const nombre = document.getElementById(`edit_name_${id}`).value.trim();
         if (!nombre) { alert('El nombre es obligatorio'); return; }
-        await db.collection('tareas').doc(id).update({
-            nombre: nombre,
-            descripcion: document.getElementById(`edit_desc_${id}`).value,
-            prioridad: document.getElementById(`edit_priority_${id}`).value,
-            fechaInicio: document.getElementById(`edit_start_${id}`).value,
-            recurrencia: parseInt(document.getElementById(`edit_recurrence_${id}`).value),
-            activa: document.getElementById(`edit_active_${id}`).value === 'true'
-        });
-        delete editStates[id];
-        await cargarTareas();
-        alert('✅ Tarea actualizada');
+        try {
+            await db.collection('tareas').doc(id).update({
+                nombre: nombre,
+                descripcion: document.getElementById(`edit_desc_${id}`).value,
+                prioridad: document.getElementById(`edit_priority_${id}`).value,
+                fechaInicio: document.getElementById(`edit_start_${id}`).value,
+                recurrencia: parseInt(document.getElementById(`edit_recurrence_${id}`).value),
+                activa: document.getElementById(`edit_active_${id}`).value === 'true'
+            });
+            delete editStates[id];
+            await cargarTareas();
+            alert('✅ Tarea actualizada');
+        } catch (error) {
+            console.error('Error guardando tarea:', error);
+            alert('Error: ' + error.message);
+        }
     }
     
     async function agregarNuevaTarea() {
         const nombre = prompt('Nombre de la nueva tarea:');
         if (!nombre) return;
-        await db.collection('tareas').add({
-            nombre: nombre,
-            descripcion: '',
-            prioridad: 'media',
-            fechaInicio: new Date().toISOString().split('T')[0],
-            recurrencia: 0,
-            activa: true,
-            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        await cargarTareas();
-        alert('✅ Tarea creada');
+        try {
+            await db.collection('tareas').add({
+                nombre: nombre,
+                descripcion: '',
+                prioridad: 'media',
+                fechaInicio: new Date().toISOString().split('T')[0],
+                recurrencia: 0,
+                activa: true,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            await cargarTareas();
+            alert('✅ Tarea creada');
+        } catch (error) {
+            console.error('Error creando tarea:', error);
+            alert('Error: ' + error.message);
+        }
     }
     
     // ========== CALENDARIO ==========
@@ -462,7 +538,9 @@
         const calendarEl = document.getElementById('calendar');
         if (!calendarEl) return;
         
+        console.log('🗓️ Cargando calendario...');
         let allEvents = [];
+        
         for (const cal of GOOGLE_CALENDARS) {
             const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?key=${GOOGLE_API_KEY}&singleEvents=true&orderBy=startTime`;
             try {
@@ -481,22 +559,26 @@
                         }
                     });
                 }
-            } catch(e) { console.error(e); }
+            } catch(e) { console.error(`Error con ${cal.title}:`, e); }
         }
         
-        const manualSnap = await db.collection('reservas').where('origen', '==', 'directa').get();
-        manualSnap.forEach(doc => {
-            const r = doc.data();
-            const checkIn = r.checkIn?.toDate?.() || new Date(r.checkIn);
-            const checkOut = r.checkOut?.toDate?.() || new Date(r.checkOut);
-            allEvents.push({
-                title: `${r.nombre} (Manual)`,
-                start: checkIn,
-                end: checkOut,
-                color: '#9b59b6',
-                textColor: 'white'
+        try {
+            const manualSnap = await db.collection('reservas').where('origen', '==', 'directa').get();
+            manualSnap.forEach(doc => {
+                const r = doc.data();
+                const checkIn = r.checkIn?.toDate?.() || new Date(r.checkIn);
+                const checkOut = r.checkOut?.toDate?.() || new Date(r.checkOut);
+                allEvents.push({
+                    title: `${r.nombre} (Manual)`,
+                    start: checkIn,
+                    end: checkOut,
+                    color: '#9b59b6',
+                    textColor: 'white'
+                });
             });
-        });
+        } catch(e) { console.error('Error cargando reservas manuales:', e); }
+        
+        console.log(`📅 ${allEvents.length} eventos cargados`);
         
         if (calendar) {
             calendar.removeAllEvents();
@@ -523,53 +605,69 @@
         const checkOut = document.getElementById('reservaCheckOut').value;
         if (!checkIn || !checkOut) { alert('Ingresa las fechas'); return; }
         
-        await db.collection('reservas').add({
-            nombre: nombre,
-            caba: document.getElementById('reservaCabaña').value,
-            checkIn: firebase.firestore.Timestamp.fromDate(new Date(checkIn)),
-            checkOut: firebase.firestore.Timestamp.fromDate(new Date(checkOut)),
-            huespedes: document.getElementById('reservaHuespedes').value,
-            observaciones: document.getElementById('reservaObservaciones').value,
-            origen: 'directa',
-            precioDiarioBRL: parseFloat(document.getElementById('reservaPrecio').value),
-            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        // Guardar en clientes
-        await db.collection('clientes').add({
-            nombre: nombre,
-            whatsapp: document.getElementById('reservaWhatsapp').value,
-            nacionalidad: document.getElementById('reservaNacionalidad').value,
-            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        alert('✅ Reserva creada');
+        try {
+            await db.collection('reservas').add({
+                nombre: nombre,
+                caba: document.getElementById('reservaCabaña').value,
+                checkIn: firebase.firestore.Timestamp.fromDate(new Date(checkIn)),
+                checkOut: firebase.firestore.Timestamp.fromDate(new Date(checkOut)),
+                huespedes: document.getElementById('reservaHuespedes').value,
+                observaciones: document.getElementById('reservaObservaciones').value,
+                origen: 'directa',
+                precioDiarioBRL: parseFloat(document.getElementById('reservaPrecio').value),
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            await db.collection('clientes').add({
+                nombre: nombre,
+                whatsapp: document.getElementById('reservaWhatsapp').value,
+                nacionalidad: document.getElementById('reservaNacionalidad').value,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            alert('✅ Reserva creada');
+            limpiarFormularioReserva();
+            cargarDashboard();
+            cargarCalendario();
+        } catch (error) {
+            console.error('Error guardando reserva:', error);
+            alert('Error: ' + error.message);
+        }
+    }
+    
+    function limpiarFormularioReserva() {
         document.getElementById('reservaNombre').value = '';
         document.getElementById('reservaWhatsapp').value = '';
         document.getElementById('reservaNacionalidad').value = '';
         document.getElementById('reservaObservaciones').value = '';
-        cargarDashboard();
-        cargarCalendario();
+        document.getElementById('reservaCheckIn').value = '';
+        document.getElementById('reservaCheckOut').value = '';
     }
     
     // ========== CLIENTES ==========
     async function cargarClientes() {
-        const snapshot = await db.collection('clientes').orderBy('nombre').get();
-        const clientes = [];
-        snapshot.forEach(doc => clientes.push({ id: doc.id, ...doc.data() }));
-        
-        const container = document.getElementById('clientesList');
-        if (clientes.length === 0) {
-            container.innerHTML = '<div class="empty-state">👥 No hay clientes registrados</div>';
-            return;
+        console.log('👥 Cargando clientes...');
+        try {
+            const snapshot = await db.collection('clientes').orderBy('nombre').get();
+            const clientes = [];
+            snapshot.forEach(doc => clientes.push({ id: doc.id, ...doc.data() }));
+            
+            const container = document.getElementById('clientesList');
+            if (clientes.length === 0) {
+                container.innerHTML = '<div class="empty-state">👥 No hay clientes registrados</div>';
+                return;
+            }
+            
+            let html = '<table class="data-table"><thead><tr><th>Nombre</th><th>WhatsApp</th><th>Nacionalidad</th></tr></thead><tbody>';
+            clientes.forEach(c => {
+                html += `<tr><td><strong>${escapeHtml(c.nombre)}</strong></td><td>${escapeHtml(c.whatsapp || '-')}</td><td>${escapeHtml(c.nacionalidad || '-')}</td></tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        } catch (error) {
+            console.error('Error cargando clientes:', error);
+            document.getElementById('clientesList').innerHTML = '<div class="empty-state">❌ Error al cargar clientes</div>';
         }
-        
-        let html = '<table class="data-table" style="width:100%; border-collapse:collapse;"><thead><tr><th>Nombre</th><th>WhatsApp</th><th>Nacionalidad</th></tr></thead><tbody>';
-        clientes.forEach(c => {
-            html += `<tr><td><strong>${escapeHtml(c.nombre)}</strong></td><td>${escapeHtml(c.whatsapp || '-')}</td><td>${escapeHtml(c.nacionalidad || '-')}</td></tr>`;
-        });
-        html += '</tbody></table>';
-        container.innerHTML = html;
     }
     
     function abrirModalNuevoCliente() { document.getElementById('modalCliente').style.display = 'flex'; }
@@ -578,47 +676,62 @@
     async function guardarNuevoCliente() {
         const nombre = document.getElementById('nuevoClienteNombre').value.trim();
         if (!nombre) { alert('Ingresa el nombre'); return; }
-        await db.collection('clientes').add({
-            nombre: nombre,
-            whatsapp: document.getElementById('nuevoClienteWhatsapp').value,
-            nacionalidad: document.getElementById('nuevoClienteNacionalidad').value,
-            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        cerrarModalCliente();
-        cargarClientes();
-        alert('✅ Cliente agregado');
+        try {
+            await db.collection('clientes').add({
+                nombre: nombre,
+                whatsapp: document.getElementById('nuevoClienteWhatsapp').value,
+                nacionalidad: document.getElementById('nuevoClienteNacionalidad').value,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            cerrarModalCliente();
+            cargarClientes();
+            alert('✅ Cliente agregado');
+        } catch (error) {
+            console.error('Error guardando cliente:', error);
+            alert('Error: ' + error.message);
+        }
     }
     
     // ========== PAGOS ==========
     async function cargarPagos() {
-        const snapshot = await db.collection('pagos').orderBy('creadoEn', 'desc').get();
-        const pagos = [];
-        snapshot.forEach(doc => pagos.push(doc.data()));
-        
-        const container = document.getElementById('pagosList');
-        if (pagos.length === 0) {
-            container.innerHTML = '<div class="empty-state">💰 No hay pagos registrados</div>';
-            return;
+        console.log('💰 Cargando pagos...');
+        try {
+            const snapshot = await db.collection('pagos').orderBy('creadoEn', 'desc').get();
+            const pagos = [];
+            snapshot.forEach(doc => pagos.push(doc.data()));
+            
+            const container = document.getElementById('pagosList');
+            if (pagos.length === 0) {
+                container.innerHTML = '<div class="empty-state">💰 No hay pagos registrados</div>';
+                return;
+            }
+            
+            let html = '<table class="data-table"><thead><tr><th>Fecha</th><th>Cliente</th><th>Monto</th><th>Método</th><th>Tipo</th></tr></thead><tbody>';
+            pagos.forEach(p => {
+                const fecha = p.creadoEn?.toDate?.() || new Date();
+                html += `<tr><td>${fecha.toLocaleDateString()}</td><td>${escapeHtml(p.clienteNombre || p.clienteId)}</td><td>${p.moneda === 'USD' ? 'USD' : 'R$'} ${p.monto?.toFixed(2) || '0'}</td><td>${p.metodo || '-'}</td><td>${p.tipo || 'Pago'}</td></tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        } catch (error) {
+            console.error('Error cargando pagos:', error);
+            document.getElementById('pagosList').innerHTML = '<div class="empty-state">❌ Error al cargar pagos</div>';
         }
-        
-        let html = '<table class="data-table" style="width:100%; border-collapse:collapse;"><thead><tr><th>Fecha</th><th>Cliente</th><th>Monto</th><th>Método</th><th>Tipo</th></tr></thead><tbody>';
-        pagos.forEach(p => {
-            const fecha = p.creadoEn?.toDate?.() || new Date();
-            html += `<tr><td>${fecha.toLocaleDateString()}</td><td>${escapeHtml(p.clienteNombre)}</td><td>${p.moneda === 'USD' ? 'USD' : 'R$'} ${p.monto.toFixed(2)}</td><td>${p.metodo}</td><td>${p.tipo}</td></tr>`;
-        });
-        html += '</tbody></table>';
-        container.innerHTML = html;
     }
     
     async function cargarClientesSelect() {
-        const snapshot = await db.collection('clientes').orderBy('nombre').get();
-        clientesList = [];
-        snapshot.forEach(doc => clientesList.push({ id: doc.id, ...doc.data() }));
-        const select = document.getElementById('pagoClienteSelect');
-        select.innerHTML = '<option value="">Seleccionar cliente...</option>';
-        clientesList.forEach(c => {
-            select.innerHTML += `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`;
-        });
+        try {
+            const snapshot = await db.collection('clientes').orderBy('nombre').get();
+            clientesList = [];
+            snapshot.forEach(doc => clientesList.push({ id: doc.id, ...doc.data() }));
+            const select = document.getElementById('pagoClienteSelect');
+            select.innerHTML = '<option value="">Seleccionar cliente...</option>';
+            clientesList.forEach(c => {
+                select.innerHTML += `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`;
+            });
+        } catch (error) {
+            console.error('Error cargando clientes para select:', error);
+        }
     }
     
     function abrirModalPago() { document.getElementById('modalPago').style.display = 'flex'; }
@@ -631,19 +744,24 @@
         if (!monto) { alert('Ingresa un monto'); return; }
         
         const cliente = clientesList.find(c => c.id === clienteId);
-        await db.collection('pagos').add({
-            clienteId: clienteId,
-            clienteNombre: cliente.nombre,
-            monto: monto,
-            moneda: document.getElementById('pagoMoneda').value,
-            metodo: document.getElementById('pagoMetodo').value,
-            tipo: document.getElementById('pagoTipo').value,
-            creadoPor: currentUser.uid,
-            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        cerrarModalPago();
-        cargarPagos();
-        alert('✅ Pago registrado');
+        try {
+            await db.collection('pagos').add({
+                clienteId: clienteId,
+                clienteNombre: cliente.nombre,
+                monto: monto,
+                moneda: document.getElementById('pagoMoneda').value,
+                metodo: document.getElementById('pagoMetodo').value,
+                tipo: document.getElementById('pagoTipo').value,
+                creadoPor: currentUser.uid,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            cerrarModalPago();
+            cargarPagos();
+            alert('✅ Pago registrado');
+        } catch (error) {
+            console.error('Error guardando pago:', error);
+            alert('Error: ' + error.message);
+        }
     }
     
     // ========== UTILIDADES ==========
@@ -658,6 +776,7 @@
             btn.classList.add('active');
             const tab = btn.dataset.tab;
             document.getElementById(`${tab}Panel`).style.display = 'block';
+            console.log(`📁 Cambiando a pestaña: ${tab}`);
             if (tab === 'calendario') cargarCalendario();
             if (tab === 'clientes') cargarClientes();
             if (tab === 'pagos') { cargarPagos(); cargarClientesSelect(); }
@@ -667,22 +786,23 @@
     
     // ========== INICIALIZACIÓN ==========
     auth.onAuthStateChanged(async (user) => {
-        if (!user) { window.location.href = 'login.html'; return; }
-        const userDoc = await db.collection('usuarios').doc(user.uid).get();
-        if (!userDoc.exists || userDoc.data().rol !== 'admin') {
-            window.location.href = 'colaborador.html';
+        console.log('🔐 Auth state changed:', user?.email);
+        if (!user) { 
+            window.location.href = 'login.html';
             return;
         }
-        currentUser = user;
-        document.getElementById('userNameDisplay').textContent = userDoc.data().nombre || user.email;
-        cargarDashboard();
-        cargarTareas();
-        cargarCalendario();
-        cargarClientes();
-        cargarPagos();
-        cargarClientesSelect();
+        const isAdmin = await verificarAdmin();
+        if (isAdmin) {
+            await cargarDashboard();
+            await cargarTareas();
+            await cargarCalendario();
+            await cargarClientes();
+            await cargarPagos();
+            await cargarClientesSelect();
+        }
     });
     
+    // Exponer funciones globales
     window.logout = logout;
     window.activarEdicion = activarEdicion;
     window.cancelarEdicion = cancelarEdicion;
