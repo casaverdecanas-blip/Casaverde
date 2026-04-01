@@ -6,24 +6,23 @@
     <link rel="stylesheet" href="css/admin-style.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@5.11.3/main.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@5.11.3/main.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@5.11.3/main.min.js"></script>
     
     <style>
-        body { display: flex; margin: 0; background: #f4f7f6; }
+        body { display: flex; margin: 0; background: #f4f7f6; font-family: sans-serif; }
         .sidebar { width: 250px; position: fixed; height: 100vh; background: #2d5a27; color: white; z-index: 100; }
         .main-content { margin-left: 260px; width: calc(100% - 280px); padding: 20px; }
-        #calendar { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); height: 80vh; }
+        #calendar { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); height: 85vh; }
         
-        /* Colores según origen */
-        .fc-event-airbnb { background-color: #ff5a5f !important; border: none !important; cursor: pointer; }
-        .fc-event-directo { background-color: #2d5a27 !important; border: none !important; cursor: pointer; }
-        .fc-resource-area { width: 150px !important; font-weight: bold; }
+        .fc-event-airbnb { background-color: #ff5a5f !important; border: none !important; cursor: pointer; padding: 2px; }
+        .fc-event-directo { background-color: #2d5a27 !important; border: none !important; cursor: pointer; padding: 2px; }
+        .fc-timeline-slot { height: 60px !important; }
     </style>
 </head>
 <body>
     <div class="sidebar">
-        <h2 style="text-align:center; padding:20px;">Casa Verde</h2>
+        <h2 style="text-align:center; padding:20px; border-bottom:1px solid rgba(255,255,255,0.1);">Casa Verde</h2>
         <a href="dashboard.html" class="nav-link"><span class="material-icons">dashboard</span> Tareas</a>
         <a href="calendario.html" class="nav-link active"><span class="material-icons">calendar_view_day</span> Ocupación</a>
         <a href="reservas.html" class="nav-link"><span class="material-icons">list</span> Reservas</a>
@@ -32,12 +31,11 @@
 
     <div class="main-content">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-            <h1>Disponibilidad por Unidad</h1>
-            <div style="font-size: 0.9rem;">
-                <span style="color:#ff5a5f;">● Airbnb</span> | <span style="color:#2d5a27;">● Directo</span>
+            <h1>Disponibilidad de Unidades</h1>
+            <div style="font-size: 0.85rem; background: white; padding: 8px 15px; border-radius: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                <span style="color:#ff5a5f; font-weight:bold;">● Airbnb</span> | <span style="color:#2d5a27; font-weight:bold;">● Directo</span>
             </div>
         </div>
-
         <div id="calendar"></div>
     </div>
 
@@ -46,19 +44,15 @@
     <script src="js/auth-core.js"></script>
 
     <script>
-        document.addEventListener('DOMContentLoaded', async function() {
+        document.addEventListener('DOMContentLoaded', function() {
             const calendarEl = document.getElementById('calendar');
             
             const calendar = new FullCalendar.Calendar(calendarEl, {
-                schedulerLicenseKey: 'CC-Attribution-NonCommercial-NoDerivatives', // Versión libre para desarrollo
-                initialView: 'resourceTimelineMonth', // Vista horizontal por cabaña
+                schedulerLicenseKey: 'GPL-My-Project-Is-Open-Source',
+                initialView: 'resourceTimelineMonth',
                 locale: 'es',
-                headerToolbar: {
-                    left: 'today prev,next',
-                    center: 'title',
-                    right: 'resourceTimelineMonth,resourceTimelineDay'
-                },
-                resourceAreaHeaderContent: 'Cabañas',
+                resourceAreaWidth: '15%',
+                resourceAreaHeaderContent: 'Unidad',
                 resources: [
                     { id: 'Cabaña 1', title: 'CABAÑA 1' },
                     { id: 'Cabaña 2', title: 'CABAÑA 2' },
@@ -69,25 +63,27 @@
                         const snap = await db.collection('reservas').get();
                         const events = snap.docs.map(doc => {
                             const d = doc.data();
+                            // Aseguramos que la fecha tenga el formato ISO correcto (T00:00:00)
                             return {
                                 id: doc.id,
-                                resourceId: d.cabana, // Mapea la reserva a su fila (cabaña)
+                                resourceId: d.cabana, 
                                 title: d.nombre,
-                                start: d.checkIn,
+                                start: d.checkIn, 
                                 end: d.checkOut,
                                 className: d.origen === 'Airbnb' ? 'fc-event-airbnb' : 'fc-event-directo',
                                 extendedProps: { origen: d.origen }
                             };
                         });
                         successCallback(events);
-                    } catch (e) { failureCallback(e); }
+                    } catch (e) { 
+                        console.error("Error cargando eventos:", e);
+                        failureCallback(e); 
+                    }
                 },
                 eventClick: function(info) {
                     const resId = info.event.id;
                     const origen = info.event.extendedProps.origen;
-                    // Si es directa, vamos a pagos. Si es Airbnb, a la ficha de reserva.
-                    const target = (origen === 'Directo') ? `pagos.html?id=${resId}` : `reservas.html?edit=${resId}`;
-                    window.location.href = target;
+                    window.location.href = (origen === 'Directo') ? `pagos.html?id=${resId}` : `reservas.html?id=${resId}`;
                 }
             });
             
