@@ -2,35 +2,39 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Calendario - Casa Verde</title>
+    <title>Calendario Cabañas - Casa Verde</title>
     <link rel="stylesheet" href="css/admin-style.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@5.11.3/main.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@5.11.3/main.min.css" rel="stylesheet">
+    
     <style>
-        body { display: flex; margin: 0; background: #f4f7f6; font-family: 'Segoe UI', sans-serif; }
-        .sidebar { width: 250px; position: fixed; height: 100vh; background: #2d5a27; color: white; }
+        body { display: flex; margin: 0; background: #f4f7f6; }
+        .sidebar { width: 250px; position: fixed; height: 100vh; background: #2d5a27; color: white; z-index: 100; }
         .main-content { margin-left: 260px; width: calc(100% - 280px); padding: 20px; }
-        #calendar { background: white; padding: 20px; border-radius: 15px; shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        /* Colores por origen */
-        .fc-event-airbnb { background-color: #ff5a5f !important; border: none !important; }
-        .fc-event-directo { background-color: #2d5a27 !important; border: none !important; }
+        #calendar { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); height: 80vh; }
+        
+        /* Colores según origen */
+        .fc-event-airbnb { background-color: #ff5a5f !important; border: none !important; cursor: pointer; }
+        .fc-event-directo { background-color: #2d5a27 !important; border: none !important; cursor: pointer; }
+        .fc-resource-area { width: 150px !important; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="sidebar">
         <h2 style="text-align:center; padding:20px;">Casa Verde</h2>
         <a href="dashboard.html" class="nav-link"><span class="material-icons">dashboard</span> Tareas</a>
-        <a href="calendario.html" class="nav-link active"><span class="material-icons">calendar_month</span> Calendario</a>
-        <a href="reservas.html" class="nav-link"><span class="material-icons">list</span> Lista Reservas</a>
+        <a href="calendario.html" class="nav-link active"><span class="material-icons">calendar_view_day</span> Ocupación</a>
+        <a href="reservas.html" class="nav-link"><span class="material-icons">list</span> Reservas</a>
         <a href="clientes.html" class="nav-link"><span class="material-icons">people</span> Clientes</a>
     </div>
 
     <div class="main-content">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <h1>Ocupación de Cabañas</h1>
-            <div>
-                <span style="display:inline-block; width:12px; height:12px; background:#ff5a5f; border-radius:50%;"></span> Airbnb
-                <span style="display:inline-block; width:12px; height:12px; background:#2d5a27; border-radius:50%; margin-left:15px;"></span> Directo
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h1>Disponibilidad por Unidad</h1>
+            <div style="font-size: 0.9rem;">
+                <span style="color:#ff5a5f;">● Airbnb</span> | <span style="color:#2d5a27;">● Directo</span>
             </div>
         </div>
 
@@ -39,49 +43,54 @@
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/es.js"></script>
     <script src="js/auth-core.js"></script>
 
     <script>
         document.addEventListener('DOMContentLoaded', async function() {
             const calendarEl = document.getElementById('calendar');
+            
             const calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'dayGridMonth',
+                schedulerLicenseKey: 'CC-Attribution-NonCommercial-NoDerivatives', // Versión libre para desarrollo
+                initialView: 'resourceTimelineMonth', // Vista horizontal por cabaña
                 locale: 'es',
                 headerToolbar: {
-                    left: 'prev,next today',
+                    left: 'today prev,next',
                     center: 'title',
-                    right: 'dayGridMonth,timeGridWeek'
+                    right: 'resourceTimelineMonth,resourceTimelineDay'
                 },
-                eventClick: function(info) {
-                    // Al hacer clic, te lleva directo a los pagos o edición
-                    const resId = info.event.id;
-                    const origen = info.event.extendedProps.origen;
-                    if(origen === 'Directo') {
-                        window.location.href = `pagos.html?id=${resId}`;
-                    } else {
-                        window.location.href = `reservas.html?edit=${resId}`;
-                    }
-                },
+                resourceAreaHeaderContent: 'Cabañas',
+                resources: [
+                    { id: 'Cabaña 1', title: 'CABAÑA 1' },
+                    { id: 'Cabaña 2', title: 'CABAÑA 2' },
+                    { id: 'Suite', title: 'SUITE' }
+                ],
                 events: async function(info, successCallback, failureCallback) {
                     try {
                         const snap = await db.collection('reservas').get();
                         const events = snap.docs.map(doc => {
-                            const data = doc.data();
+                            const d = doc.data();
                             return {
                                 id: doc.id,
-                                title: `${data.cabana}: ${data.nombre}`,
-                                start: data.checkIn,
-                                end: data.checkOut,
-                                className: data.origen === 'Airbnb' ? 'fc-event-airbnb' : 'fc-event-directo',
-                                extendedProps: { origen: data.origen }
+                                resourceId: d.cabana, // Mapea la reserva a su fila (cabaña)
+                                title: d.nombre,
+                                start: d.checkIn,
+                                end: d.checkOut,
+                                className: d.origen === 'Airbnb' ? 'fc-event-airbnb' : 'fc-event-directo',
+                                extendedProps: { origen: d.origen }
                             };
                         });
                         successCallback(events);
                     } catch (e) { failureCallback(e); }
+                },
+                eventClick: function(info) {
+                    const resId = info.event.id;
+                    const origen = info.event.extendedProps.origen;
+                    // Si es directa, vamos a pagos. Si es Airbnb, a la ficha de reserva.
+                    const target = (origen === 'Directo') ? `pagos.html?id=${resId}` : `reservas.html?edit=${resId}`;
+                    window.location.href = target;
                 }
             });
+            
             calendar.render();
         });
     </script>
