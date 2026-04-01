@@ -2,91 +2,78 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard Admin - Casa Verde</title>
+    <title>Admin - Casa Verde</title>
     <link rel="stylesheet" href="css/admin-style.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
-        /* Ajuste de Layout para que la sidebar no tape nada */
-        body { display: flex; margin: 0; background: #f4f7f6; }
-        .sidebar { width: 250px; position: fixed; height: 100vh; z-index: 100; }
+        body { display: flex; margin: 0; background: #f4f7f6; font-family: sans-serif; }
+        .sidebar { width: 250px; position: fixed; height: 100vh; background: #2d5a27; color: white; z-index: 100; }
         .main-content { margin-left: 260px; width: calc(100% - 280px); padding: 20px; }
+        
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 12px; border-bottom: 2px solid #eee; color: #666; }
+        td { padding: 12px; border-bottom: 1px solid #eee; }
 
-        /* Botones de acción mejorados */
         .btn-edit { background: #3b82f6; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
-        .btn-delete { background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; margin-left: 5px; }
-        .btn-edit:hover { background: #2563eb; }
-        .btn-delete:hover { background: #dc2626; }
-
-        /* Estilos de tabla y alertas */
+        .btn-delete { background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; margin-left: 5px; }
+        
         .alerta-roja { background-color: #fee2e2 !important; border-left: 4px solid #ef4444; }
-        .modal { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:1001; width:90%; max-width:450px; background:white; padding:30px; border-radius:15px; box-shadow:0 0 40px rgba(0,0,0,0.4); }
+        .modal { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:1001; width:400px; background:white; padding:30px; border-radius:15px; box-shadow:0 0 40px rgba(0,0,0,0.4); }
         .overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; }
         
-        select#filtroColab { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd; font-size: 1rem; margin-bottom: 15px; }
-        .historial-item { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+        #filtroColab { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 15px; font-size: 1rem; }
+        .historial-item { padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: white; margin-bottom: 5px; border-radius: 5px; }
     </style>
 </head>
 <body>
     <div class="sidebar">
-        <h2>Casa Verde</h2>
+        <h2 style="text-align:center; padding:20px;">Casa Verde</h2>
         <a href="dashboard.html" class="nav-link active"><span class="material-icons">dashboard</span> Tareas</a>
-        <a href="reservas.html" class="nav-link"><span class="material-icons">event_available</span> Reservas</a>
+        <a href="calendario.html" class="nav-link"><span class="material-icons">calendar_view_day</span> Ocupación</a>
+        <a href="reservas.html" class="nav-link"><span class="material-icons">list</span> Reservas</a>
         <a href="clientes.html" class="nav-link"><span class="material-icons">people</span> Clientes</a>
         <button onclick="logout()" class="nav-link" style="background:none; border:none; width:100%; color:#f87171; cursor:pointer; margin-top:auto; text-align:left; padding:15px;"><span class="material-icons">logout</span> Salir</button>
     </div>
 
     <div class="main-content">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
-            <h1>Panel de Control</h1>
-            <button class="btn-cv" onclick="abrirModal()" style="padding: 12px 20px;"><span class="material-icons">add</span> AGREGAR TAREA</button>
+            <h1>Panel de Operaciones</h1>
+            <button class="btn-cv" onclick="abrirModal()" style="padding: 12px 20px;"><span class="material-icons">add</span> NUEVA TAREA</button>
         </div>
 
         <div class="card">
-            <h3>Estado de Mantenimiento</h3>
-            <table style="width:100%; border-collapse: collapse;">
+            <h3>Monitor de Mantenimiento</h3>
+            <table>
                 <thead>
-                    <tr style="text-align:left; border-bottom: 2px solid #eee;">
-                        <th>Tarea</th>
-                        <th>Frecuencia</th>
-                        <th>Última Realización</th>
-                        <th>Responsable</th>
-                        <th>Acciones</th>
-                    </tr>
+                    <tr><th>Tarea</th><th>Frecuencia</th><th>Última vez</th><th>Responsable</th><th>Acciones</th></tr>
                 </thead>
                 <tbody id="monitorBody"></tbody>
             </table>
         </div>
 
         <div class="card" style="margin-top:30px;">
-            <h3><span class="material-icons">analytics</span> Desempeño Individual</h3>
-            <p>Selecciona un colaborador para ver su historial cronológico:</p>
+            <h3><span class="material-icons" style="vertical-align:middle">history</span> Historial por Colaborador</h3>
             <select id="filtroColab" onchange="cargarHistorialColaborador()">
-                <option value="">Cargando lista...</option>
+                <option value="">Selecciona un colaborador...</option>
             </select>
-            <div id="listaHistorialIndividual" style="max-height: 400px; overflow-y: auto; background: #fafafa; border-radius: 8px; padding: 10px;">
-                <p style="color:#999; text-align:center;">Selecciona a alguien para ver sus tareas...</p>
+            <div id="listaHistorialIndividual" style="max-height: 300px; overflow-y: auto; background: #f9f9f9; padding: 10px; border-radius: 8px;">
+                <p style="text-align:center; color:#999;">Selecciona a alguien para ver su actividad...</p>
             </div>
         </div>
     </div>
 
     <div class="overlay" id="overlay" onclick="cerrarModal()"></div>
     <div class="modal" id="modalTarea">
-        <h2 id="modalTitle" style="margin-top:0;">Configurar Tarea</h2>
+        <h3 id="modalTitle">Configurar Tarea</h3>
         <input type="hidden" id="editId">
-        
-        <label>Nombre de la Tarea:</label>
-        <input type="text" id="taskName" placeholder="Ej: Limpiar vidrios" style="width:100%; padding:10px; margin:10px 0; border:1px solid #ccc; border-radius:5px;">
-        
-        <label>Recurrencia (Días):</label>
-        <input type="number" id="taskRec" value="1" style="width:100%; padding:10px; margin:10px 0; border:1px solid #ccc; border-radius:5px;">
-        
-        <label>Descripción / Instrucciones:</label>
-        <textarea id="taskDesc" style="width:100%; padding:10px; margin:10px 0; border:1px solid #ccc; border-radius:5px; height:80px;"></textarea>
-        
-        <div style="display:flex; gap:10px; margin-top:20px;">
-            <button onclick="cerrarModal()" style="flex:1; padding:12px; border:none; background:#ccc; border-radius:8px;">Cancelar</button>
-            <button onclick="guardarTarea()" class="btn-cv" style="flex:1; padding:12px; font-weight:bold;">GUARDAR</button>
-        </div>
+        <label>Nombre:</label>
+        <input type="text" id="taskName" style="width:100%; padding:10px; margin:10px 0;">
+        <label>Días para repetir:</label>
+        <input type="number" id="taskRec" value="1" style="width:100%; padding:10px; margin:10px 0;">
+        <label>Notas:</label>
+        <textarea id="taskDesc" style="width:100%; padding:10px; margin:10px 0; height:60px;"></textarea>
+        <button onclick="guardarTarea()" class="btn-cv" style="width:100%; padding:12px; margin-top:10px;">GUARDAR</button>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -104,36 +91,31 @@
 
             const historial = hSnap.docs.map(d => d.data());
             
-            // 1. Renderizar Tabla de Tareas
+            // Render Tabla
             let html = '';
             tSnap.forEach(doc => {
                 const t = doc.data();
-                const ultimoReg = historial.find(h => h.tareaId === doc.id);
+                const ultimo = historial.find(h => h.tareaId === doc.id);
                 let vencida = true;
-                
-                if (ultimoReg && ultimoReg.timestamp) {
-                    const diff = (ahora - ultimoReg.timestamp.toDate()) / (1000 * 60 * 60 * 24);
+                if (ultimo && ultimo.timestamp) {
+                    const diff = (ahora - ultimo.timestamp.toDate()) / (1000 * 60 * 60 * 24);
                     if (diff < (t.recurrencia || 1)) vencida = false;
                 }
 
-                html += `<tr class="${vencida ? 'alerta-roja' : ''}" style="border-bottom:1px solid #eee;">
-                    <td style="padding:15px;"><b>${t.nombre}</b><br><small style="color:#666">${t.descripcion || ''}</small></td>
-                    <td>Cada ${t.recurrencia} días</td>
-                    <td>${ultimoReg ? ultimoReg.timestamp.toDate().toLocaleString('es-ES', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '⚠️ Nunca'}</td>
-                    <td><span style="background:#eee; padding:3px 8px; border-radius:4px; font-size:0.8rem;">${ultimoReg ? (ultimoReg.colaboradorNombre || 'Staff') : '--'}</span></td>
+                html += `<tr class="${vencida ? 'alerta-roja' : ''}">
+                    <td><b>${t.nombre}</b></td>
+                    <td>Cada ${t.recurrencia}d</td>
+                    <td>${ultimo ? ultimo.timestamp.toDate().toLocaleDateString() : '⚠️ Pendiente'}</td>
+                    <td>${ultimo ? (ultimo.colaboradorNombre || 'Staff') : '--'}</td>
                     <td>
-                        <button class="btn-edit" onclick="abrirModal('${doc.id}','${t.nombre}',${t.recurrencia},'${t.descripcion}')">
-                            <span class="material-icons">edit</span> Editar
-                        </button>
-                        <button class="btn-delete" onclick="eliminarTarea('${doc.id}')">
-                            <span class="material-icons">delete</span>
-                        </button>
+                        <button class="btn-edit" onclick="abrirModal('${doc.id}','${t.nombre}',${t.recurrencia},'${t.descripcion}')"><span class="material-icons">edit</span></button>
+                        <button class="btn-delete" onclick="eliminarTarea('${doc.id}')"><span class="material-icons">delete</span></button>
                     </td>
                 </tr>`;
             });
             document.getElementById('monitorBody').innerHTML = html;
 
-            // 2. Cargar lista de colaboradores en el filtro
+            // Llenar Filtro
             const nombres = [...new Set(historial.map(h => h.colaboradorNombre).filter(n => n))];
             let options = '<option value="">Selecciona un colaborador...</option>';
             nombres.forEach(n => options += `<option value="${n}">${n}</option>`);
@@ -143,77 +125,51 @@
         async function cargarHistorialColaborador() {
             const nombre = document.getElementById('filtroColab').value;
             const container = document.getElementById('listaHistorialIndividual');
-            if(!nombre) { container.innerHTML = '<p>Selecciona a alguien...</p>'; return; }
+            if(!nombre) return;
 
-            const hSnap = await db.collection('historial')
-                            .where('colaboradorNombre', '==', nombre)
-                            .orderBy('timestamp', 'desc').get();
-            
-            // Necesitamos los nombres de las tareas porque el historial solo tiene tareaId
-            const tSnap = await db.collection('tareas').get();
-            const nombresTareas = {};
-            tSnap.forEach(d => nombresTareas[d.id] = d.data().nombre);
+            const [hSnap, tSnap] = await Promise.all([
+                db.collection('historial').where('colaboradorNombre', '==', nombre).get(),
+                db.collection('tareas').get()
+            ]);
 
-            let html = '';
-            if(hSnap.empty) html = '<p>No hay tareas registradas.</p>';
-            
-            hSnap.forEach(doc => {
-                const h = doc.data();
-                html += `
+            const nombresT = {}; tSnap.forEach(d => nombresT[d.id] = d.data().nombre);
+            const regs = hSnap.docs.map(d => d.data()).sort((a,b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
+
+            container.innerHTML = regs.map(h => `
                 <div class="historial-item">
-                    <span><b>${nombresTareas[h.tareaId] || 'Tarea eliminada'}</b></span>
-                    <span style="color:#666; font-size:0.85rem;">${h.timestamp ? h.timestamp.toDate().toLocaleString() : '--'}</span>
-                </div>`;
-            });
-            container.innerHTML = html;
+                    <span><b>${nombresT[h.tareaId] || 'Tarea'}</b></span>
+                    <small>${h.timestamp ? h.timestamp.toDate().toLocaleString() : '--'}</small>
+                </div>
+            `).join('') || '<p>Sin registros.</p>';
         }
-
-        // --- FUNCIONES CRUD ---
 
         function abrirModal(id='', n='', r=1, d='') {
             document.getElementById('editId').value = id;
             document.getElementById('taskName').value = n;
             document.getElementById('taskRec').value = r;
             document.getElementById('taskDesc').value = d;
-            document.getElementById('modalTitle').innerText = id ? "Editar Tarea" : "Nueva Tarea";
             document.getElementById('overlay').style.display = 'block';
             document.getElementById('modalTarea').style.display = 'block';
         }
 
-        function cerrarModal() {
-            document.getElementById('overlay').style.display = 'none';
-            document.getElementById('modalTarea').style.display = 'none';
-        }
+        function cerrarModal() { document.getElementById('overlay').style.display = 'none'; document.getElementById('modalTarea').style.display = 'none'; }
 
         async function guardarTarea() {
             const id = document.getElementById('editId').value;
-            const nombre = document.getElementById('taskName').value;
-            if(!nombre) return alert("El nombre es obligatorio");
-
             const data = {
-                nombre: nombre,
+                nombre: document.getElementById('taskName').value,
                 recurrencia: parseInt(document.getElementById('taskRec').value) || 1,
                 descripcion: document.getElementById('taskDesc').value,
                 activa: true,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             };
-
-            try {
-                if(id) {
-                    await db.collection('tareas').doc(id).update(data);
-                } else {
-                    await db.collection('tareas').add(data);
-                }
-                cerrarModal();
-                loadDashboard();
-            } catch (e) { alert("Error al guardar: " + e.message); }
+            if(id) await db.collection('tareas').doc(id).update(data);
+            else await db.collection('tareas').add(data);
+            cerrarModal(); loadDashboard();
         }
 
         async function eliminarTarea(id) {
-            if(confirm("¿Seguro que deseas eliminar esta tarea de la lista?")) {
-                await db.collection('tareas').doc(id).update({ activa: false });
-                loadDashboard();
-            }
+            if(confirm("¿Eliminar tarea?")) { await db.collection('tareas').doc(id).update({activa:false}); loadDashboard(); }
         }
 
         window.onload = () => setTimeout(loadDashboard, 1000);
