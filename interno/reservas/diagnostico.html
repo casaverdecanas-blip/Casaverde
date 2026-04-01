@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug de Reservas - Casa Verde</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; background: #f0f2f5; color: #333; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .log-box { background: #282c34; color: #61dafb; padding: 15px; border-radius: 6px; overflow-x: auto; font-family: 'Courier New', monospace; margin-top: 10px; min-height: 100px; }
+        .status-tag { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.9em; }
+        .warning { background: #fff3cd; border-left: 5px solid #ffc107; padding: 15px; margin: 20px 0; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🛠 Diagnóstico de Sincronización: Casa Verde</h2>
+    <p>Este script analizará por qué las reservas de Google aparecen como "Canceladas".</p>
+
+    <div class="warning">
+        <strong>Instrucción:</strong> Si el log indica error de permisos, asegúrate de estar logueado en tu aplicación de Casa Verde en otra pestaña del mismo navegador.
+    </div>
+
+    <button id="btnCheck">Iniciar Análisis de Datos</button>
+
+    <h3>1. Estado de la Conexión</h3>
+    <div id="connLog" class="log-box">Esperando inicio...</div>
+
+    <h3>2. Muestra de Reservas en Base de Datos</h3>
+    <p>Aquí veremos cómo están guardados los campos <code>status</code> y <code>source</code>.</p>
+    <div id="dataLog" class="log-box">Sin datos aún.</div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+  import { getFirestore, collection, query, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+
+  // Tu configuración de Casa Verde (Recuperada de registros previos)
+  const firebaseConfig = {
+    apiKey: "AIzaSy...", // Reemplaza con tu API Key si no carga automáticamente
+    authDomain: "casaverdecanas.com.br",
+    projectId: "casaverde-...", // Completa con tu ID de proyecto
+    storageBucket: "casaverde-....appspot.com",
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+
+  document.getElementById('btnCheck').addEventListener('click', analyze);
+
+  async function analyze() {
+    const connLog = document.getElementById('connLog');
+    const dataLog = document.getElementById('dataLog');
+    
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        connLog.innerText = `✅ Logueado como: ${user.email}`;
+        
+        try {
+          // Consultamos las últimas 5 reservas para ver la estructura
+          const q = query(collection(db, "reservas"), limit(5));
+          const querySnapshot = await getDocs(q);
+          
+          let results = [];
+          querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            results.push({
+              id: doc.id,
+              huesped: data.nombre || data.guestName || "Sin nombre",
+              estado_en_db: data.status,
+              origen: data.source || (data.googleId ? "Google Calendar" : "Manual"),
+              raw_data: data // Esto me servirá para ver si hay campos ocultos
+            });
+          });
+
+          dataLog.innerText = JSON.stringify(results, null, 2);
+          
+        } catch (e) {
+          dataLog.innerText = "❌ Error al leer Firestore: " + e.message;
+        }
+      } else {
+        connLog.innerHTML = "<span style='color:#ff6b6b'>❌ No detecto sesión activa. Por favor, logueate en tu web habitual y refresca esta página.</span>";
+      }
+    });
+  }
+</script>
+
+</body>
+</html>
