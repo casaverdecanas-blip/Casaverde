@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reservas - Casa Verde</title>
+    <link rel="stylesheet" href="css/admin-style.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        .pago-pendiente { color: #ef4444; font-weight: bold; }
+        .pago-ok { color: #22c55e; }
+        .origen-airbnb { background: #ff5a5f; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; }
+        .origen-directo { background: #2d5a27; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Casa Verde</h2>
+        <a href="dashboard.html" class="nav-link"><span class="material-icons">dashboard</span> Tareas</a>
+        <a href="reservas.html" class="nav-link active"><span class="material-icons">event_available</span> Reservas</a>
+        <a href="clientes.html" class="nav-link"><span class="material-icons">people</span> Clientes</a>
+    </div>
+
+    <div class="main-content">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h1>Calendario de Reservas</h1>
+            <button class="btn-cv" onclick="abrirReserva()"><span class="material-icons">add</span> Nueva Reserva</button>
+        </div>
+
+        <div class="card" style="margin-top:20px;">
+            <table>
+                <thead><tr><th>Huésped</th><th>Check-in / Out</th><th>Plataforma</th><th>Total</th><th>Saldo</th><th>Estado</th></tr></thead>
+                <tbody id="reservaBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="modalReserva" class="card" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:1001; width:450px;">
+        <h3>Registrar Reserva</h3>
+        <input type="text" id="resNombre" placeholder="Nombre Huésped" style="width:100%; margin:10px 0; padding:8px;">
+        <div style="display:flex; gap:10px;">
+            <input type="date" id="resIn" style="width:50%; padding:8px;">
+            <input type="date" id="resOut" style="width:50%; padding:8px;">
+        </div>
+        <select id="resOrigen" style="width:100%; margin:10px 0; padding:8px;">
+            <option value="Airbnb">Airbnb</option>
+            <option value="Directo">WhatsApp / Directo</option>
+            <option value="Booking">Booking</option>
+        </select>
+        <input type="number" id="resTotal" placeholder="Precio Total" style="width:100%; margin:10px 0; padding:8px;">
+        <input type="number" id="resPagado" placeholder="Monto ya pagado" style="width:100%; margin:10px 0; padding:8px;">
+        <button onclick="guardarReserva()" class="btn-cv" style="width:100%">Guardar Reserva</button>
+        <button onclick="document.getElementById('modalReserva').style.display='none'" style="width:100%; margin-top:5px; background:#ccc; border:none; padding:8px; border-radius:8px;">Cancelar</button>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="js/auth-core.js"></script>
+    <script>
+        async function loadReservas() {
+            const snap = await db.collection('reservas').orderBy('checkIn', 'asc').get();
+            let html = '';
+            snap.forEach(doc => {
+                const r = doc.data();
+                const saldo = r.total - r.pagado;
+                html += `<tr>
+                    <td><b>${r.nombre}</b></td>
+                    <td>${r.checkIn} al ${r.checkOut}</td>
+                    <td><span class="origen-${r.origen.toLowerCase()}">${r.origen}</span></td>
+                    <td>$${r.total}</td>
+                    <td class="${saldo > 0 ? 'pago-pendiente' : 'pago-ok'}">$${saldo}</td>
+                    <td>${saldo > 0 ? '⏳ Pendiente' : '✅ Pagado'}</td>
+                </tr>`;
+            });
+            document.getElementById('reservaBody').innerHTML = html;
+        }
+        function abrirReserva(){ document.getElementById('modalReserva').style.display='block'; }
+        async function guardarReserva(){
+            await db.collection('reservas').add({
+                nombre: document.getElementById('resNombre').value,
+                checkIn: document.getElementById('resIn').value,
+                checkOut: document.getElementById('resOut').value,
+                origen: document.getElementById('resOrigen').value,
+                total: parseFloat(document.getElementById('resTotal').value),
+                pagado: parseFloat(document.getElementById('resPagado').value),
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            document.getElementById('modalReserva').style.display='none'; loadReservas();
+        }
+        window.onload = () => setTimeout(loadReservas, 1000);
+    </script>
+</body>
+</html>
