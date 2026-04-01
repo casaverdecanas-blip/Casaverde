@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Depuración - Migración Base de Datos</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <!-- Eruda para depuración -->
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
+    
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: linear-gradient(135deg, #1e3c2c 0%, #2d5a27 100%); min-height: 100vh; padding: 20px; }
+        
+        .container { max-width: 1000px; margin: 0 auto; }
+        .card { background: white; border-radius: 20px; padding: 30px; margin-bottom: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .card h2 { color: #2d5a27; display: flex; align-items: center; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #e8f5e9; padding-bottom: 12px; }
+        
+        .status-ok { color: #27ae60; }
+        .status-warning { color: #f39c12; }
+        .status-error { color: #e74c3c; }
+        
+        .log-area { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 12px; font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto; margin-top: 20px; }
+        .log-success { color: #4ec9b0; }
+        .log-error { color: #f48771; }
+        .log-warning { color: #dcdcaa; }
+        .log-info { color: #9cdcfe; }
+        
+        .btn-primary { background: #2d5a27; color: white; border: none; padding: 12px 24px; border-radius: 30px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; margin-right: 10px; margin-top: 15px; }
+        .btn-warning { background: #f39c12; color: white; border: none; padding: 12px 24px; border-radius: 30px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+        .btn-danger { background: #e74c3c; color: white; border: none; padding: 12px 24px; border-radius: 30px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+        
+        .progress-bar { width: 100%; height: 20px; background: #e9ecef; border-radius: 10px; overflow: hidden; margin: 15px 0; }
+        .progress-fill { height: 100%; background: #2d5a27; width: 0%; transition: width 0.3s; }
+        
+        .login-container { display: flex; justify-content: center; align-items: center; min-height: 90vh; }
+        .login-box { background: white; padding: 40px; border-radius: 24px; width: 350px; text-align: center; }
+        .login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 12px; }
+        .login-box button { width: 100%; padding: 12px; background: #2d5a27; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; }
+        
+        @media (max-width: 768px) { .container { padding: 10px; } }
+    </style>
+</head>
+<body>
+
+<div id="loginContainer" class="login-container">
+    <div class="login-box">
+        <h2><span class="material-icons">build</span> Depurador</h2>
+        <input type="email" id="email" placeholder="Email" autocomplete="email">
+        <input type="password" id="password" placeholder="Contraseña" autocomplete="current-password">
+        <button onclick="login()">Ingresar como Admin</button>
+        <div id="loginError" style="color:red; margin-top:10px;"></div>
+        <div style="margin-top: 15px; font-size: 12px; color: #666;">
+            <span class="material-icons" style="font-size: 12px;">info</span> Este script verificará y corregirá la estructura de la base de datos
+        </div>
+    </div>
+</div>
+
+<div id="mainPanel" style="display: none;">
+    <div class="container">
+        <div class="card">
+            <h2><span class="material-icons">database</span> Depuración y Migración</h2>
+            <p>Este script verificará y corregirá la estructura de la base de datos para el sistema de reservas.</p>
+            
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill"></div>
+            </div>
+            
+            <div id="statusMessage" style="margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 8px;">
+                🔍 Listo para iniciar depuración
+            </div>
+            
+            <div>
+                <button class="btn-primary" onclick="ejecutarDiagnostico()">
+                    <span class="material-icons">analytics</span> Ejecutar Diagnóstico
+                </button>
+                <button class="btn-warning" onclick="ejecutarMigracion()" id="btnMigrar" disabled>
+                    <span class="material-icons">migrate</span> Ejecutar Migración
+                </button>
+                <button class="btn-danger" onclick="importarGoogleCalendar()" id="btnImportar" disabled>
+                    <span class="material-icons">sync</span> Importar Google Calendar
+                </button>
+            </div>
+            
+            <div id="logArea" class="log-area">
+                <div class="log-info">🚀 Sistema de depuración iniciado</div>
+                <div class="log-info">📋 Esperando acción...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+        authDomain: "tatareas-d8a80.firebaseapp.com",
+        projectId: "tatareas-d8a80",
+        storageBucket: "tatareas-d8a80.firebasestorage.app",
+        messagingSenderId: "709332495480",
+        appId: "1:709332495480:web:7060b2c75984352354918d"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    
+    let currentUser = null;
+    let diagnosticResult = null;
+    
+    const GOOGLE_API_KEY = 'AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs';
+    const CALENDARS = [
+        { id: 'h5a1h0a8dg9rl0oufvq19hn05r4gbubg@import.calendar.google.com', nombre: 'Cabaña 1', cabaña: '1', color: '#FF9800' },
+        { id: '60n7foetdu2qvsn16mi7is8j6i4ugm66@import.calendar.google.com', nombre: 'Cabaña 2', cabaña: '2', color: '#3498db' },
+        { id: '8i3hl5ppqi6al50kf7casj5n5vl9sp1j@import.calendar.google.com', nombre: 'Cabaña 3', cabaña: '3', color: '#2ecc71' }
+    ];
+    
+    function addLog(message, type = 'info') {
+        const logArea = document.getElementById('logArea');
+        const time = new Date().toLocaleTimeString();
+        const colorClass = type === 'success' ? 'log-success' : (type === 'error' ? 'log-error' : (type === 'warning' ? 'log-warning' : 'log-info'));
+        logArea.innerHTML += `<div class="${colorClass}">[${time}] ${message}</div>`;
+        logArea.scrollTop = logArea.scrollHeight;
+        console.log(message);
+    }
+    
+    function updateProgress(percent, message) {
+        document.getElementById('progressFill').style.width = `${percent}%`;
+        document.getElementById('statusMessage').innerHTML = message;
+    }
+    
+    async function login() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const errorDiv = document.getElementById('loginError');
+        try {
+            const userCredential = await auth.signInWithEmailAndPassword(email, password);
+            const userDoc = await db.collection('usuarios').doc(userCredential.user.uid).get();
+            if (!userDoc.exists || userDoc.data().rol !== 'admin') {
+                await auth.signOut();
+                errorDiv.textContent = 'Acceso solo para administradores';
+                return;
+            }
+            currentUser = userCredential.user;
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('mainPanel').style.display = 'block';
+            addLog(`✅ Admin autenticado: ${currentUser.email}`, 'success');
+        } catch (error) {
+            errorDiv.textContent = 'Email o contraseña incorrectos';
+        }
+    }
+    
+    async function ejecutarDiagnostico() {
+        addLog('🔍 Iniciando diagnóstico de base de datos...', 'info');
+        updateProgress(10, 'Verificando colecciones...');
+        
+        const colecciones = ['reservas', 'presupuestos', 'clientes', 'pagos'];
+        const resultados = {};
+        
+        for (let i = 0; i < colecciones.length; i++) {
+            const col = colecciones[i];
+            try {
+                const snapshot = await db.collection(col).limit(1).get();
+                resultados[col] = { existe: true, documentos: snapshot.size };
+                addLog(`📁 Colección "${col}": ${snapshot.size > 0 ? '✅ existe' : '⚠️ vacía'}`, snapshot.size > 0 ? 'success' : 'warning');
+            } catch (error) {
+                resultados[col] = { existe: false, error: error.message };
+                addLog(`❌ Colección "${col}": no existe o error: ${error.message}`, 'error');
+            }
+            updateProgress(20 + (i * 10), `Verificando ${col}...`);
+        }
+        
+        // Verificar estructura de reservas existentes
+        updateProgress(50, 'Verificando estructura de documentos...');
+        try {
+            const reservasSnap = await db.collection('reservas').limit(10).get();
+            let camposCorrectos = 0;
+            let camposFaltantes = [];
+            
+            reservasSnap.forEach(doc => {
+                const data = doc.data();
+                const camposEsperados = ['caba', 'nombre', 'checkIn', 'checkOut', 'huespedes', 'observaciones', 'origen'];
+                camposEsperados.forEach(campo => {
+                    if (!data[campo]) camposFaltantes.push(campo);
+                    else camposCorrectos++;
+                });
+            });
+            
+            if (camposFaltantes.length > 0) {
+                addLog(`⚠️ Documentos en reservas tienen campos faltantes: ${[...new Set(camposFaltantes)].join(', ')}`, 'warning');
+            } else if (reservasSnap.size > 0) {
+                addLog(`✅ Estructura de reservas correcta`, 'success');
+            }
+        } catch (error) {
+            addLog(`⚠️ No se pudo verificar estructura de reservas: ${error.message}`, 'warning');
+        }
+        
+        updateProgress(70, 'Verificando reglas de Firestore...');
+        addLog('📋 Recuerda verificar en Firebase Console que las reglas incluyan las colecciones: reservas, presupuestos, clientes, pagos', 'info');
+        
+        updateProgress(100, 'Diagnóstico completado');
+        addLog('✅ Diagnóstico finalizado', 'success');
+        
+        document.getElementById('btnMigrar').disabled = false;
+        document.getElementById('btnImportar').disabled = false;
+    }
+    
+    async function ejecutarMigracion() {
+        if (!confirm('⚠️ Esta acción creará las colecciones faltantes y corregirá la estructura de datos. ¿Continuar?')) return;
+        
+        addLog('🚀 Iniciando migración...', 'info');
+        updateProgress(10, 'Creando colecciones faltantes...');
+        
+        // Crear documentos de prueba en colecciones que no existen
+        const colecciones = ['reservas', 'presupuestos', 'clientes', 'pagos'];
+        
+        for (let i = 0; i < colecciones.length; i++) {
+            const col = colecciones[i];
+            try {
+                const testDoc = await db.collection(col).add({
+                    _temp: true,
+                    _created: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                await db.collection(col).doc(testDoc.id).delete();
+                addLog(`✅ Colección "${col}" verificada/creada`, 'success');
+            } catch (error) {
+                addLog(`❌ Error con colección "${col}": ${error.message}`, 'error');
+            }
+            updateProgress(20 + (i * 15), `Procesando ${col}...`);
+        }
+        
+        // Corregir reservas existentes
+        updateProgress(70, 'Corrigiendo documentos existentes...');
+        try {
+            const reservasSnap = await db.collection('reservas').get();
+            let corregidas = 0;
+            
+            for (const doc of reservasSnap.docs) {
+                const data = doc.data();
+                const updates = {};
+                
+                // Corregir campos
+                if (data.caba && typeof data.caba === 'number') updates.caba = data.caba.toString();
+                if (data.huespedes && typeof data.huespedes === 'number') updates.huespedes = data.huespedes.toString();
+                if (!data.origen) updates.origen = data.eventoId ? 'airbnb' : 'directa';
+                if (!data.gestion) updates.gestion = '';
+                if (!data.gestionNombre) updates.gestionNombre = '';
+                
+                if (Object.keys(updates).length > 0) {
+                    await db.collection('reservas').doc(doc.id).update(updates);
+                    corregidas++;
+                }
+            }
+            addLog(`✅ Documentos corregidos: ${corregidas}`, 'success');
+        } catch (error) {
+            addLog(`⚠️ Error corrigiendo documentos: ${error.message}`, 'warning');
+        }
+        
+        updateProgress(100, 'Migración completada');
+        addLog('✅ Migración finalizada exitosamente', 'success');
+        
+        // Mostrar resumen
+        addLog('📋 Resumen:', 'info');
+        addLog('   - Colecciones verificadas: reservas, presupuestos, clientes, pagos', 'info');
+        addLog('   - Campos estandarizados: cabaña (string), huespedes (string), origen', 'info');
+        addLog('   - Estructura lista para usar', 'success');
+    }
+    
+    async function importarGoogleCalendar() {
+        if (!confirm('🔄 ¿Importar reservas desde Google Calendar? Las reservas existentes no se duplicarán.')) return;
+        
+        addLog('🌐 Iniciando importación desde Google Calendar...', 'info');
+        updateProgress(10, 'Conectando con Google Calendar API...');
+        
+        let totalEventos = 0;
+        let nuevos = 0;
+        let existentes = 0;
+        
+        for (let idx = 0; idx < CALENDARS.length; idx++) {
+            const cal = CALENDARS[idx];
+            addLog(`📡 Consultando ${cal.nombre}...`, 'info');
+            
+            const now = new Date();
+            const startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString();
+            const endDate = new Date(now.getFullYear(), now.getMonth() + 6, 0).toISOString();
+            const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?key=${GOOGLE_API_KEY}&timeMin=${startDate}&timeMax=${endDate}&singleEvents=true&orderBy=startTime`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.error) {
+                    addLog(`❌ Error en ${cal.nombre}: ${data.error.message}`, 'error');
+                    continue;
+                }
+                
+                addLog(`✅ ${cal.nombre}: ${data.items?.length || 0} eventos encontrados`, 'success');
+                totalEventos += data.items?.length || 0;
+                
+                if (data.items) {
+                    for (const event of data.items) {
+                        if (event.summary && (event.start?.date || event.start?.dateTime)) {
+                            const checkInStr = event.start.date || event.start.dateTime.split('T')[0];
+                            const checkOutStr = event.end.date || event.end.dateTime.split('T')[0];
+                            
+                            // Verificar si ya existe
+                            const existing = await db.collection('reservas')
+                                .where('eventoId', '==', event.id)
+                                .where('calendarioId', '==', cal.id)
+                                .get();
+                            
+                            if (existing.empty) {
+                                const reservaData = {
+                                    eventoId: event.id,
+                                    calendarioId: cal.id,
+                                    caba: cal.cabaña,
+                                    nombre: event.summary,
+                                    checkIn: firebase.firestore.Timestamp.fromDate(new Date(checkInStr)),
+                                    checkOut: firebase.firestore.Timestamp.fromDate(new Date(checkOutStr)),
+                                    huespedes: '1',
+                                    observaciones: event.description || '',
+                                    origen: 'airbnb',
+                                    gestion: '',
+                                    gestionNombre: '',
+                                    creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+                                };
+                                await db.collection('reservas').add(reservaData);
+                                nuevos++;
+                                addLog(`➕ Nueva: ${event.summary} (${cal.nombre})`, 'success');
+                            } else {
+                                existentes++;
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                addLog(`❌ Error en ${cal.nombre}: ${error.message}`, 'error');
+            }
+            updateProgress(20 + (idx * 25), `Procesando ${cal.nombre}...`);
+        }
+        
+        updateProgress(100, 'Importación completada');
+        addLog(`✅ Importación finalizada: ${nuevos} nuevas reservas, ${existentes} existentes, ${totalEventos} eventos procesados`, 'success');
+        
+        // Mostrar resumen por cabaña
+        addLog('📊 Resumen por cabaña:', 'info');
+        for (const cal of CALENDARS) {
+            const count = await db.collection('reservas').where('calendarioId', '==', cal.id).get();
+            addLog(`   - ${cal.nombre}: ${count.size} reservas`, 'info');
+        }
+    }
+    
+    auth.onAuthStateChanged(async (user) => {
+        if (user) {
+            const userDoc = await db.collection('usuarios').doc(user.uid).get();
+            if (userDoc.exists && userDoc.data().rol === 'admin') {
+                currentUser = user;
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('mainPanel').style.display = 'block';
+                addLog(`🚀 Depurador listo - Admin: ${currentUser.email}`, 'success');
+            } else { auth.signOut(); }
+        }
+    });
+    
+    window.login = login;
+    window.ejecutarDiagnostico = ejecutarDiagnostico;
+    window.ejecutarMigracion = ejecutarMigracion;
+    window.importarGoogleCalendar = importarGoogleCalendar;
+</script>
+</body>
+</html>
