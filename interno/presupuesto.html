@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Presupuestos - CasaVerdeCanas</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -36,8 +36,17 @@
         
         .login-container { display: flex; justify-content: center; align-items: center; min-height: 90vh; }
         .login-box { background: white; padding: 40px; border-radius: 24px; width: 350px; text-align: center; }
+        .login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 12px; }
+        .login-box button { width: 100%; padding: 12px; background: #2d5a27; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; }
         
         @media (max-width: 768px) { .form-grid { grid-template-columns: 1fr; } }
+        
+        .presupuesto-card { background: #f8f9fa; border-radius: 12px; padding: 15px; margin-bottom: 12px; border-left: 4px solid #2d5a27; }
+        .presupuesto-header { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+        .estado-badge { padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+        .estado-pendiente { background: #fff3e0; color: #f39c12; }
+        .estado-aprobado { background: #e8f5e9; color: #27ae60; }
+        .estado-expirado { background: #fee2e2; color: #e74c3c; }
     </style>
 </head>
 <body>
@@ -47,7 +56,7 @@
         <h2><span class="material-icons">receipt</span> Presupuestos</h2>
         <input type="email" id="email" placeholder="Email">
         <input type="password" id="password" placeholder="Contraseña">
-        <button onclick="login()" style="margin-top:10px; background:#2d5a27; color:white; padding:10px; width:100%; border:none; border-radius:12px;">Ingresar</button>
+        <button onclick="login()">Ingresar</button>
         <div id="loginError" style="color:red; margin-top:10px;"></div>
     </div>
 </div>
@@ -93,33 +102,17 @@
             
             <div class="form-grid">
                 <div class="form-group">
-                    <label>💰 Precio por día</label>
+                    <label>💰 Precio por día (BRL)</label>
                     <input type="number" id="precioDiario" value="250" step="10">
+                    <small style="color:#666;">Precio en Reales Brasileños</small>
                 </div>
                 <div class="form-group">
-                    <label>🧹 Costo de limpieza</label>
+                    <label>🧹 Costo de limpieza (BRL)</label>
                     <input type="number" id="costoLimpieza" value="150" step="10">
                 </div>
                 <div class="form-group">
-                    <label>💵 Moneda de cotización</label>
-                    <select id="moneda" onchange="toggleTipoCambio()">
-                        <option value="BRL">Real Brasileño (BRL)</option>
-                        <option value="USD" selected>Dólar Americano (USD)</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div id="tipoCambioContainer" style="margin-bottom: 15px;">
-                <div class="form-group">
                     <label>💱 Tipo de cambio (1 USD = ? BRL)</label>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="number" id="tipoCambio" value="5.30" step="0.01" style="flex:1;">
-                        <button type="button" onclick="resetTipoCambio()" class="btn-secondary" style="padding: 8px 16px;">↺ Restablecer</button>
-                    </div>
-                    <div class="tipo-cambio-info">
-                        <span>📊 Valor por defecto: 1 USD = 5,30 BRL</span>
-                        <span>✏️ Puedes editar este valor manualmente</span>
-                    </div>
+                    <input type="number" id="tipoCambio" value="5.30" step="0.01">
                 </div>
             </div>
             
@@ -128,24 +121,27 @@
                 <textarea id="observaciones" rows="2" placeholder="Notas adicionales..."></textarea>
             </div>
             
+            <!-- Cálculo en tiempo real -->
             <div class="precio-row">
                 <div class="precio-item">
-                    <span>🏠 Estadía (días)</span>
+                    <span>🏠 Estadía</span>
                     <span id="diasCalculo">0 días</span>
                 </div>
                 <div class="precio-item">
-                    <span>💰 Subtotal</span>
-                    <span id="subtotalMostrar">0,00</span>
+                    <span>💰 Subtotal (BRL)</span>
+                    <span id="subtotalMostrar">0,00 BRL</span>
                 </div>
                 <div class="precio-item">
-                    <span>🧹 Costo limpieza</span>
-                    <span id="limpiezaMostrar">150,00</span>
+                    <span>🧹 Costo limpieza (BRL)</span>
+                    <span id="limpiezaMostrar">150,00 BRL</span>
                 </div>
                 <div class="precio-item total">
-                    <span>💵 TOTAL</span>
-                    <span id="totalMostrar">0,00</span>
+                    <span>💵 TOTAL EN REALES (BRL)</span>
+                    <span id="totalBRLMostrar">0,00 BRL</span>
                 </div>
-                <div id="conversionMostrar" style="font-size: 12px; color: #666; text-align: right; margin-top: 8px;"></div>
+                <div id="conversionMostrar" style="font-size: 13px; color: #2d5a27; text-align: right; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #c8e6c9;">
+                    ≈ <strong id="totalUSDMostrar">0,00 USD</strong> (1 USD = <span id="tasaMostrar">5.30</span> BRL)
+                </div>
             </div>
             
             <div style="display: flex; gap: 15px; justify-content: flex-end; margin-top: 20px;">
@@ -181,7 +177,7 @@
     
     let currentUser = null;
     
-    // Funciones de cálculo
+    // ========== FUNCIONES DE CÁLCULO ==========
     function calcularDias() {
         const checkIn = document.getElementById('checkIn').value;
         const checkOut = document.getElementById('checkOut').value;
@@ -198,75 +194,54 @@
         const dias = calcularDias();
         const precioDiario = parseFloat(document.getElementById('precioDiario').value) || 0;
         const costoLimpieza = parseFloat(document.getElementById('costoLimpieza').value) || 0;
-        const moneda = document.getElementById('moneda').value;
         const tipoCambio = parseFloat(document.getElementById('tipoCambio').value) || 5.30;
         
-        const subtotal = dias * precioDiario;
-        const total = subtotal + costoLimpieza;
+        const subtotalBRL = dias * precioDiario;
+        const totalBRL = subtotalBRL + costoLimpieza;
+        const totalUSD = totalBRL / tipoCambio;
         
         document.getElementById('diasCalculo').textContent = `${dias} ${dias === 1 ? 'día' : 'días'}`;
-        document.getElementById('subtotalMostrar').textContent = formatMoneda(subtotal, moneda);
-        document.getElementById('limpiezaMostrar').textContent = formatMoneda(costoLimpieza, moneda);
-        document.getElementById('totalMostrar').textContent = formatMoneda(total, moneda);
-        
-        if (moneda === 'USD') {
-            const totalBRL = total * tipoCambio;
-            document.getElementById('conversionMostrar').innerHTML = `≈ BRL ${totalBRL.toFixed(2)} (1 USD = ${tipoCambio.toFixed(2)} BRL)`;
-        } else {
-            document.getElementById('conversionMostrar').innerHTML = '';
-        }
+        document.getElementById('subtotalMostrar').textContent = `${subtotalBRL.toFixed(2)} BRL`;
+        document.getElementById('limpiezaMostrar').textContent = `${costoLimpieza.toFixed(2)} BRL`;
+        document.getElementById('totalBRLMostrar').textContent = `${totalBRL.toFixed(2)} BRL`;
+        document.getElementById('totalUSDMostrar').textContent = `${totalUSD.toFixed(2)} USD`;
+        document.getElementById('tasaMostrar').textContent = tipoCambio.toFixed(2);
     }
     
-    function formatMoneda(valor, moneda) {
-        if (moneda === 'USD') return `USD ${valor.toFixed(2)}`;
-        return `BRL ${valor.toFixed(2)}`;
-    }
-    
-    function toggleTipoCambio() {
-        const moneda = document.getElementById('moneda').value;
-        const container = document.getElementById('tipoCambioContainer');
-        if (moneda === 'USD') {
-            container.style.display = 'block';
-        } else {
-            container.style.display = 'none';
-        }
-        actualizarTotales();
-    }
-    
-    function resetTipoCambio() {
-        document.getElementById('tipoCambio').value = '5.30';
-        actualizarTotales();
-    }
-    
-    // Listeners de cambios
+    // Listeners para actualizar cálculos en tiempo real
     document.getElementById('checkIn').addEventListener('change', actualizarTotales);
     document.getElementById('checkOut').addEventListener('change', actualizarTotales);
     document.getElementById('precioDiario').addEventListener('input', actualizarTotales);
     document.getElementById('costoLimpieza').addEventListener('input', actualizarTotales);
     document.getElementById('tipoCambio').addEventListener('input', actualizarTotales);
     
+    // ========== AUTENTICACIÓN ==========
     async function login() {
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
+        const errorDiv = document.getElementById('loginError');
+        if (!email || !password) { errorDiv.textContent = 'Ingresa email y contraseña'; return; }
         try {
             const userCredential = await auth.signInWithEmailAndPassword(email, password);
             const userDoc = await db.collection('usuarios').doc(userCredential.user.uid).get();
             if (!userDoc.exists || userDoc.data().rol !== 'admin') {
                 await auth.signOut();
-                document.getElementById('loginError').textContent = 'Acceso solo para administradores';
+                errorDiv.textContent = 'Acceso solo para administradores';
                 return;
             }
             currentUser = userCredential.user;
             document.getElementById('loginContainer').style.display = 'none';
             document.getElementById('mainPanel').style.display = 'block';
             cargarPresupuestos();
+            actualizarTotales();
         } catch (error) {
-            document.getElementById('loginError').textContent = 'Email o contraseña incorrectos';
+            errorDiv.textContent = 'Email o contraseña incorrectos';
         }
     }
     
     function logout() { auth.signOut(); }
     
+    // ========== GENERAR PRESUPUESTO ==========
     async function generarPresupuesto() {
         const clienteNombre = document.getElementById('clienteNombre').value.trim();
         if (!clienteNombre) {
@@ -287,13 +262,13 @@
             return;
         }
         
-        const precioDiario = parseFloat(document.getElementById('precioDiario').value);
-        const costoLimpieza = parseFloat(document.getElementById('costoLimpieza').value);
-        const moneda = document.getElementById('moneda').value;
-        const tipoCambio = moneda === 'USD' ? parseFloat(document.getElementById('tipoCambio').value) : 1;
-        const subtotal = dias * precioDiario;
-        const total = subtotal + costoLimpieza;
-        const totalBRL = moneda === 'USD' ? total * tipoCambio : total;
+        const precioDiario = parseFloat(document.getElementById('precioDiario').value) || 0;
+        const costoLimpieza = parseFloat(document.getElementById('costoLimpieza').value) || 0;
+        const tipoCambio = parseFloat(document.getElementById('tipoCambio').value) || 5.30;
+        
+        const subtotalBRL = dias * precioDiario;
+        const totalBRL = subtotalBRL + costoLimpieza;
+        const totalUSD = totalBRL / tipoCambio;
         
         const validUntil = new Date();
         validUntil.setDate(validUntil.getDate() + 7);
@@ -306,13 +281,12 @@
             checkIn: firebase.firestore.Timestamp.fromDate(new Date(checkIn)),
             checkOut: firebase.firestore.Timestamp.fromDate(new Date(checkOut)),
             dias: dias,
-            precioDiario: precioDiario,
-            costoLimpieza: costoLimpieza,
-            subtotal: subtotal,
-            total: total,
-            moneda: moneda,
-            tipoCambio: tipoCambio,
+            precioDiarioBRL: precioDiario,
+            costoLimpiezaBRL: costoLimpieza,
+            subtotalBRL: subtotalBRL,
             totalBRL: totalBRL,
+            totalUSD: totalUSD,
+            tipoCambio: tipoCambio,
             observaciones: document.getElementById('observaciones').value,
             estado: 'pendiente',
             creadoPor: currentUser.uid,
@@ -323,14 +297,16 @@
         
         try {
             await db.collection('presupuestos').add(presupuestoData);
-            alert(`✅ Presupuesto generado con éxito\n\n${clienteNombre}\nTotal: ${formatMoneda(total, moneda)}\nVálido hasta: ${validUntil.toLocaleDateString('es-ES')}`);
+            alert(`✅ Presupuesto generado con éxito\n\n${clienteNombre}\nTotal en USD: USD ${totalUSD.toFixed(2)}\nTotal en BRL: BRL ${totalBRL.toFixed(2)}\nVálido hasta: ${validUntil.toLocaleDateString('es-ES')}`);
             limpiarFormulario();
             cargarPresupuestos();
         } catch (error) {
+            console.error('Error:', error);
             alert('Error al guardar: ' + error.message);
         }
     }
     
+    // ========== CARGAR PRESUPUESTOS ==========
     async function cargarPresupuestos() {
         try {
             const snapshot = await db.collection('presupuestos')
@@ -350,35 +326,36 @@
             }
             
             container.style.display = 'block';
-            let html = '<div style="display: flex; flex-direction: column; gap: 15px;">';
+            let html = '';
             
             for (const p of presupuestos) {
                 const fecha = p.creadoEn?.toDate?.() || new Date();
                 const checkIn = p.checkIn?.toDate?.() || new Date(p.checkIn);
                 const checkOut = p.checkOut?.toDate?.() || new Date(p.checkOut);
-                const totalStr = p.moneda === 'USD' ? `USD ${p.total.toFixed(2)}` : `BRL ${p.total.toFixed(2)}`;
+                const estadoClass = p.estado === 'pendiente' ? 'estado-pendiente' : (p.estado === 'aprobado' ? 'estado-aprobado' : 'estado-expirado');
                 
                 html += `
-                    <div style="background: #f8f9fa; border-radius: 12px; padding: 15px; border-left: 4px solid #2d5a27;">
-                        <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                    <div class="presupuesto-card">
+                        <div class="presupuesto-header">
                             <strong>${escapeHtml(p.clienteNombre)}</strong>
-                            <span style="background: #e8f5e9; padding: 2px 10px; border-radius: 20px; font-size: 12px;">${p.estado}</span>
+                            <span class="estado-badge ${estadoClass}">${p.estado === 'pendiente' ? 'Pendiente' : (p.estado === 'aprobado' ? 'Aprobado' : 'Expirado')}</span>
                         </div>
-                        <div style="font-size: 13px; color: #666; margin-top: 8px;">
+                        <div style="font-size: 13px; color: #666;">
                             🏠 Cabaña ${p.cabaña} | 📅 ${checkIn.toLocaleDateString('es-ES')} → ${checkOut.toLocaleDateString('es-ES')} (${p.dias} días)
                         </div>
                         <div style="font-size: 13px; margin-top: 5px;">
-                            💰 ${totalStr} | 📆 ${fecha.toLocaleDateString('es-ES')}
+                            💰 USD ${p.totalUSD?.toFixed(2)} | BRL ${p.totalBRL?.toFixed(2)}
                         </div>
-                        ${p.moneda === 'USD' ? `<div style="font-size: 11px; color: #888;">≈ BRL ${p.totalBRL?.toFixed(2)} (1 USD = ${p.tipoCambio} BRL)</div>` : ''}
+                        <div style="font-size: 11px; color: #888;">
+                            📆 ${fecha.toLocaleDateString('es-ES')} | 💱 1 USD = ${p.tipoCambio} BRL
+                        </div>
                         ${p.observaciones ? `<div style="font-size: 12px; color: #666; margin-top: 8px;">📝 ${escapeHtml(p.observaciones)}</div>` : ''}
                     </div>
                 `;
             }
-            html += '</div>';
             content.innerHTML = html;
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Error cargando presupuestos:', error);
         }
     }
     
@@ -391,10 +368,8 @@
         document.getElementById('checkOut').value = '';
         document.getElementById('precioDiario').value = '250';
         document.getElementById('costoLimpieza').value = '150';
-        document.getElementById('moneda').value = 'USD';
         document.getElementById('tipoCambio').value = '5.30';
         document.getElementById('observaciones').value = '';
-        toggleTipoCambio();
         actualizarTotales();
     }
     
@@ -408,6 +383,7 @@
                 document.getElementById('loginContainer').style.display = 'none';
                 document.getElementById('mainPanel').style.display = 'block';
                 cargarPresupuestos();
+                actualizarTotales();
             } else { auth.signOut(); }
         }
     });
@@ -416,8 +392,6 @@
     window.logout = logout;
     window.generarPresupuesto = generarPresupuesto;
     window.limpiarFormulario = limpiarFormulario;
-    window.toggleTipoCambio = toggleTipoCambio;
-    window.resetTipoCambio = resetTipoCambio;
 </script>
 </body>
 </html>
