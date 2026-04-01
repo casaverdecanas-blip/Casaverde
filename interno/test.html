@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Diagnóstico de Datos - Casa Verde</title>
+    <link rel="stylesheet" href="css/admin-style.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        .debug-card { font-family: monospace; font-size: 0.8rem; background: #2d3436; color: #fab1a0; padding: 15px; border-radius: 8px; overflow-x: auto; margin-top: 10px; }
+        .status-ok { color: #55efc4; font-weight: bold; }
+        .status-error { color: #ff7675; font-weight: bold; }
+        .badge-info { background: #dfe6e9; color: #2d3436; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; }
+    </style>
+</head>
+<body>
+    <div class="main-content" style="margin-left:0; width:100%; max-width:1000px; margin: 0 auto;">
+        <div class="card">
+            <h1>🛠️ Recuperación de Estructura y Datos</h1>
+            <p>Este panel analiza por qué las tareas no se están vinculando correctamente con el historial.</p>
+            <button class="btn-cv" onclick="ejecutarDiagnostico()" style="margin-top:15px;">
+                <span class="material-icons">refresh</span> Iniciar Escaneo
+            </button>
+        </div>
+
+        <div class="grid-3">
+            <div class="card">
+                <h3>Colección: Tareas</h3>
+                <div id="res-tareas">Esperando...</div>
+            </div>
+            <div class="card">
+                <h3>Historial (Hoy)</h3>
+                <div id="res-historial">Esperando...</div>
+            </div>
+            <div class="card">
+                <h3>Estado de Unión</h3>
+                <div id="res-union">Esperando...</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Consola de Datos Crudos (JSON)</h3>
+            <div id="console-log" class="debug-card">Inicia el escaneo para ver la estructura de los objetos...</div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="js/auth-core.js"></script>
+
+    <script>
+        async function ejecutarDiagnostico() {
+            const log = document.getElementById('console-log');
+            const resTareas = document.getElementById('res-tareas');
+            const resHistorial = document.getElementById('res-historial');
+            const resUnion = document.getElementById('res-union');
+            
+            log.innerHTML = "Escaneando base de datos...<br>";
+
+            try {
+                // 1. Obtener Tareas
+                const tareasSnap = await db.collection('tareas').get();
+                let tareasData = [];
+                tareasSnap.forEach(doc => tareasData.push({ id: doc.id, ...doc.data() }));
+                resTareas.innerHTML = `<span class="status-ok">${tareasData.length} Tareas encontradas</span>`;
+                
+                // 2. Obtener Historial de Hoy (Día Calendario)
+                const hoy = new Date(); hoy.setHours(0,0,0,0);
+                const historialSnap = await db.collection('historial').where('timestamp', '>=', hoy).get();
+                let historialData = [];
+                historialSnap.forEach(doc => historialData.push({ id: doc.id, ...doc.data() }));
+                resHistorial.innerHTML = `<span class="status-ok">${historialData.length} Registros de hoy</span>`;
+
+                // 3. Analizar Estructura de la primera tarea e historial
+                log.innerHTML += "<br>--- ESTRUCTURA DE TAREA ---<br>";
+                if(tareasData[0]) log.innerHTML += JSON.stringify(tareasData[0], null, 2);
+                
+                log.innerHTML += "<br><br>--- ESTRUCTURA DE HISTORIAL ---<br>";
+                if(historialData[0]) log.innerHTML += JSON.stringify(historialData[0], null, 2);
+
+                // 4. Verificar por qué no se "tachan" (La Unión)
+                let unionHtml = "<ul>";
+                let crucesExitosos = 0;
+
+                tareasData.forEach(t => {
+                    // VERIFICACIÓN CRÍTICA: ¿El ID de la tarea coincide con el tareaId del historial?
+                    const coincidencia = historialData.find(h => String(h.tareaId).trim() === String(t.id).trim());
+                    
+                    if (coincidencia) {
+                        crucesExitosos++;
+                        unionHtml += `<li>✅ ${t.nombre}: <span class="status-ok">VINCULADA</span></li>`;
+                    } else {
+                        unionHtml += `<li>❌ ${t.nombre}: <span class="status-error">SIN REGISTRO HOY</span></li>`;
+                    }
+                });
+                
+                resUnion.innerHTML = unionHtml + "</ul>";
+                
+                if (crucesExitosos === 0 && historialData.length > 0) {
+                    log.innerHTML += "<br><br><span class='status-error'>ALERTA: Tienes registros hoy pero ninguno coincide con las IDs de tareas. Verifica si 'tareaId' en historial coincide con el ID del documento en tareas.</span>";
+                }
+
+            } catch (error) {
+                log.innerHTML += `<br><span class="status-error">ERROR: ${error.message}</span>`;
+            }
+        }
+    </script>
+</body>
+</html>
