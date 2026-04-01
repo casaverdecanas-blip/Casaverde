@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalle Presupuesto - CasaVerdeCanas</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: #f5f7fa; min-height: 100vh; }
+        
+        .header { background: #2d5a27; color: white; padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+        .header h1 { display: flex; align-items: center; gap: 10px; font-size: 1.5rem; }
+        .user-info { display: flex; align-items: center; gap: 15px; background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 40px; }
+        .back-btn, .logout-btn { background: rgba(255,255,255,0.2); border: none; padding: 8px 16px; border-radius: 40px; cursor: pointer; color: white; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+        .logout-btn { background: #e74c3c; }
+        
+        .content { max-width: 900px; margin: 30px auto; padding: 0 20px; }
+        .card { background: white; border-radius: 20px; padding: 30px; margin-bottom: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .card h2 { color: #2d5a27; display: flex; align-items: center; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #e8f5e9; padding-bottom: 12px; }
+        
+        .info-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #e9ecef; }
+        .info-label { font-weight: 600; color: #495057; }
+        .estado-badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .estado-pendiente { background: #fff3e0; color: #f39c12; }
+        .estado-aprobado { background: #e8f5e9; color: #27ae60; }
+        .estado-expirado { background: #fee2e2; color: #e74c3c; }
+        
+        .btn-primary { background: #2d5a27; color: white; border: none; padding: 10px 20px; border-radius: 30px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-weight: 500; margin-right: 10px; margin-bottom: 10px; }
+        .btn-warning { background: #f39c12; color: white; border: none; padding: 10px 20px; border-radius: 30px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+        .btn-danger { background: #e74c3c; color: white; border: none; padding: 10px 20px; border-radius: 30px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+        
+        .loading { text-align: center; padding: 50px; }
+        .error-message { text-align: center; padding: 50px; color: #e74c3c; }
+        
+        @media (max-width: 768px) { .header { flex-direction: column; text-align: center; } }
+    </style>
+</head>
+<body>
+
+<div id="loginContainer" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #1e3c2c 0%, #2d5a27 100%);">
+    <div style="background: white; padding: 40px; border-radius: 24px; width: 350px; text-align: center;">
+        <h2 style="color: #2d5a27;">🔍 Detalle Presupuesto</h2>
+        <input type="email" id="email" placeholder="Email" style="width:100%; padding:12px; margin:10px 0; border:1px solid #ddd; border-radius:12px;">
+        <input type="password" id="password" placeholder="Contraseña" style="width:100%; padding:12px; margin:10px 0; border:1px solid #ddd; border-radius:12px;">
+        <button onclick="login()" style="width:100%; padding:12px; background:#2d5a27; color:white; border:none; border-radius:12px;">Ingresar</button>
+        <div id="loginError" style="color:red; margin-top:10px;"></div>
+    </div>
+</div>
+
+<div id="mainPanel" style="display: none;">
+    <div class="header">
+        <h1><span class="material-icons">receipt</span> Detalle Presupuesto</h1>
+        <div class="user-info">
+            <span class="material-icons">account_circle</span>
+            <span id="userEmail"></span>
+            <a href="presupuestos.html" class="back-btn"><span class="material-icons">arrow_back</span> Volver</a>
+            <button class="logout-btn" onclick="logout()"><span class="material-icons">logout</span> Salir</button>
+        </div>
+    </div>
+    
+    <div class="content" id="contentArea">
+        <div class="loading">🔄 Cargando presupuesto...</div>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+        authDomain: "tatareas-d8a80.firebaseapp.com",
+        projectId: "tatareas-d8a80",
+        storageBucket: "tatareas-d8a80.firebasestorage.app",
+        messagingSenderId: "709332495480",
+        appId: "1:709332495480:web:7060b2c75984352354918d"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    
+    let currentUser = null;
+    let presupuestoId = null;
+    
+    function getUrlParam(param) {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get(param);
+    }
+    
+    async function login() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const errorDiv = document.getElementById('loginError');
+        try {
+            const userCredential = await auth.signInWithEmailAndPassword(email, password);
+            const userDoc = await db.collection('usuarios').doc(userCredential.user.uid).get();
+            if (!userDoc.exists || userDoc.data().rol !== 'admin') {
+                await auth.signOut();
+                errorDiv.textContent = 'Acceso solo para administradores';
+                return;
+            }
+            currentUser = userCredential.user;
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('mainPanel').style.display = 'block';
+            document.getElementById('userEmail').textContent = currentUser.email;
+            cargarPresupuesto();
+        } catch (error) {
+            errorDiv.textContent = 'Email o contraseña incorrectos';
+        }
+    }
+    
+    function logout() { auth.signOut(); }
+    
+    async function cargarPresupuesto() {
+        presupuestoId = getUrlParam('id');
+        if (!presupuestoId) {
+            document.getElementById('contentArea').innerHTML = '<div class="error-message">❌ No se especificó un presupuesto</div>';
+            return;
+        }
+        
+        try {
+            const doc = await db.collection('presupuestos').doc(presupuestoId).get();
+            if (!doc.exists) {
+                document.getElementById('contentArea').innerHTML = '<div class="error-message">❌ Presupuesto no encontrado</div>';
+                return;
+            }
+            
+            const p = { id: doc.id, ...doc.data() };
+            renderizarDetalle(p);
+        } catch (error) {
+            document.getElementById('contentArea').innerHTML = `<div class="error-message">❌ Error: ${error.message}</div>`;
+        }
+    }
+    
+    function renderizarDetalle(p) {
+        const checkIn = p.checkIn?.toDate?.() || new Date(p.checkIn);
+        const checkOut = p.checkOut?.toDate?.() || new Date(p.checkOut);
+        const estadoClass = p.estado === 'pendiente' ? 'estado-pendiente' : (p.estado === 'aprobado' ? 'estado-aprobado' : 'estado-expirado');
+        const estadoTexto = p.estado === 'pendiente' ? 'Pendiente' : (p.estado === 'aprobado' ? 'Aprobado' : 'Expirado');
+        const totalUSD = p.totalUSD?.toFixed(2) || (p.totalBRL / p.tipoCambio).toFixed(2);
+        const totalBRL = p.totalBRL?.toFixed(2) || (p.totalUSD * p.tipoCambio).toFixed(2);
+        
+        const html = `
+            <div class="card">
+                <h2><span class="material-icons">info</span> Información General</h2>
+                <div class="info-row"><span class="info-label">Cliente:</span><span>${escapeHtml(p.clienteNombre)}</span></div>
+                <div class="info-row"><span class="info-label">WhatsApp:</span><span>${escapeHtml(p.clienteWhatsapp || '-')}</span></div>
+                <div class="info-row"><span class="info-label">Nacionalidad:</span><span>${escapeHtml(p.clienteNacionalidad || '-')}</span></div>
+                <div class="info-row"><span class="info-label">Estado:</span><span><span class="estado-badge ${estadoClass}">${estadoTexto}</span></span></div>
+                <div class="info-row"><span class="info-label">Creado por:</span><span>${escapeHtml(p.creadoPorNombre)}</span></div>
+                <div class="info-row"><span class="info-label">Fecha creación:</span><span>${p.creadoEn?.toDate?.().toLocaleString('es-ES') || '-'}</span></div>
+                <div class="info-row"><span class="info-label">Válido hasta:</span><span>${p.validoHasta?.toDate?.().toLocaleDateString('es-ES') || '-'}</span></div>
+            </div>
+            
+            <div class="card">
+                <h2><span class="material-icons">holiday_village</span> Detalles de Estadía</h2>
+                <div class="info-row"><span class="info-label">Cabaña:</span><span>Cabaña ${p.cabaña}</span></div>
+                <div class="info-row"><span class="info-label">Check-in:</span><span>${checkIn.toLocaleDateString('es-ES')}</span></div>
+                <div class="info-row"><span class="info-label">Check-out:</span><span>${checkOut.toLocaleDateString('es-ES')}</span></div>
+                <div class="info-row"><span class="info-label">Días:</span><span>${p.dias} días</span></div>
+            </div>
+            
+            <div class="card">
+                <h2><span class="material-icons">payments</span> Valores</h2>
+                <div class="info-row"><span class="info-label">Precio por día (BRL):</span><span>R$ ${p.precioDiarioBRL?.toFixed(2)}</span></div>
+                <div class="info-row"><span class="info-label">Costo limpieza (BRL):</span><span>R$ ${p.costoLimpiezaBRL?.toFixed(2)}</span></div>
+                <div class="info-row"><span class="info-label">Subtotal (BRL):</span><span>R$ ${p.subtotalBRL?.toFixed(2)}</span></div>
+                <div class="info-row"><span class="info-label">Total (BRL):</span><span><strong>R$ ${totalBRL}</strong></span></div>
+                <div class="info-row"><span class="info-label">Tipo de cambio:</span><span>1 USD = R$ ${p.tipoCambio}</span></div>
+                <div class="info-row"><span class="info-label">Total (USD):</span><span><strong>USD ${totalUSD}</strong></span></div>
+            </div>
+            
+            ${p.observaciones ? `
+            <div class="card">
+                <h2><span class="material-icons">notes</span> Observaciones</h2>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 12px;">${escapeHtml(p.observaciones)}</div>
+            </div>
+            ` : ''}
+            
+            <div class="card">
+                <h2><span class="material-icons">assignment_turned_in</span> Acciones</h2>
+                <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                    <button class="btn-primary" onclick="registrarPago()"><span class="material-icons">payments</span> Registrar Seña/Pago</button>
+                    <button class="btn-warning" onclick="confirmarDisponibilidad()"><span class="material-icons">check_circle</span> Confirmar Disponibilidad</button>
+                    <button class="btn-primary" onclick="convertirReserva()"><span class="material-icons">event_available</span> Convertir en Reserva</button>
+                    <button class="btn-danger" onclick="marcarExpirado()"><span class="material-icons">cancel</span> Marcar como Expirado</button>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('contentArea').innerHTML = html;
+    }
+    
+    function registrarPago() {
+        window.location.href = `registrar-pago.html?presupuestoId=${presupuestoId}&cliente=${encodeURIComponent(document.querySelector('.info-row:first-child span:last-child')?.innerText || '')}`;
+    }
+    
+    function confirmarDisponibilidad() {
+        window.location.href = `calendario.html?presupuestoId=${presupuestoId}`;
+    }
+    
+    async function convertirReserva() {
+        if (!confirm('¿Convertir este presupuesto en reserva confirmada? Se creará una reserva en el sistema.')) return;
+        try {
+            const doc = await db.collection('presupuestos').doc(presupuestoId).get();
+            const p = doc.data();
+            
+            const reservaData = {
+                presupuestoId: presupuestoId,
+                clienteNombre: p.clienteNombre,
+                clienteWhatsapp: p.clienteWhatsapp,
+                clienteNacionalidad: p.clienteNacionalidad,
+                cabaña: p.cabaña,
+                checkIn: p.checkIn,
+                checkOut: p.checkOut,
+                dias: p.dias,
+                precioDiarioBRL: p.precioDiarioBRL,
+                costoLimpiezaBRL: p.costoLimpiezaBRL,
+                totalBRL: p.totalBRL,
+                totalUSD: p.totalUSD,
+                tipoCambio: p.tipoCambio,
+                observaciones: p.observaciones,
+                estado: 'confirmada',
+                origen: 'directa',
+                creadoPor: currentUser.uid,
+                creadoPorNombre: currentUser.email,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            
+            await db.collection('reservas').add(reservaData);
+            await db.collection('presupuestos').doc(presupuestoId).update({ estado: 'aprobado' });
+            alert('✅ Reserva creada exitosamente');
+            window.location.href = 'reservas.html';
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    }
+    
+    async function marcarExpirado() {
+        if (!confirm('¿Marcar este presupuesto como expirado? Esta acción no se puede deshacer.')) return;
+        try {
+            await db.collection('presupuestos').doc(presupuestoId).update({ estado: 'expirado' });
+            alert('✅ Presupuesto marcado como expirado');
+            cargarPresupuesto();
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    }
+    
+    function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m)); }
+    
+    auth.onAuthStateChanged(async (user) => {
+        if (user) {
+            const userDoc = await db.collection('usuarios').doc(user.uid).get();
+            if (userDoc.exists && userDoc.data().rol === 'admin') {
+                currentUser = user;
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('mainPanel').style.display = 'block';
+                document.getElementById('userEmail').textContent = currentUser.email;
+                cargarPresupuesto();
+            } else { auth.signOut(); }
+        }
+    });
+    
+    window.login = login;
+    window.logout = logout;
+    window.registrarPago = registrarPago;
+    window.confirmarDisponibilidad = confirmarDisponibilidad;
+    window.convertirReserva = convertirReserva;
+    window.marcarExpirado = marcarExpirado;
+</script>
+</body>
+</html>
