@@ -6,22 +6,38 @@
     <title>Panel Colaborador - Casa Verde</title>
     <link rel="stylesheet" href="css/admin-style.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab-btn { flex: 1; padding: 10px; border: none; border-radius: 8px; cursor: pointer; background: #ddd; }
+        .tab-btn.active { background: #2d5a27; color: white; }
+        .check-item { background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; border-left: 5px solid #f39c12; }
+    </style>
 </head>
-<body>
+<body style="background:#f4f7f6;">
     <nav style="background:#2d5a27; color:white; padding:15px; display:flex; justify-content:space-between; align-items:center;">
-        <span><b>CASA VERDE COLABORADORES</b></span>
+        <span><b>CASA VERDE</b></span>
         <button onclick="logout()" style="background:none; border:none; color:white; cursor:pointer;"><span class="material-icons">logout</span></button>
     </nav>
 
     <div style="padding:20px; max-width:500px; margin:0 auto;">
         <h2 id="saludo" style="color:#2d5a27; margin-bottom:20px;">Hola...</h2>
         
-        <div id="listaTareas"></div>
+        <div class="tabs">
+            <button class="tab-btn active" id="btnMant" onclick="showTab('mant')">Mantenimiento</button>
+            <button class="tab-btn" id="btnCheck" onclick="showTab('check')">Check-in Hoy</button>
+        </div>
 
-        <div class="card" style="margin-top:30px; border:2px dashed #2d5a27; background:#f0f7f0;">
-            <h4 style="color:#2d5a27; margin-bottom:10px;">¿Surgió algo nuevo?</h4>
-            <input type="text" id="extraTaskName" placeholder="Ej: Cambiar foco pasillo" style="width:100%; padding:10px; margin-bottom:10px; border-radius:5px; border:1px solid #ccc;">
-            <button onclick="crearTareaExtra()" class="btn-cv" style="width:100%">Reportar y Marcar Hecho</button>
+        <div id="tab-mant">
+            <div id="listaTareas"></div>
+            <div class="card" style="margin-top:30px; border:2px dashed #2d5a27; background:#f0f7f0;">
+                <h4 style="color:#2d5a27; margin-bottom:10px;">¿Algo nuevo?</h4>
+                <input type="text" id="extraTaskName" placeholder="Ej: Fuga de agua" style="width:100%; padding:10px; margin-bottom:10px; border-radius:5px; border:1px solid #ccc;">
+                <button onclick="crearTareaExtra()" class="btn-cv" style="width:100%">Reportar y Hacer</button>
+            </div>
+        </div>
+
+        <div id="tab-check" style="display:none;">
+            <div id="listaCheckins"></div>
         </div>
     </div>
 
@@ -30,68 +46,78 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="js/auth-core.js"></script>
     <script>
-        async function cargarTareas() {
-            const container = document.getElementById('listaTareas');
+        function showTab(tab) {
+            document.getElementById('tab-mant').style.display = tab === 'mant' ? 'block' : 'none';
+            document.getElementById('tab-check').style.display = tab === 'check' ? 'block' : 'none';
+            document.getElementById('btnMant').classList.toggle('active', tab === 'mant');
+            document.getElementById('btnCheck').classList.toggle('active', tab === 'check');
+        }
+
+        async function cargarDatos() {
             const ahora = new Date();
+            const hoyISO = ahora.toISOString().split('T')[0];
             document.getElementById('saludo').textContent = `Hola, ${sessionStorage.getItem('userName')}`;
 
-            const [tareasSnap, historialSnap] = await Promise.all([
+            // Cargar Tareas
+            const [tSnap, hSnap, rSnap] = await Promise.all([
                 db.collection('tareas').where('activa', '==', true).get(),
-                db.collection('historial').orderBy('timestamp', 'desc').get()
+                db.collection('historial').orderBy('timestamp', 'desc').get(),
+                db.collection('reservas').where('checkIn', '==', hoyISO).get()
             ]);
 
-            const historial = historialSnap.docs.map(d => d.data());
-            let html = '';
-
-            tareasSnap.forEach(doc => {
+            // Lógica de Tareas (Igual a la anterior)
+            const hist = hSnap.docs.map(d => d.data());
+            let tHtml = '';
+            tSnap.forEach(doc => {
                 const t = doc.data();
-                const ultimo = historial.find(h => h.tareaId === doc.id);
                 let alDia = false;
-
-                if (ultimo && ultimo.timestamp) {
-                    const diffDias = (ahora - ultimo.timestamp.toDate()) / (1000 * 60 * 60 * 24);
-                    if (diffDias < (t.recurrencia || 1)) alDia = true;
-                }
-
-                html += `
-                <div class="card" style="display:flex; justify-content:space-between; align-items:center; border-left:5px solid ${alDia ? '#ccc' : '#2d5a27'}; opacity:${alDia ? 0.5 : 1}">
-                    <div>
-                        <b style="${alDia ? 'text-decoration:line-through; color:#999' : ''}">${t.nombre}</b>
-                        <p style="font-size:0.8rem; color:#666">${alDia ? 'Completada' : (t.descripcion || '')}</p>
-                    </div>
-                    ${alDia ? '<span class="material-icons" style="color:#27ae60">check_circle</span>' : 
-                    `<button onclick="completar('${doc.id}', '${t.nombre}')" class="btn-cv" style="padding:8px; border-radius:50%;"><span class="material-icons">done</span></button>`}
+                const u = hist.find(h => h.tareaId === doc.id);
+                if(u && (ahora - u.timestamp.toDate())/(1000*60*60*24) < (t.recurrencia || 1)) alDia = true;
+                tHtml += `<div class="card" style="display:flex; justify-content:space-between; align-items:center; opacity:${alDia?0.5:1}">
+                    <div><b>${t.nombre}</b></div>
+                    ${alDia ? '<span class="material-icons" style="color:green">check</span>' : `<button onclick="completar('${doc.id}','${t.nombre}')" class="btn-cv">OK</button>`}
                 </div>`;
             });
-            container.innerHTML = html;
+            document.getElementById('listaTareas').innerHTML = tHtml;
+
+            // Lógica de Check-ins
+            let cHtml = rSnap.empty ? '<p>No hay ingresos programados para hoy.</p>' : '';
+            rSnap.forEach(doc => {
+                const res = doc.data();
+                const listo = res.preparada === true;
+                cHtml += `<div class="check-item" style="border-left-color:${listo ? '#2ecc71' : '#f39c12'}">
+                    <div style="flex:1">
+                        <b>Ingreso: ${res.nombre}</b><br>
+                        <small>Verificar sábanas, toallas y kit de bienvenida.</small>
+                    </div>
+                    ${listo ? '<span class="material-icons" style="color:green">done_all</span>' : 
+                    `<button onclick="prepararCasa('${doc.id}')" class="btn-cv" style="background:#f39c12">Marcar Lista</button>`}
+                </div>`;
+            });
+            document.getElementById('listaCheckins').innerHTML = cHtml;
+        }
+
+        async function prepararCasa(resId) {
+            if(!confirm("¿La casa está 100% lista para el huésped?")) return;
+            await db.collection('reservas').doc(resId).update({ 
+                preparada: true,
+                preparadaPor: sessionStorage.getItem('userName'),
+                preparadaFecha: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            cargarDatos();
         }
 
         async function completar(id, nombre) {
-            if(!confirm(`¿Confirmas ${nombre}?`)) return;
             await db.collection('historial').add({
                 tareaId: id,
                 usuarioId: auth.currentUser.uid,
                 colaboradorNombre: sessionStorage.getItem('userName'),
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             });
-            cargarTareas();
+            cargarDatos();
         }
 
-        async function crearTareaExtra() {
-            const nombre = document.getElementById('extraTaskName').value;
-            if(!nombre) return;
-            const ref = await db.collection('tareas').add({
-                nombre: nombre,
-                descripcion: "Tarea extra reportada",
-                recurrencia: 99, // Para que no se repita pronto
-                activa: true,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            await completar(ref.id, nombre);
-            document.getElementById('extraTaskName').value = "";
-        }
-
-        window.onload = () => setTimeout(cargarTareas, 1000);
+        window.onload = () => setTimeout(cargarDatos, 1000);
     </script>
 </body>
 </html>
