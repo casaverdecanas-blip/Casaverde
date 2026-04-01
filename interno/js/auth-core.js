@@ -17,15 +17,21 @@ auth.onAuthStateChanged(async (user) => {
         window.location.href = 'login.html';
     } else if (user) {
         const doc = await db.collection('usuarios').doc(user.uid).get();
-        const rol = doc.data()?.rol;
-        
-        // Redirección por Rol
-        if (rol === 'admin' && (path.includes('colaborador.html') || path.includes('login.html'))) {
-            window.location.href = 'dashboard.html';
-        } else if (rol === 'user' && !path.includes('colaborador.html')) {
-            window.location.href = 'colaborador.html';
+        if (doc.exists) {
+            const data = doc.data();
+            sessionStorage.setItem('userName', data.nombre || 'Colaborador');
+            sessionStorage.setItem('userRol', data.rol);
+
+            if (data.rol === 'admin' && (path.includes('colaborador.html') || path.includes('login.html'))) {
+                window.location.href = 'dashboard.html';
+            } else if (data.rol === 'user' && !path.includes('colaborador.html')) {
+                window.location.href = 'colaborador.html';
+            }
         }
     }
 });
 
-function logout() { auth.signOut().then(() => window.location.href = 'login.html'); }
+function logout() { 
+    sessionStorage.clear();
+    auth.signOut().then(() => window.location.href = 'login.html'); 
+}
