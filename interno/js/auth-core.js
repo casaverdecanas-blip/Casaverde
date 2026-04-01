@@ -21,7 +21,6 @@ auth.onAuthStateChanged(async (user) => {
             const data = doc.data();
             sessionStorage.setItem('userName', data.nombre || 'Colaborador');
             sessionStorage.setItem('userRol', data.rol);
-
             if (data.rol === 'admin' && (path.includes('colaborador.html') || path.includes('login.html'))) {
                 window.location.href = 'dashboard.html';
             } else if (data.rol === 'user' && !path.includes('colaborador.html')) {
