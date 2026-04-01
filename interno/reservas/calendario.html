@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendario Ocupación - CasaVerdeCanas</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <!-- FullCalendar -->
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+    
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: #f5f7fa; min-height: 100vh; }
+        
+        .header { background: #2d5a27; color: white; padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+        .header h1 { display: flex; align-items: center; gap: 10px; font-size: 1.5rem; }
+        .user-info { display: flex; align-items: center; gap: 15px; background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 40px; }
+        .back-btn, .logout-btn { background: rgba(255,255,255,0.2); border: none; padding: 8px 16px; border-radius: 40px; cursor: pointer; color: white; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+        .logout-btn { background: #e74c3c; }
+        
+        .content { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
+        .card { background: white; border-radius: 20px; padding: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        
+        .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 12px; }
+        .legend-color { width: 20px; height: 20px; border-radius: 4px; display: inline-block; margin-right: 8px; }
+        
+        @media (max-width: 768px) { .header { flex-direction: column; text-align: center; } }
+    </style>
+</head>
+<body>
+
+<div id="loginContainer" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #1e3c2c 0%, #2d5a27 100%);">
+    <div style="background: white; padding: 40px; border-radius: 24px; width: 350px; text-align: center;">
+        <h2 style="color: #2d5a27;">🗓️ Calendario</h2>
+        <input type="email" id="email" placeholder="Email" style="width:100%; padding:12px; margin:10px 0; border:1px solid #ddd; border-radius:12px;">
+        <input type="password" id="password" placeholder="Contraseña" style="width:100%; padding:12px; margin:10px 0; border:1px solid #ddd; border-radius:12px;">
+        <button onclick="login()" style="width:100%; padding:12px; background:#2d5a27; color:white; border:none; border-radius:12px;">Ingresar</button>
+        <div id="loginError" style="color:red; margin-top:10px;"></div>
+        <div style="margin-top: 20px;"><a href="index.html" style="color:#2d5a27;">← Volver al Dashboard</a></div>
+    </div>
+</div>
+
+<div id="mainPanel" style="display: none;">
+    <div class="header">
+        <h1><span class="material-icons">calendar_month</span> Calendario de Ocupación</h1>
+        <div class="user-info">
+            <span class="material-icons">account_circle</span>
+            <span id="userEmail"></span>
+            <a href="index.html" class="back-btn"><span class="material-icons">arrow_back</span> Dashboard</a>
+            <a href="reservas.html" class="back-btn"><span class="material-icons">list</span> Reservas</a>
+            <button class="logout-btn" onclick="logout()"><span class="material-icons">logout</span> Salir</button>
+        </div>
+    </div>
+    
+    <div class="content">
+        <div class="card">
+            <div id="calendar"></div>
+            <div class="legend">
+                <div><span class="legend-color" style="background:#FF9800;"></span> Cabaña 1 (Frente)</div>
+                <div><span class="legend-color" style="background:#3498db;"></span> Cabaña 2 (Depa abajo)</div>
+                <div><span class="legend-color" style="background:#2ecc71;"></span> Cabaña 3 (Loft)</div>
+                <div><span class="legend-color" style="background:#f1c40f;"></span> Presupuesto pendiente</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+        authDomain: "tatareas-d8a80.firebaseapp.com",
+        projectId: "tatareas-d8a80",
+        storageBucket: "tatareas-d8a80.firebasestorage.app",
+        messagingSenderId: "709332495480",
+        appId: "1:709332495480:web:7060b2c75984352354918d"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    
+    let currentUser = null;
+    let calendar = null;
+    
+    async function login() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const errorDiv = document.getElementById('loginError');
+        try {
+            const userCredential = await auth.signInWithEmailAndPassword(email, password);
+            const userDoc = await db.collection('usuarios').doc(userCredential.user.uid).get();
+            if (!userDoc.exists || userDoc.data().rol !== 'admin') {
+                await auth.signOut();
+                errorDiv.textContent = 'Acceso solo para administradores';
+                return;
+            }
+            currentUser = userCredential.user;
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('mainPanel').style.display = 'block';
+            document.getElementById('userEmail').textContent = currentUser.email;
+            cargarEventos();
+        } catch (error) {
+            errorDiv.textContent = 'Email o contraseña incorrectos';
+        }
+    }
+    
+    function logout() { auth.signOut(); }
+    
+    const cabañaColores = { '1': '#FF9800', '2': '#3498db', '3': '#2ecc71' };
+    
+    async function cargarEventos() {
+        // Cargar reservas confirmadas
+        const reservasSnap = await db.collection('reservas').where('estado', 'in', ['confirmada', 'pagada_total']).get();
+        const reservas = [];
+        reservasSnap.forEach(doc => reservas.push({ id: doc.id, ...doc.data(), tipo: 'reserva' }));
+        
+        // Cargar presupuestos pendientes
+        const presupSnap = await db.collection('presupuestos').where('estado', '==', 'pendiente').get();
+        const presupuestos = [];
+        presupSnap.forEach(doc => presupuestos.push({ id: doc.id, ...doc.data(), tipo: 'presupuesto' }));
+        
+        const eventos = [...reservas, ...presupuestos];
+        
+        const eventosCalendar = eventos.map(e => {
+            const checkIn = e.checkIn?.toDate?.() || new Date(e.checkIn);
+            const checkOut = e.checkOut?.toDate?.() || new Date(e.checkOut);
+            const color = e.tipo === 'presupuesto' ? '#f1c40f' : (cabañaColores[e.cabaña] || '#95a5a6');
+            const titulo = `${e.clienteNombre} (Cabaña ${e.cabaña})${e.tipo === 'presupuesto' ? ' - Presupuesto' : ''}`;
+            return {
+                title: titulo,
+                start: checkIn,
+                end: checkOut,
+                color: color,
+                textColor: 'white',
+                extendedProps: { tipo: e.tipo, id: e.id, cabaña: e.cabaña }
+            };
+        });
+        
+        if (calendar) {
+            calendar.removeAllEvents();
+            calendar.addEventSource(eventosCalendar);
+        } else {
+            const calendarEl = document.getElementById('calendar');
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'es',
+                headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
+                firstDay: 1,
+                height: 'auto',
+                timeZone: 'America/Sao_Paulo',
+                events: eventosCalendar,
+                eventClick: function(info) {
+                    const evento = info.event;
+                    const tipo = evento.extendedProps.tipo;
+                    const id = evento.extendedProps.id;
+                    if (tipo === 'presupuesto') {
+                        if (confirm('Ver detalle del presupuesto?')) {
+                            window.location.href = `detalle-presupuesto.html?id=${id}`;
+                        }
+                    } else {
+                        if (confirm('Ver detalle de la reserva?')) {
+                            window.location.href = `detalle-reserva.html?id=${id}`;
+                        }
+                    }
+                }
+            });
+            calendar.render();
+        }
+    }
+    
+    auth.onAuthStateChanged(async (user) => {
+        if (user) {
+            const userDoc = await db.collection('usuarios').doc(user.uid).get();
+            if (userDoc.exists && userDoc.data().rol === 'admin') {
+                currentUser = user;
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('mainPanel').style.display = 'block';
+                document.getElementById('userEmail').textContent = currentUser.email;
+                cargarEventos();
+            } else { auth.signOut(); }
+        }
+    });
+    
+    window.login = login;
+    window.logout = logout;
+</script>
+</body>
+</html>
