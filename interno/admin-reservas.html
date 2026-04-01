@@ -45,11 +45,6 @@
         .cabaña-2 { background: #3498db; color: white; }
         .cabaña-3 { background: #2ecc71; color: white; }
         
-        .btn-edit, .btn-save, .btn-cancel { padding: 6px 12px; border: none; border-radius: 20px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
-        .btn-edit { background: #3498db; color: white; }
-        .btn-save { background: #27ae60; color: white; }
-        .btn-cancel { background: #95a5a6; color: white; }
-        
         .edit-input, .edit-select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
         .loading { text-align: center; padding: 50px; color: #2d5a27; }
         .empty-state { text-align: center; padding: 50px; color: #9aa6b5; }
@@ -82,7 +77,6 @@
     <div class="toolbar">
         <div class="stats">
             <span class="stat-badge" id="totalReservas">0 reservas</span>
-            <span class="stat-badge" id="googleReservas">0 Airbnb</span>
         </div>
         <button class="btn-sync" onclick="sincronizarGoogle()">
             <span class="material-icons">sync</span> Importar desde Google Calendar
@@ -116,12 +110,12 @@
     
     const GOOGLE_API_KEY = 'AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs';
     const CALENDARS = [
-        { id: 'h5a1h0a8dg9rl0oufvq19hn05r4gbubg@import.calendar.google.com', nombre: 'Cabaña 1', cabaña: 1 },
-        { id: '60n7foetdu2qvsn16mi7is8j6i4ugm66@import.calendar.google.com', nombre: 'Cabaña 2', cabaña: 2 },
-        { id: '8i3hl5ppqi6al50kf7casj5n5vl9sp1j@import.calendar.google.com', nombre: 'Cabaña 3', cabaña: 3 }
+        { id: 'h5a1h0a8dg9rl0oufvq19hn05r4gbubg@import.calendar.google.com', nombre: 'Cabaña 1', cabaña: '1' },
+        { id: '60n7foetdu2qvsn16mi7is8j6i4ugm66@import.calendar.google.com', nombre: 'Cabaña 2', cabaña: '2' },
+        { id: '8i3hl5ppqi6al50kf7casj5n5vl9sp1j@import.calendar.google.com', nombre: 'Cabaña 3', cabaña: '3' }
     ];
     
-    const cabañaNombre = { 1: 'Cabaña 1', 2: 'Cabaña 2', 3: 'Cabaña 3' };
+    const cabañaNombre = { '1': 'Cabaña 1', '2': 'Cabaña 2', '3': 'Cabaña 3' };
     
     async function login() {
         const email = document.getElementById('email').value;
@@ -144,6 +138,20 @@
     
     function logout() { auth.signOut(); }
     
+    function formatDateToInput(date) {
+        if (!date) return '';
+        const d = date.toDate ? date.toDate() : new Date(date);
+        return d.toISOString().split('T')[0];
+    }
+    
+    function formatFechaMostrar(fecha) {
+        if (!fecha) return '-';
+        let d;
+        if (fecha.toDate) d = fecha.toDate();
+        else d = new Date(fecha);
+        return d.toLocaleDateString('es-ES');
+    }
+    
     async function obtenerEventosGoogle() {
         let todosEventos = [];
         for (const cal of CALENDARS) {
@@ -157,14 +165,16 @@
                 if (data.items) {
                     for (const event of data.items) {
                         if (event.summary && (event.start?.date || event.start?.dateTime)) {
+                            const checkInStr = event.start.date || event.start.dateTime.split('T')[0];
+                            const checkOutStr = event.end.date || event.end.dateTime.split('T')[0];
                             todosEventos.push({
                                 eventoId: event.id,
                                 calendarioId: cal.id,
-                                cabaña: cal.cabaña,
+                                caba: cal.cabaña,
                                 nombre: event.summary,
-                                checkIn: event.start.date || event.start.dateTime.split('T')[0],
-                                checkOut: event.end.date || event.end.dateTime.split('T')[0],
-                                pasajeros: 1,
+                                checkIn: firebase.firestore.Timestamp.fromDate(new Date(checkInStr)),
+                                checkOut: firebase.firestore.Timestamp.fromDate(new Date(checkOutStr)),
+                                huespedes: '1',
                                 observaciones: event.description || ''
                             });
                         }
@@ -182,18 +192,7 @@
         for (const evento of eventos) {
             const existente = await db.collection('reservas').where('eventoId', '==', evento.eventoId).get();
             if (existente.empty) {
-                await db.collection('reservas').add({
-                    eventoId: evento.eventoId,
-                    calendarioId: evento.calendarioId,
-                    cabaña: evento.cabaña,
-                    nombre: evento.nombre,
-                    checkIn: evento.checkIn,
-                    checkOut: evento.checkOut,
-                    pasajeros: evento.pasajeros,
-                    observaciones: evento.observaciones,
-                    origen: 'google',
-                    creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                await db.collection('reservas').add(evento);
                 nuevos++;
             }
         }
@@ -207,22 +206,24 @@
             reservas = [];
             snapshot.forEach(doc => { reservas.push({ id: doc.id, ...doc.data() }); });
             renderizarTabla();
-            actualizarContadores();
+            document.getElementById('totalReservas').textContent = `${reservas.length} reservas`;
         } catch (error) {
+            console.error('Error:', error);
             document.getElementById('reservasContent').innerHTML = '<div class="empty-state">❌ Error al cargar reservas</div>';
         }
     }
     
-    function actualizarContadores() {
-        const total = reservas.length;
-        const googleCount = reservas.filter(r => r.origen === 'google').length;
-        document.getElementById('totalReservas').textContent = `${total} reservas`;
-        document.getElementById('googleReservas').textContent = `${googleCount} Airbnb`;
-    }
-    
     async function guardarReserva(id, campo, valor) {
         try {
-            await db.collection('reservas').doc(id).update({ [campo]: valor, actualizadoEn: firebase.firestore.FieldValue.serverTimestamp() });
+            let updateData = {};
+            if (campo === 'checkIn' || campo === 'checkOut') {
+                updateData[campo] = firebase.firestore.Timestamp.fromDate(new Date(valor));
+            } else if (campo === 'caba') {
+                updateData[campo] = valor;
+            } else {
+                updateData[campo] = valor;
+            }
+            await db.collection('reservas').doc(id).update(updateData);
             await cargarReservas();
             editandoId = null;
         } catch (error) { alert('Error al guardar: ' + error.message); }
@@ -231,17 +232,30 @@
     function iniciarEdicion(id, campo, valorActual) {
         editandoId = id;
         const celda = document.getElementById(`cell_${id}_${campo}`);
-        if (campo === 'cabaña') {
+        
+        if (campo === 'caba') {
             const select = document.createElement('select');
             select.className = 'edit-select';
-            select.innerHTML = `<option value="1" ${valorActual == 1 ? 'selected' : ''}>🏠 Cabaña 1</option><option value="2" ${valorActual == 2 ? 'selected' : ''}>🏢 Cabaña 2</option><option value="3" ${valorActual == 3 ? 'selected' : ''}>✨ Cabaña 3</option>`;
-            select.onchange = () => guardarReserva(id, campo, parseInt(select.value));
+            select.innerHTML = `<option value="1" ${valorActual == 1 || valorActual == '1' ? 'selected' : ''}>🏠 Cabaña 1</option>
+                                <option value="2" ${valorActual == 2 || valorActual == '2' ? 'selected' : ''}>🏢 Cabaña 2</option>
+                                <option value="3" ${valorActual == 3 || valorActual == '3' ? 'selected' : ''}>✨ Cabaña 3</option>`;
+            select.onchange = () => guardarReserva(id, campo, select.value);
             celda.innerHTML = '';
             celda.appendChild(select);
             select.focus();
+        } else if (campo === 'checkIn' || campo === 'checkOut') {
+            const input = document.createElement('input');
+            input.type = 'date';
+            input.value = valorActual;
+            input.className = 'edit-input';
+            input.onblur = () => guardarReserva(id, campo, input.value);
+            input.onkeypress = (e) => { if (e.key === 'Enter') guardarReserva(id, campo, input.value); };
+            celda.innerHTML = '';
+            celda.appendChild(input);
+            input.focus();
         } else {
             const input = document.createElement('input');
-            input.type = campo === 'checkIn' || campo === 'checkOut' ? 'date' : 'text';
+            input.type = 'text';
             input.value = valorActual;
             input.className = 'edit-input';
             input.onblur = () => guardarReserva(id, campo, input.value);
@@ -252,7 +266,6 @@
         }
     }
     
-    function formatFecha(fecha) { if (!fecha) return '-'; const p = fecha.split('-'); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : fecha; }
     function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m)); }
     
     function renderizarTabla() {
@@ -261,20 +274,32 @@
             container.innerHTML = `<div class="empty-state"><span class="material-icons" style="font-size:48px;">inbox</span><p>No hay reservas</p><p style="font-size:12px;">Haz clic en "Importar desde Google Calendar"</p></div>`;
             return;
         }
-        let html = `<table><thead><tr><th>📅 Check-in</th><th>🏠 Cabaña</th><th>👤 Nombre</th><th>👥 Pasajeros</th><th>📅 Check-out</th><th>📝 Observaciones</th><th>⚡ Origen</th></tr></thead><tbody>`;
+        
+        let html = `<table><thead><tr>
+            <th>📅 Check-in</th>
+            <th>🏠 Cabaña</th>
+            <th>👤 Nombre</th>
+            <th>👥 Huéspedes</th>
+            <th>📅 Check-out</th>
+            <th>📝 Observaciones</th>
+        </tr></thead><tbody>`;
+        
         for (const r of reservas) {
-            const checkIn = r.checkIn || '';
-            const checkOut = r.checkOut || '';
-            const cabañaClass = `cabaña-${r.cabaña}`;
-            const cabañaTexto = cabañaNombre[r.cabaña] || `Cabaña ${r.cabaña}`;
+            const cabañaNum = r.caba || '1';
+            const cabañaClass = `cabaña-${cabañaNum}`;
+            const cabañaTexto = cabañaNombre[cabañaNum] || `Cabaña ${cabañaNum}`;
+            const checkInStr = r.checkIn ? formatFechaMostrar(r.checkIn) : '-';
+            const checkOutStr = r.checkOut ? formatFechaMostrar(r.checkOut) : '-';
+            const checkInRaw = r.checkIn ? (r.checkIn.toDate ? r.checkIn.toDate().toISOString().split('T')[0] : r.checkIn) : '';
+            const checkOutRaw = r.checkOut ? (r.checkOut.toDate ? r.checkOut.toDate().toISOString().split('T')[0] : r.checkOut) : '';
+            
             html += `<tr class="reserva-row">
-                <td id="cell_${r.id}_checkIn"><span onclick="iniciarEdicion('${r.id}', 'checkIn', '${checkIn}')" style="cursor:pointer;">${formatFecha(checkIn)}</span></td>
-                <td id="cell_${r.id}_cabaña"><span onclick="iniciarEdicion('${r.id}', 'cabaña', ${r.cabaña})" style="cursor:pointer;"><span class="cabaña-badge ${cabañaClass}">${cabañaTexto}</span></span></td>
+                <td id="cell_${r.id}_checkIn"><span onclick="iniciarEdicion('${r.id}', 'checkIn', '${checkInRaw}')" style="cursor:pointer;">${checkInStr}</span></td>
+                <td id="cell_${r.id}_caba"><span onclick="iniciarEdicion('${r.id}', 'caba', '${cabañaNum}')" style="cursor:pointer;"><span class="cabaña-badge ${cabañaClass}">${cabañaTexto}</span></span></td>
                 <td id="cell_${r.id}_nombre"><span onclick="iniciarEdicion('${r.id}', 'nombre', '${escapeHtml(r.nombre || '')}')" style="cursor:pointer;">${escapeHtml(r.nombre || '-')}</span></td>
-                <td id="cell_${r.id}_pasajeros"><span onclick="iniciarEdicion('${r.id}', 'pasajeros', '${r.pasajeros || 1}')" style="cursor:pointer;">${r.pasajeros || 1}</span></td>
-                <td id="cell_${r.id}_checkOut"><span onclick="iniciarEdicion('${r.id}', 'checkOut', '${checkOut}')" style="cursor:pointer;">${formatFecha(checkOut)}</span></td>
+                <td id="cell_${r.id}_huespedes"><span onclick="iniciarEdicion('${r.id}', 'huespedes', '${r.huespedes || '1'}')" style="cursor:pointer;">${r.huespedes || '1'}</span></td>
+                <td id="cell_${r.id}_checkOut"><span onclick="iniciarEdicion('${r.id}', 'checkOut', '${checkOutRaw}')" style="cursor:pointer;">${checkOutStr}</span></td>
                 <td id="cell_${r.id}_observaciones"><span onclick="iniciarEdicion('${r.id}', 'observaciones', '${escapeHtml(r.observaciones || '')}')" style="cursor:pointer;">${escapeHtml(r.observaciones || '-')}</span></td>
-                <td>${r.origen === 'google' ? '<span style="font-size:11px; background:#e3f2fd; padding:2px 6px; border-radius:12px;">📧 Airbnb</span>' : ''}</td>
             </tr>`;
         }
         html += `</tbody></table>`;
