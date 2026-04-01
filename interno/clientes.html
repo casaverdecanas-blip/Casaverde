@@ -2,68 +2,198 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Clientes - Casa Verde</title>
-    <link rel="stylesheet" href="css/admin-style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clientes - CasaVerdeCanas</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <style>
-        .main-content { margin-left: 260px; width: calc(100% - 280px); padding: 20px; }
-        .client-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
-        .client-card { background: white; padding: 20px; border-radius: 12px; border-top: 5px solid #2d5a27; }
-    </style>
+    <link rel="stylesheet" href="/css/admin-style.css">
 </head>
 <body>
-    <div class="sidebar">
-        <h2>Casa Verde</h2>
-        <a href="dashboard.html" class="nav-link"><span class="material-icons">dashboard</span> Tareas</a>
-        <a href="calendario.html" class="nav-link"><span class="material-icons">calendar_month</span> Calendario</a>
-        <a href="clientes.html" class="nav-link active"><span class="material-icons">people</span> Clientes</a>
-    </div>
 
-    <div class="main-content">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <h1>Base de Huéspedes</h1>
-            <button class="btn-cv" onclick="nuevoCliente()"><span class="material-icons">person_add</span> PRE-CARGAR CLIENTE</button>
+<div id="loginContainer" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #1e3c2c 0%, #2d5a27 100%);">
+    <div style="background: white; padding: 40px; border-radius: 24px; width: 350px; text-align: center;">
+        <h2 style="color: #2d5a27;">👥 Clientes</h2>
+        <input type="email" id="email" placeholder="Email" style="width:100%; padding:12px; margin:10px 0; border:1px solid #ddd; border-radius:12px;">
+        <input type="password" id="password" placeholder="Contraseña" style="width:100%; padding:12px; margin:10px 0; border:1px solid #ddd; border-radius:12px;">
+        <button onclick="login()" style="width:100%; padding:12px; background:#2d5a27; color:white; border:none; border-radius:12px;">Ingresar</button>
+        <div id="loginError" style="color:red; margin-top:10px;"></div>
+    </div>
+</div>
+
+<div id="mainPanel" style="display: none;">
+    <div class="admin-header">
+        <h1><span class="material-icons">people</span> Base de Clientes</h1>
+        <div class="user-info">
+            <span class="material-icons">account_circle</span>
+            <span id="userEmail"></span>
+            <button class="logout-btn" onclick="logout()"><span class="material-icons">logout</span> Salir</button>
         </div>
-
-        <div class="client-grid" id="listaClientes"></div>
     </div>
+    
+    <div class="admin-nav">
+        <a href="dashboard.html" class="nav-item"><span class="material-icons">dashboard</span> Dashboard</a>
+        <a href="calendario.html" class="nav-item"><span class="material-icons">calendar_month</span> Calendario</a>
+        <a href="reservas.html" class="nav-item"><span class="material-icons">add_circle</span> Nueva Reserva</a>
+        <a href="clientes.html" class="nav-item active"><span class="material-icons">people</span> Clientes</a>
+        <a href="pagos.html" class="nav-item"><span class="material-icons">payments</span> Pagos</a>
+    </div>
+    
+    <div class="admin-content">
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
+                <h2><span class="material-icons">list</span> Lista de Clientes</h2>
+                <button class="btn-primary" onclick="abrirModalNuevoCliente()"><span class="material-icons">add</span> Nuevo Cliente</button>
+            </div>
+            <div id="clientesList">
+                <div class="loading"><div class="loading-spinner"></div><p>Cargando clientes...</p></div>
+            </div>
+        </div>
+    </div>
+</div>
 
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="js/auth-core.js"></script>
-    <script>
-        async function loadClientes() {
-            const snap = await db.collection('clientes').orderBy('nombre').get();
-            let html = '';
-            snap.forEach(doc => {
-                const c = doc.data();
-                html += `
-                <div class="client-card card">
-                    <div style="display:flex; justify-content:space-between;">
-                        <b style="font-size:1.1rem;">${c.nombre}</b>
-                        <button onclick="editarCliente('${doc.id}')" style="border:none; background:none; cursor:pointer;"><span class="material-icons" style="font-size:18px;">edit</span></button>
-                    </div>
-                    <p><span class="material-icons" style="font-size:14px; vertical-align:middle;">phone</span> ${c.contacto || 'Sin tel.'}</p>
-                    <p><span class="material-icons" style="font-size:14px; vertical-align:middle;">history</span> Última: ${c.ultimaVisita || 'N/A'}</p>
-                    <button class="btn-cv" style="width:100%; margin-top:10px; font-size:0.8rem;" onclick="location.href='reservas.html?nombre=${encodeURIComponent(c.nombre)}'">Nueva Reserva</button>
-                </div>`;
-            });
-            document.getElementById('listaClientes').innerHTML = html;
-        }
+<!-- Modal Nuevo Cliente -->
+<div id="modalCliente" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center;">
+    <div style="background:white; padding:30px; border-radius:20px; width:90%; max-width:450px;">
+        <h3 style="color:#2d5a27; margin-bottom:20px;">➕ Nuevo Cliente</h3>
+        <div class="form-group"><label>👤 Nombre *</label><input type="text" id="nuevoNombre" placeholder="Nombre completo"></div>
+        <div class="form-group"><label>📱 WhatsApp</label><input type="text" id="nuevoWhatsapp" placeholder="+55 11 99999-9999"></div>
+        <div class="form-group"><label>🌎 Nacionalidad</label><input type="text" id="nuevoNacionalidad" placeholder="Ej: Argentina, Brasil"></div>
+        <div class="form-group"><label>📧 Email</label><input type="email" id="nuevoEmail" placeholder="correo@ejemplo.com"></div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn-secondary" onclick="cerrarModalCliente()">Cancelar</button>
+            <button class="btn-primary" onclick="guardarCliente()">Guardar</button>
+        </div>
+    </div>
+</div>
 
-        function nuevoCliente() {
-            const nombre = prompt("Nombre del cliente:");
-            const tel = prompt("WhatsApp / Contacto:");
-            if(nombre) {
-                db.collection('clientes').doc(nombre).set({
-                    nombre: nombre,
-                    contacto: tel,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                }).then(() => loadClientes());
+<script src="/js/auth-core.js"></script>
+<script>
+    async function cargarClientes() {
+        try {
+            const snapshot = await db.collection('clientes').orderBy('nombre', 'asc').get();
+            const clientes = [];
+            snapshot.forEach(doc => clientes.push({ id: doc.id, ...doc.data() }));
+            
+            const container = document.getElementById('clientesList');
+            if (clientes.length === 0) {
+                container.innerHTML = '<div class="empty-state"><span class="material-icons">people</span><p>No hay clientes registrados</p></div>';
+                return;
             }
+            
+            let html = `<table class="data-table"><thead><tr><th>Nombre</th><th>WhatsApp</th><th>Nacionalidad</th><th>Email</th><th>Acciones</th></tr></thead><tbody>`;
+            for (const c of clientes) {
+                html += `<tr>
+                    <td><strong>${escapeHtml(c.nombre)}</strong></td>
+                    <td>${escapeHtml(c.whatsapp || '-')}</td>
+                    <td>${escapeHtml(c.nacionalidad || '-')}</td>
+                    <td>${escapeHtml(c.email || '-')}</td>
+                    <td>
+                        <button class="btn-sm" style="background:#3498db;" onclick="verHistorial('${c.id}')">Historial</button>
+                        <button class="btn-sm" style="background:#95a5a6;" onclick="editarCliente('${c.id}', '${escapeHtml(c.nombre)}')">Editar</button>
+                    </td>
+                </tr>`;
+            }
+            html += `</tbody></table>`;
+            container.innerHTML = html;
+        } catch (error) {
+            container.innerHTML = '<div class="empty-state">❌ Error al cargar clientes</div>';
         }
-
-        window.onload = () => setTimeout(loadClientes, 1000);
-    </script>
+    }
+    
+    function abrirModalNuevoCliente() {
+        document.getElementById('nuevoNombre').value = '';
+        document.getElementById('nuevoWhatsapp').value = '';
+        document.getElementById('nuevoNacionalidad').value = '';
+        document.getElementById('nuevoEmail').value = '';
+        document.getElementById('modalCliente').style.display = 'flex';
+    }
+    
+    function cerrarModalCliente() {
+        document.getElementById('modalCliente').style.display = 'none';
+    }
+    
+    async function guardarCliente() {
+        const nombre = document.getElementById('nuevoNombre').value.trim();
+        if (!nombre) { alert('Ingresa el nombre del cliente'); return; }
+        
+        try {
+            await db.collection('clientes').add({
+                nombre: nombre,
+                whatsapp: document.getElementById('nuevoWhatsapp').value,
+                nacionalidad: document.getElementById('nuevoNacionalidad').value,
+                email: document.getElementById('nuevoEmail').value,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            alert('✅ Cliente agregado');
+            cerrarModalCliente();
+            cargarClientes();
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    }
+    
+    async function verHistorial(id) {
+        const reservasSnap = await db.collection('reservas').where('clienteId', '==', id).get();
+        let mensaje = '📋 Historial de reservas:\n\n';
+        if (reservasSnap.empty) {
+            mensaje += 'No hay reservas registradas para este cliente.';
+        } else {
+            reservasSnap.forEach(doc => {
+                const r = doc.data();
+                mensaje += `- ${formatDate(r.checkIn)} → ${formatDate(r.checkOut)}: Cabaña ${r.caba}\n`;
+            });
+        }
+        alert(mensaje);
+    }
+    
+    async function editarCliente(id, nombreActual) {
+        const nuevoNombre = prompt('Nuevo nombre:', nombreActual);
+        if (nuevoNombre && nuevoNombre !== nombreActual) {
+            await db.collection('clientes').doc(id).update({ nombre: nuevoNombre });
+            cargarClientes();
+        }
+    }
+    
+    async function login() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const errorDiv = document.getElementById('loginError');
+        const result = await loginAdmin(email, password);
+        if (result.success) {
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('mainPanel').style.display = 'block';
+            document.getElementById('userEmail').textContent = result.user.email;
+            cargarClientes();
+        } else {
+            errorDiv.textContent = result.error;
+        }
+    }
+    
+    async function logout() {
+        await logoutAdmin();
+        window.location.reload();
+    }
+    
+    checkAdmin().then(isAdmin => {
+        if (isAdmin) {
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('mainPanel').style.display = 'block';
+            document.getElementById('userEmail').textContent = currentUser.email;
+            cargarClientes();
+        }
+    });
+    
+    window.login = login;
+    window.logout = logout;
+    window.abrirModalNuevoCliente = abrirModalNuevoCliente;
+    window.cerrarModalCliente = cerrarModalCliente;
+    window.guardarCliente = guardarCliente;
+    window.verHistorial = verHistorial;
+    window.editarCliente = editarCliente;
+</script>
 </body>
 </html>
