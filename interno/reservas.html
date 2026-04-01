@@ -6,10 +6,15 @@
     <link rel="stylesheet" href="css/admin-style.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
-        .pago-pendiente { color: #ef4444; font-weight: bold; background: #fee2e2; padding: 2px 5px; border-radius: 4px; }
-        .pago-ok { color: #166534; background: #dcfce7; padding: 2px 5px; border-radius: 4px; }
-        .status-ready { display: flex; align-items: center; gap: 5px; color: #2ecc71; font-weight: bold; }
-        .status-wait { display: flex; align-items: center; gap: 5px; color: #999; }
+        .main-content { margin-left: 260px; width: calc(100% - 280px); padding: 20px; }
+        .grid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .full-width { grid-column: span 2; }
+        .badge { padding: 4px 8px; border-radius: 5px; font-size: 0.75rem; font-weight: bold; }
+        .badge-airbnb { background: #ff5a5f; color: white; }
+        .badge-directa { background: #2d5a27; color: white; }
+        .btn-pago { background: #f39c12; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+        .modal { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:1001; width:90%; max-width:600px; background:white; padding:25px; border-radius:15px; box-shadow:0 0 40px rgba(0,0,0,0.5); overflow-y: auto; max-height: 90vh; }
+        .overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; }
     </style>
 </head>
 <body>
@@ -21,40 +26,83 @@
     </div>
 
     <div class="main-content">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <h1>Calendario y Cobros</h1>
-            <button class="btn-cv" onclick="document.getElementById('modalReserva').style.display='block'"><span class="material-icons">add</span> Nueva Reserva</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h1>Gestión de Reservas</h1>
+            <button class="btn-cv" onclick="abrirModalReserva()"><span class="material-icons">add_circle</span> NUEVA RESERVA</button>
         </div>
 
-        <div class="card" style="margin-top:20px;">
-            <table>
+        <div class="card">
+            <table style="width:100%">
                 <thead>
-                    <tr><th>Huésped</th><th>Check-in</th><th>Origen</th><th>Total</th><th>Saldo</th><th>¿Casa Preparada?</th></tr>
+                    <tr>
+                        <th>Huésped / Cabaña</th>
+                        <th>Entrada / Salida</th>
+                        <th>Pax</th>
+                        <th>Origen</th>
+                        <th>Pagos</th>
+                        <th>Acciones</th>
+                    </tr>
                 </thead>
-                <tbody id="reservaBody"></tbody>
+                <tbody id="tablaReservas"></tbody>
             </table>
         </div>
     </div>
 
-    <div id="modalReserva" class="modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:450px; background:white; padding:25px; z-index:1100; border-radius:15px;">
-        <h3>Registrar Nueva Reserva</h3>
-        <input type="text" id="resNombre" placeholder="Nombre completo" style="width:100%; margin:8px 0; padding:10px;">
-        <div style="display:flex; gap:10px;">
-            <div style="flex:1"><label>Entrada:</label><input type="date" id="resIn" style="width:100%; padding:10px;"></div>
-            <div style="flex:1"><label>Salida:</label><input type="date" id="resOut" style="width:100%; padding:10px;"></div>
+    <div class="overlay" id="overlay" onclick="cerrarModal()"></div>
+    <div class="modal" id="modalReserva">
+        <h3 id="modalTitle">Detalle de Reserva</h3>
+        <input type="hidden" id="resId">
+        <div class="grid-form">
+            <div class="full-width">
+                <label>Huésped (Nombre completo):</label>
+                <input type="text" id="resNombre" style="width:100%; padding:8px;">
+            </div>
+            <div>
+                <label>Cabaña / Unidad:</label>
+                <select id="resCabana" style="width:100%; padding:8px;">
+                    <option value="Cabaña 1">Cabaña 1</option>
+                    <option value="Cabaña 2">Cabaña 2</option>
+                    <option value="Suite">Suite</option>
+                </select>
+            </div>
+            <div>
+                <label>Pasajeros (Cant.):</label>
+                <input type="number" id="resPax" style="width:100%; padding:8px;">
+            </div>
+            <div>
+                <label>Check-in (Fecha y Hora):</label>
+                <input type="datetime-local" id="resIn" style="width:100%; padding:8px;">
+            </div>
+            <div>
+                <label>Check-out (Fecha y Hora):</label>
+                <input type="datetime-local" id="resOut" style="width:100%; padding:8px;">
+            </div>
+            <div>
+                <label>Origen:</label>
+                <select id="resOrigen" style="width:100%; padding:8px;" onchange="toggleFinanzas()">
+                    <option value="Airbnb">Airbnb</option>
+                    <option value="Directo">Directo (WhatsApp/Web)</option>
+                </select>
+            </div>
+            <div>
+                <label>Contacto (Tel/WhatsApp):</label>
+                <input type="text" id="resContacto" style="width:100%; padding:8px;">
+            </div>
+            <div class="full-width">
+                <label>Observaciones:</label>
+                <textarea id="resObs" style="width:100%; padding:8px; height:60px;"></textarea>
+            </div>
         </div>
-        <label>Plataforma:</label>
-        <select id="resOrigen" style="width:100%; margin:8px 0; padding:10px;">
-            <option value="Airbnb">Airbnb</option>
-            <option value="Directo">WhatsApp / Directo</option>
-            <option value="Booking">Booking.com</option>
-        </select>
-        <div style="display:flex; gap:10px;">
-            <div style="flex:1"><label>Precio Total:</label><input type="number" id="resTotal" value="0" style="width:100%; padding:10px;"></div>
-            <div style="flex:1"><label>Seña/Pagado:</label><input type="number" id="resPagado" value="0" style="width:100%; padding:10px;"></div>
+        <div id="seccionFinanzas" style="margin-top:15px; border-top:1px solid #eee; padding-top:15px;">
+            <div class="grid-form">
+                <div><label>Monto Total ($):</label><input type="number" id="resTotal" style="width:100%; padding:8px;"></div>
+                <div><label>Limpieza ($):</label><input type="number" id="resLimpieza" style="width:100%; padding:8px;"></div>
+            </div>
         </div>
-        <button onclick="guardarReserva()" class="btn-cv" style="width:100%; margin-top:20px;">Confirmar Reserva</button>
-        <button onclick="document.getElementById('modalReserva').style.display='none'" style="width:100%; margin-top:8px; background:none; border:none; color:gray;">Cerrar</button>
+        <div style="margin-top:20px; display:flex; gap:10px;">
+            <button onclick="cerrarModal()" style="flex:1; padding:10px;">Cerrar</button>
+            <button onclick="guardarReserva()" class="btn-cv" style="flex:1;">GUARDAR RESERVA</button>
+        </div>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -63,41 +111,86 @@
     <script src="js/auth-core.js"></script>
     <script>
         async function loadReservas() {
-            const snap = await db.collection('reservas').orderBy('checkIn', 'desc').get();
+            const snap = await db.collection('reservas').orderBy('checkIn', 'asc').get();
             let html = '';
             snap.forEach(doc => {
                 const r = doc.data();
-                const saldo = r.total - r.pagado;
-                const listo = r.preparada === true;
+                const fIn = new Date(r.checkIn).toLocaleString('es-ES', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+                const fOut = new Date(r.checkOut).toLocaleString('es-ES', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+                
                 html += `<tr>
-                    <td><b>${r.nombre}</b></td>
-                    <td>${r.checkIn}</td>
-                    <td>${r.origen}</td>
-                    <td>$${r.total}</td>
-                    <td><span class="${saldo > 0 ? 'pago-pendiente' : 'pago-ok'}">$${saldo}</span></td>
+                    <td><b>${r.nombre}</b><br><small>${r.cabana}</small></td>
+                    <td>In: ${fIn}<br>Out: ${fOut}</td>
+                    <td>${r.pax} pax</td>
+                    <td><span class="badge ${r.origen === 'Airbnb' ? 'badge-airbnb' : 'badge-directa'}">${r.origen}</span></td>
                     <td>
-                        <div class="${listo ? 'status-ready' : 'status-wait'}">
-                            <span class="material-icons">${listo ? 'task_alt' : 'hourglass_empty'}</span>
-                            ${listo ? '¡Lista!' : 'Pendiente'}
-                        </div>
+                        ${r.origen === 'Directo' ? 
+                        `<button class="btn-pago" onclick="window.location.href='pagos.html?id=${doc.id}'"><span class="material-icons" style="font-size:16px;">payments</span> Gestionar</button>` 
+                        : 'Pagado en Plataforma'}
+                    </td>
+                    <td>
+                        <button onclick="abrirModalReserva('${doc.id}')"><span class="material-icons">edit</span></button>
                     </td>
                 </tr>`;
             });
-            document.getElementById('reservaBody').innerHTML = html;
+            document.getElementById('tablaReservas').innerHTML = html;
+        }
+
+        async function abrirModalReserva(id = null) {
+            if(id) {
+                const doc = await db.collection('reservas').doc(id).get();
+                const d = doc.data();
+                document.getElementById('resId').value = id;
+                document.getElementById('resNombre').value = d.nombre;
+                document.getElementById('resCabana').value = d.cabana;
+                document.getElementById('resPax').value = d.pax;
+                document.getElementById('resIn').value = d.checkIn;
+                document.getElementById('resOut').value = d.checkOut;
+                document.getElementById('resOrigen').value = d.origen;
+                document.getElementById('resContacto').value = d.contacto || '';
+                document.getElementById('resObs').value = d.observaciones || '';
+                document.getElementById('resTotal').value = d.total || 0;
+                document.getElementById('resLimpieza').value = d.limpieza || 0;
+            } else {
+                document.getElementById('modalReserva').querySelectorAll('input, textarea').forEach(i => i.value = '');
+                document.getElementById('resId').value = '';
+            }
+            document.getElementById('overlay').style.display = 'block';
+            document.getElementById('modalReserva').style.display = 'block';
+        }
+
+        function cerrarModal() { 
+            document.getElementById('overlay').style.display = 'none'; 
+            document.getElementById('modalReserva').style.display = 'none'; 
         }
 
         async function guardarReserva() {
-            await db.collection('reservas').add({
+            const id = document.getElementById('resId').value;
+            const data = {
                 nombre: document.getElementById('resNombre').value,
+                cabana: document.getElementById('resCabana').value,
+                pax: document.getElementById('resPax').value,
                 checkIn: document.getElementById('resIn').value,
                 checkOut: document.getElementById('resOut').value,
                 origen: document.getElementById('resOrigen').value,
-                total: parseFloat(document.getElementById('resTotal').value),
-                pagado: parseFloat(document.getElementById('resPagado').value),
-                preparada: false, // Por defecto al crearla
+                contacto: document.getElementById('resContacto').value,
+                observaciones: document.getElementById('resObs').value,
+                total: parseFloat(document.getElementById('resTotal').value) || 0,
+                limpieza: parseFloat(document.getElementById('resLimpieza').value) || 0,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            location.reload();
+            };
+
+            // Al guardar, también creamos/actualizamos el Cliente automáticamente
+            await db.collection('clientes').doc(data.nombre).set({
+                nombre: data.nombre,
+                contacto: data.contacto,
+                ultimaVisita: data.checkIn
+            }, { merge: true });
+
+            if(id) await db.collection('reservas').doc(id).update(data);
+            else await db.collection('reservas').add(data);
+            
+            cerrarModal(); loadReservas();
         }
 
         window.onload = () => setTimeout(loadReservas, 1000);
