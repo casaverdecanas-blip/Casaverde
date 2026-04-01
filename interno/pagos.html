@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Control de Pagos - Casa Verde</title>
+    <link rel="stylesheet" href="css/admin-style.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        .pago-card { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 20px; }
+        .money { font-size: 1.5rem; font-weight: bold; color: #2d5a27; }
+        .red { color: #e74c3c; }
+    </style>
+</head>
+<body>
+    <div class="main-content" style="margin-left:0; max-width: 900px; margin: 0 auto;">
+        <button class="btn-cv" onclick="window.history.back()"><span class="material-icons">arrow_back</span> Volver a Reservas</button>
+        
+        <div class="card" style="margin-top:20px;">
+            <h2 id="pagoHuesped">Cargando...</h2>
+            <div id="pagoDetalle" style="color:#666; margin-bottom:20px;"></div>
+            
+            <div class="pago-card">
+                <div class="card" style="background:#f9f9f9;">
+                    <small>Total Estadía + Limpieza</small>
+                    <div id="montoTotal" class="money">$ 0</div>
+                </div>
+                <div class="card" style="background:#f9f9f9;">
+                    <small>Monto Pagado (Señas/Abonos)</small>
+                    <div id="montoPagado" class="money" style="color:#3498db;">$ 0</div>
+                </div>
+                <div class="card" style="background:#fff3f3;">
+                    <small>SALDO PENDIENTE</small>
+                    <div id="montoSaldo" class="money red">$ 0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Registrar Entrega de Dinero</h3>
+            <div style="display:flex; gap:10px; align-items:flex-end;">
+                <div><label>Monto:</label><input type="number" id="nuevoPago" style="padding:10px;"></div>
+                <div><label>Forma de Pago:</label>
+                    <select id="formaPago" style="padding:10px;">
+                        <option value="Efectivo">Efectivo</option>
+                        <option value="Transferencia">Transferencia</option>
+                        <option value="Pix">Pix / Brasil</option>
+                    </select>
+                </div>
+                <button onclick="agregarPago()" class="btn-cv" style="padding:12px;">REGISTRAR PAGO</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="js/auth-core.js"></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const resId = urlParams.get('id');
+
+        async function loadDetallePago() {
+            const doc = await db.collection('reservas').doc(resId).get();
+            const r = doc.data();
+            
+            const fechaIn = new Date(r.checkIn);
+            const fechaOut = new Date(r.checkOut);
+            const noches = Math.ceil((fechaOut - fechaIn) / (1000 * 60 * 60 * 24));
+            const totalFinal = (r.total || 0) + (r.limpieza || 0);
+            const pagado = r.pagadoAcumulado || 0;
+
+            document.getElementById('pagoHuesped').innerText = "Reserva: " + r.nombre;
+            document.getElementById('pagoDetalle').innerHTML = `
+                <b>Cabaña:</b> ${r.cabana} | <b>Noches:</b> ${noches} | <b>Pax:</b> ${r.pax}<br>
+                <b>Ingreso:</b> ${fechaIn.toLocaleString()} | <b>Salida:</b> ${fechaOut.toLocaleString()}
+            `;
+            
+            document.getElementById('montoTotal').innerText = `$ ${totalFinal}`;
+            document.getElementById('montoPagado').innerText = `$ ${pagado}`;
+            document.getElementById('montoSaldo').innerText = `$ ${totalFinal - pagado}`;
+        }
+
+        async function agregarPago() {
+            const monto = parseFloat(document.getElementById('nuevoPago').value);
+            if(!monto) return;
+
+            const resRef = db.collection('reservas').doc(resId);
+            const doc = await resRef.get();
+            const pagadoActual = doc.data().pagadoAcumulado || 0;
+
+            await resRef.update({
+                pagadoAcumulado: pagadoActual + monto,
+                ultimoPagoForma: document.getElementById('formaPago').value,
+                ultimoPagoFecha: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            alert("Pago registrado con éxito");
+            location.reload();
+        }
+
+        window.onload = () => setTimeout(loadDetallePago, 1000);
+    </script>
+</body>
+</html>
