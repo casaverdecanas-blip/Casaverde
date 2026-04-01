@@ -5,54 +5,65 @@
     <title>Clientes - Casa Verde</title>
     <link rel="stylesheet" href="css/admin-style.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        .main-content { margin-left: 260px; width: calc(100% - 280px); padding: 20px; }
+        .client-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+        .client-card { background: white; padding: 20px; border-radius: 12px; border-top: 5px solid #2d5a27; }
+    </style>
 </head>
 <body>
     <div class="sidebar">
         <h2>Casa Verde</h2>
         <a href="dashboard.html" class="nav-link"><span class="material-icons">dashboard</span> Tareas</a>
-        <a href="reservas.html" class="nav-link"><span class="material-icons">event_available</span> Reservas</a>
+        <a href="calendario.html" class="nav-link"><span class="material-icons">calendar_month</span> Calendario</a>
         <a href="clientes.html" class="nav-link active"><span class="material-icons">people</span> Clientes</a>
     </div>
 
     <div class="main-content">
-        <h1>Base de Clientes</h1>
-        <div class="card">
-            <input type="text" id="searchClient" placeholder="Buscar por nombre o país..." onkeyup="filtrarClientes()" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h1>Base de Huéspedes</h1>
+            <button class="btn-cv" onclick="nuevoCliente()"><span class="material-icons">person_add</span> PRE-CARGAR CLIENTE</button>
         </div>
-        <div class="card" style="margin-top:20px;">
-            <table id="clientTable">
-                <thead><tr><th>Nombre</th><th>Email / Tel</th><th>Procedencia</th><th>Notas</th></tr></thead>
-                <tbody id="clientBody"></tbody>
-            </table>
-        </div>
+
+        <div class="client-grid" id="listaClientes"></div>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="js/auth-core.js"></script>
     <script>
-        async function loadClients() {
-            // Un truco: también podemos cargar clientes desde la colección de 'reservas' automáticamente
-            const snap = await db.collection('reservas').get();
-            const uniqueClients = {};
-            snap.forEach(doc => {
-                const r = doc.data();
-                uniqueClients[r.nombre] = { nombre: r.nombre, plataforma: r.origen };
-            });
-
+        async function loadClientes() {
+            const snap = await db.collection('clientes').orderBy('nombre').get();
             let html = '';
-            Object.values(uniqueClients).forEach(c => {
-                html += `<tr>
-                    <td><b>${c.nombre}</b></td>
-                    <td>--</td>
-                    <td>${c.plataforma}</td>
-                    <td>Huésped recurrente</td>
-                </tr>`;
+            snap.forEach(doc => {
+                const c = doc.data();
+                html += `
+                <div class="client-card card">
+                    <div style="display:flex; justify-content:space-between;">
+                        <b style="font-size:1.1rem;">${c.nombre}</b>
+                        <button onclick="editarCliente('${doc.id}')" style="border:none; background:none; cursor:pointer;"><span class="material-icons" style="font-size:18px;">edit</span></button>
+                    </div>
+                    <p><span class="material-icons" style="font-size:14px; vertical-align:middle;">phone</span> ${c.contacto || 'Sin tel.'}</p>
+                    <p><span class="material-icons" style="font-size:14px; vertical-align:middle;">history</span> Última: ${c.ultimaVisita || 'N/A'}</p>
+                    <button class="btn-cv" style="width:100%; margin-top:10px; font-size:0.8rem;" onclick="location.href='reservas.html?nombre=${encodeURIComponent(c.nombre)}'">Nueva Reserva</button>
+                </div>`;
             });
-            document.getElementById('clientBody').innerHTML = html;
+            document.getElementById('listaClientes').innerHTML = html;
         }
-        window.onload = () => setTimeout(loadClients, 1000);
+
+        function nuevoCliente() {
+            const nombre = prompt("Nombre del cliente:");
+            const tel = prompt("WhatsApp / Contacto:");
+            if(nombre) {
+                db.collection('clientes').doc(nombre).set({
+                    nombre: nombre,
+                    contacto: tel,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                }).then(() => loadClientes());
+            }
+        }
+
+        window.onload = () => setTimeout(loadClientes, 1000);
     </script>
 </body>
 </html>
