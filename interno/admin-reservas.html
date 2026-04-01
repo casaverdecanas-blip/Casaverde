@@ -10,6 +10,10 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     
+    <!-- Eruda para depuración en móvil -->
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
+    
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     
     <style>
@@ -91,6 +95,8 @@
 </div>
 
 <script>
+    console.log('🚀 Sistema iniciado - Eruda disponible');
+    
     const firebaseConfig = {
         apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
         authDomain: "tatareas-d8a80.firebaseapp.com",
@@ -121,22 +127,35 @@
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
         const errorDiv = document.getElementById('loginError');
-        if (!email || !password) { errorDiv.textContent = 'Ingresa email y contraseña'; return; }
+        console.log('🔐 Intentando login:', email);
+        
+        if (!email || !password) { 
+            errorDiv.textContent = 'Ingresa email y contraseña'; 
+            return; 
+        }
         try {
             const userCredential = await auth.signInWithEmailAndPassword(email, password);
             const userDoc = await db.collection('usuarios').doc(userCredential.user.uid).get();
+            console.log('📄 Documento usuario:', userDoc.exists ? userDoc.data() : 'No existe');
+            
             if (!userDoc.exists || userDoc.data().rol !== 'admin') {
                 await auth.signOut();
                 errorDiv.textContent = 'Acceso solo para administradores';
+                console.log('❌ Usuario no es admin');
                 return;
             }
+            console.log('✅ Login exitoso como admin');
             errorDiv.textContent = '';
         } catch (error) {
+            console.error('❌ Error login:', error);
             errorDiv.textContent = 'Email o contraseña incorrectos';
         }
     }
     
-    function logout() { auth.signOut(); }
+    function logout() { 
+        console.log('🔓 Cerrando sesión');
+        auth.signOut(); 
+    }
     
     function formatDateToInput(date) {
         if (!date) return '';
@@ -153,15 +172,22 @@
     }
     
     async function obtenerEventosGoogle() {
+        console.log('🌐 Obteniendo eventos de Google Calendar...');
         let todosEventos = [];
         for (const cal of CALENDARS) {
             const now = new Date();
             const startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString();
             const endDate = new Date(now.getFullYear(), now.getMonth() + 6, 0).toISOString();
             const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?key=${GOOGLE_API_KEY}&timeMin=${startDate}&timeMax=${endDate}&singleEvents=true&orderBy=startTime`;
+            console.log(`📡 Consultando ${cal.nombre}: ${url.substring(0, 100)}...`);
             try {
                 const response = await fetch(url);
                 const data = await response.json();
+                if (data.error) {
+                    console.error(`❌ Error en ${cal.nombre}:`, data.error);
+                    continue;
+                }
+                console.log(`✅ ${cal.nombre}: ${data.items?.length || 0} eventos`);
                 if (data.items) {
                     for (const event of data.items) {
                         if (event.summary && (event.start?.date || event.start?.dateTime)) {
@@ -180,12 +206,16 @@
                         }
                     }
                 }
-            } catch (error) { console.error('Error:', error); }
+            } catch (error) { 
+                console.error(`❌ Error en fetch ${cal.nombre}:`, error); 
+            }
         }
+        console.log(`📋 Total eventos obtenidos: ${todosEventos.length}`);
         return todosEventos;
     }
     
     async function sincronizarGoogle() {
+        console.log('🔄 Iniciando sincronización con Google Calendar...');
         alert('🔄 Sincronizando con Google Calendar...');
         const eventos = await obtenerEventosGoogle();
         let nuevos = 0;
@@ -194,26 +224,36 @@
             if (existente.empty) {
                 await db.collection('reservas').add(evento);
                 nuevos++;
+                console.log(`➕ Nueva reserva: ${evento.nombre} (${evento.checkIn.toDate().toLocaleDateString()})`);
+            } else {
+                console.log(`⏭️ Reserva ya existe: ${evento.nombre}`);
             }
         }
+        console.log(`✅ Sincronización completada: ${nuevos} nuevas reservas`);
         alert(`✅ Sincronizado: ${nuevos} nuevas reservas`);
         cargarReservas();
     }
     
     async function cargarReservas() {
+        console.log('📋 Cargando reservas desde Firestore...');
         try {
             const snapshot = await db.collection('reservas').orderBy('checkIn', 'asc').get();
             reservas = [];
-            snapshot.forEach(doc => { reservas.push({ id: doc.id, ...doc.data() }); });
+            snapshot.forEach(doc => { 
+                reservas.push({ id: doc.id, ...doc.data() }); 
+                console.log(`📄 Reserva: ${doc.data().nombre} - ${doc.data().checkIn?.toDate?.()?.toLocaleDateString() || doc.data().checkIn}`);
+            });
+            console.log(`✅ ${reservas.length} reservas cargadas`);
             renderizarTabla();
             document.getElementById('totalReservas').textContent = `${reservas.length} reservas`;
         } catch (error) {
-            console.error('Error:', error);
+            console.error('❌ Error cargando reservas:', error);
             document.getElementById('reservasContent').innerHTML = '<div class="empty-state">❌ Error al cargar reservas</div>';
         }
     }
     
     async function guardarReserva(id, campo, valor) {
+        console.log(`💾 Guardando ${campo} = ${valor} en reserva ${id}`);
         try {
             let updateData = {};
             if (campo === 'checkIn' || campo === 'checkOut') {
@@ -224,12 +264,17 @@
                 updateData[campo] = valor;
             }
             await db.collection('reservas').doc(id).update(updateData);
+            console.log(`✅ Guardado exitoso`);
             await cargarReservas();
             editandoId = null;
-        } catch (error) { alert('Error al guardar: ' + error.message); }
+        } catch (error) { 
+            console.error(`❌ Error al guardar:`, error);
+            alert('Error al guardar: ' + error.message); 
+        }
     }
     
     function iniciarEdicion(id, campo, valorActual) {
+        console.log(`✏️ Editando ${campo} de reserva ${id}`);
         editandoId = id;
         const celda = document.getElementById(`cell_${id}_${campo}`);
         
@@ -302,11 +347,12 @@
                 <td id="cell_${r.id}_observaciones"><span onclick="iniciarEdicion('${r.id}', 'observaciones', '${escapeHtml(r.observaciones || '')}')" style="cursor:pointer;">${escapeHtml(r.observaciones || '-')}</span></td>
             </tr>`;
         }
-        html += `</tbody></table>`;
+        html += `</tbody> </table>`;
         container.innerHTML = html;
     }
     
     auth.onAuthStateChanged(async (user) => {
+        console.log('🔐 Auth state changed:', user ? user.email : 'null');
         if (user) {
             const userDoc = await db.collection('usuarios').doc(user.uid).get();
             if (userDoc.exists && userDoc.data().rol === 'admin') {
@@ -314,8 +360,12 @@
                 document.getElementById('loginContainer').style.display = 'none';
                 document.getElementById('mainPanel').style.display = 'block';
                 document.getElementById('userEmail').textContent = user.email;
+                console.log('✅ Admin autenticado, cargando reservas...');
                 cargarReservas();
-            } else { auth.signOut(); }
+            } else { 
+                console.log('❌ Usuario no es admin, cerrando sesión');
+                auth.signOut(); 
+            }
         } else {
             document.getElementById('loginContainer').style.display = 'flex';
             document.getElementById('mainPanel').style.display = 'none';
