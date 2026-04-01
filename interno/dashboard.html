@@ -1,26 +1,47 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <title>Admin - Casa Verde</title>
+    <meta charset="UTF-8">
+    <title>Dashboard Admin - Casa Verde</title>
     <link rel="stylesheet" href="css/admin-style.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        .alerta-roja { background-color: #fee2e2 !important; color: #b91c1c; font-weight: bold; }
+        .badge-user { background: #e2e8f0; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; color: #475569; }
+        .status-pill { padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; }
+        .pill-pending { background: #fef3c7; color: #92400e; }
+        .pill-done { background: #dcfce7; color: #166534; }
+    </style>
 </head>
 <body>
     <div class="sidebar">
-        <h2>Casa Verde</h2>
-        <a href="dashboard.html" class="nav-link active"><span class="material-icons">dashboard</span> Resumen</a>
+        <h2><span class="material-icons">park</span> Casa Verde</h2>
+        <a href="dashboard.html" class="nav-link active"><span class="material-icons">dashboard</span> Dashboard</a>
         <a href="reservas.html" class="nav-link"><span class="material-icons">event</span> Reservas</a>
-        <a href="clientes.html" class="nav-link"><span class="material-icons">people</span> Clientes</a>
-        <button onclick="logout()" class="nav-link" style="background:none; border:none; width:100%; cursor:pointer; color:#ff8a80;"><span class="material-icons">logout</span> Salir</button>
+        <a href="clientes.html" class="nav-link"><span class="material-icons">groups</span> Clientes</a>
+        <button onclick="logout()" class="nav-link" style="background:none; border:none; width:100%; cursor:pointer; color:#f87171; margin-top: auto;">
+            <span class="material-icons">logout</span> Salir
+        </button>
     </div>
 
     <div class="main-content">
-        <h1>Monitor de Operaciones</h1>
-        <div class="card" style="margin-top:20px;">
-            <h3>Tareas Realizadas Hoy</h3>
-            <table style="width:100%; margin-top:15px;">
-                <thead><tr><th>Actividad</th><th>Estado</th><th>Hora</th></tr></thead>
-                <tbody id="monitorBody"></tbody>
+        <h1>Estado de Mantenimiento</h1>
+        <p style="color: #64748b; margin-bottom: 30px;">Control de recurrencias y última actividad por colaborador.</p>
+
+        <div class="card">
+            <table id="tablaMaestra">
+                <thead>
+                    <tr>
+                        <th>Tarea</th>
+                        <th>Frecuencia</th>
+                        <th>Última Realización</th>
+                        <th>Realizado por</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody id="monitorBody">
+                    <tr><td colspan="5">Analizando plazos...</td></tr>
+                </tbody>
             </table>
         </div>
     </div>
@@ -29,29 +50,76 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="js/auth-core.js"></script>
+
     <script>
-        async function updateAdminView() {
-            const hoy = new Date(); hoy.setHours(0,0,0,0);
-            
-            const [tareasSnap, historialSnap] = await Promise.all([
-                db.collection('tareas').where('activa','==',true).get(),
-                db.collection('historial').where('timestamp','>=',hoy).get()
-            ]);
+        async function actualizarPanelAdmin() {
+            try {
+                // 1. Obtener todas las tareas activas
+                const tareasSnap = await db.collection('tareas').where('activa', '==', true).get();
+                
+                // 2. Obtener el historial completo (ordenado por fecha para tener la última primero)
+                const historialSnap = await db.collection('historial').orderBy('timestamp', 'desc').get();
+                const historial = historialSnap.docs.map(d => d.data());
 
-            const hechos = historialSnap.docs.map(d => d.data());
-            let html = '';
+                let html = '';
+                const ahora = new Date();
 
-            tareasSnap.forEach(doc => {
-                const registro = hechos.find(h => h.tareaId === doc.id);
-                html += `<tr>
-                    <td><b>${doc.data().nombre}</b></td>
-                    <td>${registro ? '<span style="color:#27ae60">✅ Hecho</span>' : '<span style="color:#e74c3c">⏳ Pendiente</span>'}</td>
-                    <td>${registro ? registro.timestamp.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '--'}</td>
-                </tr>`;
-            });
-            document.getElementById('monitorBody').innerHTML = html;
+                tareasSnap.forEach(doc => {
+                    const t = doc.data();
+                    const tId = doc.id;
+                    const recurrenciaDias = parseInt(t.recurrencia) || 1;
+                    
+                    // Buscar el registro más reciente de ESTA tarea
+                    const ultimoRegistro = historial.find(h => h.tareaId === tId);
+                    
+                    let fechaTexto = "Nunca";
+                    let colaborador = "--";
+                    let fueraDePlazo = false;
+                    let diasDesdeUltima = 999; // Si nunca se hizo, es prioridad
+
+                    if (ultimoRegistro && ultimoRegistro.timestamp) {
+                        const fechaUltima = ultimoRegistro.timestamp.toDate();
+                        fechaTexto = fechaUltima.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                        colaborador = ultimoRegistro.colaboradorNombre || "Sistema";
+                        
+                        // Calcular diferencia en días
+                        const diffTime = Math.abs(ahora - fechaUltima);
+                        diasDesdeUltima = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    }
+
+                    // MARCAR EN ROJO: Si los días que pasaron son >= a la recurrencia configurada
+                    if (diasDesdeUltima >= recurrenciaDias) {
+                        fueraDePlazo = true;
+                    }
+
+                    html += `
+                        <tr class="${fueraDePlazo ? 'alerta-roja' : ''}">
+                            <td>
+                                <b>${t.nombre}</b><br>
+                                <span style="font-size:0.7rem; color:#666">${t.descripcion || ''}</span>
+                            </td>
+                            <td>Cada ${recurrenciaDias} ${recurrenciaDias === 1 ? 'día' : 'días'}</td>
+                            <td>${fechaTexto}</td>
+                            <td><span class="badge-user">${colaborador}</span></td>
+                            <td>
+                                <span class="status-pill ${fueraDePlazo ? 'pill-pending' : 'pill-done'}">
+                                    ${fueraDePlazo ? 'Toca realizar' : 'Al día'}
+                                </span>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                document.getElementById('monitorBody').innerHTML = html;
+
+            } catch (error) {
+                console.error("Error al actualizar panel:", error);
+                document.getElementById('monitorBody').innerHTML = '<tr><td colspan="5">Error al cargar datos.</td></tr>';
+            }
         }
-        window.onload = () => setTimeout(updateAdminView, 1000);
+
+        // Ejecutar al cargar
+        window.onload = () => setTimeout(actualizarPanelAdmin, 1000);
     </script>
 </body>
 </html>
