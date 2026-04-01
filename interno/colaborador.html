@@ -7,14 +7,17 @@
     <link rel="stylesheet" href="css/admin-style.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
-<body style="display:block; background:#f4f7f6;">
-    <nav style="background:#2d5a27; color:white; padding:15px; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-        <span style="letter-spacing:1px;"><b>CASA VERDE COLABORADORES</b></span>
+<body style="display:block;">
+    <nav style="background:var(--dark); color:white; padding:15px 25px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-weight:bold; letter-spacing:1px;">CASA VERDE</span>
         <button onclick="logout()" style="background:none; border:none; color:white; cursor:pointer;"><span class="material-icons">logout</span></button>
     </nav>
 
-    <div style="padding:20px; max-width:500px; margin:0 auto;">
-        <h2 id="fechaTitle" style="color:#2d5a27; margin-bottom:15px; font-size:1.1rem; text-transform: capitalize;"></h2>
+    <div style="padding:25px; max-width:550px; margin:0 auto;">
+        <div style="margin-bottom:25px;">
+            <h1 id="saludo" style="color:var(--primary); font-size:1.5rem;">Hola...</h1>
+            <p id="fechaHoy" style="color:#64748b; text-transform:capitalize;"></p>
+        </div>
         <div id="listaTareas"></div>
     </div>
 
@@ -23,62 +26,47 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="js/auth-core.js"></script>
     <script>
-        async function cargarTareasHoy() {
+        async function loadTasks() {
             const container = document.getElementById('listaTareas');
-            const hoyInicio = new Date();
-            hoyInicio.setHours(0,0,0,0); // Reset a las 00:00 del día actual
+            const hoy = new Date(); hoy.setHours(0,0,0,0);
+            
+            document.getElementById('saludo').textContent = `Hola, ${sessionStorage.getItem('userName')}`;
+            document.getElementById('fechaHoy').textContent = new Date().toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'});
 
-            try {
-                // 1. Tareas programadas
-                const tareasSnap = await db.collection('tareas').where('activa', '==', true).get();
-                // 2. Historial de lo que YA se hizo hoy
-                const historialSnap = await db.collection('historial').where('timestamp', '>=', hoyInicio).get();
-                
-                const hechasHoy = historialSnap.docs.map(d => d.data().tareaId);
-                let html = '';
+            const [tareas, hechos] = await Promise.all([
+                db.collection('tareas').where('activa','==',true).get(),
+                db.collection('historial').where('timestamp','>=',hoy).get()
+            ]);
 
-                if (tareasSnap.empty) {
-                    container.innerHTML = '<p>No hay tareas asignadas para hoy.</p>';
-                    return;
-                }
+            const hechosIds = hechos.docs.map(d => d.data().tareaId);
+            let html = '';
 
-                tareasSnap.forEach(doc => {
-                    const t = doc.data();
-                    const terminada = hechasHoy.includes(doc.id);
-                    html += `
-                        <div class="card" style="display:flex; justify-content:space-between; align-items:center; border-left:5px solid ${terminada ? '#ccc':'#2d5a27'}; opacity:${terminada ? 0.6 : 1}">
-                            <div>
-                                <b style="${terminada ? 'text-decoration:line-through; color:#999' : ''}">${t.nombre}</b>
-                                <p style="font-size:0.8rem; color:#666; margin-top:4px;">${t.descripcion || 'Tarea de mantenimiento'}</p>
-                            </div>
-                            ${terminada ? 
-                                '<span class="material-icons" style="color:#27ae60">check_circle</span>' : 
-                                `<button onclick="completar('${doc.id}', '${t.nombre}')" class="btn-cv" style="padding:10px; display:flex; border-radius:50%;"><span class="material-icons">done</span></button>`
-                            }
-                        </div>`;
-                });
-                container.innerHTML = html;
-            } catch (e) {
-                container.innerHTML = '<p>Error de conexión. Reintente.</p>';
-            }
+            tareas.forEach(doc => {
+                const t = doc.data();
+                const done = hechosIds.includes(doc.id);
+                html += `
+                <div class="card" style="display:flex; justify-content:space-between; align-items:center; border-left:6px solid ${done ? '#cbd5e1' : '#2d5a27'}; opacity:${done?0.6:1}">
+                    <div>
+                        <b style="${done ? 'text-decoration:line-through; color:#94a3b8' : ''}">${t.nombre}</b>
+                        <p style="font-size:0.85rem; color:#64748b; margin-top:4px;">${t.descripcion || 'Sin descripción'}</p>
+                    </div>
+                    ${done ? '<span class="material-icons" style="color:#22c55e">check_circle</span>' : 
+                    `<button onclick="done('${doc.id}','${t.nombre}')" class="btn-cv" style="padding:10px; border-radius:50%; display:flex;"><span class="material-icons">done</span></button>`}
+                </div>`;
+            });
+            container.innerHTML = html || '<p>No hay tareas hoy.</p>';
         }
 
-        async function completar(id, nombre) {
-            if(!confirm(`¿Confirmas que terminaste la tarea: ${nombre}?`)) return;
-            try {
-                await db.collection('historial').add({
-                    tareaId: id,
-                    colaborador: auth.currentUser.email,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                cargarTareasHoy();
-            } catch (error) {
-                alert("Error al registrar.");
-            }
+        async function done(id, nombre) {
+            if(!confirm(`¿Finalizaste ${nombre}?`)) return;
+            await db.collection('historial').add({
+                tareaId: id,
+                colaboradorNombre: sessionStorage.getItem('userName'),
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            loadTasks();
         }
-
-        document.getElementById('fechaTitle').textContent = new Date().toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'});
-        window.onload = () => setTimeout(cargarTareasHoy, 800);
+        window.onload = () => setTimeout(loadTasks, 1000);
     </script>
 </body>
 </html>
