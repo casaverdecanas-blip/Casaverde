@@ -3,140 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Control - Casa Verde</title>
+    <title>Diagnóstico Sincronización - Casa Verde</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
 
     <style>
-        :root { --primary: #2c3e50; --success: #27ae60; --error: #e74c3c; }
-        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; margin: 0; padding: 20px; }
-        .container { max-width: 1000px; margin: auto; }
-        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
-        button { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; margin-top: 20px; }
-        .reserva { border-left: 5px solid #ccc; padding: 15px; background: #fff; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .status-confirmada { border-left-color: var(--success); color: var(--success); }
-        .status-cancelada { border-left-color: var(--error); color: var(--error); }
-        .tag { font-size: 10px; background: #eee; padding: 2px 6px; border-radius: 10px; color: #666; }
+        body { font-family: sans-serif; padding: 20px; background: #1e3c2c; color: white; }
+        .card { background: white; color: #333; padding: 20px; border-radius: 15px; margin-bottom: 20px; }
+        pre { background: #222; color: #0f0; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 11px; }
+        input { width: 100%; padding: 10px; margin: 10px 0; border-radius: 5px; border: 1px solid #ccc; }
+        button { width: 100%; padding: 15px; background: #2d5a27; color: white; border: none; border-radius: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="card" id="loginSection">
-        <h2>🔐 Acceso Casa Verde</h2>
-        <input type="email" id="email" placeholder="Email de administrador">
+    <div class="card">
+        <h3>🔍 Reparador de Reservas Google</h3>
+        <p>Introduce tus datos para analizar por qué aparecen como canceladas.</p>
+        <input type="email" id="email" placeholder="Email (el que usas en Mis Tareas)">
         <input type="password" id="password" placeholder="Contraseña">
-        <button id="btnLogin">Entrar y Sincronizar</button>
+        <button id="btnDiag">Iniciar Diagnóstico y Reparación</button>
     </div>
 
-    <div id="mainContent" style="display:none;">
-        <div class="card">
-            <h2>📅 Gestión de Reservas</h2>
-            <p id="userMsg"></p>
-            <button id="btnFix" style="background: var(--success);">Reparar Estados de Google</button>
-        </div>
-
-        <div class="grid" id="listaReservas">
-            </div>
+    <div class="card">
+        <h3>Resultados:</h3>
+        <pre id="output">Esperando acción...</pre>
     </div>
-</div>
 
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-    import { getFirestore, collection, query, getDocs, updateDoc, doc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+    <script>
+        // TU CONFIGURACIÓN EXACTA
+        const firebaseConfig = {
+            apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+            authDomain: "tatareas-d8a80.firebaseapp.com",
+            projectId: "tatareas-d8a80",
+            storageBucket: "tatareas-d8a80.firebasestorage.app",
+            messagingSenderId: "709332495480",
+            appId: "1:709332495480:web:7060b2c75984352354918d"
+        };
 
-    // CONFIGURACIÓN (Asegúrate de completar estos campos)
-    const firebaseConfig = {
-        apiKey: "TU_API_KEY_REAL",
-        authDomain: "casaverdecanas.com.br",
-        projectId: "casaverde-canas",
-        storageBucket: "casaverde-canas.appspot.com",
-    };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
+        document.getElementById('btnDiag').onclick = async () => {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('password').value;
+            const output = document.getElementById('output');
 
-    // --- LÓGICA DE LOGIN ---
-    document.getElementById('btnLogin').onclick = async () => {
-        const email = document.getElementById('email').value;
-        const pass = document.getElementById('password').value;
-        try {
-            await signInWithEmailAndPassword(auth, email, pass);
-        } catch (e) {
-            alert("Error: " + e.message);
-        }
-    };
+            try {
+                output.innerText = "Autenticando...";
+                await firebase.auth().signInWithEmailAndPassword(email, pass);
+                output.innerText = "✅ Conexión exitosa. Analizando base de datos...";
 
-    onAuthStateChanged(auth, (user) => {
-        if (user) {
-            document.getElementById('loginSection').style.display = 'none';
-            document.getElementById('mainContent').style.display = 'block';
-            document.getElementById('userMsg').innerText = `Conectado como: ${user.email}`;
-            cargarReservas();
-        }
-    });
-
-    // --- CARGAR Y MOSTRAR RESERVAS ---
-    async function cargarReservas() {
-        const container = document.getElementById('listaReservas');
-        container.innerHTML = "Cargando...";
-        
-        try {
-            const q = query(collection(db, "reservas"));
-            const snap = await getDocs(q);
-            container.innerHTML = "";
-
-            snap.forEach(resDoc => {
-                const res = resDoc.data();
-                const div = document.createElement('div');
-                // Normalizamos el status para la clase CSS
-                const statusClase = res.status ? res.status.toLowerCase() : 'pendiente';
+                // Buscamos en la colección de reservas (ajusta el nombre si es distinto)
+                // Nota: He puesto 'reservas' porque es el estándar, si el nombre es otro cámbialo aquí abajo:
+                const snapshot = await db.collection('reservas').limit(10).get();
                 
-                div.className = `reserva status-${statusClase}`;
-                div.innerHTML = `
-                    <div class="tag">${res.googleEventId ? 'GOOGLE CALENDAR' : 'MANUAL'}</div>
-                    <strong>${res.nombre || 'Huésped sin nombre'}</strong><br>
-                    <small>${res.checkIn || ''} al ${res.checkOut || ''}</small><br>
-                    <span>Estado: <b>${res.status}</b></span>
-                `;
-                container.appendChild(div);
-            });
-        } catch (e) {
-            console.error(e);
-        }
-    }
+                if(snapshot.empty) {
+                    output.innerText += "\n⚠️ No se encontraron documentos en la colección 'reservas'.";
+                    return;
+                }
 
-    // --- FUNCIÓN MAESTRA DE REPARACIÓN ---
-    document.getElementById('btnFix').onclick = async () => {
-        if(!confirm("¿Deseas reparar las reservas de Google que aparecen como canceladas?")) return;
-        
-        const q = query(collection(db, "reservas"));
-        const snap = await getDocs(q);
-        let cont = 0;
-
-        for (const resDoc of snap.docs) {
-            const res = resDoc.data();
-            
-            // LÓGICA: Si viene de Google y el status es "cancelada" o "cancelled"
-            // pero tiene fechas válidas, lo devolvemos a "confirmada"
-            if (res.googleEventId && (res.status === 'cancelada' || res.status === 'cancelled')) {
-                console.log("Reparando reserva de:", res.nombre);
-                await updateDoc(doc(db, "reservas", resDoc.id), {
-                    status: 'confirmada', // Cambia esto por el nombre exacto que usa tu filtro (ej: 'Confirmada')
-                    reparado: true
+                let analizadas = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    analizadas.push({
+                        id: doc.id,
+                        nombre: data.nombre || data.summary,
+                        status: data.status,
+                        origen_google: !!data.googleEventId
+                    });
                 });
-                cont++;
-            }
-        }
-        alert(`Se han reparado ${cont} reservas.`);
-        cargarReservas();
-    };
 
-</script>
+                output.innerText = "Datos encontrados:\n" + JSON.stringify(analizadas, null, 2);
+
+            } catch (error) {
+                console.error(error);
+                output.innerText = "❌ Error: " + error.message;
+            }
+        };
+    </script>
 </body>
 </html>
