@@ -2,103 +2,204 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Control de Pagos - Casa Verde</title>
-    <link rel="stylesheet" href="css/admin-style.css">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <style>
-        .pago-card { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 20px; }
-        .money { font-size: 1.5rem; font-weight: bold; color: #2d5a27; }
-        .red { color: #e74c3c; }
-    </style>
-</head>
-<body>
-    <div class="main-content" style="margin-left:0; max-width: 900px; margin: 0 auto;">
-        <button class="btn-cv" onclick="window.history.back()"><span class="material-icons">arrow_back</span> Volver a Reservas</button>
-        
-        <div class="card" style="margin-top:20px;">
-            <h2 id="pagoHuesped">Cargando...</h2>
-            <div id="pagoDetalle" style="color:#666; margin-bottom:20px;"></div>
-            
-            <div class="pago-card">
-                <div class="card" style="background:#f9f9f9;">
-                    <small>Total Estadía + Limpieza</small>
-                    <div id="montoTotal" class="money">$ 0</div>
-                </div>
-                <div class="card" style="background:#f9f9f9;">
-                    <small>Monto Pagado (Señas/Abonos)</small>
-                    <div id="montoPagado" class="money" style="color:#3498db;">$ 0</div>
-                </div>
-                <div class="card" style="background:#fff3f3;">
-                    <small>SALDO PENDIENTE</small>
-                    <div id="montoSaldo" class="money red">$ 0</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <h3>Registrar Entrega de Dinero</h3>
-            <div style="display:flex; gap:10px; align-items:flex-end;">
-                <div><label>Monto:</label><input type="number" id="nuevoPago" style="padding:10px;"></div>
-                <div><label>Forma de Pago:</label>
-                    <select id="formaPago" style="padding:10px;">
-                        <option value="Efectivo">Efectivo</option>
-                        <option value="Transferencia">Transferencia</option>
-                        <option value="Pix">Pix / Brasil</option>
-                    </select>
-                </div>
-                <button onclick="agregarPago()" class="btn-cv" style="padding:12px;">REGISTRAR PAGO</button>
-            </div>
-        </div>
-    </div>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pagos - CasaVerdeCanas</title>
+    
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="js/auth-core.js"></script>
-    <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const resId = urlParams.get('id');
+    
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="stylesheet" href="/css/admin-style.css">
+</head>
+<body>
 
-        async function loadDetallePago() {
-            const doc = await db.collection('reservas').doc(resId).get();
-            const r = doc.data();
+<div id="loginContainer" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #1e3c2c 0%, #2d5a27 100%);">
+    <div style="background: white; padding: 40px; border-radius: 24px; width: 350px; text-align: center;">
+        <h2 style="color: #2d5a27;">💰 Pagos</h2>
+        <input type="email" id="email" placeholder="Email" style="width:100%; padding:12px; margin:10px 0; border:1px solid #ddd; border-radius:12px;">
+        <input type="password" id="password" placeholder="Contraseña" style="width:100%; padding:12px; margin:10px 0; border:1px solid #ddd; border-radius:12px;">
+        <button onclick="login()" style="width:100%; padding:12px; background:#2d5a27; color:white; border:none; border-radius:12px;">Ingresar</button>
+        <div id="loginError" style="color:red; margin-top:10px;"></div>
+    </div>
+</div>
+
+<div id="mainPanel" style="display: none;">
+    <div class="admin-header">
+        <h1><span class="material-icons">payments</span> Control de Pagos</h1>
+        <div class="user-info">
+            <span class="material-icons">account_circle</span>
+            <span id="userEmail"></span>
+            <button class="logout-btn" onclick="logout()"><span class="material-icons">logout</span> Salir</button>
+        </div>
+    </div>
+    
+    <div class="admin-nav">
+        <a href="dashboard.html" class="nav-item"><span class="material-icons">dashboard</span> Dashboard</a>
+        <a href="calendario.html" class="nav-item"><span class="material-icons">calendar_month</span> Calendario</a>
+        <a href="reservas.html" class="nav-item"><span class="material-icons">add_circle</span> Nueva Reserva</a>
+        <a href="clientes.html" class="nav-item"><span class="material-icons">people</span> Clientes</a>
+        <a href="pagos.html" class="nav-item active"><span class="material-icons">payments</span> Pagos</a>
+    </div>
+    
+    <div class="admin-content">
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
+                <h2><span class="material-icons">receipt</span> Registro de Pagos</h2>
+                <button class="btn-primary" onclick="abrirModalPago()"><span class="material-icons">add</span> Nuevo Pago</button>
+            </div>
+            <div id="pagosList">
+                <div class="loading"><div class="loading-spinner"></div><p>Cargando pagos...</p></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nuevo Pago -->
+<div id="modalPago" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center;">
+    <div style="background:white; padding:30px; border-radius:20px; width:90%; max-width:500px;">
+        <h3 style="color:#2d5a27; margin-bottom:20px;">💰 Registrar Pago</h3>
+        <div class="form-group"><label>👤 Cliente *</label><select id="pagoCliente"></select></div>
+        <div class="form-group"><label>💰 Monto *</label><input type="number" id="pagoMonto" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>💵 Moneda</label><select id="pagoMoneda"><option value="BRL">Real Brasileño (BRL)</option><option value="USD">Dólar Americano (USD)</option></select></div>
+        <div class="form-group"><label>💳 Método</label><select id="pagoMetodo"><option value="pix">PIX</option><option value="transferencia">Transferencia</option><option value="efectivo">Efectivo</option><option value="tarjeta">Tarjeta</option></select></div>
+        <div class="form-group"><label>📝 Tipo</label><select id="pagoTipo"><option value="seña">Seña</option><option value="parcial">Pago Parcial</option><option value="total">Pago Total</option></select></div>
+        <div class="form-group"><label>📝 Observaciones</label><input type="text" id="pagoObservaciones" placeholder="Comprobante, referencia..."></div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn-secondary" onclick="cerrarModalPago()">Cancelar</button>
+            <button class="btn-primary" onclick="guardarPago()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<script src="/js/auth-core.js"></script>
+<script>
+    let clientesList = [];
+    
+    async function cargarPagos() {
+        try {
+            const snapshot = await db.collection('pagos').orderBy('creadoEn', 'desc').get();
+            const pagos = [];
+            snapshot.forEach(doc => pagos.push({ id: doc.id, ...doc.data() }));
             
-            const fechaIn = new Date(r.checkIn);
-            const fechaOut = new Date(r.checkOut);
-            const noches = Math.ceil((fechaOut - fechaIn) / (1000 * 60 * 60 * 24));
-            const totalFinal = (r.total || 0) + (r.limpieza || 0);
-            const pagado = r.pagadoAcumulado || 0;
-
-            document.getElementById('pagoHuesped').innerText = "Reserva: " + r.nombre;
-            document.getElementById('pagoDetalle').innerHTML = `
-                <b>Cabaña:</b> ${r.cabana} | <b>Noches:</b> ${noches} | <b>Pax:</b> ${r.pax}<br>
-                <b>Ingreso:</b> ${fechaIn.toLocaleString()} | <b>Salida:</b> ${fechaOut.toLocaleString()}
-            `;
+            const container = document.getElementById('pagosList');
+            if (pagos.length === 0) {
+                container.innerHTML = '<div class="empty-state"><span class="material-icons">payments</span><p>No hay pagos registrados</p></div>';
+                return;
+            }
             
-            document.getElementById('montoTotal').innerText = `$ ${totalFinal}`;
-            document.getElementById('montoPagado').innerText = `$ ${pagado}`;
-            document.getElementById('montoSaldo').innerText = `$ ${totalFinal - pagado}`;
+            let totalBRL = 0;
+            let totalUSD = 0;
+            let html = `<table class="data-table"><thead><tr><th>Fecha</th><th>Cliente</th><th>Monto</th><th>Método</th><th>Tipo</th><th>Observaciones</th></tr></thead><tbody>`;
+            for (const p of pagos) {
+                const fecha = p.creadoEn?.toDate?.() || new Date();
+                const montoStr = p.moneda === 'USD' ? `USD ${p.monto.toFixed(2)}` : `R$ ${p.monto.toFixed(2)}`;
+                if (p.moneda === 'USD') totalUSD += p.monto;
+                else totalBRL += p.monto;
+                html += `<tr>
+                    <td>${fecha.toLocaleDateString('es-ES')}</td>
+                    <td>${escapeHtml(p.clienteNombre)}</td>
+                    <td><strong>${montoStr}</strong></td>
+                    <td>${p.metodo}</td>
+                    <td>${p.tipo}</td>
+                    <td>${escapeHtml(p.observaciones || '-')}</td>
+                </tr>`;
+            }
+            html += `<tr style="background:#e8f5e9; font-weight:bold;"><td colspan="2">TOTALES</td><td>R$ ${totalBRL.toFixed(2)}</td><td colspan="3">USD ${totalUSD.toFixed(2)}</td></tr>`;
+            html += `</tbody></table>`;
+            container.innerHTML = html;
+        } catch (error) {
+            container.innerHTML = '<div class="empty-state">❌ Error al cargar pagos</div>';
         }
-
-        async function agregarPago() {
-            const monto = parseFloat(document.getElementById('nuevoPago').value);
-            if(!monto) return;
-
-            const resRef = db.collection('reservas').doc(resId);
-            const doc = await resRef.get();
-            const pagadoActual = doc.data().pagadoAcumulado || 0;
-
-            await resRef.update({
-                pagadoAcumulado: pagadoActual + monto,
-                ultimoPagoForma: document.getElementById('formaPago').value,
-                ultimoPagoFecha: firebase.firestore.FieldValue.serverTimestamp()
-            });
-
-            alert("Pago registrado con éxito");
-            location.reload();
+    }
+    
+    async function cargarClientesSelect() {
+        const snapshot = await db.collection('clientes').orderBy('nombre', 'asc').get();
+        clientesList = [];
+        snapshot.forEach(doc => clientesList.push({ id: doc.id, ...doc.data() }));
+        const select = document.getElementById('pagoCliente');
+        select.innerHTML = '<option value="">Seleccionar cliente...</option>';
+        clientesList.forEach(c => {
+            select.innerHTML += `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`;
+        });
+    }
+    
+    function abrirModalPago() {
+        document.getElementById('pagoMonto').value = '';
+        document.getElementById('pagoObservaciones').value = '';
+        document.getElementById('modalPago').style.display = 'flex';
+    }
+    
+    function cerrarModalPago() {
+        document.getElementById('modalPago').style.display = 'none';
+    }
+    
+    async function guardarPago() {
+        const clienteId = document.getElementById('pagoCliente').value;
+        if (!clienteId) { alert('Selecciona un cliente'); return; }
+        const monto = parseFloat(document.getElementById('pagoMonto').value);
+        if (!monto || monto <= 0) { alert('Ingresa un monto válido'); return; }
+        
+        const cliente = clientesList.find(c => c.id === clienteId);
+        const moneda = document.getElementById('pagoMoneda').value;
+        const tipoCambio = moneda === 'USD' ? 5.30 : 1;
+        const montoBRL = moneda === 'USD' ? monto * tipoCambio : monto;
+        
+        await db.collection('pagos').add({
+            clienteId: clienteId,
+            clienteNombre: cliente.nombre,
+            monto: monto,
+            moneda: moneda,
+            tipoCambio: tipoCambio,
+            montoBRL: montoBRL,
+            metodo: document.getElementById('pagoMetodo').value,
+            tipo: document.getElementById('pagoTipo').value,
+            observaciones: document.getElementById('pagoObservaciones').value,
+            creadoPor: currentUser.uid,
+            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        alert('✅ Pago registrado');
+        cerrarModalPago();
+        cargarPagos();
+    }
+    
+    async function login() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const errorDiv = document.getElementById('loginError');
+        const result = await loginAdmin(email, password);
+        if (result.success) {
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('mainPanel').style.display = 'block';
+            document.getElementById('userEmail').textContent = result.user.email;
+            cargarPagos();
+            cargarClientesSelect();
+        } else {
+            errorDiv.textContent = result.error;
         }
-
-        window.onload = () => setTimeout(loadDetallePago, 1000);
-    </script>
+    }
+    
+    async function logout() {
+        await logoutAdmin();
+        window.location.reload();
+    }
+    
+    checkAdmin().then(isAdmin => {
+        if (isAdmin) {
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('mainPanel').style.display = 'block';
+            document.getElementById('userEmail').textContent = currentUser.email;
+            cargarPagos();
+            cargarClientesSelect();
+        }
+    });
+    
+    window.login = login;
+    window.logout = logout;
+    window.abrirModalPago = abrirModalPago;
+    window.cerrarModalPago = cerrarModalPago;
+    window.guardarPago = guardarPago;
+</script>
 </body>
 </html>
