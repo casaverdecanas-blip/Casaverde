@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin - Casa Verde</title>
+    <link rel="stylesheet" href="css/admin-style.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body>
+    <div class="sidebar">
+        <h2 style="color:white;"><span class="material-icons">park</span> Casa Verde</h2>
+        <a href="dashboard.html" class="nav-link active"><span class="material-icons">dashboard</span> Resumen</a>
+        <a href="reservas.html" class="nav-link"><span class="material-icons">event</span> Reservas</a>
+        <a href="clientes.html" class="nav-link"><span class="material-icons">groups</span> Clientes</a>
+        <a href="#" onclick="logout()" class="nav-link" style="margin-top:auto; color:#ff8a80;"><span class="material-icons">logout</span> Salir</a>
+    </div>
+
+    <div class="main-content">
+        <div class="header">
+            <h1>Panel Administrativo</h1>
+            <div class="card" style="margin:0; padding:10px 20px; font-weight:bold; color:var(--primary);">ADMIN</div>
+        </div>
+
+        <div class="grid-3">
+            <div class="card">
+                <p style="color:#718096">Ocupación Hoy</p>
+                <h2 id="kpi-ocu">Calculando...</h2>
+            </div>
+            <div class="card">
+                <p style="color:#718096">Colaboradores Activos</p>
+                <h2 id="kpi-colab">--</h2>
+            </div>
+            <div class="card">
+                <p style="color:#718096">Tareas de Hoy</p>
+                <h2 id="kpi-tareas">0/0</h2>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Monitor de Tareas en Tiempo Real</h3>
+            <p style="font-size:0.8rem; color:#666; margin-bottom:15px;">Estado de las actividades de los colaboradores hoy</p>
+            <div id="monitorTareasBody"></div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="js/auth-core.js"></script>
+    <script>
+        async function cargarMonitor() {
+            const hoy = new Date(); hoy.setHours(0,0,0,0);
+            const tareas = await db.collection('tareas').where('activa','==',true).get();
+            const hechos = await db.collection('historial').where('timestamp','>=',hoy).get();
+            const hechosData = hechos.docs.map(d => d.data());
+
+            let html = '<table style="width:100%"><tr><th>Actividad</th><th>Estado</th><th>Colaborador</th><th>Hora</th></tr>';
+            let contHechas = 0;
+
+            tareas.forEach(doc => {
+                const h = hechosData.find(d => d.data().tareaId === doc.id);
+                if(h) contHechas++;
+                html += `<tr>
+                    <td>${doc.data().nombre}</td>
+                    <td>${h ? '<span style="color:#27ae60">✅ Realizada</span>' : '<span style="color:#e74c3c">⏳ Pendiente</span>'}</td>
+                    <td>${h ? h.colaborador.split('@')[0] : '--'}</td>
+                    <td>${h ? h.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--'}</td>
+                </tr>`;
+            });
+            document.getElementById('monitorTareasBody').innerHTML = html + '</table>';
+            document.getElementById('kpi-tareas').textContent = `${contHechas}/${tareas.size}`;
+        }
+        window.onload = () => setTimeout(cargarMonitor, 1000);
+    </script>
+</body>
+</html>
