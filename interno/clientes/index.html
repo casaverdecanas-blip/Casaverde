@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clientes - CasaVerdeCanas</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: #f5f7fa; min-height: 100vh; }
+        
+        .header { background: #2d5a27; color: white; padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+        .header h1 { display: flex; align-items: center; gap: 10px; font-size: 1.5rem; }
+        .user-info { display: flex; align-items: center; gap: 15px; background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 40px; }
+        .back-btn, .logout-btn { background: rgba(255,255,255,0.2); border: none; padding: 8px 16px; border-radius: 40px; cursor: pointer; color: white; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+        .logout-btn { background: #e74c3c; }
+        
+        .content { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
+        .card { background: white; border-radius: 20px; padding: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        
+        .cliente-item { padding: 20px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+        .btn-sm { background: #2d5a27; color: white; border: none; padding: 6px 12px; border-radius: 20px; cursor: pointer; font-size: 12px; text-decoration: none; display: inline-block; margin: 2px; }
+        .btn-add { background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 30px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; margin-bottom: 20px; }
+        
+        .empty-state { text-align: center; padding: 50px; color: #9aa6b5; }
+        
+        @media (max-width: 768px) { .header { flex-direction: column; text-align: center; } }
+    </style>
+</head>
+<body>
+
+<div id="loginContainer" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #1e3c2c 0%, #2d5a27 100%);">
+    <div style="background: white; padding: 40px; border-radius: 24px; width: 350px; text-align: center;">
+        <h2 style="color: #2d5a27;">👥 Clientes</h2>
+        <input type="email" id="email" placeholder="Email" style="width:100%; padding:12px; margin:10px 0; border:1px solid #ddd; border-radius:12px;">
+        <input type="password" id="password" placeholder="Contraseña" style="width:100%; padding:12px; margin:10px 0; border:1px solid #ddd; border-radius:12px;">
+        <button onclick="login()" style="width:100%; padding:12px; background:#2d5a27; color:white; border:none; border-radius:12px;">Ingresar</button>
+        <div id="loginError" style="color:red; margin-top:10px;"></div>
+        <div style="margin-top: 20px;"><a href="../reservas/index.html" style="color:#2d5a27;">← Volver a Reservas</a></div>
+    </div>
+</div>
+
+<div id="mainPanel" style="display: none;">
+    <div class="header">
+        <h1><span class="material-icons">people</span> Clientes</h1>
+        <div class="user-info">
+            <span class="material-icons">account_circle</span>
+            <span id="userEmail"></span>
+            <a href="../reservas/index.html" class="back-btn"><span class="material-icons">arrow_back</span> Reservas</a>
+            <button class="logout-btn" onclick="logout()"><span class="material-icons">logout</span> Salir</button>
+        </div>
+    </div>
+    
+    <div class="content">
+        <div class="card">
+            <button class="btn-add" onclick="nuevoCliente()"><span class="material-icons">add</span> Nuevo Cliente</button>
+            <div id="clientesList"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+        authDomain: "tatareas-d8a80.firebaseapp.com",
+        projectId: "tatareas-d8a80",
+        storageBucket: "tatareas-d8a80.firebasestorage.app",
+        messagingSenderId: "709332495480",
+        appId: "1:709332495480:web:7060b2c75984352354918d"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    
+    let currentUser = null;
+    
+    async function login() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const errorDiv = document.getElementById('loginError');
+        try {
+            const userCredential = await auth.signInWithEmailAndPassword(email, password);
+            const userDoc = await db.collection('usuarios').doc(userCredential.user.uid).get();
+            if (!userDoc.exists || userDoc.data().rol !== 'admin') {
+                await auth.signOut();
+                errorDiv.textContent = 'Acceso solo para administradores';
+                return;
+            }
+            currentUser = userCredential.user;
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('mainPanel').style.display = 'block';
+            document.getElementById('userEmail').textContent = currentUser.email;
+            cargarClientes();
+        } catch (error) {
+            errorDiv.textContent = 'Email o contraseña incorrectos';
+        }
+    }
+    
+    function logout() { auth.signOut(); }
+    
+    async function cargarClientes() {
+        const snapshot = await db.collection('clientes').orderBy('nombre', 'asc').get();
+        const clientes = [];
+        snapshot.forEach(doc => clientes.push({ id: doc.id, ...doc.data() }));
+        
+        const container = document.getElementById('clientesList');
+        if (clientes.length === 0) {
+            container.innerHTML = '<div class="empty-state">📭 No hay clientes registrados</div>';
+            return;
+        }
+        
+        let html = '';
+        for (const c of clientes) {
+            html += `
+                <div class="cliente-item">
+                    <div>
+                        <strong>${escapeHtml(c.nombre)}</strong><br>
+                        <span style="font-size: 13px; color: #666;">
+                            📱 ${escapeHtml(c.whatsapp || '-')} | 🌎 ${escapeHtml(c.nacionalidad || '-')}
+                        </span>
+                    </div>
+                    <div>
+                        <button class="btn-sm" onclick="verHistorial('${c.id}')">Ver historial</button>
+                        <button class="btn-sm" onclick="editarCliente('${c.id}')">Editar</button>
+                    </div>
+                </div>
+            `;
+        }
+        container.innerHTML = html;
+    }
+    
+    function nuevoCliente() {
+        const nombre = prompt('Nombre completo del cliente:');
+        if (!nombre) return;
+        const whatsapp = prompt('WhatsApp (con código país):');
+        const nacionalidad = prompt('Nacionalidad:');
+        
+        db.collection('clientes').add({
+            nombre: nombre,
+            whatsapp: whatsapp || '',
+            nacionalidad: nacionalidad || '',
+            creadoPor: currentUser.uid,
+            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(() => {
+            alert('✅ Cliente agregado');
+            cargarClientes();
+        }).catch(err => alert('Error: ' + err.message));
+    }
+    
+    function verHistorial(id) {
+        window.location.href = `historial.html?id=${id}`;
+    }
+    
+    function editarCliente(id) {
+        const nuevoNombre = prompt('Nuevo nombre:');
+        if (!nuevoNombre) return;
+        db.collection('clientes').doc(id).update({ nombre: nuevoNombre })
+            .then(() => cargarClientes())
+            .catch(err => alert('Error: ' + err.message));
+    }
+    
+    function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m)); }
+    
+    auth.onAuthStateChanged(async (user) => {
+        if (user) {
+            const userDoc = await db.collection('usuarios').doc(user.uid).get();
+            if (userDoc.exists && userDoc.data().rol === 'admin') {
+                currentUser = user;
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('mainPanel').style.display = 'block';
+                document.getElementById('userEmail').textContent = currentUser.email;
+                cargarClientes();
+            } else { auth.signOut(); }
+        }
+    });
+    
+    window.login = login;
+    window.logout = logout;
+    window.nuevoCliente = nuevoCliente;
+    window.verHistorial = verHistorial;
+    window.editarCliente = editarCliente;
+</script>
+</body>
+</html>
