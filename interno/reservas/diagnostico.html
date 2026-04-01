@@ -2,94 +2,58 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Diagnóstico Maestro - Casa Verde</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Casa Verde con Eruda</title>
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
+    
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 40px; background-color: #f8f9fa; }
-        .box { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        input { padding: 10px; margin: 5px 0; width: 250px; border: 1px solid #ddd; border-radius: 4px; }
-        button { padding: 10px 20px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 4px; }
-        pre { background: #2d2d2d; color: #ccc; padding: 15px; border-radius: 5px; overflow-x: auto; font-size: 12px; }
-        .error { color: #dc3545; font-weight: bold; }
-        .success { color: #28a745; font-weight: bold; }
+        body { font-family: sans-serif; padding: 20px; background: #f0f2f5; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        button { width: 100%; padding: 15px; background: #007bff; color: white; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px;}
+        pre { background: #222; color: #0f0; padding: 15px; border-radius: 5px; font-size: 12px; overflow-x: auto; }
     </style>
 </head>
 <body>
 
-    <div class="box">
-        <h2>1. Autenticación Necesaria</h2>
-        <p>Introduce tus credenciales de administrador para acceder a Firestore:</p>
-        <input type="email" id="email" placeholder="Correo electrónico">
-        <input type="password" id="password" placeholder="Contraseña">
-        <button id="btnLogin">Conectar y Analizar</button>
-        <div id="authStatus"></div>
+    <div class="card">
+        <h3>Diagnóstico con Consola</h3>
+        <p>Pulsa el botón de engranaje abajo a la derecha para ver errores detallados.</p>
+        <button id="btnTest">Probar Conexión Firebase</button>
+        <hr>
+        <pre id="log">Los resultados aparecerán aquí...</pre>
     </div>
 
-    <div class="box">
-        <h2>2. Resultado del Análisis</h2>
-        <div id="loading" style="display:none;">Consultando base de datos...</div>
-        <pre id="output">Los resultados aparecerán aquí tras el inicio de sesión.</pre>
-    </div>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, limit, query } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-    import { getFirestore, collection, query, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // Aquí pon los datos que creas que son correctos
+        const config = {
+            apiKey: "TU_API_KEY_AQUI", 
+            authDomain: "casaverdecanas.com.br",
+            projectId: "casaverde-canas"
+        };
 
-    // CONFIGURACIÓN DE TU PROYECTO
-    const firebaseConfig = {
-        apiKey: "AIzaSy...", // Asegúrate de que esta sea tu API KEY real
-        authDomain: "casaverdecanas.com.br",
-        projectId: "casaverde-...", // Tu ID de proyecto
-        storageBucket: "casaverde-....appspot.com",
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-
-    document.getElementById('btnLogin').onclick = async () => {
-        const email = document.getElementById('email').value;
-        const pass = document.getElementById('password').value;
-        const status = document.getElementById('authStatus');
-        const output = document.getElementById('output');
-
-        try {
-            status.innerHTML = "Iniciando sesión...";
-            await signInWithEmailAndPassword(auth, email, pass);
-            status.innerHTML = "<span class='success'>✅ Sesión iniciada con éxito.</span>";
-            
-            // Una vez logueado, traemos los datos
-            fetchData();
-        } catch (error) {
-            status.innerHTML = `<span class='error'>❌ Error: ${error.message}</span>`;
-        }
-    };
-
-    async function fetchData() {
-        const output = document.getElementById('output');
-        try {
-            // Buscamos en la colección 'reservas' las que vienen de Google
-            const q = query(collection(db, "reservas"), limit(10));
-            const snapshot = await getDocs(q);
-            
-            let dataFound = [];
-            snapshot.forEach(doc => {
-                const res = doc.data();
-                // Solo nos interesan las que tienen rastro de Google para comparar
-                dataFound.push({
-                    id_interno: doc.id,
-                    nombre: res.nombre || res.displayName || "N/A",
-                    status_actual: res.status, // Aquí veremos si dice 'cancelled'
-                    google_id: res.googleEventId || res.id || "No tiene",
-                    datos_originales: res // Esto me muestra TODO lo que hay guardado
-                });
-            });
-
-            output.textContent = JSON.stringify(dataFound, null, 2);
-        } catch (e) {
-            output.textContent = "Error al leer datos: " + e.message;
-        }
-    }
-</script>
+        document.getElementById('btnTest').onclick = async () => {
+            const log = document.getElementById('log');
+            try {
+                console.log("Iniciando prueba..."); // Esto lo verás en Eruda
+                const app = initializeApp(config);
+                const db = getFirestore(app);
+                
+                const q = query(collection(db, "reservas"), limit(3));
+                const snap = await getDocs(q);
+                
+                let data = [];
+                snap.forEach(doc => data.push(doc.data()));
+                log.innerText = JSON.stringify(data, null, 2);
+                console.log("¡Éxito!", data);
+            } catch (e) {
+                console.error("Error detectado:", e);
+                log.innerText = "Error: " + e.message;
+            }
+        };
+    </script>
 </body>
 </html>
