@@ -2,66 +2,111 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ocupación Casa Verde</title>
-    <link rel="stylesheet" href="../css/admin-style.css">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendario Cabañas - Casa Verde</title>
     
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@6.1.15/index.global.min.js"></script>
     
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
     <style>
-        body { display: flex; margin: 0; background: #f4f7f6; }
-        .sidebar { width: 250px; position: fixed; height: 100vh; background: #2d5a27; color: white; z-index: 100; }
-        .main-content { margin-left: 260px; width: calc(100% - 280px); padding: 20px; }
-        #calendar { background: white; padding: 15px; border-radius: 12px; height: 85vh; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .fc-event-google { background-color: #ff5a5f !important; border: none !important; }
-        .fc-event-manual { background-color: #2d5a27 !important; border: none !important; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { display: flex; background: #f4f7f6; min-height: 100vh; }
+        
+        /* Sidebar */
+        .sidebar { width: 250px; background: #2d5a27; color: white; position: fixed; height: 100vh; padding: 20px 0; }
+        .sidebar h2 { text-align: center; margin-bottom: 30px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; }
+        .nav-link { display: flex; align-items: center; gap: 10px; padding: 15px 25px; color: white; text-decoration: none; transition: 0.3s; }
+        .nav-link:hover, .nav-link.active { background: rgba(255,255,255,0.1); border-left: 4px solid #fff; }
+
+        /* Main Content */
+        .main-content { margin-left: 250px; width: calc(100% - 250px); padding: 30px; }
+        .card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        
+        /* Eventos Colores */
+        .fc-event-google { background-color: #ff5a5f !important; border: none !important; font-size: 0.85rem; padding: 2px; }
+        .fc-event-manual { background-color: #2d5a27 !important; border: none !important; font-size: 0.85rem; padding: 2px; }
+        .fc-resource-area { width: 150px !important; font-weight: bold; color: #2d5a27; }
+        
+        #loading { position: fixed; top: 20px; right: 20px; background: #2d5a27; color: white; padding: 10px 20px; border-radius: 20px; display: none; z-index: 1000; }
     </style>
 </head>
 <body>
-    <div class="sidebar">
-        <h2 style="text-align:center; padding:20px;">Casa Verde</h2>
-        <a href="dashboard.html" class="nav-link"><span class="material-icons">dashboard</span> Tareas</a>
-        <a href="calendario.html" class="nav-link active"><span class="material-icons">calendar_view_day</span> Ocupación</a>
-        <a href="reservas.html" class="nav-link"><span class="material-icons">list</span> Reservas</a>
-    </div>
 
-    <div class="main-content">
-        <h1>Calendario de Disponibilidad</h1>
+<div id="loading">🔄 Sincronizando...</div>
+
+<div class="sidebar">
+    <h2>Casa Verde</h2>
+    <a href="dashboard.html" class="nav-link"><span class="material-icons">dashboard</span> Tareas</a>
+    <a href="calendario.html" class="nav-link active"><span class="material-icons">calendar_view_day</span> Ocupación</a>
+    <a href="reservas.html" class="nav-link"><span class="material-icons">list</span> Reservas</a>
+    <a href="clientes.html" class="nav-link"><span class="material-icons">people</span> Clientes</a>
+</div>
+
+<div class="main-content">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h1>Disponibilidad por Unidad</h1>
+        <div style="font-size: 0.8rem;">
+            <span style="color:#ff5a5f;">● Airbnb/Google</span> | <span style="color:#2d5a27;">● Directo/Manual</span>
+        </div>
+    </div>
+    
+    <div class="card">
         <div id="calendar"></div>
     </div>
+</div>
 
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="js/auth-core.js"></script>
+<script>
+    // 1. CONFIGURACIÓN
+    const firebaseConfig = {
+        apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
+        authDomain: "tatareas-d8a80.firebaseapp.com",
+        projectId: "tatareas-d8a80",
+        storageBucket: "tatareas-d8a80.firebasestorage.app",
+        messagingSenderId: "709332495480",
+        appId: "1:709332495480:web:7060b2c75984352354918d"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
 
-    <script>
-        const GOOGLE_API_KEY = 'AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs';
-        const CALENDARS = [
-            { id: 'h5a1h0a8dg9rl0oufvq19hn05r4gbubg@import.calendar.google.com', resId: 'Cabaña 1' },
-            { id: '60n7foetdu2qvsn16mi7is8j6i4ugm66@import.calendar.google.com', resId: 'Cabaña 2' },
-            { id: '8i3hl5ppqi6al50kf7casj5n5vl9sp1j@import.calendar.google.com', resId: 'Suite' }
-        ];
+    const GOOGLE_API_KEY = 'AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs';
+    const CALENDARS = [
+        { id: 'h5a1h0a8dg9rl0oufvq19hn05r4gbubg@import.calendar.google.com', resId: 'Cabaña 1' },
+        { id: '60n7foetdu2qvsn16mi7is8j6i4ugm66@import.calendar.google.com', resId: 'Cabaña 2' },
+        { id: '8i3hl5ppqi6al50kf7casj5n5vl9sp1j@import.calendar.google.com', resId: 'Suite' }
+    ];
 
-        document.addEventListener('DOMContentLoaded', function() {
-            const calendarEl = document.getElementById('calendar');
-            const calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'resourceTimelineMonth',
-                locale: 'es',
-                schedulerLicenseKey: 'GPL-My-Project-Is-Open-Source',
-                resources: [
-                    { id: 'Cabaña 1', title: 'Cabaña 1' },
-                    { id: 'Cabaña 2', title: 'Cabaña 2' },
-                    { id: 'Suite', title: 'Suite' }
-                ],
-                events: async function(info, successCallback) {
-                    let events = [];
-                    // 1. Cargar Google
+    // 2. INICIALIZAR CALENDARIO
+    document.addEventListener('DOMContentLoaded', function() {
+        const calendarEl = document.getElementById('calendar');
+        const loader = document.getElementById('loading');
+
+        const calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'resourceTimelineMonth',
+            locale: 'es',
+            schedulerLicenseKey: 'GPL-My-Project-Is-Open-Source',
+            resourceAreaHeaderContent: 'Unidad',
+            resources: [
+                { id: 'Cabaña 1', title: 'CABAÑA 1' },
+                { id: 'Cabaña 2', title: 'CABAÑA 2' },
+                { id: 'Suite', title: 'SUITE / LOFT' }
+            ],
+            events: async function(info, successCallback, failureCallback) {
+                loader.style.display = 'block';
+                let allEvents = [];
+
+                try {
+                    // Cargar de Google
                     for (const cal of CALENDARS) {
                         const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?key=${GOOGLE_API_KEY}&timeMin=${info.startStr}&timeMax=${info.endStr}&singleEvents=true`;
                         const res = await fetch(url);
                         const data = await res.json();
-                        if(data.items) {
-                            events.push(...data.items.map(e => ({
+                        if (data.items) {
+                            allEvents.push(...data.items.map(e => ({
                                 resourceId: cal.resId,
                                 title: e.summary || 'Ocupado',
                                 start: e.start.dateTime || e.start.date,
@@ -70,24 +115,42 @@
                             })));
                         }
                     }
-                    // 2. Cargar Firebase (Manuales)
+
+                    // Cargar de Firebase (Reservas Directas)
                     const snap = await db.collection('reservas').get();
                     snap.forEach(doc => {
-                        const d = doc.data();
-                        events.push({
+                        const r = doc.data();
+                        allEvents.push({
                             id: doc.id,
-                            resourceId: d.cabana,
-                            title: d.nombre,
-                            start: d.checkIn,
-                            end: d.checkOut,
-                            className: 'fc-event-manual'
+                            resourceId: r.cabana, // Debe coincidir con IDs de resources arriba
+                            title: r.nombre + " (Directa)",
+                            start: r.checkIn,
+                            end: r.checkOut,
+                            className: 'fc-event-manual',
+                            extendedProps: { origen: 'manual' }
                         });
                     });
-                    successCallback(events);
+
+                    successCallback(allEvents);
+                } catch (e) {
+                    console.error("Error al cargar eventos:", e);
+                    failureCallback(e);
+                } finally {
+                    loader.style.display = 'none';
                 }
-            });
-            calendar.render();
+            },
+            eventClick: function(info) {
+                if (info.event.extendedProps.origen === 'manual') {
+                    window.location.href = `pagos.html?id=${info.event.id}`;
+                } else {
+                    alert("Reserva de Airbnb / Externa: " + info.event.title);
+                }
+            }
         });
-    </script>
+
+        calendar.render();
+    });
+</script>
+
 </body>
 </html>
