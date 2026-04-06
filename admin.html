@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Casa Verde Canas</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        :root {
+            --verde-casaverde: #74E3AE;
+            --verde-oscuro: #1e3c2c;
+            --madera: #5d4037;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+
+        /* --- LOGIN SECTION --- */
+        #login-section {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(135deg, var(--verde-oscuro) 0%, #2d5a27 100%);
+        }
+
+        .login-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 350px;
+            text-align: center;
+        }
+
+        .login-card h2 { color: var(--verde-oscuro); margin-bottom: 1.5rem; }
+        
+        .input-group { margin-bottom: 1rem; text-align: left; }
+        .input-group label { display: block; font-size: 0.9rem; margin-bottom: 5px; }
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            box-sizing: border-box;
+        }
+
+        .btn-admin {
+            background-color: var(--verde-casaverde);
+            color: var(--verde-oscuro);
+            border: none;
+            padding: 12px 25px;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            transition: 0.3s;
+        }
+
+        /* --- ADMIN PANEL --- */
+        #admin-panel { display: none; }
+        
+        header {
+            background-color: var(--verde-oscuro);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .container { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+
+        .cabana-card {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border-left: 5px solid var(--verde-casaverde);
+        }
+
+        .cabana-card h3 { margin-top: 0; color: var(--madera); }
+        
+        .edit-fields {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .full-width { grid-column: span 2; }
+
+        textarea { width: 100%; border-radius: 10px; border: 1px solid #ddd; padding: 10px; }
+
+        .status-tag {
+            font-size: 0.8rem;
+            padding: 4px 8px;
+            border-radius: 5px;
+            background: #eee;
+        }
+
+        .btn-save {
+            background-color: var(--verde-oscuro);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .btn-logout { background: transparent; color: white; border: 1px solid white; cursor: pointer; padding: 5px 10px; border-radius: 5px; }
+
+        @media (max-width: 600px) {
+            .edit-fields { grid-template-columns: 1fr; }
+            .full-width { grid-column: span 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <section id="login-section">
+        <div class="login-card">
+            <span class="material-icons" style="font-size: 48px; color: var(--verde-casaverde);">account_tree</span>
+            <h2>Gestión Casa Verde</h2>
+            <div class="input-group">
+                <label>Correo electrónico</label>
+                <input type="email" id="email" placeholder="admin@casaverde.com">
+            </div>
+            <div class="input-group">
+                <label>Contraseña</label>
+                <input type="password" id="password" placeholder="••••••••">
+            </div>
+            <button class="btn-admin" onclick="loginAdmin()">Ingresar al Panel</button>
+        </div>
+    </section>
+
+    <section id="admin-panel">
+        <header>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span class="material-icons">cottage</span>
+                <strong>Casa Verde Canas - Admin</strong>
+            </div>
+            <button class="btn-logout" onclick="logout()">Cerrar Sesión</button>
+        </header>
+
+        <div class="container">
+            <h2>Actualizar Propiedades</h2>
+            <p>Desde aquí puedes corregir enlaces de fotos rotas y descripciones.</p>
+            
+            <div id="lista-cabanas">
+                <div class="loading">Cargando datos de cabañas...</div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        // CONFIGURACIÓN FIREBASE (Usa tus credenciales aquí)
+        const firebaseConfig = {
+            apiKey: "AIzaSy...",
+            authDomain: "casaverdecanas-199.firebaseapp.com",
+            databaseURL: "https://casaverdecanas-199-default-rtdb.firebaseio.com",
+            projectId: "casaverdecanas-199",
+            storageBucket: "casaverdecanas-199.appspot.com",
+            appId: "1:..."
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+        const fs = firebase.firestore();
+
+        // 1. CONTROL DE ACCESO
+        auth.onAuthStateChanged(async (user) => {
+            const loginSection = document.getElementById('login-section');
+            const adminPanel = document.getElementById('admin-panel');
+
+            if (user) {
+                // Verificar ROL en Firestore
+                const doc = await fs.collection('usuarios').doc(user.uid).get();
+                if (doc.exists && doc.data().rol === "admin") {
+                    loginSection.style.display = 'none';
+                    adminPanel.style.display = 'block';
+                    cargarCabanas();
+                } else {
+                    alert("No tienes permisos de administrador.");
+                    auth.signOut();
+                }
+            } else {
+                loginSection.style.display = 'flex';
+                adminPanel.style.display = 'none';
+            }
+        });
+
+        async function loginAdmin() {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('password').value;
+            try {
+                await auth.signInWithEmailAndPassword(email, pass);
+            } catch (e) {
+                alert("Error de acceso: " + e.message);
+            }
+        }
+
+        function logout() { auth.signOut(); }
+
+        // 2. CARGAR Y GUARDAR DATOS
+        function cargarCabanas() {
+            const container = document.getElementById('lista-cabanas');
+            
+            db.ref('propiedades').on('value', (snapshot) => {
+                const datos = snapshot.val();
+                container.innerHTML = '';
+                
+                for (let id in datos) {
+                    const c = datos[id];
+                    container.innerHTML += `
+                        <div class="cabana-card">
+                            <h3>${c.nombre}</h3>
+                            <div class="edit-fields">
+                                <div class="input-group full-width">
+                                    <label>URL de Imagen (Postimage o Firebase)</label>
+                                    <input type="text" id="img-${id}" value="${c.imagenUrl || ''}">
+                                </div>
+                                <div class="input-group">
+                                    <label>Precio por noche (USD)</label>
+                                    <input type="number" id="precio-${id}" value="${c.precio || ''}">
+                                </div>
+                                <div class="input-group">
+                                    <label>Capacidad (personas)</label>
+                                    <input type="text" id="cap-${id}" value="${c.capacidad || ''}">
+                                </div>
+                                <div class="input-group full-width">
+                                    <label>Descripción</label>
+                                    <textarea id="desc-${id}" rows="2">${c.descripcion || ''}</textarea>
+                                </div>
+                            </div>
+                            <button class="btn-save" onclick="guardarCambios('${id}')">
+                                <span class="material-icons" style="font-size:14px">save</span> Guardar
+                            </button>
+                        </div>
+                    `;
+                }
+            });
+        }
+
+        function guardarCambios(id) {
+            const updates = {
+                imagenUrl: document.getElementById(`img-${id}`).value,
+                precio: document.getElementById(`precio-${id}`).value,
+                capacidad: document.getElementById(`cap-${id}`).value,
+                descripcion: document.getElementById(`desc-${id}`).value
+            };
+
+            db.ref('propiedades/' + id).update(updates)
+                .then(() => alert("✅ Datos de " + id + " actualizados."))
+                .catch(e => alert("Error: " + e.message));
+        }
+    </script>
+</body>
+</html>
