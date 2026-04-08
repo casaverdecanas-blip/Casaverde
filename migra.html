@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Migrar Imágenes a Local - Casa Verde</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #1e3c2c;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 900px;
+            width: 100%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        h1 { color: #2E5A31; margin-bottom: 5px; }
+        h2 { color: #555; font-size: 1rem; margin-bottom: 20px; }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        button {
+            background: #2E5A31;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 10px 5px;
+            transition: 0.2s;
+        }
+        button:hover { background: #1e3c2c; transform: translateY(-2px); }
+        .btn-primary { background: #27ae60; }
+        .btn-secondary { background: #3498db; }
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin: 15px 0;
+            display: none;
+        }
+        .status.success { background: #d4edda; color: #155724; display: block; }
+        .status.error { background: #f8d7da; color: #721c24; display: block; }
+        .status.info { background: #d1ecf1; color: #0c5460; display: block; }
+        .log {
+            background: #1e1e1e;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+            display: none;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 15px 0;
+            display: none;
+        }
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background: #27ae60;
+            transition: width 0.3s;
+        }
+        .result-box {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 11px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+        hr { margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📸 Migrar Imágenes a Local</h1>
+        <h2>Casa Verde Canas</h2>
+        
+        <div class="warning">
+            ⚠️ <strong>Herramienta de un solo uso</strong><br>
+            1. Descargará todas las imágenes desde URLs externas (Postimg, etc.)<br>
+            2. Las organizará en carpetas<br>
+            3. Generará un ZIP para subir a GitHub<br>
+            4. Creará un script para actualizar las URLs en Firebase
+        </div>
+        
+        <button id="btn-iniciar" class="btn-primary" onclick="iniciarMigracion()">🚀 Iniciar Migración</button>
+        <button id="btn-descargar" onclick="descargarZIP()" style="display:none;">📦 Descargar ZIP con imágenes</button>
+        <button id="btn-script" onclick="mostrarScript()" style="display:none;">📝 Mostrar script para actualizar URLs</button>
+        
+        <div id="progress-bar" class="progress-bar">
+            <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <div id="status" class="status"></div>
+        <div id="log" class="log"></div>
+        <div id="resultado" class="result-box"></div>
+    </div>
+
+    <script>
+        // Firebase Config
+        const firebaseConfig = {
+            apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
+            authDomain: "casaverdecanas-199.firebaseapp.com",
+            databaseURL: "https://casaverdecanas-199-default-rtdb.firebaseio.com",
+            projectId: "casaverdecanas-199",
+            storageBucket: "casaverdecanas-199.firebasestorage.app",
+            appId: "1:417825635316:web:ff7f4fe52edcab43d8d7a1"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        
+        let todasLasImagenes = []; // { url, path, nombre }
+        let zip = null;
+        
+        function mostrarLog(mensaje, tipo = 'info') {
+            const logDiv = document.getElementById('log');
+            const statusDiv = document.getElementById('status');
+            
+            logDiv.style.display = 'block';
+            logDiv.innerHTML += `[${new Date().toLocaleTimeString()}] ${mensaje}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            
+            statusDiv.className = `status ${tipo}`;
+            statusDiv.innerHTML = mensaje;
+            statusDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                if (document.getElementById('status').innerHTML === mensaje) {
+                    statusDiv.style.display = 'none';
+                }
+            }, 3000);
+        }
+        
+        function actualizarProgreso(porcentaje) {
+            const fill = document.getElementById('progress-fill');
+            if (fill) fill.style.width = porcentaje + '%';
+        }
+        
+        async function iniciarMigracion() {
+            document.getElementById('btn-iniciar').disabled = true;
+            document.getElementById('progress-bar').style.display = 'block';
+            mostrarLog('📥 Cargando datos desde Firebase...', 'info');
+            
+            try {
+                const snapshot = await db.ref('siteData').once('value');
+                const siteData = snapshot.val() || {};
+                
+                // Recopilar todas las imágenes
+                todasLasImagenes = [];
+                
+                // 1. Imágenes de cabañas
+                if (siteData.apartments) {
+                    for (const [apId, apt] of Object.entries(siteData.apartments)) {
+                        if (apt.categories) {
+                            for (const [catId, cat] of Object.entries(apt.categories)) {
+                                if (cat.photos) {
+                                    for (let i = 0; i < cat.photos.length; i++) {
+                                        const photo = cat.photos[i];
+                                        if (photo.url && (photo.url.startsWith('http://') || photo.url.startsWith('https://'))) {
+                                            // Generar nombre de archivo
+                                            const extension = photo.url.split('.').pop().split('?')[0].substring(0, 4);
+                                            const ext = extension.match(/jpg|jpeg|png|gif|webp/i) ? extension : 'jpg';
+                                            const nombre = `${apId}_${catId}_${i+1}.${ext.toLowerCase()}`;
+                                            const rutaLocal = `img/${apId}/${catId}/${nombre}`;
+                                            todasLasImagenes.push({
+                                                url: photo.url,
+                                                path: rutaLocal,
+                                                nombre: nombre,
+                                                apId: apId,
+                                                catId: catId,
+                                                photoIndex: i
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // 2. Imágenes de espacios comunes
+                if (siteData.common?.categories) {
+                    for (const [catId, cat] of Object.entries(siteData.common.categories)) {
+                        if (cat.photos) {
+                            for (let i = 0; i < cat.photos.length; i++) {
+                                const photo = cat.photos[i];
+                                if (photo.url && (photo.url.startsWith('http://') || photo.url.startsWith('https://'))) {
+                                    const extension = photo.url.split('.').pop().split('?')[0].substring(0, 4);
+                                    const ext = extension.match(/jpg|jpeg|png|gif|webp/i) ? extension : 'jpg';
+                                    const nombre = `common_${catId}_${i+1}.${ext.toLowerCase()}`;
+                                    const rutaLocal = `img/common/${catId}/${nombre}`;
+                                    todasLasImagenes.push({
+                                        url: photo.url,
+                                        path: rutaLocal,
+                                        nombre: nombre,
+                                        catId: catId,
+                                        photoIndex: i,
+                                        esCommon: true
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                mostrarLog(`📸 Se encontraron ${todasLasImagenes.length} imágenes para migrar`, 'success');
+                
+                if (todasLasImagenes.length === 0) {
+                    mostrarLog('❌ No se encontraron imágenes para migrar', 'error');
+                    return;
+                }
+                
+                // Crear ZIP y descargar imágenes
+                await descargarTodasLasImagenes();
+                
+            } catch (error) {
+                mostrarLog('❌ Error: ' + error.message, 'error');
+                console.error(error);
+            }
+        }
+        
+        async function descargarTodasLasImagenes() {
+            zip = new JSZip();
+            let completadas = 0;
+            
+            mostrarLog('📥 Descargando imágenes...', 'info');
+            
+            for (const img of todasLasImagenes) {
+                try {
+                    const response = await fetch(img.url);
+                    const blob = await response.blob();
+                    
+                    // Organizar en carpetas dentro del ZIP
+                    const partes = img.path.split('/');
+                    const carpeta = partes.slice(0, -1).join('/');
+                    const nombreArchivo = partes[partes.length - 1];
+                    
+                    const carpetaZip = zip.folder(carpeta);
+                    carpetaZip.file(nombreArchivo, blob);
+                    
+                    completadas++;
+                    const porcentaje = (completadas / todasLasImagenes.length) * 100;
+                    actualizarProgreso(porcentaje);
+                    mostrarLog(`✅ ${completadas}/${todasLasImagenes.length}: ${img.path}`);
+                    
+                } catch (error) {
+                    mostrarLog(`⚠️ Error descargando ${img.url}: ${error.message}`, 'error');
+                }
+            }
+            
+            mostrarLog(`✅ ${completadas}/${todasLasImagenes.length} imágenes descargadas`, 'success');
+            
+            // Generar script de actualización
+            generarScriptActualizacion();
+            
+            // Mostrar botones de descarga
+            document.getElementById('btn-descargar').style.display = 'inline-block';
+            document.getElementById('btn-script').style.display = 'inline-block';
+            document.getElementById('btn-iniciar').disabled = false;
+        }
+        
+        function generarScriptActualizacion() {
+            let script = `// Script para actualizar URLs en Firebase
+// Ejecutar en consola del navegador estando logueado en admin.html
+
+const nuevasUrls = {\n`;
+            
+            for (const img of todasLasImagenes) {
+                const nuevaUrl = `https://casaverdecanas.com.br/${img.path}`;
+                script += `  "${img.url}": "${nuevaUrl}",\n`;
+            }
+            
+            script += `};\n\n`;
+            script += `// Función para actualizar (ejecutar después de subir imágenes a GitHub)
+async function actualizarUrls() {
+  for (const [viejaUrl, nuevaUrl] of Object.entries(nuevasUrls)) {
+    // Buscar y reemplazar en siteData
+    console.log(\`Actualizando: \${viejaUrl} -> \${nuevaUrl}\`);
+  }
+  console.log("Script generado. Subí las imágenes a GitHub primero.");
+}
+`;
+            
+            document.getElementById('resultado').style.display = 'block';
+            document.getElementById('resultado').innerHTML = `<strong>📝 Script para actualizar URLs (guardar como .js):</strong><br><br><pre>${script}</pre>`;
+        }
+        
+        function descargarZIP() {
+            if (!zip) {
+                mostrarLog('❌ No hay ZIP para descargar', 'error');
+                return;
+            }
+            
+            zip.generateAsync({ type: 'blob' }).then(function(content) {
+                saveAs(content, 'imagenes-casaverde.zip');
+                mostrarLog('✅ ZIP descargado. Subí la carpeta "img" a la raíz de tu GitHub Pages.', 'success');
+            });
+        }
+        
+        function mostrarScript() {
+            const resultado = document.getElementById('resultado');
+            resultado.style.display = 'block';
+            resultado.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // Exponer funciones globales
+        window.iniciarMigracion = iniciarMigracion;
+        window.descargarZIP = descargarZIP;
+        window.mostrarScript = mostrarScript;
+    </script>
+</body>
+</html>
