@@ -9,7 +9,6 @@
     
     <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap" rel="stylesheet">
     
-    <!-- Favicon con el logo -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Ccircle cx='100' cy='100' r='85' fill='none' stroke='%235A3A1F' stroke-width='4'/%3E%3Cpath d='M50 140 C35 110, 40 80, 65 65 C55 95, 55 120, 50 140 Z' fill='%232E7D55'/%3E%3Cpath d='M150 140 C165 110, 160 80, 135 65 C145 95, 145 120, 150 140 Z' fill='%232E7D55'/%3E%3Cpolygon points='65,75 100,50 135,75' fill='none' stroke='%235A3A1F' stroke-width='4'/%3E%3Crect x='70' y='75' width='60' height='40' fill='none' stroke='%235A3A1F' stroke-width='4'/%3E%3Crect x='85' y='85' width='30' height='20' fill='none' stroke='%235A3A1F' stroke-width='3'/%3E%3Cline x1='70' y1='115' x2='130' y2='115' stroke='%235A3A1F' stroke-width='4'/%3E%3Cline x1='80' y1='115' x2='80' y2='145' stroke='%235A3A1F' stroke-width='4'/%3E%3Cline x1='100' y1='115' x2='100' y2='145' stroke='%235A3A1F' stroke-width='4'/%3E%3Cline x1='120' y1='115' x2='120' y2='145' stroke='%235A3A1F' stroke-width='4'/%3E%3C/svg%3E">
     
     <style>
@@ -19,8 +18,6 @@
             --warm-yellow: #F9D976;
             --charcoal: #4A4A4A;
             --starry-white: #FFFFFF;
-            --earth-brown: #5A3A1F;
-            --leaf-green: #2E7D55;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -32,7 +29,6 @@
             line-height: 1.6; 
         }
         
-        /* Header consistente con index */
         .hero {
             background: linear-gradient(135deg, var(--forest-green) 0%, #1a3a1c 100%);
             color: white;
@@ -181,7 +177,7 @@
             line-height: 1.7;
         }
         
-        /* Features grid - DINÁMICO */
+        /* Features grid */
         .features-grid { 
             display: grid; 
             grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); 
@@ -197,7 +193,7 @@
             transition: 0.2s;
         }
         .feature-card:hover { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.05); }
-        .feature-card .icon { font-size: 1.8rem; margin-bottom: 8px; }
+        .feature-card .icon { font-size: 2rem; margin-bottom: 8px; }
         .feature-card span { font-size: 0.9rem; font-weight: 500; color: var(--charcoal); }
         
         /* Nota especial */
@@ -222,7 +218,6 @@
             font-size: 0.95rem;
         }
         
-        /* Sliders */
         .category-group { 
             background: white; 
             border-radius: 25px; 
@@ -278,13 +273,6 @@
         }
         .shared-spaces h3 { font-size: 1.6rem; margin-bottom: 15px; }
         
-        #calendar-container { 
-            width: 100%; 
-            margin: 25px 0; 
-            border-radius: 20px; 
-            overflow: hidden;
-            background: white;
-        }
         #calendar-container iframe { 
             width: 100%; 
             border: none; 
@@ -403,7 +391,6 @@
     </footer>
 
     <script>
-        // Configuración Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
             authDomain: "casaverdecanas-199.firebaseapp.com",
@@ -416,7 +403,6 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         
-        // Obtener el ID de la cabaña desde la URL
         const urlParams = new URLSearchParams(window.location.search);
         const CABIN_ID = urlParams.get('id');
         
@@ -472,46 +458,51 @@
             const cabinName = getText(cabinData.name) || 'Cabaña';
             const description = getText(cabinData.description) || 'Descripción no disponible';
             
-            // Actualizar título y meta
             document.title = `${cabinName} | Casa Verde Canas`;
-            const metaDesc = document.getElementById('meta-description');
-            if (metaDesc) {
-                metaDesc.setAttribute('content', `${cabinName} - Cabaña rústica en Canasvieiras, Florianópolis. Espacio privado con acceso a piscina y áreas comunes.`);
-            }
             
-            // Obtener features (dinámicos)
-            const features = cabinData.features ? getText(cabinData.features) : [];
-            const featuresArray = Array.isArray(features) ? features : 
-                                  (typeof features === 'string' ? [features] : []);
+            // Obtener features
+            let featuresArray = [];
+            if (cabinData.features) {
+                const featuresText = getText(cabinData.features);
+                featuresArray = Array.isArray(featuresText) ? featuresText : 
+                                (typeof featuresText === 'string' ? [featuresText] : []);
+            }
             
             // Obtener nota especial
             const specialNote = cabinData.specialNote ? getText(cabinData.specialNote) : '';
             
-            // Construir HTML de features
+            // Construir features con iconos
             let featuresHtml = '';
             if (featuresArray.length > 0) {
                 featuresHtml = `
                     <div class="features-grid">
                         ${featuresArray.map(feature => {
-                            // Detectar si el texto ya tiene ícono o agregar uno por defecto
-                            const hasIcon = feature.match(/[🔹🔸👥🛏️🚿🍳🌿🏠❄️💡]/);
-                            const displayText = hasIcon ? feature : `🔹 ${feature}`;
-                            return `<div class="feature-card"><div class="icon">${displayText.charAt(0)}</div><span>${escapeHtml(displayText.substring(2))}</span></div>`;
+                            let displayFeature = feature;
+                            const hasIcon = /[👥🛏️🚿🍳🌿🏠❄️💡🔹🔸]/.test(feature);
+                            if (!hasIcon && feature.trim()) {
+                                displayFeature = `🔹 ${feature}`;
+                            }
+                            const iconMatch = displayFeature.match(/^([^a-zA-Z0-9]+)/);
+                            const icon = iconMatch ? iconMatch[1] : '🔹';
+                            const text = displayFeature.replace(/^[^a-zA-Z0-9]+/, '').trim();
+                            return `
+                                <div class="feature-card">
+                                    <div class="icon">${icon}</div>
+                                    <span>${escapeHtml(text)}</span>
+                                </div>
+                            `;
                         }).join('')}
                     </div>
                 `;
             }
             
-            // Construir HTML de nota especial
-            let specialNoteHtml = '';
-            if (specialNote && specialNote.trim() !== '') {
-                specialNoteHtml = `
-                    <div class="special-note">
-                        <div class="note-icon">💡</div>
-                        <div class="note-text">${escapeHtml(specialNote).replace(/\n/g, '<br>')}</div>
-                    </div>
-                `;
-            }
+            // Nota especial
+            const specialNoteHtml = specialNote && specialNote.trim() !== '' ? `
+                <div class="special-note">
+                    <div class="note-icon">💡</div>
+                    <div class="note-text">${escapeHtml(specialNote).replace(/\n/g, '<br>')}</div>
+                </div>
+            ` : '';
             
             let html = `
                 <h1 class="cabin-title">${escapeHtml(cabinName)}</h1>
@@ -550,13 +541,8 @@
             
             container.innerHTML = html;
             
-            // Cargar categorías y fotos
             renderCategories();
-            
-            // Cargar calendario
             renderCalendar();
-            
-            // Configurar WhatsApp
             setupWhatsApp(cabinName);
         }
         
@@ -649,7 +635,6 @@
             loadCabinData();
         }
 
-        // Inicializar
         document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.lang-btn').forEach(btn => {
                 if (btn.getAttribute('data-lang') === currentLang) {
