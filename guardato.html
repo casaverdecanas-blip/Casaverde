@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Guardar Token GitHub - Casa Verde</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #1e3c2c;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        h1 { color: #2E5A31; margin-bottom: 5px; font-size: 1.5rem; }
+        h2 { color: #555; font-size: 0.9rem; margin-bottom: 20px; }
+        .login-box {
+            background: #f4f4f4;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            font-size: 14px;
+        }
+        textarea {
+            font-family: monospace;
+            font-size: 12px;
+            resize: vertical;
+        }
+        button {
+            background: #2E5A31;
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            margin: 10px 0;
+            transition: 0.2s;
+        }
+        button:hover { background: #1e3c2c; transform: translateY(-2px); }
+        .btn-success { background: #27ae60; }
+        .status {
+            padding: 12px;
+            border-radius: 10px;
+            margin: 15px 0;
+            display: none;
+        }
+        .status.success { background: #d4edda; color: #155724; display: block; }
+        .status.error { background: #f8d7da; color: #721c24; display: block; }
+        .status.info { background: #d1ecf1; color: #0c5460; display: block; }
+        .token-display {
+            background: #1e1e1e;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 11px;
+            word-break: break-all;
+            margin-top: 15px;
+            display: none;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 8px;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔑 Guardar Token GitHub</h1>
+        <h2>Casa Verde Canas</h2>
+        
+        <div class="warning">
+            ⚠️ Pegá tu token de GitHub en el campo de abajo. <strong>No lo compartas con nadie.</strong>
+        </div>
+        
+        <div class="login-box">
+            <input type="email" id="email" placeholder="Email" autocomplete="email">
+            <input type="password" id="password" placeholder="Contraseña" autocomplete="current-password">
+            <button id="btn-login" onclick="login()">🔐 Iniciar sesión</button>
+            <div id="login-error" style="color:#e74c3c; margin-top:10px; font-size:0.8rem;"></div>
+        </div>
+        
+        <div id="panel-token" style="display:none;">
+            <div id="status" class="status"></div>
+            
+            <label style="font-weight: bold;">📝 Token de GitHub:</label>
+            <textarea id="token-input" rows="2" placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"></textarea>
+            
+            <button id="btn-guardar" class="btn-success" onclick="guardarToken()">💾 Guardar Token en Firebase</button>
+            <button id="btn-verificar" onclick="verificarToken()">🔍 Verificar Token guardado</button>
+            
+            <div id="resultado" class="token-display"></div>
+        </div>
+        
+        <p style="margin-top: 20px; font-size: 12px; color: #666; text-align:center;">
+            El token se guardará en <code>siteData/_config/github_token</code><br>
+            Solo visible para administradores.
+        </p>
+    </div>
+
+    <script>
+        // Firebase Config
+        const firebaseConfig = {
+            apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
+            authDomain: "casaverdecanas-199.firebaseapp.com",
+            databaseURL: "https://casaverdecanas-199-default-rtdb.firebaseio.com",
+            projectId: "casaverdecanas-199",
+            storageBucket: "casaverdecanas-199.firebasestorage.app",
+            appId: "1:417825635316:web:ff7f4fe52edcab43d8d7a1"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        let isAdmin = false;
+        let currentUser = null;
+        
+        function mostrarStatus(msg, tipo = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${tipo}`;
+            statusDiv.innerHTML = msg;
+            statusDiv.style.display = 'block';
+            setTimeout(() => {
+                if (document.getElementById('status').innerHTML === msg) {
+                    statusDiv.style.display = 'none';
+                }
+            }, 5000);
+        }
+        
+        function mostrarResultado(texto) {
+            const resultadoDiv = document.getElementById('resultado');
+            resultadoDiv.style.display = 'block';
+            resultadoDiv.innerHTML = texto;
+        }
+        
+        // Login
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('login-error');
+            
+            if (!email || !password) {
+                errorDiv.textContent = '❌ Ingresa email y contraseña';
+                return;
+            }
+            
+            try {
+                const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                
+                const userDoc = await firebase.firestore().collection('usuarios').doc(user.uid).get();
+                
+                if (userDoc.exists && userDoc.data().rol === 'admin') {
+                    currentUser = user;
+                    isAdmin = true;
+                    errorDiv.textContent = '';
+                    document.getElementById('panel-token').style.display = 'block';
+                    mostrarStatus('✅ Autenticación exitosa como administrador', 'success');
+                } else {
+                    errorDiv.textContent = '❌ No tienes permisos de administrador';
+                    await firebase.auth().signOut();
+                }
+            } catch (err) {
+                errorDiv.textContent = '❌ ' + (err.message || 'Error de autenticación');
+            }
+        }
+        
+        // Guardar token en Firebase
+        async function guardarToken() {
+            if (!isAdmin) {
+                mostrarStatus('❌ No estás autenticado como administrador', 'error');
+                return;
+            }
+            
+            const token = document.getElementById('token-input').value.trim();
+            if (!token) {
+                mostrarStatus('❌ Pegá tu token de GitHub en el campo de texto', 'error');
+                return;
+            }
+            
+            if (!token.startsWith('ghp_')) {
+                mostrarStatus('❌ El token debe comenzar con "ghp_"', 'error');
+                return;
+            }
+            
+            mostrarStatus('💾 Guardando token en Firebase...', 'info');
+            
+            try {
+                await db.ref('siteData/_config/github_token').set(token);
+                mostrarStatus('✅ Token guardado correctamente en Firebase', 'success');
+                const tokenOculto = token.substring(0, 10) + '...' + token.substring(token.length - 4);
+                mostrarResultado(`✅ Token guardado en:\n\nsiteData/_config/github_token\n\nToken: ${tokenOculto}\n\nAhora podés usar la subida automática a GitHub desde el admin.`);
+                
+                // Limpiar el campo por seguridad
+                document.getElementById('token-input').value = '';
+            } catch (error) {
+                mostrarStatus('❌ Error: ' + error.message, 'error');
+            }
+        }
+        
+        // Verificar token guardado
+        async function verificarToken() {
+            if (!isAdmin) {
+                mostrarStatus('❌ No estás autenticado como administrador', 'error');
+                return;
+            }
+            
+            mostrarStatus('🔍 Verificando token en Firebase...', 'info');
+            
+            try {
+                const snapshot = await db.ref('siteData/_config/github_token').once('value');
+                const token = snapshot.val();
+                
+                if (token) {
+                    const tokenOculto = token.substring(0, 10) + '...' + token.substring(token.length - 4);
+                    mostrarResultado(`✅ Token encontrado en Firebase:\n\n${tokenOculto}\n\nEl token está guardado correctamente.`);
+                    mostrarStatus('✅ Token verificado', 'success');
+                } else {
+                    mostrarResultado('❌ No hay token guardado en Firebase.\n\nGuardá uno usando el botón "Guardar Token".');
+                    mostrarStatus('❌ No se encontró token', 'error');
+                }
+            } catch (error) {
+                mostrarStatus('❌ Error: ' + error.message, 'error');
+            }
+        }
+        
+        // Verificar sesión al cargar
+        firebase.auth().onAuthStateChanged(async (user) => {
+            if (user) {
+                try {
+                    const userDoc = await firebase.firestore().collection('usuarios').doc(user.uid).get();
+                    if (userDoc.exists && userDoc.data().rol === 'admin') {
+                        currentUser = user;
+                        isAdmin = true;
+                        document.getElementById('panel-token').style.display = 'block';
+                        mostrarStatus('✅ Sesión reanudada como administrador', 'success');
+                    }
+                } catch (err) {}
+            }
+        });
+        
+        window.login = login;
+        window.guardarToken = guardarToken;
+        window.verificarToken = verificarToken;
+    </script>
+</body>
+</html>
