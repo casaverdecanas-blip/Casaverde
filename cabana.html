@@ -181,23 +181,46 @@
             line-height: 1.7;
         }
         
+        /* Features grid - DINÁMICO */
         .features-grid { 
             display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); 
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); 
             gap: 20px; 
             margin: 40px 0; 
         }
         .feature-card { 
             background: #f4f8f4; 
-            padding: 20px; 
+            padding: 18px 12px; 
             border-radius: 20px; 
             text-align: center; 
             border: 1px solid #eef3ee;
             transition: 0.2s;
         }
         .feature-card:hover { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.05); }
-        .feature-card .icon { font-size: 2rem; margin-bottom: 8px; }
-        .feature-card h4 { color: var(--forest-green); font-size: 0.95rem; }
+        .feature-card .icon { font-size: 1.8rem; margin-bottom: 8px; }
+        .feature-card span { font-size: 0.9rem; font-weight: 500; color: var(--charcoal); }
+        
+        /* Nota especial */
+        .special-note {
+            background: #fef9e6;
+            border-left: 4px solid var(--warm-yellow);
+            padding: 20px 25px;
+            border-radius: 16px;
+            margin: 30px 0;
+            display: flex;
+            gap: 15px;
+            align-items: flex-start;
+        }
+        .special-note .note-icon {
+            font-size: 1.8rem;
+        }
+        .special-note .note-text {
+            flex: 1;
+            font-style: italic;
+            color: #7a6a3a;
+            line-height: 1.5;
+            font-size: 0.95rem;
+        }
         
         /* Sliders */
         .category-group { 
@@ -322,11 +345,12 @@
             .slider-slide { flex: 0 0 calc(50% - 8px); min-width: 200px; }
             #calendar-container iframe { min-height: 400px; }
             .container { padding: 25px 16px; }
+            .features-grid { grid-template-columns: repeat(2, 1fr); }
+            .special-note { flex-direction: column; }
         }
         
         @media (max-width: 480px) {
             .slider-slide { flex: 0 0 100%; }
-            .features-grid { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
     
@@ -421,7 +445,6 @@
         }
 
         async function loadCabinData() {
-            // Validar que tenemos un ID
             if (!CABIN_ID) {
                 showError('No se especificó qué cabaña ver.');
                 return;
@@ -456,7 +479,40 @@
                 metaDesc.setAttribute('content', `${cabinName} - Cabaña rústica en Canasvieiras, Florianópolis. Espacio privado con acceso a piscina y áreas comunes.`);
             }
             
-            // Construir el HTML de la página
+            // Obtener features (dinámicos)
+            const features = cabinData.features ? getText(cabinData.features) : [];
+            const featuresArray = Array.isArray(features) ? features : 
+                                  (typeof features === 'string' ? [features] : []);
+            
+            // Obtener nota especial
+            const specialNote = cabinData.specialNote ? getText(cabinData.specialNote) : '';
+            
+            // Construir HTML de features
+            let featuresHtml = '';
+            if (featuresArray.length > 0) {
+                featuresHtml = `
+                    <div class="features-grid">
+                        ${featuresArray.map(feature => {
+                            // Detectar si el texto ya tiene ícono o agregar uno por defecto
+                            const hasIcon = feature.match(/[🔹🔸👥🛏️🚿🍳🌿🏠❄️💡]/);
+                            const displayText = hasIcon ? feature : `🔹 ${feature}`;
+                            return `<div class="feature-card"><div class="icon">${displayText.charAt(0)}</div><span>${escapeHtml(displayText.substring(2))}</span></div>`;
+                        }).join('')}
+                    </div>
+                `;
+            }
+            
+            // Construir HTML de nota especial
+            let specialNoteHtml = '';
+            if (specialNote && specialNote.trim() !== '') {
+                specialNoteHtml = `
+                    <div class="special-note">
+                        <div class="note-icon">💡</div>
+                        <div class="note-text">${escapeHtml(specialNote).replace(/\n/g, '<br>')}</div>
+                    </div>
+                `;
+            }
+            
             let html = `
                 <h1 class="cabin-title">${escapeHtml(cabinName)}</h1>
                 
@@ -468,12 +524,8 @@
                 
                 <p class="description">${escapeHtml(description).replace(/\n/g, '<br>')}</p>
                 
-                <div class="features-grid">
-                    <div class="feature-card"><div class="icon">👥</div><h4>4 huéspedes</h4></div>
-                    <div class="feature-card"><div class="icon">🏠</div><h4>Entrepiso</h4></div>
-                    <div class="feature-card"><div class="icon">🚿</div><h4>Baño completo</h4></div>
-                    <div class="feature-card"><div class="icon">🍳</div><h4>Cocina completa</h4></div>
-                </div>
+                ${featuresHtml}
+                ${specialNoteHtml}
                 
                 <div id="categories-container"></div>
                 
@@ -586,7 +638,6 @@
             localStorage.setItem('lang', lang);
             currentLang = lang;
             
-            // Actualizar clase activa en botones
             document.querySelectorAll('.lang-btn').forEach(btn => {
                 if (btn.getAttribute('data-lang') === lang) {
                     btn.classList.add('active');
@@ -595,13 +646,11 @@
                 }
             });
             
-            // Recargar datos con nuevo idioma
             loadCabinData();
         }
 
         // Inicializar
         document.addEventListener('DOMContentLoaded', () => {
-            // Marcar botón de idioma activo
             document.querySelectorAll('.lang-btn').forEach(btn => {
                 if (btn.getAttribute('data-lang') === currentLang) {
                     btn.classList.add('active');
@@ -611,7 +660,6 @@
             loadCabinData();
         });
         
-        // Exponer funciones globales
         window.changeLanguage = changeLanguage;
         window.openModal = openModal;
     </script>
