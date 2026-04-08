@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Admin Casa Verde Canas</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
+    <style>
+        :root {
+            --verde: #74E3AE;
+            --verde-oscuro: #2E5A31;
+            --oscuro: #1e3c2c;
+            --gris: #f4f4f4;
+            --gris-claro: #e8e8e8;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--gris);
+            min-height: 100vh;
+        }
+        
+        /* Login */
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, var(--oscuro) 0%, var(--verde-oscuro) 100%);
+        }
+        
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        
+        .login-box h2 {
+            color: var(--verde-oscuro);
+            margin-bottom: 10px;
+        }
+        
+        .login-box input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        
+        .login-box button {
+            width: 100%;
+            padding: 12px;
+            background: var(--verde-oscuro);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        .login-box button:hover {
+            background: var(--oscuro);
+        }
+        
+        .error-msg {
+            color: #e74c3c;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        
+        /* Admin Panel */
+        .admin-panel {
+            display: none;
+        }
+        
+        .header {
+            background: var(--oscuro);
+            color: white;
+            padding: 15px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .header h1 {
+            font-size: 1.3rem;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: var(--verde);
+            color: var(--oscuro);
+        }
+        
+        .btn-primary:hover {
+            background: var(--verde-oscuro);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+        
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #219a52;
+        }
+        
+        .status {
+            background: #d4edda;
+            padding: 12px;
+            margin: 15px 25px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .container {
+            padding: 25px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 25px;
+            border-bottom: 2px solid var(--gris-claro);
+            padding-bottom: 10px;
+        }
+        
+        .tab-btn {
+            background: none;
+            border: none;
+            padding: 10px 25px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 30px;
+            transition: all 0.2s;
+            color: #666;
+        }
+        
+        .tab-btn:hover {
+            background: var(--gris-claro);
+        }
+        
+        .tab-btn.active {
+            background: var(--verde-oscuro);
+            color: white;
+        }
+        
+        /* Panels */
+        .panel {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .panel.active {
+            display: block;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        }
+        
+        .card h3 {
+            color: var(--verde-oscuro);
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--verde);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+        
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .lang-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .lang-field {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        .lang-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .lang-es { background: #f39c12; color: white; }
+        .lang-pt { background: #27ae60; color: white; }
+        .lang-en { background: #3498db; color: white; }
+        
+        /* Features list */
+        .features-list {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 12px;
+            margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .feature-item {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .feature-item input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        
+        .feature-item button {
+            padding: 6px 12px;
+            font-size: 12px;
+            background: #e74c3c;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+        }
+        
+        .add-feature-btn {
+            background: none;
+            border: 1px dashed var(--verde-oscuro);
+            padding: 8px;
+            text-align: center;
+            cursor: pointer;
+            border-radius: 8px;
+            margin-top: 10px;
+            color: var(--verde-oscuro);
+            font-weight: bold;
+            width: 100%;
+        }
+        
+        .add-feature-btn:hover {
+            background: var(--verde);
+        }
+        
+        /* Uploader manual */
+        .upload-area {
+            border: 2px dashed var(--verde-oscuro);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin: 15px 0;
+            background: #f9f9f9;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .upload-area:hover {
+            background: #f0f8f0;
+            border-color: #27ae60;
+        }
+        .upload-info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 10px;
+        }
+        .file-name-preview {
+            background: #e8f5e9;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 11px;
+            word-break: break-all;
+            text-align: left;
+        }
+        .size-warning {
+            color: #e74c3c;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+        
+        /* Stats */
+        .stats-bar {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        
+        .stat {
+            background: var(--verde-oscuro);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+        
+        /* Category items */
+        .category-item {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .category-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .category-order {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .category-order input {
+            width: 60px;
+            padding: 5px;
+            text-align: center;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .photos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .photo-card {
+            background: white;
+            border-radius: 10px;
+            padding: 12px;
+            border: 1px solid #eee;
+        }
+        
+        .photo-card img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        
+        .photo-url-input input {
+            width: 100%;
+            padding: 6px;
+            font-size: 10px;
+            margin-top: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .add-photo-btn {
+            background: none;
+            border: 2px dashed var(--verde-oscuro);
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            border-radius: 8px;
+            margin-top: 15px;
+            color: var(--verde-oscuro);
+            font-weight: bold;
+            width: 100%;
+        }
+        
+        .add-photo-btn:hover {
+            background: var(--verde);
+        }
+        
+        .add-category-btn {
+            background: none;
+            border: 2px dashed var(--verde-oscuro);
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            border-radius: 8px;
+            margin-top: 15px;
+            color: var(--verde-oscuro);
+            font-weight: bold;
+            width: 100%;
+        }
+        
+        .add-category-btn:hover {
+            background: var(--verde);
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal img {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 8px;
+        }
+        
+        /* Logout button */
+        .logout-fixed {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: bold;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        
+        .logout-fixed:hover {
+            background: #c0392b;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            .lang-row {
+                flex-direction: column;
+            }
+            
+            .photos-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .card {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Login -->
+    <div id="login-container" class="login-container">
+        <div class="login-box">
+            <h2>🌿 Casa Verde Canas</h2>
+            <p style="color: #666; margin-bottom: 20px;">Acceso Administrador</p>
+            <input type="email" id="email" placeholder="Email" autocomplete="email">
+            <input type="password" id="password" placeholder="Contraseña" autocomplete="current-password">
+            <button onclick="login()">INGRESAR</button>
+            <div id="login-error" class="error-msg"></div>
+        </div>
+    </div>
+    
+    <!-- Admin Panel -->
+    <div id="admin-panel" class="admin-panel">
+        <div class="header">
+            <h1>🌱 Casa Verde Canas - Administración</h1>
+            <div class="header-actions">
+                <button class="btn btn-success" onclick="saveAll()">💾 GUARDAR TODO</button>
+                <button class="btn btn-primary" onclick="loadAllData()">🔄 RECARGAR</button>
+            </div>
+        </div>
+        
+        <div id="status" class="status">✅ Listo</div>
+        
+        <div class="container">
+            <div class="stats-bar" id="stats-bar"></div>
+            
+            <div class="tabs" id="tabs-container"></div>
+            <div id="panels-container"></div>
+        </div>
+    </div>
+    
+    <button id="logout-btn" class="logout-fixed" onclick="logout()" style="display: none;">🚪 Cerrar sesión</button>
+    
+    <div id="modal" class="modal" onclick="closeModal()">
+        <img id="modal-img" src="">
+    </div>
+    
+    <script>
+        // Firebase Config
+        const firebaseConfig = {
+            apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
+            authDomain: "casaverdecanas-199.firebaseapp.com",
+            databaseURL: "https://casaverdecanas-199-default-rtdb.firebaseio.com",
+            projectId: "casaverdecanas-199",
+            storageBucket: "casaverdecanas-199.firebasestorage.app",
+            messagingSenderId: "417825635316",
+            appId: "1:417825635316:web:ff7f4fe52edcab43d8d7a1"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        
+        let siteData = {
+            siteContent: {
+                hero: { subtitle: { es: "", pt: "", en: "" } },
+                mainDescription: { title: { es: "", pt: "", en: "" }, body: { es: "", pt: "", en: "" } },
+                address: { displayText: { es: "", pt: "", en: "" } },
+                sectionTitles: { cabins: { es: "", pt: "", en: "" }, common: { es: "", pt: "", en: "" } }
+            },
+            apartments: {},
+            common: { categories: {} }
+        };
+        
+        let currentTab = 'siteContent';
+        let isAdmin = false;
+        let currentUser = null;
+        
+        // ============================================
+        // AUTENTICACIÓN
+        // ============================================
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('login-error');
+            
+            if (!email || !password) {
+                errorDiv.textContent = '❌ Ingresa email y contraseña';
+                return;
+            }
+            
+            try {
+                const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                
+                const userDoc = await firebase.firestore().collection('usuarios').doc(user.uid).get();
+                
+                if (userDoc.exists && userDoc.data().rol === 'admin') {
+                    currentUser = user;
+                    isAdmin = true;
+                    document.getElementById('login-container').style.display = 'none';
+                    document.getElementById('admin-panel').style.display = 'block';
+                    document.getElementById('logout-btn').style.display = 'block';
+                    loadAllData();
+                } else {
+                    errorDiv.textContent = '❌ No tienes permisos de administrador';
+                    await firebase.auth().signOut();
+                }
+            } catch (err) {
+                errorDiv.textContent = '❌ ' + (err.message || 'Error de autenticación');
+            }
+        }
+        
+        function logout() {
+            firebase.auth().signOut().then(() => {
+                location.reload();
+            });
+        }
+        
+        firebase.auth().onAuthStateChanged(async (user) => {
+            if (user) {
+                try {
+                    const userDoc = await firebase.firestore().collection('usuarios').doc(user.uid).get();
+                    if (userDoc.exists && userDoc.data().rol === 'admin') {
+                        currentUser = user;
+                        isAdmin = true;
+                        document.getElementById('login-container').style.display = 'none';
+                        document.getElementById('admin-panel').style.display = 'block';
+                        document.getElementById('logout-btn').style.display = 'block';
+                        loadAllData();
+                    }
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+        });
+        
+        // ============================================
+        // CARGA DE DATOS
+        // ============================================
+        function updateStatus(msg, isError = false) {
+            const statusDiv = document.getElementById('status');
+            if (statusDiv) {
+                statusDiv.innerHTML = msg;
+                statusDiv.style.background = isError ? '#f8d7da' : '#d4edda';
+                setTimeout(() => {
+                    if (document.getElementById('status')?.innerHTML === msg) {
+                        document.getElementById('status').innerHTML = '✅ Listo';
+                        if (statusDiv) statusDiv.style.background = '#d4edda';
+                    }
+                }, 3000);
+            }
+        }
+        
+        async function loadAllData() {
+            updateStatus('📥 Cargando datos...');
+            try {
+                const snapshot = await db.ref('siteData').once('value');
+                const data = snapshot.val();
+                if (data) {
+                    siteData = data;
+                    if (!siteData.siteContent) {
+                        siteData.siteContent = {
+                            hero: { subtitle: { es: "", pt: "", en: "" } },
+                            mainDescription: { title: { es: "", pt: "", en: "" }, body: { es: "", pt: "", en: "" } },
+                            address: { displayText: { es: "", pt: "", en: "" } },
+                            sectionTitles: { cabins: { es: "Nuestras Cabañas", pt: "Nossas Cabanas", en: "Our Cabins" }, common: { es: "Espacios Compartidos", pt: "Espaços Comuns", en: "Shared Spaces" } }
+                        };
+                    }
+                    if (!siteData.apartments) siteData.apartments = {};
+                    if (!siteData.common) siteData.common = { categories: {} };
+                    if (!siteData.common.categories) siteData.common.categories = {};
+                }
+                renderAll();
+                updateStatus('✅ Datos cargados correctamente');
+            } catch (error) {
+                updateStatus('❌ Error: ' + error.message, true);
+            }
+        }
+        
+        async function saveAll() {
+            updateStatus('💾 Guardando...');
+            try {
+                await db.ref('siteData').set(siteData);
+                updateStatus('✅ ¡Todos los datos guardados correctamente!');
+            } catch (error) {
+                updateStatus('❌ Error: ' + error.message, true);
+            }
+        }
+        
+        // ============================================
+        // RENDERIZADO
+        // ============================================
+        function renderAll() {
+            renderTabs();
+            renderPanels();
+            updateStats();
+        }
+        
+        function renderTabs() {
+            const tabsContainer = document.getElementById('tabs-container');
+            if (!tabsContainer) return;
+            tabsContainer.innerHTML = '';
+            
+            const tabs = [
+                { id: 'siteContent', label: '📝 Contenido del Sitio' },
+                { id: 'common', label: '🏡 Espacios Comunes' }
+            ];
+            
+            if (siteData.apartments) {
+                for (const [id, apt] of Object.entries(siteData.apartments)) {
+                    tabs.push({ id: id, label: `🏠 ${apt.name?.es || id}` });
+                }
+            }
+            
+            tabs.push({ id: 'newApartment', label: '+ Nueva Cabaña' });
+            
+            for (const tab of tabs) {
+                const btn = document.createElement('button');
+                btn.className = `tab-btn ${currentTab === tab.id ? 'active' : ''}`;
+                btn.textContent = tab.label;
+                btn.onclick = () => switchTab(tab.id);
+                tabsContainer.appendChild(btn);
+            }
+        }
+        
+        function switchTab(tabId) {
+            currentTab = tabId;
+            renderTabs();
+            renderPanels();
+        }
+        
+        function renderPanels() {
+            const panelsContainer = document.getElementById('panels-container');
+            if (!panelsContainer) return;
+            panelsContainer.innerHTML = '';
+            
+            panelsContainer.appendChild(renderSiteContentPanel());
+            panelsContainer.appendChild(renderCommonPanel());
+            
+            if (siteData.apartments) {
+                for (const [id, apt] of Object.entries(siteData.apartments)) {
+                    panelsContainer.appendChild(renderApartmentPanel(id, apt));
+                }
+            }
+            
+            panelsContainer.appendChild(renderNewApartmentPanel());
+            
+            document.querySelectorAll('.panel').forEach(panel => {
+                panel.classList.toggle('active', panel.id === `panel-${currentTab}`);
+            });
+        }
+        
+        // ============================================
+        // PANEL: CONTENIDO DEL SITIO
+        // ============================================
+        function renderSiteContentPanel() {
+            const panel = document.createElement('div');
+            panel.className = 'panel';
+            panel.id = 'panel-siteContent';
+            
+            const sc = siteData.siteContent;
+            
+            panel.innerHTML = `
+                <div class="card">
+                    <h3>🏷️ Subtítulo del Hero</h3>
+                    <div class="lang-row">
+                        <div class="lang-field">
+                            <span class="lang-badge lang-es">🇪🇸 Español</span>
+                            <textarea id="subtitle-es" rows="3">${escapeHtml(sc?.hero?.subtitle?.es || '')}</textarea>
+                        </div>
+                        <div class="lang-field">
+                            <span class="lang-badge lang-pt">🇧🇷 Português</span>
+                            <textarea id="subtitle-pt" rows="3">${escapeHtml(sc?.hero?.subtitle?.pt || '')}</textarea>
+                        </div>
+                        <div class="lang-field">
+                            <span class="lang-badge lang-en">🇺🇸 English</span>
+                            <textarea id="subtitle-en" rows="3">${escapeHtml(sc?.hero?.subtitle?.en || '')}</textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3>📖 Descripción Principal</h3>
+                    <div class="form-group">
+                        <label>Título</label>
+                        <div class="lang-row">
+                            <div class="lang-field"><input type="text" id="mainTitle-es" value="${escapeHtml(sc?.mainDescription?.title?.es || '')}" placeholder="Español"></div>
+                            <div class="lang-field"><input type="text" id="mainTitle-pt" value="${escapeHtml(sc?.mainDescription?.title?.pt || '')}" placeholder="Português"></div>
+                            <div class="lang-field"><input type="text" id="mainTitle-en" value="${escapeHtml(sc?.mainDescription?.title?.en || '')}" placeholder="English"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Cuerpo del texto</label>
+                        <div class="lang-row">
+                            <div class="lang-field"><textarea id="mainBody-es" rows="8">${escapeHtml(sc?.mainDescription?.body?.es || '')}</textarea></div>
+                            <div class="lang-field"><textarea id="mainBody-pt" rows="8">${escapeHtml(sc?.mainDescription?.body?.pt || '')}</textarea></div>
+                            <div class="lang-field"><textarea id="mainBody-en" rows="8">${escapeHtml(sc?.mainDescription?.body?.en || '')}</textarea></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3>📍 Dirección (Footer)</h3>
+                    <div class="lang-row">
+                        <div class="lang-field">
+                            <span class="lang-badge lang-es">🇪🇸 Español</span>
+                            <input type="text" id="address-es" value="${escapeHtml(sc?.address?.displayText?.es || '')}">
+                        </div>
+                        <div class="lang-field">
+                            <span class="lang-badge lang-pt">🇧🇷 Português</span>
+                            <input type="text" id="address-pt" value="${escapeHtml(sc?.address?.displayText?.pt || '')}">
+                        </div>
+                        <div class="lang-field">
+                            <span class="lang-badge lang-en">🇺🇸 English</span>
+                            <input type="text" id="address-en" value="${escapeHtml(sc?.address?.displayText?.en || '')}">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3>📌 Títulos de Sección</h3>
+                    <div class="form-group">
+                        <label>Cabañas</label>
+                        <div class="lang-row">
+                            <div class="lang-field"><input type="text" id="cabinsTitle-es" value="${escapeHtml(sc?.sectionTitles?.cabins?.es || '')}" placeholder="Español"></div>
+                            <div class="lang-field"><input type="text" id="cabinsTitle-pt" value="${escapeHtml(sc?.sectionTitles?.cabins?.pt || '')}" placeholder="Português"></div>
+                            <div class="lang-field"><input type="text" id="cabinsTitle-en" value="${escapeHtml(sc?.sectionTitles?.cabins?.en || '')}" placeholder="English"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Espacios Comunes</label>
+                        <div class="lang-row">
+                            <div class="lang-field"><input type="text" id="commonTitle-es" value="${escapeHtml(sc?.sectionTitles?.common?.es || '')}" placeholder="Español"></div>
+                            <div class="lang-field"><input type="text" id="commonTitle-pt" value="${escapeHtml(sc?.sectionTitles?.common?.pt || '')}" placeholder="Português"></div>
+                            <div class="lang-field"><input type="text" id="commonTitle-en" value="${escapeHtml(sc?.sectionTitles?.common?.en || '')}" placeholder="English"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            attachSiteContentEvents(panel);
+            return panel;
+        }
+        
+        function attachSiteContentEvents(panel) {
+            const fields = ['subtitle', 'mainTitle', 'mainBody', 'address', 'cabinsTitle', 'commonTitle'];
+            for (const field of fields) {
+                for (const lang of ['es', 'pt', 'en']) {
+                    const el = panel.querySelector(`#${field}-${lang}`);
+                    if (el) {
+                        el.onchange = () => updateSiteContent(field, lang, el.value);
+                    }
+                }
+            }
+        }
+        
+        function updateSiteContent(field, lang, value) {
+            if (!siteData.siteContent) siteData.siteContent = {};
+            if (field === 'subtitle') {
+                if (!siteData.siteContent.hero) siteData.siteContent.hero = {};
+                if (!siteData.siteContent.hero.subtitle) siteData.siteContent.hero.subtitle = {};
+                siteData.siteContent.hero.subtitle[lang] = value;
+            } else if (field === 'mainTitle') {
+                if (!siteData.siteContent.mainDescription) siteData.siteContent.mainDescription = {};
+                if (!siteData.siteContent.mainDescription.title) siteData.siteContent.mainDescription.title = {};
+                siteData.siteContent.mainDescription.title[lang] = value;
+            } else if (field === 'mainBody') {
+                if (!siteData.siteContent.mainDescription) siteData.siteContent.mainDescription = {};
+                if (!siteData.siteContent.mainDescription.body) siteData.siteContent.mainDescription.body = {};
+                siteData.siteContent.mainDescription.body[lang] = value;
+            } else if (field === 'address') {
+                if (!siteData.siteContent.address) siteData.siteContent.address = {};
+                if (!siteData.siteContent.address.displayText) siteData.siteContent.address.displayText = {};
+                siteData.siteContent.address.displayText[lang] = value;
+            } else if (field === 'cabinsTitle') {
+                if (!siteData.siteContent.sectionTitles) siteData.siteContent.sectionTitles = {};
+                if (!siteData.siteContent.sectionTitles.cabins) siteData.siteContent.sectionTitles.cabins = {};
+                siteData.siteContent.sectionTitles.cabins[lang] = value;
+            } else if (field === 'commonTitle') {
+                if (!siteData.siteContent.sectionTitles) siteData.siteContent.sectionTitles = {};
+                if (!siteData.siteContent.sectionTitles.common) siteData.siteContent.sectionTitles.common = {};
+                siteData.siteContent.sectionTitles.common[lang] = value;
+            }
+        }
+        
+        // ============================================
+        // PANEL: ESPACIOS COMUNES
+        // ============================================
+        function renderCommonPanel() {
+            const panel = document.createElement('div');
+            panel.className = 'panel';
+            panel.id = 'panel-common';
+            
+            panel.innerHTML = `
+                <div class="card">
+                    <h3>🏡 Espacios Comunes</h3>
+                    <div id="common-categories-container"></div>
+                    <button class="add-category-btn" onclick="addCommonCategory()">+ Agregar Categoría</button>
+                </div>
+            `;
+            
+            const container = panel.querySelector('#common-categories-container');
+            const categories = siteData.common.categories || {};
+            const sorted = Object.entries(categories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
+            
+            for (const [catId, cat] of sorted) {
+                container.appendChild(renderCategory('common', catId, cat));
+            }
+            
+            return panel;
+        }
+        
+        // ============================================
+        // PANEL: CABAÑA
+        // ============================================
+        function renderApartmentPanel(apId, apt) {
+            const panel = document.createElement('div');
+            panel.className = 'panel';
+            panel.id = `panel-${apId}`;
+            
+            if (!apt.categories) apt.categories = {};
+            if (!apt.name) apt.name = {};
+            if (!apt.description) apt.description = {};
+            if (!apt.features) apt.features = { es: [], pt: [], en: [] };
+            if (!apt.specialNote) apt.specialNote = { es: "", pt: "", en: "" };
+            
+            panel.innerHTML = `
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 20px;">
+                        <h3>🏠 ${escapeHtml(apt.name?.es || apId)}</h3>
+                        <button class="btn btn-danger" onclick="deleteApartment('${apId}')" style="padding: 5px 15px;">🗑️ Eliminar Cabaña</button>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Nombre</label>
+                        <div class="lang-row">
+                            <div class="lang-field"><input type="text" id="${apId}-name-es" value="${escapeHtml(apt.name?.es || '')}" placeholder="Español"></div>
+                            <div class="lang-field"><input type="text" id="${apId}-name-pt" value="${escapeHtml(apt.name?.pt || '')}" placeholder="Português"></div>
+                            <div class="lang-field"><input type="text" id="${apId}-name-en" value="${escapeHtml(apt.name?.en || '')}" placeholder="English"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Descripción</label>
+                        <div class="lang-row">
+                            <div class="lang-field"><textarea id="${apId}-desc-es" rows="4">${escapeHtml(apt.description?.es || '')}</textarea></div>
+                            <div class="lang-field"><textarea id="${apId}-desc-pt" rows="4">${escapeHtml(apt.description?.pt || '')}</textarea></div>
+                            <div class="lang-field"><textarea id="${apId}-desc-en" rows="4">${escapeHtml(apt.description?.en || '')}</textarea></div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>🔗 Enlace Airbnb</label>
+                        <input type="url" id="${apId}-airbnb" value="${escapeHtml(apt.airbnb_url || '')}">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>📅 Google Calendar Iframe</label>
+                        <textarea id="${apId}-calendar" rows="3" style="font-family: monospace; font-size: 11px;">${escapeHtml(apt.google_calendar_iframe || '')}</textarea>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3>⭐ Características (Features)</h3>
+                    <p style="font-size: 0.8rem; color: #666; margin-bottom: 15px;">Ejemplos: 👥 4 huéspedes, 🛏️ 2 dormitorios, 🚿 1 baño, 🍳 Cocina completa, 🌿 Terraza, ❄️ Aire acondicionado, 🏠 Entrepiso</p>
+                    
+                    <div class="lang-row">
+                        <div class="lang-field">
+                            <span class="lang-badge lang-es">🇪🇸 Español</span>
+                            <div id="${apId}-features-es-container" class="features-list"></div>
+                            <button class="add-feature-btn" onclick="addFeature('${apId}', 'es')">+ Agregar característica</button>
+                        </div>
+                        <div class="lang-field">
+                            <span class="lang-badge lang-pt">🇧🇷 Português</span>
+                            <div id="${apId}-features-pt-container" class="features-list"></div>
+                            <button class="add-feature-btn" onclick="addFeature('${apId}', 'pt')">+ Adicionar característica</button>
+                        </div>
+                        <div class="lang-field">
+                            <span class="lang-badge lang-en">🇺🇸 English</span>
+                            <div id="${apId}-features-en-container" class="features-list"></div>
+                            <button class="add-feature-btn" onclick="addFeature('${apId}', 'en')">+ Add feature</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3>💡 Nota Especial</h3>
+                    <p style="font-size: 0.8rem; color: #666; margin-bottom: 15px;">Texto informativo que aparece debajo de las características (ej: accesibilidad del loft).</p>
+                    <div class="lang-row">
+                        <div class="lang-field">
+                            <span class="lang-badge lang-es">🇪🇸 Español</span>
+                            <textarea id="${apId}-note-es" rows="4">${escapeHtml(apt.specialNote?.es || '')}</textarea>
+                        </div>
+                        <div class="lang-field">
+                            <span class="lang-badge lang-pt">🇧🇷 Português</span>
+                            <textarea id="${apId}-note-pt" rows="4">${escapeHtml(apt.specialNote?.pt || '')}</textarea>
+                        </div>
+                        <div class="lang-field">
+                            <span class="lang-badge lang-en">🇺🇸 English</span>
+                            <textarea id="${apId}-note-en" rows="4">${escapeHtml(apt.specialNote?.en || '')}</textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3>📸 Categorías y Fotos</h3>
+                    <div id="${apId}-categories-container"></div>
+                    <button class="add-category-btn" onclick="addCategory('${apId}')">+ Agregar Categoría</button>
+                </div>
+            `;
+            
+            attachApartmentEvents(panel, apId, apt);
+            renderFeaturesList(apId, apt);
+            
+            const container = panel.querySelector(`#${apId}-categories-container`);
+            const categories = apt.categories;
+            const sorted = Object.entries(categories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
+            
+            if (sorted.length === 0) {
+                container.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">📭 Sin categorías. Haz clic en "+ Agregar Categoría"</div>';
+            } else {
+                for (const [catId, cat] of sorted) {
+                    container.appendChild(renderCategory(apId, catId, cat));
+                }
+            }
+            
+            return panel;
+        }
+        
+        function attachApartmentEvents(panel, apId, apt) {
+            panel.querySelector(`#${apId}-name-es`).onchange = (e) => { apt.name.es = e.target.value; renderTabs(); };
+            panel.querySelector(`#${apId}-name-pt`).onchange = (e) => { apt.name.pt = e.target.value; renderTabs(); };
+            panel.querySelector(`#${apId}-name-en`).onchange = (e) => { apt.name.en = e.target.value; renderTabs(); };
+            panel.querySelector(`#${apId}-desc-es`).onchange = (e) => { apt.description.es = e.target.value; };
+            panel.querySelector(`#${apId}-desc-pt`).onchange = (e) => { apt.description.pt = e.target.value; };
+            panel.querySelector(`#${apId}-desc-en`).onchange = (e) => { apt.description.en = e.target.value; };
+            panel.querySelector(`#${apId}-airbnb`).onchange = (e) => { apt.airbnb_url = e.target.value; };
+            panel.querySelector(`#${apId}-calendar`).onchange = (e) => { apt.google_calendar_iframe = e.target.value; };
+            panel.querySelector(`#${apId}-note-es`).onchange = (e) => { if (!apt.specialNote) apt.specialNote = {}; apt.specialNote.es = e.target.value; };
+            panel.querySelector(`#${apId}-note-pt`).onchange = (e) => { if (!apt.specialNote) apt.specialNote = {}; apt.specialNote.pt = e.target.value; };
+            panel.querySelector(`#${apId}-note-en`).onchange = (e) => { if (!apt.specialNote) apt.specialNote = {}; apt.specialNote.en = e.target.value; };
+        }
+        
+        function renderFeaturesList(apId, apt) {
+            if (!apt.features) apt.features = { es: [], pt: [], en: [] };
+            for (const lang of ['es', 'pt', 'en']) {
+                const container = document.getElementById(`${apId}-features-${lang}-container`);
+                if (!container) continue;
+                const features = apt.features[lang] || [];
+                container.innerHTML = '';
+                features.forEach((feature, idx) => {
+                    const div = document.createElement('div');
+                    div.className = 'feature-item';
+                    div.innerHTML = `
+                        <input type="text" value="${escapeHtml(feature)}" onchange="updateFeature('${apId}', '${lang}', ${idx}, this.value)">
+                        <button class="btn-danger" style="padding: 4px 10px;" onclick="removeFeature('${apId}', '${lang}', ${idx})">✖</button>
+                    `;
+                    container.appendChild(div);
+                });
+            }
+        }
+        
+        // ============================================
+        // PANEL: NUEVA CABAÑA
+        // ============================================
+        function renderNewApartmentPanel() {
+            const panel = document.createElement('div');
+            panel.className = 'panel';
+            panel.id = 'panel-newApartment';
+            
+            panel.innerHTML = `
+                <div class="card">
+                    <h3>➕ Agregar Nueva Cabaña</h3>
+                    <div class="form-group">
+                        <label>ID de la cabaña (sin espacios, ej: cabin-4)</label>
+                        <input type="text" id="new-apartment-id" placeholder="cabin-4">
+                    </div>
+                    <div class="form-group">
+                        <label>Nombre (Español)</label>
+                        <input type="text" id="new-apartment-name" placeholder="Nombre de la cabaña">
+                    </div>
+                    <button class="btn btn-success" onclick="createNewApartment()">Crear Cabaña</button>
+                </div>
+            `;
+            return panel;
+        }
+        
+        // ============================================
+        // RENDERIZAR CATEGORÍA CON UPLOADER MANUAL
+        // ============================================
+        function renderCategory(owner, catId, cat) {
+            const div = document.createElement('div');
+            div.className = 'category-item';
+            
+            if (!cat.name) cat.name = {};
+            if (!cat.photos) cat.photos = [];
+            
+            div.innerHTML = `
+                <div class="category-header">
+                    <div class="category-order">
+                        <span>📌 Orden:</span>
+                        <input type="number" value="${cat.order || 0}" min="0" max="100" style="width: 70px;" onchange="updateCategoryOrder('${owner}', '${catId}', this.value)">
+                    </div>
+                    <div style="flex: 2;">
+                        <div class="lang-row">
+                            <div class="lang-field"><input type="text" placeholder="Español" value="${escapeHtml(cat.name?.es || '')}" onchange="updateCategoryName('${owner}', '${catId}', 'es', this.value)"></div>
+                            <div class="lang-field"><input type="text" placeholder="Português" value="${escapeHtml(cat.name?.pt || '')}" onchange="updateCategoryName('${owner}', '${catId}', 'pt', this.value)"></div>
+                            <div class="lang-field"><input type="text" placeholder="English" value="${escapeHtml(cat.name?.en || '')}" onchange="updateCategoryName('${owner}', '${catId}', 'en', this.value)"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <button class="btn btn-danger" style="padding: 5px 12px;" onclick="deleteCategory('${owner}', '${catId}')">🗑️ Eliminar</button>
+                    </div>
+                </div>
+                
+                <div class="photos-grid" id="photos-${owner}-${catId}"></div>
+                ${renderManualUploader(owner, catId)}
+            `;
+            
+            const photosGrid = div.querySelector(`.photos-grid`);
+            const sortedPhotos = [...cat.photos].sort((a, b) => (a.order || 0) - (b.order || 0));
+            
+            if (sortedPhotos.length === 0) {
+                photosGrid.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">📭 Sin fotos en esta categoría</div>';
+            } else {
+                for (let i = 0; i < sortedPhotos.length; i++) {
+                    const photo = sortedPhotos[i];
+                    const photoCard = document.createElement('div');
+                    photoCard.className = 'photo-card';
+                    photoCard.innerHTML = `
+                        <img src="${escapeHtml(photo.url)}" onclick="openModal('${escapeHtml(photo.url)}')" onerror="this.src='https://via.placeholder.com/200x150?text=Error'">
+                        <div class="photo-url-input">
+                            <input type="text" value="${escapeHtml(photo.url)}" placeholder="URL imagen" onchange="updatePhotoUrl('${owner}', '${catId}', ${i}, this.value)">
+                        </div>
+                        <div class="lang-row" style="margin-top: 8px;">
+                            <input type="text" placeholder="ES" value="${escapeHtml(photo.desc?.es || '')}" style="font-size: 10px;" onchange="updatePhotoDesc('${owner}', '${catId}', ${i}, 'es', this.value)">
+                            <input type="text" placeholder="PT" value="${escapeHtml(photo.desc?.pt || '')}" style="font-size: 10px;" onchange="updatePhotoDesc('${owner}', '${catId}', ${i}, 'pt', this.value)">
+                            <input type="text" placeholder="EN" value="${escapeHtml(photo.desc?.en || '')}" style="font-size: 10px;" onchange="updatePhotoDesc('${owner}', '${catId}', ${i}, 'en', this.value)">
+                        </div>
+                        <button class="btn btn-danger" style="margin-top: 8px; padding: 5px;" onclick="deletePhoto('${owner}', '${catId}', ${i})">🗑️ Eliminar</button>
+                    `;
+                    photosGrid.appendChild(photoCard);
+                }
+            }
+            
+            return div;
+        }
+        
+        // ============================================
+        // SUBIDA MANUAL DE IMÁGENES (LÍMITE 1MB)
+        // ============================================
+        const MAX_SIZE_MB = 1;
+        const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+        
+        function renderManualUploader(owner, catId) {
+            return `
+                <div class="upload-area" id="upload-area-${owner}-${catId}" onclick="document.getElementById('file-input-${owner}-${catId}').click()">
+                    📸 Hacé clic o arrastrá una imagen (máx ${MAX_SIZE_MB} MB)
+                    <input type="file" id="file-input-${owner}-${catId}" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="processImageFile('${owner}', '${catId}', this.files[0])">
+                    <div class="upload-info">Formatos: JPG, PNG, WEBP | Máximo ${MAX_SIZE_MB} MB</div>
+                    <div id="preview-${owner}-${catId}" class="file-name-preview" style="display:none"></div>
+                    <div id="warning-${owner}-${catId}" class="size-warning" style="display:none"></div>
+                </div>
+            `;
+        }
+        
+        window.processImageFile = function(owner, catId, file) {
+            const previewDiv = document.getElementById(`preview-${owner}-${catId}`);
+            const warningDiv = document.getElementById(`warning-${owner}-${catId}`);
+            
+            if (!file) return;
+            
+            if (file.size > MAX_SIZE_BYTES) {
+                const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                warningDiv.style.display = 'block';
+                warningDiv.innerHTML = `⚠️ La imagen pesa ${sizeMB} MB. El límite es ${MAX_SIZE_MB} MB. Reducí la imagen o comprimila.`;
+                previewDiv.style.display = 'none';
+                return;
+            }
+            
+            warningDiv.style.display = 'none';
+            
+            const extension = file.name.split('.').pop().toLowerCase();
+            const extensionesValidas = ['jpg', 'jpeg', 'png', 'webp'];
+            
+            if (!extensionesValidas.includes(extension)) {
+                warningDiv.style.display = 'block';
+                warningDiv.innerHTML = `⚠️ Formato no soportado. Usá JPG, PNG o WEBP.`;
+                previewDiv.style.display = 'none';
+                return;
+            }
+            
+            const timestamp = new Date().toISOString().slice(0,19).replace(/:/g, '-').replace('T', '_');
+            const nombreSugerido = `${owner}_${catId}_${timestamp}.${extension}`;
+            const rutaSugerida = `img/${owner}/${catId}/${nombreSugerido}`;
+            
+            previewDiv.style.display = 'block';
+            previewDiv.innerHTML = `
+                📁 <strong>Archivo listo:</strong> ${file.name}<br>
+                📏 Tamaño: ${(file.size / 1024).toFixed(0)} KB ✅<br>
+                💾 <strong>Nombre sugerido:</strong> ${nombreSugerido}<br>
+                📂 <strong>Ruta:</strong> ${rutaSugerida}<br><br>
+                🔽 <strong>Pasos para subir a GitHub:</strong><br>
+                1. Guardá esta imagen con el nombre: <code>${nombreSugerido}</code><br>
+                2. Subila a tu repositorio en: <code>${rutaSugerida}</code><br>
+                3. Después de subir, hacé clic en "Confirmar subida"
+            `;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const imgPreview = document.createElement('div');
+                imgPreview.style.marginTop = '10px';
+                imgPreview.innerHTML = `<img src="${e.target.result}" style="max-width: 100%; max-height: 150px; border-radius: 8px; margin-top: 8px;">`;
+                previewDiv.appendChild(imgPreview);
+            };
+            reader.readAsDataURL(file);
+            
+            const confirmBtn = document.createElement('button');
+            confirmBtn.className = 'btn-success';
+            confirmBtn.style.marginTop = '10px';
+            confirmBtn.style.padding = '8px 15px';
+            confirmBtn.innerHTML = '✅ Confirmar subida a Firebase';
+            confirmBtn.onclick = () => confirmarSubidaManual(owner, catId, rutaSugerida, nombreSugerido);
+            previewDiv.appendChild(confirmBtn);
+        };
+        
+        window.confirmarSubidaManual = function(owner, catId, rutaSugerida, nombreSugerido) {
+            const urlCompleta = `https://casaverdecanas.com.br/${rutaSugerida}`;
+            const target = owner === 'common' ? siteData.common : siteData.apartments[owner];
+            const cat = target.categories[catId];
+            if (!cat.photos) cat.photos = [];
+            const newOrder = cat.photos.length;
+            
+            cat.photos.push({
+                url: urlCompleta,
+                desc: { es: `Foto ${newOrder + 1}`, pt: `Foto ${newOrder + 1}`, en: `Photo ${newOrder + 1}` },
+                order: newOrder
+            });
+            
+            renderAll();
+            updateStatus(`✅ Imagen agregada. Recordá subir el archivo "${nombreSugerido}" a GitHub en la carpeta "${owner}/${catId}"`);
+            alert(`📸 Imagen agregada a Firebase.\n\n📁 No olvides subir el archivo a GitHub:\n📂 Ruta: ${rutaSugerida}\n🔗 URL: ${urlCompleta}\n\nLuego guardá los cambios en Firebase.`);
+        };
+        
+        // ============================================
+        // FUNCIONES GLOBALES
+        // ============================================
+        window.addFeature = function(apId, lang) {
+            if (!siteData.apartments[apId].features) {
+                siteData.apartments[apId].features = { es: [], pt: [], en: [] };
+            }
+            siteData.apartments[apId].features[lang].push("Nueva característica");
+            renderFeaturesList(apId, siteData.apartments[apId]);
+        };
+        
+        window.updateFeature = function(apId, lang, idx, value) {
+            if (siteData.apartments[apId].features && siteData.apartments[apId].features[lang]) {
+                siteData.apartments[apId].features[lang][idx] = value;
+            }
+        };
+        
+        window.removeFeature = function(apId, lang, idx) {
+            if (siteData.apartments[apId].features && siteData.apartments[apId].features[lang]) {
+                siteData.apartments[apId].features[lang].splice(idx, 1);
+                renderFeaturesList(apId, siteData.apartments[apId]);
+            }
+        };
+        
+        window.addCategory = function(owner) {
+            const newId = 'cat_' + Date.now();
+            const target = owner === 'common' ? siteData.common : siteData.apartments[owner];
+            if (!target.categories) target.categories = {};
+            const currentCount = Object.keys(target.categories).length;
+            target.categories[newId] = {
+                name: { es: "📷 Nueva categoría", pt: "📷 Nova categoria", en: "📷 New category" },
+                order: currentCount + 1,
+                photos: []
+            };
+            renderAll();
+            updateStatus('Categoría agregada. Recuerda GUARDAR.');
+        };
+        
+        window.addCommonCategory = function() { addCategory('common'); };
+        
+        window.updateCategoryOrder = function(owner, catId, newOrder) {
+            const target = owner === 'common' ? siteData.common : siteData.apartments[owner];
+            if (target.categories[catId]) {
+                target.categories[catId].order = parseInt(newOrder) || 0;
+                renderAll();
+            }
+        };
+        
+        window.updateCategoryName = function(owner, catId, lang, value) {
+            const target = owner === 'common' ? siteData.common : siteData.apartments[owner];
+            if (target.categories[catId]) {
+                if (!target.categories[catId].name) target.categories[catId].name = {};
+                target.categories[catId].name[lang] = value;
+            }
+        };
+        
+        window.deleteCategory = function(owner, catId) {
+            if (confirm('¿Eliminar esta categoría y TODAS sus fotos?')) {
+                const target = owner === 'common' ? siteData.common : siteData.apartments[owner];
+                delete target.categories[catId];
+                renderAll();
+                updateStatus('Categoría eliminada. Recuerda GUARDAR.');
+            }
+        };
+        
+        window.updatePhotoUrl = function(owner, catId, photoIndex, newUrl) {
+            const target = owner === 'common' ? siteData.common : siteData.apartments[owner];
+            const cat = target.categories[catId];
+            if (cat.photos[photoIndex]) {
+                cat.photos[photoIndex].url = newUrl;
+            }
+        };
+        
+        window.updatePhotoDesc = function(owner, catId, photoIndex, lang, value) {
+            const target = owner === 'common' ? siteData.common : siteData.apartments[owner];
+            const cat = target.categories[catId];
+            if (cat.photos[photoIndex]) {
+                if (!cat.photos[photoIndex].desc) cat.photos[photoIndex].desc = {};
+                cat.photos[photoIndex].desc[lang] = value;
+            }
+        };
+        
+        window.deletePhoto = function(owner, catId, photoIndex) {
+            if (confirm('¿Eliminar esta foto?')) {
+                const target = owner === 'common' ? siteData.common : siteData.apartments[owner];
+                const cat = target.categories[catId];
+                cat.photos.splice(photoIndex, 1);
+                cat.photos.forEach((p, idx) => { p.order = idx; });
+                renderAll();
+                updateStatus('Foto eliminada. Recuerda GUARDAR.');
+            }
+        };
+        
+        window.createNewApartment = function() {
+            const newId = document.getElementById('new-apartment-id')?.value.trim();
+            const newName = document.getElementById('new-apartment-name')?.value.trim();
+            if (!newId) {
+                alert('Ingresa un ID para la cabaña (ej: cabin-4)');
+                return;
+            }
+            if (siteData.apartments[newId]) {
+                alert('Ya existe una cabaña con este ID');
+                return;
+            }
+            siteData.apartments[newId] = {
+                name: { es: newName || `Cabaña ${newId}`, pt: newName || `Cabana ${newId}`, en: newName || `Cabin ${newId}` },
+                description: { es: "", pt: "", en: "" },
+                features: { es: [], pt: [], en: [] },
+                specialNote: { es: "", pt: "", en: "" },
+                categories: {},
+                airbnb_url: "",
+                google_calendar_iframe: ""
+            };
+            currentTab = newId;
+            renderAll();
+            updateStatus(`Cabaña "${newId}" creada. Recuerda GUARDAR.`);
+        };
+        
+        window.deleteApartment = function(apId) {
+            if (confirm(`¿Eliminar la cabaña "${apId}" y TODOS sus datos?`)) {
+                delete siteData.apartments[apId];
+                const firstAp = Object.keys(siteData.apartments)[0];
+                currentTab = firstAp || 'siteContent';
+                renderAll();
+                updateStatus('Cabaña eliminada. Recuerda GUARDAR.');
+            }
+        };
+        
+        // ============================================
+        // UTILIDADES
+        // ============================================
+        function updateStats() {
+            let totalCabanas = Object.keys(siteData.apartments || {}).length;
+            let totalCategorias = 0;
+            let totalFotos = 0;
+            
+            if (siteData.common?.categories) {
+                for (const cat of Object.values(siteData.common.categories)) {
+                    totalCategorias++;
+                    totalFotos += cat.photos?.length || 0;
+                }
+            }
+            
+            if (siteData.apartments) {
+                for (const apt of Object.values(siteData.apartments)) {
+                    if (apt.categories) {
+                        for (const cat of Object.values(apt.categories)) {
+                            totalCategorias++;
+                            totalFotos += cat.photos?.length || 0;
+                        }
+                    }
+                }
+            }
+            
+            const statsBar = document.getElementById('stats-bar');
+            if (statsBar) {
+                statsBar.innerHTML = `
+                    <span class="stat">🏠 ${totalCabanas} cabañas</span>
+                    <span class="stat">🏷️ ${totalCategorias} categorías</span>
+                    <span class="stat">📸 ${totalFotos} fotos</span>
+                `;
+            }
+        }
+        
+        function openModal(url) {
+            const modal = document.getElementById('modal');
+            const img = document.getElementById('modal-img');
+            if (modal && img) {
+                img.src = url;
+                modal.classList.add('active');
+            }
+        }
+        
+        function closeModal() {
+            const modal = document.getElementById('modal');
+            if (modal) modal.classList.remove('active');
+        }
+        
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
+        }
+        
+        window.saveAll = saveAll;
+        window.loadAllData = loadAllData;
+        window.login = login;
+        window.logout = logout;
+        window.openModal = openModal;
+        window.closeModal = closeModal;
+        window.deleteApartment = deleteApartment;
+        window.createNewApartment = createNewApartment;
+    </script>
+</body>
+</html>
