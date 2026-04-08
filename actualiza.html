@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Actualizar URLs - Casa Verde</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #1e3c2c;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        h1 { color: #2E5A31; margin-bottom: 5px; font-size: 1.5rem; }
+        h2 { color: #555; font-size: 0.9rem; margin-bottom: 20px; }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 8px;
+            font-size: 0.8rem;
+        }
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #27ae60;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 8px;
+            font-size: 0.8rem;
+        }
+        .error {
+            background: #f8d7da;
+            border-left: 4px solid #e74c3c;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 8px;
+            font-size: 0.8rem;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: monospace;
+        }
+        button {
+            background: #2E5A31;
+            color: white;
+            border: none;
+            padding: 14px 25px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 10px 0;
+            width: 100%;
+            transition: 0.2s;
+        }
+        button:hover { background: #1e3c2c; transform: translateY(-2px); }
+        button:disabled { background: #999; transform: none; cursor: not-allowed; }
+        .btn-success { background: #27ae60; }
+        .btn-primary { background: #3498db; }
+        .login-box {
+            background: #f4f4f4;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+        .log {
+            background: #1e1e1e;
+            color: #0f0;
+            padding: 12px;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 11px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 15px;
+            display: none;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 15px 0;
+            display: none;
+        }
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background: #27ae60;
+            transition: width 0.3s;
+        }
+        .step {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 12px;
+            margin: 15px 0;
+        }
+        .step h3 { color: #2E5A31; font-size: 1rem; margin-bottom: 10px; }
+        hr { margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📸 Actualizar URLs de Imágenes</h1>
+        <h2>Casa Verde Canas - Migración a imágenes locales</h2>
+        
+        <div class="step">
+            <h3>📋 Paso 1: Iniciar sesión como administrador</h3>
+            <div class="login-box">
+                <input type="email" id="email" placeholder="Email" autocomplete="email">
+                <input type="password" id="password" placeholder="Contraseña" autocomplete="current-password">
+                <button id="btn-login" onclick="login()">🔐 Iniciar sesión</button>
+                <div id="login-error" style="color:#e74c3c; margin-top:10px; font-size:0.8rem;"></div>
+            </div>
+        </div>
+        
+        <div id="panel-migracion" style="display:none;">
+            <div class="step">
+                <h3>📦 Paso 2: Pegar el mapeo de URLs</h3>
+                <p style="font-size:0.8rem; color:#666;">Copia el objeto que generó la herramienta de migración:</p>
+                <textarea id="mapeo-urls" rows="10" placeholder='{
+  "https://i.postimg.cc/xxx/imagen.jpg": "https://casaverdecanas.com.br/img/cabin-1/categoria/foto.jpg",
+  ...
+}'></textarea>
+            </div>
+            
+            <div class="step">
+                <h3>🚀 Paso 3: Ejecutar actualización</h3>
+                <div id="progress-bar" class="progress-bar">
+                    <div id="progress-fill" class="progress-fill"></div>
+                </div>
+                <button id="btn-actualizar" class="btn-success" onclick="ejecutarActualizacion()">🔄 Actualizar URLs en Firebase</button>
+            </div>
+            
+            <div id="log" class="log"></div>
+            <div id="resultado" class="success" style="display:none;"></div>
+        </div>
+        
+        <div class="warning" style="margin-top: 20px;">
+            💡 <strong>Nota:</strong> Este script actualiza TODAS las URLs de imágenes en Firebase.
+            Asegurate de haber subido las imágenes a GitHub antes de ejecutarlo.
+        </div>
+    </div>
+
+    <script>
+        // Firebase Config
+        const firebaseConfig = {
+            apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
+            authDomain: "casaverdecanas-199.firebaseapp.com",
+            databaseURL: "https://casaverdecanas-199-default-rtdb.firebaseio.com",
+            projectId: "casaverdecanas-199",
+            storageBucket: "casaverdecanas-199.firebasestorage.app",
+            appId: "1:417825635316:web:ff7f4fe52edcab43d8d7a1"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        let currentUser = null;
+        let isAdmin = false;
+        
+        function mostrarLog(mensaje, tipo = 'info') {
+            const logDiv = document.getElementById('log');
+            logDiv.style.display = 'block';
+            const fecha = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${fecha}] ${mensaje}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function actualizarProgreso(porcentaje, total, actual) {
+            const fill = document.getElementById('progress-fill');
+            const progressBar = document.getElementById('progress-bar');
+            progressBar.style.display = 'block';
+            if (fill) fill.style.width = porcentaje + '%';
+            mostrarLog(`Progreso: ${actual}/${total} (${Math.round(porcentaje)}%)`);
+        }
+        
+        // Login
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('login-error');
+            
+            if (!email || !password) {
+                errorDiv.textContent = '❌ Ingresa email y contraseña';
+                return;
+            }
+            
+            try {
+                const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                
+                const userDoc = await firebase.firestore().collection('usuarios').doc(user.uid).get();
+                
+                if (userDoc.exists && userDoc.data().rol === 'admin') {
+                    currentUser = user;
+                    isAdmin = true;
+                    document.getElementById('login-error').textContent = '';
+                    document.getElementById('panel-migracion').style.display = 'block';
+                    mostrarLog('✅ Autenticación exitosa como administrador', 'success');
+                } else {
+                    errorDiv.textContent = '❌ No tienes permisos de administrador';
+                    await firebase.auth().signOut();
+                }
+            } catch (err) {
+                errorDiv.textContent = '❌ ' + (err.message || 'Error de autenticación');
+            }
+        }
+        
+        // Verificar sesión
+        firebase.auth().onAuthStateChanged(async (user) => {
+            if (user) {
+                try {
+                    const userDoc = await firebase.firestore().collection('usuarios').doc(user.uid).get();
+                    if (userDoc.exists && userDoc.data().rol === 'admin') {
+                        currentUser = user;
+                        isAdmin = true;
+                        document.getElementById('panel-migracion').style.display = 'block';
+                        mostrarLog('✅ Sesión reanudada como administrador');
+                    }
+                } catch (err) {}
+            }
+        });
+        
+        // Ejecutar actualización
+        async function ejecutarActualizacion() {
+            if (!isAdmin) {
+                mostrarLog('❌ No estás autenticado como administrador');
+                return;
+            }
+            
+            const mapeoTexto = document.getElementById('mapeo-urls').value.trim();
+            if (!mapeoTexto) {
+                mostrarLog('❌ Pegá el mapeo de URLs en el campo de texto');
+                return;
+            }
+            
+            let mapeo;
+            try {
+                mapeo = JSON.parse(mapeoTexto);
+                mostrarLog(`✅ Mapeo cargado: ${Object.keys(mapeo).length} URLs para actualizar`);
+            } catch (e) {
+                mostrarLog(`❌ Error al parsear JSON: ${e.message}`);
+                return;
+            }
+            
+            const btn = document.getElementById('btn-actualizar');
+            btn.disabled = true;
+            btn.textContent = '⏳ Actualizando...';
+            
+            try {
+                // Obtener datos actuales
+                const snapshot = await db.ref('siteData').once('value');
+                const siteData = snapshot.val() || {};
+                
+                let totalActualizadas = 0;
+                let totalEncontradas = 0;
+                
+                // Recorrer el mapeo y reemplazar URLs
+                for (const [viejaUrl, nuevaUrl] of Object.entries(mapeo)) {
+                    let encontrada = false;
+                    
+                    // Buscar en apartments
+                    if (siteData.apartments) {
+                        for (const [apId, apt] of Object.entries(siteData.apartments)) {
+                            if (apt.categories) {
+                                for (const [catId, cat] of Object.entries(apt.categories)) {
+                                    if (cat.photos) {
+                                        for (let i = 0; i < cat.photos.length; i++) {
+                                            if (cat.photos[i].url === viejaUrl) {
+                                                cat.photos[i].url = nuevaUrl;
+                                                encontrada = true;
+                                                totalActualizadas++;
+                                                mostrarLog(`✅ Actualizada: ${viejaUrl.substring(0, 50)}... → ${nuevaUrl.substring(0, 50)}...`);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Buscar en common
+                    if (siteData.common?.categories) {
+                        for (const [catId, cat] of Object.entries(siteData.common.categories)) {
+                            if (cat.photos) {
+                                for (let i = 0; i < cat.photos.length; i++) {
+                                    if (cat.photos[i].url === viejaUrl) {
+                                        cat.photos[i].url = nuevaUrl;
+                                        encontrada = true;
+                                        totalActualizadas++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (encontrada) totalEncontradas++;
+                    
+                    // Actualizar progreso
+                    const porcentaje = (totalActualizadas / Object.keys(mapeo).length) * 100;
+                    actualizarProgreso(porcentaje, Object.keys(mapeo).length, totalActualizadas);
+                }
+                
+                // Guardar en Firebase
+                mostrarLog('💾 Guardando cambios en Firebase...');
+                await db.ref('siteData').set(siteData);
+                
+                const resultadoDiv = document.getElementById('resultado');
+                resultadoDiv.style.display = 'block';
+                resultadoDiv.innerHTML = `
+                    ✅ <strong>¡Actualización completada!</strong><br>
+                    📸 URLs encontradas: ${totalEncontradas}<br>
+                    🔄 URLs actualizadas: ${totalActualizadas}<br>
+                    📦 Total en mapeo: ${Object.keys(mapeo).length}
+                `;
+                
+                mostrarLog(`✅ ¡Completado! ${totalActualizadas} URLs actualizadas.`, 'success');
+                
+            } catch (error) {
+                mostrarLog(`❌ Error: ${error.message}`, 'error');
+                console.error(error);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔄 Actualizar URLs en Firebase';
+            }
+        }
+        
+        // Exponer funciones
+        window.login = login;
+        window.ejecutarActualizacion = ejecutarActualizacion;
+    </script>
+</body>
+</html>
