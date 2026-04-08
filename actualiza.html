@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Actualizar URLs - Casa Verde</title>
+    <title>Actualizar Features - Casa Verde</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -53,14 +53,13 @@
             border-radius: 8px;
             font-size: 0.8rem;
         }
-        input, textarea {
+        input {
             width: 100%;
             padding: 12px;
             margin: 10px 0;
             border: 1px solid #ddd;
             border-radius: 10px;
             font-size: 14px;
-            font-family: monospace;
         }
         button {
             background: #2E5A31;
@@ -78,7 +77,6 @@
         button:hover { background: #1e3c2c; transform: translateY(-2px); }
         button:disabled { background: #999; transform: none; cursor: not-allowed; }
         .btn-success { background: #27ae60; }
-        .btn-primary { background: #3498db; }
         .login-box {
             background: #f4f4f4;
             padding: 20px;
@@ -112,56 +110,34 @@
             background: #27ae60;
             transition: width 0.3s;
         }
-        .step {
-            background: #f9f9f9;
-            padding: 15px;
-            border-radius: 12px;
-            margin: 15px 0;
-        }
-        .step h3 { color: #2E5A31; font-size: 1rem; margin-bottom: 10px; }
-        hr { margin: 20px 0; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📸 Actualizar URLs de Imágenes</h1>
-        <h2>Casa Verde Canas - Migración a imágenes locales</h2>
+        <h1>🏷️ Actualizar Features y Notas</h1>
+        <h2>Casa Verde Canas - Características y observaciones por cabaña</h2>
         
-        <div class="step">
-            <h3>📋 Paso 1: Iniciar sesión como administrador</h3>
-            <div class="login-box">
-                <input type="email" id="email" placeholder="Email" autocomplete="email">
-                <input type="password" id="password" placeholder="Contraseña" autocomplete="current-password">
-                <button id="btn-login" onclick="login()">🔐 Iniciar sesión</button>
-                <div id="login-error" style="color:#e74c3c; margin-top:10px; font-size:0.8rem;"></div>
-            </div>
+        <div class="warning">
+            ⚠️ Esta herramienta agregará o actualizará:<br>
+            • Features (lista de características con iconos)<br>
+            • SpecialNote (nota especial como la accesibilidad del loft)<br>
+            Los datos existentes NO se perderán.
+        </div>
+        
+        <div class="login-box">
+            <input type="email" id="email" placeholder="Email" autocomplete="email">
+            <input type="password" id="password" placeholder="Contraseña" autocomplete="current-password">
+            <button id="btn-login" onclick="login()">🔐 Iniciar sesión</button>
+            <div id="login-error" style="color:#e74c3c; margin-top:10px; font-size:0.8rem;"></div>
         </div>
         
         <div id="panel-migracion" style="display:none;">
-            <div class="step">
-                <h3>📦 Paso 2: Pegar el mapeo de URLs</h3>
-                <p style="font-size:0.8rem; color:#666;">Copia el objeto que generó la herramienta de migración:</p>
-                <textarea id="mapeo-urls" rows="10" placeholder='{
-  "https://i.postimg.cc/xxx/imagen.jpg": "https://casaverdecanas.com.br/img/cabin-1/categoria/foto.jpg",
-  ...
-}'></textarea>
+            <div id="progress-bar" class="progress-bar">
+                <div id="progress-fill" class="progress-fill"></div>
             </div>
-            
-            <div class="step">
-                <h3>🚀 Paso 3: Ejecutar actualización</h3>
-                <div id="progress-bar" class="progress-bar">
-                    <div id="progress-fill" class="progress-fill"></div>
-                </div>
-                <button id="btn-actualizar" class="btn-success" onclick="ejecutarActualizacion()">🔄 Actualizar URLs en Firebase</button>
-            </div>
-            
+            <button id="btn-actualizar" class="btn-success" onclick="ejecutarActualizacion()">🚀 Actualizar cabañas</button>
             <div id="log" class="log"></div>
-            <div id="resultado" class="success" style="display:none;"></div>
-        </div>
-        
-        <div class="warning" style="margin-top: 20px;">
-            💡 <strong>Nota:</strong> Este script actualiza TODAS las URLs de imágenes en Firebase.
-            Asegurate de haber subido las imágenes a GitHub antes de ejecutarlo.
+            <div id="resultado" style="display:none;"></div>
         </div>
     </div>
 
@@ -187,14 +163,25 @@
             const fecha = new Date().toLocaleTimeString();
             logDiv.innerHTML += `[${fecha}] ${mensaje}\n`;
             logDiv.scrollTop = logDiv.scrollHeight;
+            
+            const resultadoDiv = document.getElementById('resultado');
+            if (tipo === 'success') {
+                resultadoDiv.style.display = 'block';
+                resultadoDiv.className = 'success';
+                resultadoDiv.innerHTML = mensaje;
+            } else if (tipo === 'error') {
+                resultadoDiv.style.display = 'block';
+                resultadoDiv.className = 'error';
+                resultadoDiv.innerHTML = mensaje;
+            }
         }
         
-        function actualizarProgreso(porcentaje, total, actual) {
+        function actualizarProgreso(porcentaje, texto) {
             const fill = document.getElementById('progress-fill');
             const progressBar = document.getElementById('progress-bar');
             progressBar.style.display = 'block';
             if (fill) fill.style.width = porcentaje + '%';
-            mostrarLog(`Progreso: ${actual}/${total} (${Math.round(porcentaje)}%)`);
+            if (texto) mostrarLog(texto);
         }
         
         // Login
@@ -217,15 +204,132 @@
                 if (userDoc.exists && userDoc.data().rol === 'admin') {
                     currentUser = user;
                     isAdmin = true;
-                    document.getElementById('login-error').textContent = '';
+                    errorDiv.textContent = '';
                     document.getElementById('panel-migracion').style.display = 'block';
-                    mostrarLog('✅ Autenticación exitosa como administrador', 'success');
+                    mostrarLog('✅ Autenticación exitosa como administrador');
                 } else {
                     errorDiv.textContent = '❌ No tienes permisos de administrador';
                     await firebase.auth().signOut();
                 }
             } catch (err) {
                 errorDiv.textContent = '❌ ' + (err.message || 'Error de autenticación');
+            }
+        }
+        
+        // Features y notas especiales para cada cabaña
+        function getDefaultFeatures(cabinId) {
+            const data = {
+                "cabin-1": {
+                    features: {
+                        es: ["👥 6-7 huéspedes", "🛏️ 2 dormitorios", "🚿 1 baño", "🍳 Cocina completa", "🌿 Terraza privada"],
+                        pt: ["👥 6-7 hóspedes", "🛏️ 2 quartos", "🚿 1 banheiro", "🍳 Cozinha completa", "🌿 Terraço privado"],
+                        en: ["👥 6-7 guests", "🛏️ 2 bedrooms", "🚿 1 bathroom", "🍳 Full kitchen", "🌿 Private terrace"]
+                    },
+                    specialNote: {
+                        es: "",
+                        pt: "",
+                        en: ""
+                    }
+                },
+                "cabin-2": {
+                    features: {
+                        es: ["👥 6 huéspedes", "🏠 Dormitorios en entrepiso", "🚿 1 baño", "🍳 Cocina completa", "🌿 Terraza privada"],
+                        pt: ["👥 6 hóspedes", "🏠 Quartos no mezanino", "🚿 1 banheiro", "🍳 Cozinha completa", "🌿 Terraço privado"],
+                        en: ["👥 6 guests", "🏠 Bedrooms in mezzanine", "🚿 1 bathroom", "🍳 Full kitchen", "🌿 Private terrace"]
+                    },
+                    specialNote: {
+                        es: "💡 El loft cuenta con un entrepiso al que se accede por escaleras de madera de estilo marinero, de paso algo estrecho. Puede no ser completamente cómodo para personas con dificultades de movilidad o niños muy pequeños sin supervisión. Lo recomendamos con cariño para viajeros activos que buscan un espacio con carácter.",
+                        pt: "💡 O loft possui um mezanino acessado por escadas de madeira estilo marinheiro, de passagem um pouco estreita. Pode não ser totalmente confortável para pessoas com mobilidade reduzida ou crianças muito pequenas sem supervisão. Recomendamos com carinho para viajantes ativos que buscam um espaço com personalidade.",
+                        en: "💡 The loft has a mezzanine accessed by wooden sailor-style stairs, somewhat narrow. It may not be completely comfortable for people with reduced mobility or very young children without supervision. We lovingly recommend it for active travelers looking for a space with character."
+                    }
+                },
+                "cabin-3": {
+                    features: {
+                        es: ["👥 4 huéspedes", "🛏️ 2 dormitorios", "🚿 1 baño", "🍳 Cocina completa", "🌿 Terraza privada en planta"],
+                        pt: ["👥 4 hóspedes", "🛏️ 2 quartos", "🚿 1 banheiro", "🍳 Cozinha completa", "🌿 Terraço privado no térreo"],
+                        en: ["👥 4 guests", "🛏️ 2 bedrooms", "🚿 1 bathroom", "🍳 Full kitchen", "🌿 Private ground-floor terrace"]
+                    },
+                    specialNote: {
+                        es: "",
+                        pt: "",
+                        en: ""
+                    }
+                }
+            };
+            
+            return data[cabinId] || {
+                features: {
+                    es: ["👥 4 huéspedes", "🚿 1 baño", "🍳 Cocina completa"],
+                    pt: ["👥 4 hóspedes", "🚿 1 banheiro", "🍳 Cozinha completa"],
+                    en: ["👥 4 guests", "🚿 1 bathroom", "🍳 Full kitchen"]
+                },
+                specialNote: { es: "", pt: "", en: "" }
+            };
+        }
+        
+        async function ejecutarActualizacion() {
+            if (!isAdmin) {
+                mostrarLog('❌ No estás autenticado como administrador', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('btn-actualizar');
+            btn.disabled = true;
+            btn.textContent = '⏳ Actualizando...';
+            
+            try {
+                mostrarLog('📥 Cargando datos desde Firebase...');
+                const snapshot = await db.ref('siteData').once('value');
+                const siteData = snapshot.val() || {};
+                
+                if (!siteData.apartments) {
+                    mostrarLog('❌ No se encontraron cabañas en la base de datos', 'error');
+                    return;
+                }
+                
+                let actualizadas = 0;
+                const total = Object.keys(siteData.apartments).length;
+                
+                for (const [cabinId, cabin] of Object.entries(siteData.apartments)) {
+                    const defaultData = getDefaultFeatures(cabinId);
+                    
+                    // Actualizar features (si no existen o si queremos forzar actualización)
+                    if (!cabin.features) {
+                        cabin.features = defaultData.features;
+                        actualizadas++;
+                        mostrarLog(`✅ Agregados features a ${cabinId}`);
+                    } else {
+                        mostrarLog(`ℹ️ ${cabinId} ya tenía features, se mantienen`);
+                    }
+                    
+                    // Actualizar specialNote (si no existe)
+                    if (!cabin.specialNote && defaultData.specialNote && 
+                        (defaultData.specialNote.es || defaultData.specialNote.pt || defaultData.specialNote.en)) {
+                        cabin.specialNote = defaultData.specialNote;
+                        actualizadas++;
+                        mostrarLog(`✅ Agregada nota especial a ${cabinId}`);
+                    } else if (!cabin.specialNote) {
+                        cabin.specialNote = { es: "", pt: "", en: "" };
+                    }
+                    
+                    const porcentaje = (Object.keys(siteData.apartments).indexOf(cabinId) + 1) / total * 100;
+                    actualizarProgreso(porcentaje);
+                }
+                
+                if (actualizadas > 0) {
+                    mostrarLog('💾 Guardando cambios en Firebase...');
+                    await db.ref('siteData').set(siteData);
+                    mostrarLog(`✅ ¡Completado! Se actualizaron ${actualizadas} cabañas.`, 'success');
+                } else {
+                    mostrarLog(`ℹ️ Todas las cabañas ya estaban actualizadas. No se realizaron cambios.`, 'success');
+                }
+                
+            } catch (error) {
+                mostrarLog(`❌ Error: ${error.message}`, 'error');
+                console.error(error);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚀 Actualizar cabañas';
             }
         }
         
@@ -244,111 +348,6 @@
             }
         });
         
-        // Ejecutar actualización
-        async function ejecutarActualizacion() {
-            if (!isAdmin) {
-                mostrarLog('❌ No estás autenticado como administrador');
-                return;
-            }
-            
-            const mapeoTexto = document.getElementById('mapeo-urls').value.trim();
-            if (!mapeoTexto) {
-                mostrarLog('❌ Pegá el mapeo de URLs en el campo de texto');
-                return;
-            }
-            
-            let mapeo;
-            try {
-                mapeo = JSON.parse(mapeoTexto);
-                mostrarLog(`✅ Mapeo cargado: ${Object.keys(mapeo).length} URLs para actualizar`);
-            } catch (e) {
-                mostrarLog(`❌ Error al parsear JSON: ${e.message}`);
-                return;
-            }
-            
-            const btn = document.getElementById('btn-actualizar');
-            btn.disabled = true;
-            btn.textContent = '⏳ Actualizando...';
-            
-            try {
-                // Obtener datos actuales
-                const snapshot = await db.ref('siteData').once('value');
-                const siteData = snapshot.val() || {};
-                
-                let totalActualizadas = 0;
-                let totalEncontradas = 0;
-                
-                // Recorrer el mapeo y reemplazar URLs
-                for (const [viejaUrl, nuevaUrl] of Object.entries(mapeo)) {
-                    let encontrada = false;
-                    
-                    // Buscar en apartments
-                    if (siteData.apartments) {
-                        for (const [apId, apt] of Object.entries(siteData.apartments)) {
-                            if (apt.categories) {
-                                for (const [catId, cat] of Object.entries(apt.categories)) {
-                                    if (cat.photos) {
-                                        for (let i = 0; i < cat.photos.length; i++) {
-                                            if (cat.photos[i].url === viejaUrl) {
-                                                cat.photos[i].url = nuevaUrl;
-                                                encontrada = true;
-                                                totalActualizadas++;
-                                                mostrarLog(`✅ Actualizada: ${viejaUrl.substring(0, 50)}... → ${nuevaUrl.substring(0, 50)}...`);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Buscar en common
-                    if (siteData.common?.categories) {
-                        for (const [catId, cat] of Object.entries(siteData.common.categories)) {
-                            if (cat.photos) {
-                                for (let i = 0; i < cat.photos.length; i++) {
-                                    if (cat.photos[i].url === viejaUrl) {
-                                        cat.photos[i].url = nuevaUrl;
-                                        encontrada = true;
-                                        totalActualizadas++;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    if (encontrada) totalEncontradas++;
-                    
-                    // Actualizar progreso
-                    const porcentaje = (totalActualizadas / Object.keys(mapeo).length) * 100;
-                    actualizarProgreso(porcentaje, Object.keys(mapeo).length, totalActualizadas);
-                }
-                
-                // Guardar en Firebase
-                mostrarLog('💾 Guardando cambios en Firebase...');
-                await db.ref('siteData').set(siteData);
-                
-                const resultadoDiv = document.getElementById('resultado');
-                resultadoDiv.style.display = 'block';
-                resultadoDiv.innerHTML = `
-                    ✅ <strong>¡Actualización completada!</strong><br>
-                    📸 URLs encontradas: ${totalEncontradas}<br>
-                    🔄 URLs actualizadas: ${totalActualizadas}<br>
-                    📦 Total en mapeo: ${Object.keys(mapeo).length}
-                `;
-                
-                mostrarLog(`✅ ¡Completado! ${totalActualizadas} URLs actualizadas.`, 'success');
-                
-            } catch (error) {
-                mostrarLog(`❌ Error: ${error.message}`, 'error');
-                console.error(error);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '🔄 Actualizar URLs en Firebase';
-            }
-        }
-        
-        // Exponer funciones
         window.login = login;
         window.ejecutarActualizacion = ejecutarActualizacion;
     </script>
