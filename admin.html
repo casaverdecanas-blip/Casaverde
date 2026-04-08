@@ -5,11 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Casa Verde Canas</title>
     
-    <!-- Eruda para debugging en móvil -->
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
 
-    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -51,6 +49,7 @@
         .btn-danger { background: #e74c3c; }
         .btn-danger:hover { background: #c0392b; }
         .btn-success { background: #27ae60; }
+        .btn-primary { background: #2E5A31; }
         
         .photos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-top: 15px; }
         .photo-card { background: #f9f9f9; border-radius: 10px; padding: 12px; border: 1px solid #eee; }
@@ -103,7 +102,7 @@
         <header>
             <h1>🌱 Casa Verde Canas - Administración</h1>
             <div>
-                <button onclick="guardarTodo()" style="background:#27ae60; margin-right:10px;">💾 GUARDAR TODO</button>
+                <button onclick="guardarTodo()" class="btn-success" style="margin-right:10px;">💾 GUARDAR TODO</button>
                 <button onclick="cargarDatos()" style="background:#3498db; margin-right:10px;">🔄 RECARGAR</button>
                 <button onclick="cerrarSesion()" style="background:none; border:1px solid white;">🚪 Salir</button>
             </div>
@@ -142,11 +141,18 @@
         
         // Estructura por defecto
         let siteData = {
+            siteContent: {
+                hero: { subtitle: { es: "", pt: "", en: "" } },
+                mainDescription: { title: { es: "", pt: "", en: "" }, body: { es: "", pt: "", en: "" } },
+                address: { displayText: { es: "", pt: "", en: "" } },
+                sectionTitles: { cabins: { es: "", pt: "", en: "" }, common: { es: "", pt: "", en: "" } }
+            },
             apartments: {},
             common: { categories: {} }
         };
         
-        let currentTab = '';
+        let currentTab = 'siteContent';
+        let isAdmin = false;
 
         // ============================================
         // AUTENTICACIÓN
@@ -163,60 +169,43 @@
             
             try {
                 const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
-                console.log("Usuario autenticado:", userCredential.user.uid);
-                
-                // Verificar si es admin en Firestore
                 const userDoc = await firebase.firestore().collection('usuarios').doc(userCredential.user.uid).get();
                 
                 if (userDoc.exists && userDoc.data().rol === 'admin') {
-                    console.log("✅ Admin verificado");
-                    mostrarAdmin();
+                    isAdmin = true;
+                    document.getElementById('login-section').style.display = 'none';
+                    document.getElementById('admin-panel').style.display = 'block';
+                    actualizarStatus('✅ Autenticación exitosa como administrador', 'success');
+                    cargarDatos();
                 } else {
                     errorDiv.textContent = '❌ No tienes permisos de administrador';
                     await firebase.auth().signOut();
                 }
             } catch (err) {
-                console.error("Error login:", err);
                 errorDiv.textContent = '❌ ' + (err.message || 'Error de autenticación');
             }
         }
         
-        function mostrarAdmin() {
-            document.getElementById('login-section').style.display = 'none';
-            document.getElementById('admin-panel').style.display = 'block';
-            cargarDatos();
-        }
-        
         function cerrarSesion() {
-            firebase.auth().signOut().then(() => {
-                location.reload();
-            });
+            firebase.auth().signOut().then(() => location.reload());
         }
         
-        // Verificar sesión al cargar
         firebase.auth().onAuthStateChanged(async (user) => {
             if (user) {
                 try {
                     const userDoc = await firebase.firestore().collection('usuarios').doc(user.uid).get();
                     if (userDoc.exists && userDoc.data().rol === 'admin') {
-                        mostrarAdmin();
-                    } else {
-                        document.getElementById('login-section').style.display = 'flex';
-                        document.getElementById('admin-panel').style.display = 'none';
+                        isAdmin = true;
+                        document.getElementById('login-section').style.display = 'none';
+                        document.getElementById('admin-panel').style.display = 'block';
+                        cargarDatos();
                     }
-                } catch (err) {
-                    console.error("Error verificando admin:", err);
-                    document.getElementById('login-section').style.display = 'flex';
-                    document.getElementById('admin-panel').style.display = 'none';
-                }
-            } else {
-                document.getElementById('login-section').style.display = 'flex';
-                document.getElementById('admin-panel').style.display = 'none';
+                } catch (err) {}
             }
         });
         
         // ============================================
-        // CARGAR DATOS DESDE REALTIME DATABASE
+        // FUNCIONES PRINCIPALES
         // ============================================
         function actualizarStatus(msg, isError = false) {
             const statusDiv = document.getElementById('status');
@@ -226,43 +215,47 @@
                 setTimeout(() => {
                     if (document.getElementById('status')?.innerHTML === msg) {
                         document.getElementById('status').innerHTML = '✅ Listo. Recuerda GUARDAR los cambios.';
-                        if (statusDiv) statusDiv.style.background = '#d4edda';
+                        statusDiv.style.background = '#d4edda';
                     }
                 }, 3000);
             }
         }
         
-        function cargarDatos() {
+        async function cargarDatos() {
             actualizarStatus('📥 Cargando datos desde Firebase...');
-            
-            db.ref('siteData').once('value', (snapshot) => {
+            try {
+                const snapshot = await db.ref('siteData').once('value');
                 const data = snapshot.val();
-                console.log("Datos cargados:", data);
-                
                 if (data && Object.keys(data).length > 0) {
                     siteData = data;
+                    // Asegurar que siteContent existe
+                    if (!siteData.siteContent) {
+                        siteData.siteContent = {
+                            hero: { subtitle: { es: "", pt: "", en: "" } },
+                            mainDescription: { title: { es: "", pt: "", en: "" }, body: { es: "", pt: "", en: "" } },
+                            address: { displayText: { es: "", pt: "", en: "" } },
+                            sectionTitles: { cabins: { es: "", pt: "", en: "" }, common: { es: "", pt: "", en: "" } }
+                        };
+                    }
                     actualizarStatus('✅ Datos cargados correctamente');
                 } else {
                     actualizarStatus('⚠️ No hay datos en Firebase. Usando estructura por defecto.', true);
-                    // Crear estructura mínima si no existe
-                    if (!siteData.apartments) siteData.apartments = {};
-                    if (!siteData.common) siteData.common = { categories: {} };
                 }
-                
                 renderizarTodo();
-            }, (error) => {
-                console.error("Error Firebase:", error);
-                actualizarStatus('❌ Error al cargar: ' + error.message, true);
+            } catch (error) {
+                actualizarStatus('❌ Error: ' + error.message, true);
                 renderizarTodo();
-            });
+            }
         }
         
-        function guardarTodo() {
+        async function guardarTodo() {
             actualizarStatus('💾 Guardando en Firebase...');
-            
-            db.ref('siteData').set(siteData)
-                .then(() => actualizarStatus('✅ ¡Todos los datos guardados correctamente!'))
-                .catch((err) => actualizarStatus('❌ Error: ' + err.message, true));
+            try {
+                await db.ref('siteData').set(siteData);
+                actualizarStatus('✅ ¡Todos los datos guardados correctamente!');
+            } catch (error) {
+                actualizarStatus('❌ Error: ' + error.message, true);
+            }
         }
         
         // ============================================
@@ -279,29 +272,25 @@
             if (!tabsContainer) return;
             tabsContainer.innerHTML = '';
             
-            // Tab de espacios comunes
-            const commonTab = document.createElement('button');
-            commonTab.className = `tab-btn ${currentTab === 'common' ? 'active' : ''}`;
-            commonTab.textContent = '🏡 Espacios Comunes';
-            commonTab.onclick = () => cambiarTab('common');
-            tabsContainer.appendChild(commonTab);
+            const tabs = [
+                { id: 'siteContent', nombre: '📝 Contenido del Sitio' },
+                { id: 'common', nombre: '🏡 Espacios Comunes' }
+            ];
             
-            // Tabs de cabañas
+            // Agregar tabs de cabañas
             if (siteData.apartments) {
                 for (const [id, apt] of Object.entries(siteData.apartments)) {
-                    const nombre = apt.name?.es || id;
-                    const tab = document.createElement('button');
-                    tab.className = `tab-btn ${currentTab === id ? 'active' : ''}`;
-                    tab.textContent = `🏠 ${nombre.substring(0, 30)}`;
-                    tab.onclick = () => cambiarTab(id);
-                    tabsContainer.appendChild(tab);
+                    tabs.push({ id: id, nombre: `🏠 ${apt.name?.es || id}` });
                 }
             }
             
-            if (currentTab === '' && siteData.apartments) {
-                const firstKey = Object.keys(siteData.apartments)[0];
-                currentTab = firstKey || 'common';
-            }
+            tabs.forEach(tab => {
+                const btn = document.createElement('button');
+                btn.className = `tab-btn ${currentTab === tab.id ? 'active' : ''}`;
+                btn.textContent = tab.nombre;
+                btn.onclick = () => cambiarTab(tab.id);
+                tabsContainer.appendChild(btn);
+            });
         }
         
         function cambiarTab(tabId) {
@@ -315,69 +304,176 @@
             if (!panelsContainer) return;
             panelsContainer.innerHTML = '';
             
-            // Panel de comunes
-            const commonPanel = renderCommonPanel();
-            panelsContainer.appendChild(commonPanel);
+            // Panel de contenido del sitio
+            panelsContainer.appendChild(renderSiteContentPanel());
+            
+            // Panel de espacios comunes
+            panelsContainer.appendChild(renderCommonPanel());
             
             // Paneles de cabañas
             if (siteData.apartments) {
                 for (const [id, apt] of Object.entries(siteData.apartments)) {
-                    const panel = renderApartmentPanel(id, apt);
-                    panelsContainer.appendChild(panel);
+                    panelsContainer.appendChild(renderApartmentPanel(id, apt));
                 }
             }
             
-            // Mostrar solo el panel activo
             document.querySelectorAll('.panel').forEach(panel => {
                 panel.classList.toggle('active', panel.id === `panel-${currentTab}`);
             });
         }
         
+        // ============================================
+        // PANEL DE CONTENIDO DEL SITIO (NUEVO)
+        // ============================================
+        function renderSiteContentPanel() {
+            const panel = document.createElement('div');
+            panel.className = 'panel';
+            panel.id = 'panel-siteContent';
+            
+            const sc = siteData.siteContent || {};
+            
+            panel.innerHTML = `
+                <h2 style="color:var(--oscuro); margin-bottom:20px;">📝 Contenido del Sitio Web</h2>
+                
+                <!-- Hero / Subtítulo -->
+                <div class="card">
+                    <h3>🏷️ Subtítulo (debajo del logo)</h3>
+                    <div class="lang-row">
+                        <div class="lang-field"><span class="lang-badge lang-es">🇪🇸 Español</span><textarea id="hero-subtitle-es" rows="3" placeholder="Subtítulo en español">${escapeHtml(sc.hero?.subtitle?.es || '')}</textarea></div>
+                        <div class="lang-field"><span class="lang-badge lang-pt">🇧🇷 Português</span><textarea id="hero-subtitle-pt" rows="3" placeholder="Subtítulo em português">${escapeHtml(sc.hero?.subtitle?.pt || '')}</textarea></div>
+                        <div class="lang-field"><span class="lang-badge lang-en">🇺🇸 English</span><textarea id="hero-subtitle-en" rows="3" placeholder="Subtitle in English">${escapeHtml(sc.hero?.subtitle?.en || '')}</textarea></div>
+                    </div>
+                </div>
+                
+                <!-- Descripción principal "Un hogar dentro de un jardín" -->
+                <div class="card">
+                    <h3>🏡 Sección "Un hogar dentro de un jardín"</h3>
+                    <div class="form-group">
+                        <label>Título</label>
+                        <div class="lang-row">
+                            <div class="lang-field"><span class="lang-badge lang-es">🇪🇸</span><input type="text" id="main-title-es" value="${escapeHtml(sc.mainDescription?.title?.es || '')}"></div>
+                            <div class="lang-field"><span class="lang-badge lang-pt">🇧🇷</span><input type="text" id="main-title-pt" value="${escapeHtml(sc.mainDescription?.title?.pt || '')}"></div>
+                            <div class="lang-field"><span class="lang-badge lang-en">🇺🇸</span><input type="text" id="main-title-en" value="${escapeHtml(sc.mainDescription?.title?.en || '')}"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Cuerpo del texto (descripción completa)</label>
+                        <div class="lang-row">
+                            <div class="lang-field"><span class="lang-badge lang-es">🇪🇸</span><textarea id="main-body-es" rows="8">${escapeHtml(sc.mainDescription?.body?.es || '')}</textarea></div>
+                            <div class="lang-field"><span class="lang-badge lang-pt">🇧🇷</span><textarea id="main-body-pt" rows="8">${escapeHtml(sc.mainDescription?.body?.pt || '')}</textarea></div>
+                            <div class="lang-field"><span class="lang-badge lang-en">🇺🇸</span><textarea id="main-body-en" rows="8">${escapeHtml(sc.mainDescription?.body?.en || '')}</textarea></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Dirección -->
+                <div class="card">
+                    <h3>📍 Dirección (footer)</h3>
+                    <div class="lang-row">
+                        <div class="lang-field"><span class="lang-badge lang-es">🇪🇸 Español</span><input type="text" id="address-es" value="${escapeHtml(sc.address?.displayText?.es || '')}" placeholder="Dirección completa en español"></div>
+                        <div class="lang-field"><span class="lang-badge lang-pt">🇧🇷 Português</span><input type="text" id="address-pt" value="${escapeHtml(sc.address?.displayText?.pt || '')}" placeholder="Endereço completo em português"></div>
+                        <div class="lang-field"><span class="lang-badge lang-en">🇺🇸 English</span><input type="text" id="address-en" value="${escapeHtml(sc.address?.displayText?.en || '')}" placeholder="Full address in English"></div>
+                    </div>
+                </div>
+                
+                <!-- Títulos de sección -->
+                <div class="card">
+                    <h3>📑 Títulos de sección</h3>
+                    <div class="form-group">
+                        <label>"Nuestras Cabañas"</label>
+                        <div class="lang-row">
+                            <div class="lang-field"><span class="lang-badge lang-es">🇪🇸</span><input type="text" id="cabins-title-es" value="${escapeHtml(sc.sectionTitles?.cabins?.es || '')}"></div>
+                            <div class="lang-field"><span class="lang-badge lang-pt">🇧🇷</span><input type="text" id="cabins-title-pt" value="${escapeHtml(sc.sectionTitles?.cabins?.pt || '')}"></div>
+                            <div class="lang-field"><span class="lang-badge lang-en">🇺🇸</span><input type="text" id="cabins-title-en" value="${escapeHtml(sc.sectionTitles?.cabins?.en || '')}"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>"Espacios Compartidos"</label>
+                        <div class="lang-row">
+                            <div class="lang-field"><span class="lang-badge lang-es">🇪🇸</span><input type="text" id="common-title-es" value="${escapeHtml(sc.sectionTitles?.common?.es || '')}"></div>
+                            <div class="lang-field"><span class="lang-badge lang-pt">🇧🇷</span><input type="text" id="common-title-pt" value="${escapeHtml(sc.sectionTitles?.common?.pt || '')}"></div>
+                            <div class="lang-field"><span class="lang-badge lang-en">🇺🇸</span><input type="text" id="common-title-en" value="${escapeHtml(sc.sectionTitles?.common?.en || '')}"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Eventos para guardar cambios en memoria
+            const heroSubtitleEs = panel.querySelector('#hero-subtitle-es');
+            const heroSubtitlePt = panel.querySelector('#hero-subtitle-pt');
+            const heroSubtitleEn = panel.querySelector('#hero-subtitle-en');
+            if (heroSubtitleEs) heroSubtitleEs.onchange = (e) => { if (!siteData.siteContent.hero) siteData.siteContent.hero = {}; if (!siteData.siteContent.hero.subtitle) siteData.siteContent.hero.subtitle = {}; siteData.siteContent.hero.subtitle.es = e.target.value; };
+            if (heroSubtitlePt) heroSubtitlePt.onchange = (e) => { siteData.siteContent.hero.subtitle.pt = e.target.value; };
+            if (heroSubtitleEn) heroSubtitleEn.onchange = (e) => { siteData.siteContent.hero.subtitle.en = e.target.value; };
+            
+            const mainTitleEs = panel.querySelector('#main-title-es');
+            const mainTitlePt = panel.querySelector('#main-title-pt');
+            const mainTitleEn = panel.querySelector('#main-title-en');
+            if (mainTitleEs) mainTitleEs.onchange = (e) => { if (!siteData.siteContent.mainDescription) siteData.siteContent.mainDescription = {}; if (!siteData.siteContent.mainDescription.title) siteData.siteContent.mainDescription.title = {}; siteData.siteContent.mainDescription.title.es = e.target.value; };
+            if (mainTitlePt) mainTitlePt.onchange = (e) => { siteData.siteContent.mainDescription.title.pt = e.target.value; };
+            if (mainTitleEn) mainTitleEn.onchange = (e) => { siteData.siteContent.mainDescription.title.en = e.target.value; };
+            
+            const mainBodyEs = panel.querySelector('#main-body-es');
+            const mainBodyPt = panel.querySelector('#main-body-pt');
+            const mainBodyEn = panel.querySelector('#main-body-en');
+            if (mainBodyEs) mainBodyEs.onchange = (e) => { if (!siteData.siteContent.mainDescription.body) siteData.siteContent.mainDescription.body = {}; siteData.siteContent.mainDescription.body.es = e.target.value; };
+            if (mainBodyPt) mainBodyPt.onchange = (e) => { siteData.siteContent.mainDescription.body.pt = e.target.value; };
+            if (mainBodyEn) mainBodyEn.onchange = (e) => { siteData.siteContent.mainDescription.body.en = e.target.value; };
+            
+            const addressEs = panel.querySelector('#address-es');
+            const addressPt = panel.querySelector('#address-pt');
+            const addressEn = panel.querySelector('#address-en');
+            if (addressEs) addressEs.onchange = (e) => { if (!siteData.siteContent.address) siteData.siteContent.address = {}; if (!siteData.siteContent.address.displayText) siteData.siteContent.address.displayText = {}; siteData.siteContent.address.displayText.es = e.target.value; };
+            if (addressPt) addressPt.onchange = (e) => { siteData.siteContent.address.displayText.pt = e.target.value; };
+            if (addressEn) addressEn.onchange = (e) => { siteData.siteContent.address.displayText.en = e.target.value; };
+            
+            const cabinsTitleEs = panel.querySelector('#cabins-title-es');
+            const cabinsTitlePt = panel.querySelector('#cabins-title-pt');
+            const cabinsTitleEn = panel.querySelector('#cabins-title-en');
+            if (cabinsTitleEs) cabinsTitleEs.onchange = (e) => { if (!siteData.siteContent.sectionTitles) siteData.siteContent.sectionTitles = {}; if (!siteData.siteContent.sectionTitles.cabins) siteData.siteContent.sectionTitles.cabins = {}; siteData.siteContent.sectionTitles.cabins.es = e.target.value; };
+            if (cabinsTitlePt) cabinsTitlePt.onchange = (e) => { siteData.siteContent.sectionTitles.cabins.pt = e.target.value; };
+            if (cabinsTitleEn) cabinsTitleEn.onchange = (e) => { siteData.siteContent.sectionTitles.cabins.en = e.target.value; };
+            
+            const commonTitleEs = panel.querySelector('#common-title-es');
+            const commonTitlePt = panel.querySelector('#common-title-pt');
+            const commonTitleEn = panel.querySelector('#common-title-en');
+            if (commonTitleEs) commonTitleEs.onchange = (e) => { if (!siteData.siteContent.sectionTitles.common) siteData.siteContent.sectionTitles.common = {}; siteData.siteContent.sectionTitles.common.es = e.target.value; };
+            if (commonTitlePt) commonTitlePt.onchange = (e) => { siteData.siteContent.sectionTitles.common.pt = e.target.value; };
+            if (commonTitleEn) commonTitleEn.onchange = (e) => { siteData.siteContent.sectionTitles.common.en = e.target.value; };
+            
+            return panel;
+        }
+        
+        // ============================================
+        // PANEL DE ESPACIOS COMUNES (simplificado)
+        // ============================================
         function renderCommonPanel() {
             const panel = document.createElement('div');
             panel.className = 'panel';
             panel.id = 'panel-common';
             
             if (!siteData.common) siteData.common = { categories: {} };
-            if (!siteData.common.categories) siteData.common.categories = {};
             
             panel.innerHTML = `
                 <h2 style="color:var(--oscuro); margin-bottom:20px;">🏡 Espacios Comunes</h2>
-                
-                <div class="card">
-                    <h3>📝 Descripción General</h3>
-                    <div class="lang-row">
-                        <div class="lang-field"><span class="lang-badge lang-es">🇪🇸 Español</span><textarea id="common-desc-es" rows="3">${escapeHtml(siteData.common.description?.es || '')}</textarea></div>
-                        <div class="lang-field"><span class="lang-badge lang-pt">🇧🇷 Português</span><textarea id="common-desc-pt" rows="3">${escapeHtml(siteData.common.description?.pt || '')}</textarea></div>
-                        <div class="lang-field"><span class="lang-badge lang-en">🇺🇸 English</span><textarea id="common-desc-en" rows="3">${escapeHtml(siteData.common.description?.en || '')}</textarea></div>
-                    </div>
-                </div>
-                
                 <div id="common-categories-container"></div>
-                
                 <button class="btn-success" onclick="agregarCategoria('common')" style="margin-top:15px;">+ Agregar Categoría</button>
             `;
             
-            // Guardar descripciones
-            const descEs = panel.querySelector('#common-desc-es');
-            const descPt = panel.querySelector('#common-desc-pt');
-            const descEn = panel.querySelector('#common-desc-en');
-            if (descEs) descEs.onchange = () => { if (!siteData.common.description) siteData.common.description = {}; siteData.common.description.es = descEs.value; };
-            if (descPt) descPt.onchange = () => { if (!siteData.common.description) siteData.common.description = {}; siteData.common.description.pt = descPt.value; };
-            if (descEn) descEn.onchange = () => { if (!siteData.common.description) siteData.common.description = {}; siteData.common.description.en = descEn.value; };
-            
-            // Renderizar categorías
             const categories = siteData.common.categories;
             const container = panel.querySelector('#common-categories-container');
             const sorted = Object.entries(categories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
             
             for (const [catId, cat] of sorted) {
-                container.appendChild(renderizarCategoria('common', catId, cat));
+                container.appendChild(renderCategoria('common', catId, cat));
             }
             
             return panel;
         }
         
+        // ============================================
+        // PANEL DE CABAÑA
+        // ============================================
         function renderApartmentPanel(apId, apt) {
             const panel = document.createElement('div');
             panel.className = 'panel';
@@ -392,7 +488,6 @@
                 
                 <div class="card">
                     <h3>📝 Información Básica</h3>
-                    
                     <div class="form-group">
                         <label>Nombre / Título</label>
                         <div class="lang-row">
@@ -401,7 +496,6 @@
                             <div class="lang-field"><span class="lang-badge lang-en">🇺🇸</span><input type="text" id="${apId}-name-en" value="${escapeHtml(apt.name?.en || '')}"></div>
                         </div>
                     </div>
-                    
                     <div class="form-group">
                         <label>Descripción</label>
                         <div class="lang-row">
@@ -410,12 +504,10 @@
                             <div class="lang-field"><span class="lang-badge lang-en">🇺🇸</span><textarea id="${apId}-desc-en" rows="4">${escapeHtml(apt.description?.en || '')}</textarea></div>
                         </div>
                     </div>
-                    
                     <div class="form-group">
                         <label>🔗 Enlace Airbnb</label>
                         <input type="url" id="${apId}-airbnb" value="${escapeHtml(apt.airbnb_url || '')}">
                     </div>
-                    
                     <div class="form-group">
                         <label>📅 Código iframe Google Calendar</label>
                         <textarea id="${apId}-calendar" rows="3" style="font-family:monospace; font-size:11px;">${escapeHtml(apt.google_calendar_iframe || '')}</textarea>
@@ -424,11 +516,10 @@
                 
                 <h3 style="margin:20px 0 10px;">📸 Categorías y Fotos</h3>
                 <div id="${apId}-categories-container"></div>
-                
                 <button class="btn-success" onclick="agregarCategoria('${apId}')" style="margin-top:15px;">+ Agregar Categoría</button>
             `;
             
-            // Eventos de guardado
+            // Eventos
             panel.querySelector(`#${apId}-name-es`).onchange = (e) => { apt.name.es = e.target.value; renderizarTabs(); };
             panel.querySelector(`#${apId}-name-pt`).onchange = (e) => { apt.name.pt = e.target.value; renderizarTabs(); };
             panel.querySelector(`#${apId}-name-en`).onchange = (e) => { apt.name.en = e.target.value; renderizarTabs(); };
@@ -438,7 +529,6 @@
             panel.querySelector(`#${apId}-airbnb`).onchange = (e) => { apt.airbnb_url = e.target.value; };
             panel.querySelector(`#${apId}-calendar`).onchange = (e) => { apt.google_calendar_iframe = e.target.value; };
             
-            // Renderizar categorías
             const categories = apt.categories;
             const container = panel.querySelector(`#${apId}-categories-container`);
             const sorted = Object.entries(categories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
@@ -447,14 +537,17 @@
                 container.innerHTML = '<div style="padding:20px; text-align:center; color:#999;">📭 Sin categorías. Haz clic en "+ Agregar Categoría"</div>';
             } else {
                 for (const [catId, cat] of sorted) {
-                    container.appendChild(renderizarCategoria(apId, catId, cat));
+                    container.appendChild(renderCategoria(apId, catId, cat));
                 }
             }
             
             return panel;
         }
         
-        function renderizarCategoria(owner, catId, cat) {
+        // ============================================
+        // RENDERIZAR CATEGORÍA (reutilizable)
+        // ============================================
+        function renderCategoria(owner, catId, cat) {
             const div = document.createElement('div');
             div.className = 'category-item';
             
@@ -483,7 +576,6 @@
                 <button class="btn-success" style="margin-top:10px; padding:8px;" onclick="agregarFoto('${owner}', '${catId}')">+ Agregar Foto</button>
             `;
             
-            // Renderizar fotos
             const photosGrid = div.querySelector(`.photos-grid`);
             const sortedPhotos = [...cat.photos].sort((a, b) => (a.order || 0) - (b.order || 0));
             
@@ -514,7 +606,7 @@
         }
         
         // ============================================
-        // FUNCIONES GLOBALES PARA MANIPULAR DATOS
+        // FUNCIONES GLOBALES
         // ============================================
         window.agregarCategoria = function(owner) {
             const newId = 'cat_' + Date.now();
@@ -652,6 +744,7 @@
         window.guardarTodo = guardarTodo;
         window.cargarDatos = cargarDatos;
         window.cerrarSesion = cerrarSesion;
+        window.login = login;
     </script>
 </body>
 </html>
