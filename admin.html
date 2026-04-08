@@ -277,6 +277,8 @@
             padding: 15px;
             border-radius: 12px;
             margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
         }
         
         .feature-item {
@@ -292,12 +294,17 @@
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 6px;
+            font-size: 13px;
         }
         
         .feature-item button {
             padding: 6px 12px;
             font-size: 12px;
             background: #e74c3c;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
         }
         
         .add-feature-btn {
@@ -311,6 +318,68 @@
             color: var(--verde-oscuro);
             font-weight: bold;
             width: 100%;
+        }
+        
+        .add-feature-btn:hover {
+            background: var(--verde);
+        }
+        
+        /* Uploader manual desde archivo */
+        .upload-area {
+            border: 2px dashed var(--verde-oscuro);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin: 15px 0;
+            background: #f9f9f9;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .upload-area:hover {
+            background: #f0f8f0;
+            border-color: #27ae60;
+        }
+        .upload-info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 10px;
+        }
+        .file-name-preview {
+            background: #e8f5e9;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 11px;
+            word-break: break-all;
+            text-align: left;
+        }
+        .size-warning {
+            color: #e74c3c;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+        
+        /* URL Uploader */
+        .url-uploader {
+            background: #f0f8f0;
+            padding: 15px;
+            border-radius: 12px;
+            margin: 15px 0;
+        }
+        .url-uploader input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .url-preview-img {
+            max-width: 100%;
+            max-height: 150px;
+            border-radius: 8px;
+            margin-top: 10px;
         }
         
         /* Stats */
@@ -392,11 +461,10 @@
             border-radius: 4px;
         }
         
-        .add-photo-btn,
         .add-category-btn {
             background: none;
             border: 2px dashed var(--verde-oscuro);
-            padding: 10px;
+            padding: 12px;
             text-align: center;
             cursor: pointer;
             border-radius: 8px;
@@ -406,7 +474,6 @@
             width: 100%;
         }
         
-        .add-photo-btn:hover,
         .add-category-btn:hover {
             background: var(--verde);
         }
@@ -807,18 +874,12 @@
                 </div>
             `;
             
-            // Eventos para guardar cambios
             attachSiteContentEvents(panel);
-            
             return panel;
         }
         
         function attachSiteContentEvents(panel) {
-            const fields = [
-                'subtitle', 'mainTitle', 'mainBody', 'address',
-                'cabinsTitle', 'commonTitle'
-            ];
-            
+            const fields = ['subtitle', 'mainTitle', 'mainBody', 'address', 'cabinsTitle', 'commonTitle'];
             for (const field of fields) {
                 for (const lang of ['es', 'pt', 'en']) {
                     const el = panel.querySelector(`#${field}-${lang}`);
@@ -831,7 +892,6 @@
         
         function updateSiteContent(field, lang, value) {
             if (!siteData.siteContent) siteData.siteContent = {};
-            
             if (field === 'subtitle') {
                 if (!siteData.siteContent.hero) siteData.siteContent.hero = {};
                 if (!siteData.siteContent.hero.subtitle) siteData.siteContent.hero.subtitle = {};
@@ -887,7 +947,7 @@
         }
         
         // ============================================
-        // PANEL: CABAÑA (con features y specialNote)
+        // PANEL: CABAÑA
         // ============================================
         function renderApartmentPanel(apId, apt) {
             const panel = document.createElement('div');
@@ -985,13 +1045,9 @@
                 </div>
             `;
             
-            // Eventos básicos
             attachApartmentEvents(panel, apId, apt);
-            
-            // Renderizar features
             renderFeaturesList(apId, apt);
             
-            // Renderizar categorías
             const container = panel.querySelector(`#${apId}-categories-container`);
             const categories = apt.categories;
             const sorted = Object.entries(categories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
@@ -1023,14 +1079,11 @@
         
         function renderFeaturesList(apId, apt) {
             if (!apt.features) apt.features = { es: [], pt: [], en: [] };
-            
             for (const lang of ['es', 'pt', 'en']) {
                 const container = document.getElementById(`${apId}-features-${lang}-container`);
                 if (!container) continue;
-                
                 const features = apt.features[lang] || [];
                 container.innerHTML = '';
-                
                 features.forEach((feature, idx) => {
                     const div = document.createElement('div');
                     div.className = 'feature-item';
@@ -1042,28 +1095,6 @@
                 });
             }
         }
-        
-        // Funciones globales para features
-        window.addFeature = function(apId, lang) {
-            if (!siteData.apartments[apId].features) {
-                siteData.apartments[apId].features = { es: [], pt: [], en: [] };
-            }
-            siteData.apartments[apId].features[lang].push("Nueva característica");
-            renderFeaturesList(apId, siteData.apartments[apId]);
-        };
-        
-        window.updateFeature = function(apId, lang, idx, value) {
-            if (siteData.apartments[apId].features && siteData.apartments[apId].features[lang]) {
-                siteData.apartments[apId].features[lang][idx] = value;
-            }
-        };
-        
-        window.removeFeature = function(apId, lang, idx) {
-            if (siteData.apartments[apId].features && siteData.apartments[apId].features[lang]) {
-                siteData.apartments[apId].features[lang].splice(idx, 1);
-                renderFeaturesList(apId, siteData.apartments[apId]);
-            }
-        };
         
         // ============================================
         // PANEL: NUEVA CABAÑA
@@ -1087,12 +1118,11 @@
                     <button class="btn btn-success" onclick="createNewApartment()">Crear Cabaña</button>
                 </div>
             `;
-            
             return panel;
         }
         
         // ============================================
-        // RENDERIZAR CATEGORÍA
+        // RENDERIZAR CATEGORÍA CON UPLOADERS
         // ============================================
         function renderCategory(owner, catId, cat) {
             const div = document.createElement('div');
@@ -1120,7 +1150,8 @@
                 </div>
                 
                 <div class="photos-grid" id="photos-${owner}-${catId}"></div>
-                <button class="add-photo-btn" onclick="addPhoto('${owner}', '${catId}')">+ Agregar Foto</button>
+                ${renderManualUploader(owner, catId)}
+                ${renderUrlUploader(owner, catId)}
             `;
             
             const photosGrid = div.querySelector(`.photos-grid`);
@@ -1153,8 +1184,219 @@
         }
         
         // ============================================
+        // SUBIDA MANUAL DE IMÁGENES (ARCHIVO LOCAL)
+        // ============================================
+        const MAX_SIZE_MB = 1;
+        const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+        
+        function renderManualUploader(owner, catId) {
+            return `
+                <div class="upload-area" id="upload-area-${owner}-${catId}" onclick="document.getElementById('file-input-${owner}-${catId}').click()">
+                    📸 Hacé clic o arrastrá una imagen (máx ${MAX_SIZE_MB} MB)
+                    <input type="file" id="file-input-${owner}-${catId}" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="processImageFile('${owner}', '${catId}', this.files[0])">
+                    <div class="upload-info">Formatos: JPG, PNG, WEBP | Máximo ${MAX_SIZE_MB} MB</div>
+                    <div id="preview-${owner}-${catId}" class="file-name-preview" style="display:none"></div>
+                    <div id="warning-${owner}-${catId}" class="size-warning" style="display:none"></div>
+                </div>
+            `;
+        }
+        
+        window.processImageFile = function(owner, catId, file) {
+            const previewDiv = document.getElementById(`preview-${owner}-${catId}`);
+            const warningDiv = document.getElementById(`warning-${owner}-${catId}`);
+            
+            if (!file) return;
+            
+            if (file.size > MAX_SIZE_BYTES) {
+                const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                warningDiv.style.display = 'block';
+                warningDiv.innerHTML = `⚠️ La imagen pesa ${sizeMB} MB. El límite es ${MAX_SIZE_MB} MB. Reducí la imagen o comprimila.`;
+                previewDiv.style.display = 'none';
+                return;
+            }
+            
+            warningDiv.style.display = 'none';
+            
+            const extension = file.name.split('.').pop().toLowerCase();
+            const extensionesValidas = ['jpg', 'jpeg', 'png', 'webp'];
+            
+            if (!extensionesValidas.includes(extension)) {
+                warningDiv.style.display = 'block';
+                warningDiv.innerHTML = `⚠️ Formato no soportado. Usá JPG, PNG o WEBP.`;
+                previewDiv.style.display = 'none';
+                return;
+            }
+            
+            const timestamp = new Date().toISOString().slice(0,19).replace(/:/g, '-').replace('T', '_');
+            const nombreSugerido = `${owner}_${catId}_${timestamp}.${extension}`;
+            const rutaSugerida = `img/${owner}/${catId}/${nombreSugerido}`;
+            
+            previewDiv.style.display = 'block';
+            previewDiv.innerHTML = `
+                📁 <strong>Archivo listo:</strong> ${file.name}<br>
+                📏 Tamaño: ${(file.size / 1024).toFixed(0)} KB ✅<br>
+                💾 <strong>Nombre sugerido:</strong> ${nombreSugerido}<br>
+                📂 <strong>Ruta:</strong> ${rutaSugerida}<br><br>
+                🔽 <strong>Pasos para subir a GitHub:</strong><br>
+                1. Guardá esta imagen con el nombre: <code>${nombreSugerido}</code><br>
+                2. Subila a tu repositorio en: <code>${rutaSugerida}</code><br>
+                3. Después de subir, hacé clic en "Confirmar subida"
+            `;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const imgPreview = document.createElement('div');
+                imgPreview.style.marginTop = '10px';
+                imgPreview.innerHTML = `<img src="${e.target.result}" style="max-width: 100%; max-height: 150px; border-radius: 8px; margin-top: 8px;">`;
+                previewDiv.appendChild(imgPreview);
+            };
+            reader.readAsDataURL(file);
+            
+            const confirmBtn = document.createElement('button');
+            confirmBtn.className = 'btn-success';
+            confirmBtn.style.marginTop = '10px';
+            confirmBtn.style.padding = '8px 15px';
+            confirmBtn.innerHTML = '✅ Confirmar subida a Firebase';
+            confirmBtn.onclick = () => confirmarSubidaManual(owner, catId, rutaSugerida, nombreSugerido);
+            previewDiv.appendChild(confirmBtn);
+        };
+        
+        // ============================================
+        // SUBIDA DESDE URL EXTERNA
+        // ============================================
+        function renderUrlUploader(owner, catId) {
+            return `
+                <div class="url-uploader">
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <input type="text" id="url-input-${owner}-${catId}" placeholder="https://... (URL de la imagen externa)" style="flex: 2;">
+                        <button class="btn btn-primary" onclick="procesarUrlImagen('${owner}', '${catId}')" style="width: auto; padding: 10px 20px;">📥 Cargar desde URL</button>
+                    </div>
+                    <div id="url-preview-${owner}-${catId}" style="display:none; margin-top: 15px;"></div>
+                </div>
+            `;
+        }
+        
+        window.procesarUrlImagen = async function(owner, catId) {
+            const urlInput = document.getElementById(`url-input-${owner}-${catId}`);
+            const previewDiv = document.getElementById(`url-preview-${owner}-${catId}`);
+            const imageUrl = urlInput.value.trim();
+            
+            if (!imageUrl) {
+                alert('Ingresá una URL de imagen');
+                return;
+            }
+            
+            if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+                alert('La URL debe comenzar con http:// o https://');
+                return;
+            }
+            
+            previewDiv.style.display = 'block';
+            previewDiv.innerHTML = '<div class="loading" style="padding: 20px;">📥 Descargando imagen...</div>';
+            
+            try {
+                const response = await fetch(imageUrl);
+                if (!response.ok) {
+                    throw new Error(`Error ${response.status}: ${response.statusText}`);
+                }
+                
+                const blob = await response.blob();
+                const fileSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+                
+                if (blob.size > MAX_SIZE_BYTES) {
+                    previewDiv.innerHTML = `
+                        <div class="size-warning" style="display:block; padding: 10px;">
+                            ⚠️ La imagen pesa ${fileSizeMB} MB. El límite es ${MAX_SIZE_MB} MB. 
+                            Buscá una imagen más pequeña o comprimila antes de subir.
+                        </div>
+                    `;
+                    return;
+                }
+                
+                const extension = imageUrl.split('.').pop().split('?')[0].toLowerCase();
+                const extensionesValidas = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+                const extFinal = extensionesValidas.includes(extension) ? extension : 'jpg';
+                
+                const timestamp = new Date().toISOString().slice(0,19).replace(/:/g, '-').replace('T', '_');
+                const nombreSugerido = `${owner}_${catId}_${timestamp}.${extFinal}`;
+                const rutaSugerida = `img/${owner}/${catId}/${nombreSugerido}`;
+                
+                const objectUrl = URL.createObjectURL(blob);
+                
+                previewDiv.innerHTML = `
+                    <div class="file-name-preview">
+                        📁 <strong>Imagen descargada:</strong><br>
+                        📏 Tamaño: ${(blob.size / 1024).toFixed(0)} KB ✅<br>
+                        💾 <strong>Nombre sugerido:</strong> ${nombreSugerido}<br>
+                        📂 <strong>Ruta:</strong> ${rutaSugerida}<br><br>
+                        <img src="${objectUrl}" class="url-preview-img"><br><br>
+                        🔽 <strong>Pasos para subir a GitHub:</strong><br>
+                        1. Guardá esta imagen con el nombre: <code>${nombreSugerido}</code><br>
+                        2. Subila a tu repositorio en: <code>${rutaSugerida}</code><br>
+                        3. Después de subir, hacé clic en "Confirmar subida"
+                    </div>
+                `;
+                
+                const confirmBtn = document.createElement('button');
+                confirmBtn.className = 'btn-success';
+                confirmBtn.style.marginTop = '10px';
+                confirmBtn.style.padding = '8px 15px';
+                confirmBtn.innerHTML = '✅ Confirmar subida a Firebase';
+                confirmBtn.onclick = () => confirmarSubidaManual(owner, catId, rutaSugerida, nombreSugerido);
+                previewDiv.appendChild(confirmBtn);
+                
+            } catch (error) {
+                previewDiv.innerHTML = `
+                    <div class="size-warning" style="display:block; padding: 10px;">
+                        ❌ Error al descargar la imagen: ${error.message}<br>
+                        Verificá que la URL sea accesible públicamente.
+                    </div>
+                `;
+            }
+        };
+        
+        window.confirmarSubidaManual = function(owner, catId, rutaSugerida, nombreSugerido) {
+            const urlCompleta = `https://casaverdecanas.com.br/${rutaSugerida}`;
+            const target = owner === 'common' ? siteData.common : siteData.apartments[owner];
+            const cat = target.categories[catId];
+            if (!cat.photos) cat.photos = [];
+            const newOrder = cat.photos.length;
+            
+            cat.photos.push({
+                url: urlCompleta,
+                desc: { es: `Foto ${newOrder + 1}`, pt: `Foto ${newOrder + 1}`, en: `Photo ${newOrder + 1}` },
+                order: newOrder
+            });
+            
+            renderAll();
+            updateStatus(`✅ Imagen agregada. Recordá subir el archivo "${nombreSugerido}" a GitHub en la carpeta "${owner}/${catId}"`);
+            alert(`📸 Imagen agregada a Firebase.\n\n📁 No olvides subir el archivo a GitHub:\n📂 Ruta: ${rutaSugerida}\n🔗 URL: ${urlCompleta}\n\nLuego guardá los cambios en Firebase.`);
+        };
+        
+        // ============================================
         // FUNCIONES GLOBALES
         // ============================================
+        window.addFeature = function(apId, lang) {
+            if (!siteData.apartments[apId].features) {
+                siteData.apartments[apId].features = { es: [], pt: [], en: [] };
+            }
+            siteData.apartments[apId].features[lang].push("Nueva característica");
+            renderFeaturesList(apId, siteData.apartments[apId]);
+        };
+        
+        window.updateFeature = function(apId, lang, idx, value) {
+            if (siteData.apartments[apId].features && siteData.apartments[apId].features[lang]) {
+                siteData.apartments[apId].features[lang][idx] = value;
+            }
+        };
+        
+        window.removeFeature = function(apId, lang, idx) {
+            if (siteData.apartments[apId].features && siteData.apartments[apId].features[lang]) {
+                siteData.apartments[apId].features[lang].splice(idx, 1);
+                renderFeaturesList(apId, siteData.apartments[apId]);
+            }
+        };
+        
         window.addCategory = function(owner) {
             const newId = 'cat_' + Date.now();
             const target = owner === 'common' ? siteData.common : siteData.apartments[owner];
@@ -1196,23 +1438,6 @@
             }
         };
         
-        window.addPhoto = function(owner, catId) {
-            const url = prompt('📸 Ingresa la URL completa de la imagen:', 'https://ejemplo.com/imagen.jpg');
-            if (url) {
-                const target = owner === 'common' ? siteData.common : siteData.apartments[owner];
-                const cat = target.categories[catId];
-                if (!cat.photos) cat.photos = [];
-                const newOrder = cat.photos.length;
-                cat.photos.push({
-                    url: url,
-                    desc: { es: `Foto ${newOrder + 1}`, pt: `Foto ${newOrder + 1}`, en: `Photo ${newOrder + 1}` },
-                    order: newOrder
-                });
-                renderAll();
-                updateStatus('Foto agregada. Recuerda GUARDAR.');
-            }
-        };
-        
         window.updatePhotoUrl = function(owner, catId, photoIndex, newUrl) {
             const target = owner === 'common' ? siteData.common : siteData.apartments[owner];
             const cat = target.categories[catId];
@@ -1244,17 +1469,14 @@
         window.createNewApartment = function() {
             const newId = document.getElementById('new-apartment-id')?.value.trim();
             const newName = document.getElementById('new-apartment-name')?.value.trim();
-            
             if (!newId) {
                 alert('Ingresa un ID para la cabaña (ej: cabin-4)');
                 return;
             }
-            
             if (siteData.apartments[newId]) {
                 alert('Ya existe una cabaña con este ID');
                 return;
             }
-            
             siteData.apartments[newId] = {
                 name: { es: newName || `Cabaña ${newId}`, pt: newName || `Cabana ${newId}`, en: newName || `Cabin ${newId}` },
                 description: { es: "", pt: "", en: "" },
@@ -1264,7 +1486,6 @@
                 airbnb_url: "",
                 google_calendar_iframe: ""
             };
-            
             currentTab = newId;
             renderAll();
             updateStatus(`Cabaña "${newId}" creada. Recuerda GUARDAR.`);
