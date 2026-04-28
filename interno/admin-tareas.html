@@ -307,6 +307,7 @@
             gap: 15px;
             font-size: 0.8rem;
             color: #6c757d;
+            flex-wrap: wrap;
         }
 
         .activity-list {
@@ -514,6 +515,35 @@
             margin-left: 10px;
         }
 
+        /* ===== SELECTOR DE RANGO ===== */
+        .rango-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .rango-btn {
+            padding: 8px 18px;
+            border: 2px solid #2d5a27;
+            background: white;
+            color: #2d5a27;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .rango-btn:hover {
+            background: #e8f5e9;
+        }
+
+        .rango-btn.active-rango {
+            background: #2d5a27;
+            color: white;
+        }
+
         @media (max-width: 768px) {
             .panel {
                 padding: 15px;
@@ -525,13 +555,11 @@
     </style>
 </head>
 <body>
-    <div id="loginContainer" class="login-container" style="display: flex;">
-        <div class="login-box">
-            <h2><span class="material-icons">admin_panel_settings</span> Panel Admin</h2>
-            <input type="email" id="adminEmail" placeholder="Email">
-            <input type="password" id="adminPassword" placeholder="Contraseña">
-            <button onclick="loginAdmin()">Ingresar</button>
-            <div id="loginError" class="error-msg"></div>
+    <!-- Pantalla de verificación mientras carga -->
+    <div id="loadingScreen" style="display:flex; justify-content:center; align-items:center; min-height:100vh;">
+        <div style="background:white; padding:40px; border-radius:24px; box-shadow:0 20px 40px rgba(0,0,0,0.2); text-align:center;">
+            <div style="display:inline-block; width:40px; height:40px; border:3px solid #e9ecef; border-top-color:#2d5a27; border-radius:50%; animation:spin 0.8s linear infinite; margin-bottom:16px;"></div>
+            <p style="color:#2d5a27; font-weight:500;">Verificando acceso...</p>
         </div>
     </div>
 
@@ -568,21 +596,21 @@
         
         <!-- Panel Actividad por Usuario -->
         <div id="usersPanel" class="panel">
-            <div id="usersActivityList" class="users-activity">
+            <div id="usersActivityList">
                 <div class="loading"><div class="loading-spinner"></div><p>Cargando actividad de usuarios...</p></div>
             </div>
         </div>
         
         <!-- Panel Historial por Tarea -->
         <div id="tasksHistoryPanel" class="panel">
-            <div id="tasksHistoryList" class="tasks-history">
+            <div id="tasksHistoryList">
                 <div class="loading"><div class="loading-spinner"></div><p>Cargando historial de tareas...</p></div>
             </div>
         </div>
         
         <!-- Panel Faltas de Cumplimiento -->
         <div id="violationsPanel" class="panel">
-            <div id="violationsList" class="violations-list">
+            <div id="violationsList">
                 <div class="loading"><div class="loading-spinner"></div><p>Cargando análisis de cumplimiento...</p></div>
             </div>
         </div>
@@ -610,6 +638,12 @@
         let usuariosCache = {};
         let editStates = {};
 
+        // Variable global para el rango de actividad por usuario
+        let rangoUsuarios = 'semana';
+
+        // ============================================
+        // UTILIDADES
+        // ============================================
         function mostrarMensaje(msg, tipo) {
             const div = document.getElementById('statusMessage');
             div.textContent = msg;
@@ -660,7 +694,6 @@
                 if (tarea.recurrencia === 0) {
                     return (fechaInicio >= inicio && fechaInicio <= fin) ? 1 : 0;
                 }
-                
                 let ocurrencias = 0;
                 let fecha = new Date(fechaInicio);
                 let intentos = 0;
@@ -693,30 +726,10 @@
             return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
         }
 
-        async function loginAdmin() {
-            const email = document.getElementById('adminEmail').value;
-            const password = document.getElementById('adminPassword').value;
-            const errorDiv = document.getElementById('loginError');
-            if (!email || !password) { errorDiv.textContent = 'Ingresa email y contraseña'; return; }
-            try {
-                const userCredential = await auth.signInWithEmailAndPassword(email, password);
-                const userDoc = await db.collection('usuarios').doc(userCredential.user.uid).get();
-                if (!userDoc.exists || userDoc.data().rol !== 'admin') {
-                    await auth.signOut();
-                    errorDiv.textContent = 'Acceso solo para administradores';
-                    return;
-                }
-                currentUser = userCredential.user;
-                document.getElementById('loginContainer').style.display = 'none';
-                document.getElementById('adminPanel').style.display = 'block';
-                document.getElementById('userEmailDisplay').textContent = currentUser.email;
-                cargarTodosLosDatos();
-            } catch (error) {
-                errorDiv.textContent = 'Email o contraseña incorrectos';
-            }
-        }
-
-        async function logoutAdmin() { 
+        // ============================================
+        // AUTH - Solo verificación de sesión existente
+        // ============================================
+        async function logoutAdmin() {
             await auth.signOut();
             window.location.href = 'index.html';
         }
@@ -726,57 +739,65 @@
                 try {
                     const userDoc = await db.collection('usuarios').doc(user.uid).get();
                     if (userDoc.exists && userDoc.data().rol === 'admin') {
+                        // ✅ Es admin: mostrar panel
                         currentUser = user;
-                        document.getElementById('loginContainer').style.display = 'none';
+                        document.getElementById('loadingScreen').style.display = 'none';
                         document.getElementById('adminPanel').style.display = 'block';
                         document.getElementById('userEmailDisplay').textContent = user.email;
                         cargarTodosLosDatos();
                     } else {
+                        // ❌ Logueado pero no es admin
                         window.location.href = 'index.html';
                     }
                 } catch (error) {
+                    // ❌ Error al verificar rol
                     window.location.href = 'index.html';
                 }
             } else {
-                document.getElementById('loginContainer').style.display = 'flex';
-                document.getElementById('adminPanel').style.display = 'none';
+                // ❌ No hay sesión activa
+                window.location.href = 'index.html';
             }
         });
 
+        // ============================================
+        // CARGA DE DATOS
+        // ============================================
         async function cargarTodosLosDatos() {
             const tareasSnap = await db.collection('tareas').get();
             tareasCache = [];
             tareasSnap.forEach(doc => tareasCache.push({ id: doc.id, ...doc.data() }));
-            
+
             const historialSnap = await db.collection('historial').orderBy('timestamp', 'desc').get();
             historialCache = [];
             historialSnap.forEach(doc => historialCache.push({ id: doc.id, ...doc.data() }));
-            
+
             const usuariosSnap = await db.collection('usuarios').get();
             usuariosCache = {};
             usuariosSnap.forEach(doc => {
                 usuariosCache[doc.id] = { id: doc.id, ...doc.data() };
             });
-            
+
             renderizarTareasEditables();
             renderizarActividadPorUsuario();
             renderizarHistorialPorTarea();
             renderizarFaltasCumplimiento();
         }
 
-        // Panel de edición de tareas
+        // ============================================
+        // PANEL EDITAR TAREAS
+        // ============================================
         function renderizarTareasEditables() {
             const container = document.getElementById('tasksEditList');
-            
+
             if (tareasCache.length === 0) {
                 container.innerHTML = '<div class="empty-message"><span class="material-icons">assignment</span><p>No hay tareas creadas</p></div>';
                 return;
             }
-            
+
             let html = '';
             for (const tarea of tareasCache) {
                 const isEditing = editStates[tarea.id] || false;
-                
+
                 if (isEditing) {
                     html += `
                         <div class="task-edit-card" data-task-id="${tarea.id}">
@@ -869,7 +890,7 @@
                     `;
                 }
             }
-            
+
             container.innerHTML = html;
         }
 
@@ -890,22 +911,16 @@
             const fechaInicio = document.getElementById(`edit_start_${taskId}`).value;
             const recurrencia = parseInt(document.getElementById(`edit_recurrence_${taskId}`).value);
             const activa = document.getElementById(`edit_active_${taskId}`).value === 'true';
-            
+
             if (!nombre) {
                 mostrarMensaje('El nombre de la tarea es obligatorio', 'warning');
                 return;
             }
-            
+
             try {
                 await db.collection('tareas').doc(taskId).update({
-                    nombre: nombre,
-                    descripcion: descripcion,
-                    prioridad: prioridad,
-                    fechaInicio: fechaInicio,
-                    recurrencia: recurrencia,
-                    activa: activa
+                    nombre, descripcion, prioridad, fechaInicio, recurrencia, activa
                 });
-                
                 delete editStates[taskId];
                 mostrarMensaje('✅ Tarea actualizada correctamente', 'success');
                 await cargarTodosLosDatos();
@@ -914,30 +929,77 @@
             }
         }
 
-        // 1. Actividad por usuario (incluyendo tareas no realizadas)
+        // ============================================
+        // PANEL ACTIVIDAD POR USUARIO (CORREGIDO)
+        // ============================================
+        function cambiarRangoUsuarios(rango) {
+            rangoUsuarios = rango;
+            // Actualizar botones activos
+            document.querySelectorAll('.rango-btn').forEach(b => b.classList.remove('active-rango'));
+            const btn = document.getElementById('rango-' + rango);
+            if (btn) btn.classList.add('active-rango');
+            renderizarActividadPorUsuario();
+        }
+
         async function renderizarActividadPorUsuario() {
             const container = document.getElementById('usersActivityList');
             const usuarios = Object.values(usuariosCache);
             const inicioSemana = getInicioSemana();
             const finSemana = getFinSemana(inicioSemana);
-            
+            const ahora = new Date();
+
+            // Determinar fecha de inicio según rango seleccionado
+            let fechaDesde;
+            let labelRango;
+            if (rangoUsuarios === 'semana') {
+                fechaDesde = inicioSemana;
+                labelRango = 'Esta semana';
+            } else if (rangoUsuarios === 'mes') {
+                fechaDesde = new Date(ahora);
+                fechaDesde.setDate(ahora.getDate() - 30);
+                fechaDesde.setHours(0, 0, 0, 0);
+                labelRango = 'Últimos 30 días';
+            } else {
+                fechaDesde = new Date(0);
+                labelRango = 'Todo el historial';
+            }
+
             if (usuarios.length === 0) {
                 container.innerHTML = '<div class="empty-message"><span class="material-icons">people</span><p>No hay usuarios registrados</p></div>';
                 return;
             }
-            
-            let html = '';
-            
+
+            // Siempre renderizamos los botones primero
+            let html = `
+                <div class="rango-selector">
+                    <button id="rango-semana" class="rango-btn ${rangoUsuarios === 'semana' ? 'active-rango' : ''}" onclick="cambiarRangoUsuarios('semana')">
+                        📅 Esta semana
+                    </button>
+                    <button id="rango-mes" class="rango-btn ${rangoUsuarios === 'mes' ? 'active-rango' : ''}" onclick="cambiarRangoUsuarios('mes')">
+                        🗓️ Últimos 30 días
+                    </button>
+                    <button id="rango-todo" class="rango-btn ${rangoUsuarios === 'todo' ? 'active-rango' : ''}" onclick="cambiarRangoUsuarios('todo')">
+                        📜 Todo el historial
+                    </button>
+                </div>
+            `;
+
             for (const usuario of usuarios) {
                 const actividadesUsuario = historialCache.filter(h => h.usuarioId === usuario.id);
-                
+
+                // --- Actividades del rango seleccionado (para la lista de realizadas) ---
+                const actividadesFiltradas = actividadesUsuario.filter(h => {
+                    if (!h.timestamp) return false;
+                    return h.timestamp.toDate() >= fechaDesde;
+                });
+
+                // --- Tareas no realizadas: siempre calculadas sobre la semana actual ---
                 const actividadesSemana = actividadesUsuario.filter(h => {
                     if (!h.timestamp) return false;
                     const fecha = h.timestamp.toDate();
                     return fecha >= inicioSemana && fecha <= finSemana;
                 });
-                
-                // Obtener tareas esperadas esta semana para este usuario
+
                 const tareasEsperadas = [];
                 for (const tarea of tareasCache) {
                     if (!tarea.activa) continue;
@@ -945,23 +1007,27 @@
                     if (ocurrencias > 0) {
                         const realizadas = actividadesSemana.filter(a => a.tareaId === tarea.id).length;
                         tareasEsperadas.push({
-                            tarea: tarea,
+                            tarea,
                             esperadas: ocurrencias,
-                            realizadas: realizadas,
+                            realizadas,
                             faltantes: ocurrencias - realizadas
                         });
                     }
                 }
-                
-                const actividadesConNombres = await Promise.all(actividadesSemana.map(async act => {
-                    const tarea = tareasCache.find(t => t.id === act.tareaId);
-                    return {
-                        nombre: tarea?.nombre || 'Tarea eliminada',
-                        fecha: act.timestamp.toDate(),
-                        tareaId: act.tareaId
-                    };
-                }));
-                
+
+                // Enriquecer con nombre de tarea y ordenar por fecha desc
+                const actividadesConNombres = actividadesFiltradas
+                    .map(act => {
+                        const tarea = tareasCache.find(t => t.id === act.tareaId);
+                        return {
+                            nombre: tarea?.nombre || 'Tarea eliminada',
+                            fecha: act.timestamp.toDate()
+                        };
+                    })
+                    .sort((a, b) => b.fecha - a.fecha);
+
+                const totalFaltantes = tareasEsperadas.reduce((sum, t) => sum + t.faltantes, 0);
+
                 html += `
                     <div class="user-card-report">
                         <div class="user-card-header">
@@ -970,26 +1036,33 @@
                                 ${escapeHtml(usuario.nombre || usuario.email)}
                             </div>
                             <div class="user-stats">
-                                <span>📅 Esta semana: ${actividadesSemana.length} realizadas</span>
-                                <span>⚠️ Faltantes: ${tareasEsperadas.reduce((sum, t) => sum + t.faltantes, 0)}</span>
+                                <span>📊 ${labelRango}: ${actividadesFiltradas.length} realizadas</span>
+                                <span>⚠️ Faltantes esta semana: ${totalFaltantes}</span>
                             </div>
                         </div>
                         <div class="activity-list">
-                            <div style="background: #27ae60; color: white; padding: 8px 12px; margin-bottom: 10px; border-radius: 8px;">
-                                <strong>✅ Actividades REALIZADAS esta semana (${actividadesSemana.length})</strong>
+
+                            <div style="background:#27ae60; color:white; padding:8px 12px; margin-bottom:10px; border-radius:8px;">
+                                <strong>✅ Actividades realizadas — ${labelRango} (${actividadesFiltradas.length})</strong>
                             </div>
-                            ${actividadesConNombres.length > 0 ? actividadesConNombres.map(a => `
-                                <div class="activity-item">
-                                    <span class="activity-name">📋 ${escapeHtml(a.nombre)}</span>
-                                    <span class="activity-date"><span class="material-icons">event</span> ${a.fecha.toLocaleDateString()}</span>
-                                </div>
-                            `).join('') : '<div class="empty-message" style="padding: 20px;">✨ Sin actividades realizadas esta semana</div>'}
-                            
-                            <div style="background: #f39c12; color: white; padding: 8px 12px; margin: 15px 0 10px 0; border-radius: 8px;">
+                            ${actividadesConNombres.length > 0
+                                ? actividadesConNombres.map(a => `
+                                    <div class="activity-item">
+                                        <span class="activity-name">📋 ${escapeHtml(a.nombre)}</span>
+                                        <span class="activity-date">
+                                            <span class="material-icons">event</span>
+                                            ${a.fecha.toLocaleDateString('es-ES', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                                        </span>
+                                    </div>
+                                `).join('')
+                                : '<div class="empty-message" style="padding:20px;">✨ Sin actividades en este período</div>'
+                            }
+
+                            <div style="background:#f39c12; color:white; padding:8px 12px; margin:15px 0 10px 0; border-radius:8px;">
                                 <strong>⚠️ Actividades NO REALIZADAS esta semana</strong>
                             </div>
-                            ${tareasEsperadas.filter(t => t.faltantes > 0).length > 0 ? 
-                                tareasEsperadas.filter(t => t.faltantes > 0).map(t => `
+                            ${tareasEsperadas.filter(t => t.faltantes > 0).length > 0
+                                ? tareasEsperadas.filter(t => t.faltantes > 0).map(t => `
                                     <div class="activity-item activity-missing">
                                         <span class="activity-name">📋 ${escapeHtml(t.tarea.nombre)}</span>
                                         <span class="activity-date">
@@ -997,59 +1070,60 @@
                                             <span>(Esperada: ${t.esperadas} | Realizada: ${t.realizadas})</span>
                                         </span>
                                     </div>
-                                `).join('') : '<div class="empty-message" style="padding: 20px;">✅ Todas las tareas esperadas fueron realizadas</div>'}
+                                `).join('')
+                                : '<div class="empty-message" style="padding:20px;">✅ Todas las tareas esperadas fueron realizadas esta semana</div>'
+                            }
+
                         </div>
                     </div>
                 `;
             }
-            
+
             container.innerHTML = html;
         }
 
-        // 2. Historial por tarea
+        // ============================================
+        // PANEL HISTORIAL POR TAREA
+        // ============================================
         async function renderizarHistorialPorTarea() {
             const container = document.getElementById('tasksHistoryList');
-            
+
             if (tareasCache.length === 0) {
                 container.innerHTML = '<div class="empty-message"><span class="material-icons">assignment</span><p>No hay tareas activas</p></div>';
                 return;
             }
-            
+
             const hoy = getFechaSinHora(new Date());
             let html = '';
-            
+
             for (const tarea of tareasCache) {
                 const historialTarea = historialCache
                     .filter(h => h.tareaId === tarea.id)
                     .sort((a, b) => {
-                        const fechaA = a.timestamp ? a.timestamp.toDate() : new Date(0);
-                        const fechaB = b.timestamp ? b.timestamp.toDate() : new Date(0);
-                        return fechaB - fechaA;
+                        const fa = a.timestamp ? a.timestamp.toDate() : new Date(0);
+                        const fb = b.timestamp ? b.timestamp.toDate() : new Date(0);
+                        return fb - fa;
                     });
-                
+
                 let estaAtrasada = false;
                 if (historialTarea.length > 0 && tarea.recurrencia > 0) {
                     const ultimaRealizacion = historialTarea[0].timestamp.toDate();
                     const espaciado = getEspaciadoMinimo(tarea.recurrencia);
                     const diasDesdeUltima = Math.floor((hoy - getFechaSinHora(ultimaRealizacion)) / (1000 * 60 * 60 * 24));
-                    if (diasDesdeUltima > espaciado) {
-                        estaAtrasada = true;
-                    }
+                    if (diasDesdeUltima > espaciado) estaAtrasada = true;
                 } else if (historialTarea.length === 0 && tarea.fechaInicio) {
                     const fechaInicio = new Date(tarea.fechaInicio);
-                    if (hoy > getFechaSinHora(fechaInicio)) {
-                        estaAtrasada = true;
-                    }
+                    if (hoy > getFechaSinHora(fechaInicio)) estaAtrasada = true;
                 }
-                
-                const historialConDetalles = await Promise.all(historialTarea.map(async h => {
+
+                const historialConDetalles = historialTarea.map(h => {
                     const usuario = usuariosCache[h.usuarioId];
                     return {
                         fecha: h.timestamp.toDate(),
                         usuario: usuario?.nombre || usuario?.email || h.usuarioId.substring(0, 8)
                     };
-                }));
-                
+                });
+
                 html += `
                     <div class="task-history-card">
                         <div class="task-history-header">
@@ -1067,37 +1141,43 @@
                             </div>
                         </div>
                         <div class="history-list">
-                            ${historialConDetalles.length > 0 ? historialConDetalles.map(h => `
-                                <div class="history-entry">
-                                    <span class="history-date"><span class="material-icons">event</span> ${h.fecha.toLocaleDateString()}</span>
-                                    <span class="history-user"><span class="material-icons">person</span> ${escapeHtml(h.usuario)}</span>
-                                </div>
-                            `).join('') : '<div class="empty-message" style="padding: 20px;">📭 No hay realizaciones registradas para esta tarea</div>'}
+                            ${historialConDetalles.length > 0
+                                ? historialConDetalles.map(h => `
+                                    <div class="history-entry">
+                                        <span class="history-date">
+                                            <span class="material-icons">event</span>
+                                            ${h.fecha.toLocaleDateString('es-ES', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                                        </span>
+                                        <span class="history-user"><span class="material-icons">person</span> ${escapeHtml(h.usuario)}</span>
+                                    </div>
+                                `).join('')
+                                : '<div class="empty-message" style="padding:20px;">📭 No hay realizaciones registradas para esta tarea</div>'
+                            }
                         </div>
                     </div>
                 `;
             }
-            
+
             container.innerHTML = html;
         }
 
-        // 3. Faltas de cumplimiento
+        // ============================================
+        // PANEL FALTAS DE CUMPLIMIENTO
+        // ============================================
         async function renderizarFaltasCumplimiento() {
             const container = document.getElementById('violationsList');
             const inicioSemana = getInicioSemana();
             const finSemana = getFinSemana(inicioSemana);
-            
             const violaciones = [];
-            
+
             for (const tarea of tareasCache) {
                 if (!tarea.activa) continue;
-                
                 const ocurrenciasEsperadas = calcularOcurrenciasEnRango(tarea, inicioSemana, finSemana);
                 if (ocurrenciasEsperadas === 0) continue;
-                
+
                 let realizacionesSemana = 0;
                 const realizacionesPorUsuario = {};
-                
+
                 for (const h of historialCache) {
                     if (h.tareaId === tarea.id && h.timestamp) {
                         const fecha = h.timestamp.toDate();
@@ -1107,59 +1187,58 @@
                         }
                     }
                 }
-                
+
                 const faltas = ocurrenciasEsperadas - realizacionesSemana;
-                
+
                 if (faltas > 0) {
-                    const usuariosConDetalles = await Promise.all(
-                        Object.entries(realizacionesPorUsuario).map(async ([uid, count]) => {
-                            const usuario = usuariosCache[uid];
-                            return {
-                                nombre: usuario?.nombre || usuario?.email || uid.substring(0, 8),
-                                realizaciones: count
-                            };
-                        })
-                    );
-                    
+                    const usuariosConDetalles = Object.entries(realizacionesPorUsuario).map(([uid, count]) => {
+                        const usuario = usuariosCache[uid];
+                        return {
+                            nombre: usuario?.nombre || usuario?.email || uid.substring(0, 8),
+                            realizaciones: count
+                        };
+                    });
+
                     violaciones.push({
                         tareaNombre: tarea.nombre,
                         recurrencia: traducirRecurrencia(tarea.recurrencia),
                         esperadas: ocurrenciasEsperadas,
                         realizadas: realizacionesSemana,
-                        faltas: faltas,
+                        faltas,
                         realizacionesPorUsuario: usuariosConDetalles
                     });
                 }
             }
-            
+
             violaciones.sort((a, b) => b.faltas - a.faltas);
-            
+
             if (violaciones.length === 0) {
                 container.innerHTML = '<div class="empty-message"><span class="material-icons">check_circle</span><p>✅ No hay faltas de cumplimiento esta semana</p></div>';
                 return;
             }
-            
+
             let html = `
                 <div class="report-section">
                     <div class="report-header">
                         <span class="material-icons">warning</span>
-                        <h3>Tareas con faltas de cumplimiento (Última semana)</h3>
+                        <h3>Tareas con faltas de cumplimiento (Esta semana)</h3>
                     </div>
                     <div class="report-content">
-                        <table class="violations-table">
-                            <thead>
-                                <tr>
-                                    <th>Tarea</th>
-                                    <th>Recurrencia</th>
-                                    <th>Esperadas</th>
-                                    <th>Realizadas</th>
-                                    <th>Faltas</th>
-                                    <th>Realizado por</th>
-                                </tr>
-                            </thead>
-                            <tbody>
+                        <div style="overflow-x:auto;">
+                            <table class="violations-table">
+                                <thead>
+                                    <tr>
+                                        <th>Tarea</th>
+                                        <th>Recurrencia</th>
+                                        <th>Esperadas</th>
+                                        <th>Realizadas</th>
+                                        <th>Faltas</th>
+                                        <th>Realizado por</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
             `;
-            
+
             for (const v of violaciones) {
                 const realizadores = v.realizacionesPorUsuario.map(u => `${u.nombre} (${u.realizaciones})`).join(', ') || 'Ninguno';
                 html += `
@@ -1169,16 +1248,18 @@
                         <td>${v.esperadas}</td>
                         <td>${v.realizadas}</td>
                         <td><span class="badge-warning">${v.faltas} falta(s)</span></td>
-                        <td>${escapeHtml(realizadores) || '—'}</td>
+                        <td>${escapeHtml(realizadores)}</td>
                     </tr>
                 `;
             }
-            
-            html += `</tbody></table></div></div>`;
+
+            html += `</tbody></table></div></div></div>`;
             container.innerHTML = html;
         }
 
-        // Tabs
+        // ============================================
+        // TABS
+        // ============================================
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -1189,12 +1270,12 @@
         });
 
         // Exponer funciones globales
-        window.loginAdmin = loginAdmin;
         window.logoutAdmin = logoutAdmin;
         window.volverAlIndex = volverAlIndex;
         window.activarEdicion = activarEdicion;
         window.cancelarEdicion = cancelarEdicion;
         window.guardarEdicionTarea = guardarEdicionTarea;
+        window.cambiarRangoUsuarios = cambiarRangoUsuarios;
     </script>
 </body>
 </html>
