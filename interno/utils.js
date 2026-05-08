@@ -59,7 +59,7 @@ function verificarAuth(rolesPermitidos) {
                     return;
                 }
                 const userData = userDoc.data();
-                if (!userData.activo) {
+                if (userData.activo === false) {
                     await auth.signOut();
                     window.location.href = 'index.html';
                     return;
