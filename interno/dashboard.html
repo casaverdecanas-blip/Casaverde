@@ -3,444 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Dashboard Admin - CasaVerdeCanas</title>
+    <title>Dashboard Admin - Casa Verde Canas</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     
-    <!-- FullCalendar -->
-    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
-    
-    <!-- Chart.js para gráficos -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    
-    <!-- Eruda para depuración -->
-    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-    <script>eruda.init();</script>
-    
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: #f5f7fa; min-height: 100vh; }
         
-        body {
-            background: #f5f7fa;
-            min-height: 100vh;
-        }
+        .admin-header { background: #2d5a27; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; position: sticky; top: 0; z-index: 100; }
+        .admin-header h1 { display: flex; align-items: center; gap: 10px; font-size: 1.3rem; }
+        .user-info { display: flex; align-items: center; gap: 15px; background: rgba(255,255,255,0.2); padding: 6px 15px; border-radius: 40px; }
+        .logout-btn { background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 30px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
         
-        /* Header */
-        .admin-header {
-            background: #2d5a27;
-            color: white;
-            padding: 15px 25px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
+        .admin-nav { background: white; padding: 0 25px; display: flex; gap: 5px; border-bottom: 1px solid #e0e0e0; flex-wrap: wrap; position: sticky; top: 70px; z-index: 99; }
+        .nav-item { padding: 14px 20px; background: none; border: none; cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; gap: 8px; color: #6c757d; transition: all 0.2s; }
+        .nav-item:hover { background: #f0f2f5; color: #2d5a27; }
+        .nav-item.active { color: #2d5a27; border-bottom: 3px solid #2d5a27; background: white; }
         
-        .admin-header h1 {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 1.3rem;
-        }
+        .admin-content { max-width: 1400px; margin: 30px auto; padding: 0 25px; }
+        .panel { display: none; }
+        .panel.active { display: block; }
+        .card { background: white; border-radius: 20px; padding: 25px; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .card h2 { color: #2d5a27; display: flex; align-items: center; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #e8f5e9; padding-bottom: 12px; font-size: 1.2rem; }
         
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            background: rgba(255,255,255,0.2);
-            padding: 6px 15px;
-            border-radius: 40px;
-        }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .kpi-card { background: white; padding: 20px; border-radius: 16px; text-align: center; border-left: 4px solid #2d5a27; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .kpi-number { font-size: 32px; font-weight: bold; color: #2d5a27; }
+        .kpi-label { color: #6c757d; margin-top: 5px; font-size: 14px; }
         
-        .logout-btn {
-            background: #e74c3c;
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 30px;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table th, .data-table td { padding: 12px; text-align: left; border-bottom: 1px solid #e9ecef; }
+        .data-table th { background: #f8f9fa; font-weight: 600; color: #2d5a27; }
+        .data-table tr:hover { background: #f8f9fa; }
         
-        /* Navegación */
-        .admin-nav {
-            background: white;
-            padding: 0 25px;
-            display: flex;
-            gap: 5px;
-            border-bottom: 1px solid #e0e0e0;
-            flex-wrap: wrap;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            position: sticky;
-            top: 70px;
-            z-index: 99;
-        }
-        
-        .nav-item {
-            padding: 14px 20px;
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-weight: 500;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            color: #6c757d;
-            transition: all 0.2s;
-        }
-        
-        .nav-item:hover {
-            background: #f0f2f5;
-            color: #2d5a27;
-        }
-        
-        .nav-item.active {
-            color: #2d5a27;
-            border-bottom: 3px solid #2d5a27;
-            background: white;
-        }
-        
-        /* Contenido */
-        .admin-content {
-            max-width: 1400px;
-            margin: 30px auto;
-            padding: 0 25px;
-        }
-        
-        .panel {
-            display: none;
-        }
-        
-        .panel.active {
-            display: block;
-        }
-        
-        .card {
-            background: white;
-            border-radius: 20px;
-            padding: 25px;
-            margin-bottom: 25px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-        
-        .card h2 {
-            color: #2d5a27;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #e8f5e9;
-            padding-bottom: 12px;
-            font-size: 1.2rem;
-        }
-        
-        /* KPIs */
-        .kpi-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        
-        .kpi-card {
-            background: white;
-            padding: 20px;
-            border-radius: 16px;
-            text-align: center;
-            border-left: 4px solid #2d5a27;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            transition: transform 0.2s;
-        }
-        
-        .kpi-card:hover {
-            transform: translateY(-3px);
-        }
-        
-        .kpi-number {
-            font-size: 32px;
-            font-weight: bold;
-            color: #2d5a27;
-        }
-        
-        .kpi-label {
-            color: #6c757d;
-            margin-top: 5px;
-            font-size: 14px;
-        }
-        
-        /* Tablas */
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        .data-table th,
-        .data-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #e9ecef;
-        }
-        
-        .data-table th {
-            background: #f8f9fa;
-            font-weight: 600;
-            color: #2d5a27;
-        }
-        
-        .data-table tr:hover {
-            background: #f8f9fa;
-        }
-        
-        /* Badges */
-        .badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-        
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+        .badge-admin { background: #e8f5e9; color: #27ae60; }
+        .badge-user { background: #e3f2fd; color: #1976d2; }
         .badge-pendiente { background: #fff3e0; color: #f39c12; }
-        .badge-parcial { background: #e3f2fd; color: #1976d2; }
         .badge-pagado { background: #e8f5e9; color: #27ae60; }
-        .badge-airbnb { background: #f3e5f5; color: #7b1fa2; }
-        .badge-directa { background: #e8f5e9; color: #2ecc71; }
         
-        /* Cabaña badges */
-        .cabaña-badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-        .cabaña-1 { background: #FF9800; color: white; }
-        .cabaña-2 { background: #3498db; color: white; }
-        .cabaña-3 { background: #2ecc71; color: white; }
-        
-        /* Botones */
-        .btn-sm {
-            padding: 6px 12px;
-            border: none;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 12px;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
-        
-        .btn-view { background: #3498db; color: white; }
+        .btn-sm { padding: 6px 12px; border: none; border-radius: 20px; cursor: pointer; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; margin: 2px; }
         .btn-edit { background: #f39c12; color: white; }
         .btn-delete { background: #e74c3c; color: white; }
+        .btn-view { background: #3498db; color: white; }
+        .btn-primary { background: #2d5a27; color: white; padding: 10px 20px; border: none; border-radius: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
         
-        /* Filtros */
-        .filtros {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
-        }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 30px; border-radius: 20px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+        .modal-content h3 { color: #2d5a27; margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; font-size: 14px; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; }
+        .modal-buttons { display: flex; gap: 10px; margin-top: 20px; }
+        .modal-buttons button { flex: 1; padding: 10px; border: none; border-radius: 8px; cursor: pointer; }
         
-        .filtro-btn {
-            padding: 8px 16px;
-            border: 1px solid #ddd;
-            background: white;
-            border-radius: 30px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
+        .empty-state { text-align: center; padding: 50px; color: #9aa6b5; }
+        .loading { text-align: center; padding: 50px; }
+        .loading-spinner { display: inline-block; width: 40px; height: 40px; border: 3px solid #e9ecef; border-top-color: #2d5a27; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
         
-        .filtro-btn.active {
-            background: #2d5a27;
-            color: white;
-            border-color: #2d5a27;
-        }
-        
-        /* Selector de colaborador */
-        .colaborador-selector {
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-        
-        .colaborador-selector select {
-            padding: 10px 15px;
-            border: 1px solid #ddd;
-            border-radius: 30px;
-            min-width: 200px;
-        }
-        
-        /* Modal */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-        
-        .modal-content {
-            background: white;
-            padding: 30px;
-            border-radius: 20px;
-            width: 90%;
-            max-width: 500px;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-        
-        .modal-content h3 {
-            color: #2d5a27;
-            margin-bottom: 20px;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-            font-size: 14px;
-        }
-        
-        .form-group input,
-        .form-group select,
-        .form-group textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-        }
-        
-        .modal-buttons {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-        }
-        
-        .modal-buttons button {
-            flex: 1;
-            padding: 10px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 50px;
-        }
-        
-        .loading-spinner {
-            display: inline-block;
-            width: 40px;
-            height: 40px;
-            border: 3px solid #e9ecef;
-            border-top-color: #2d5a27;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        .empty-state {
-            text-align: center;
-            padding: 50px;
-            color: #9aa6b5;
-        }
-        
-        .reserva-card {
-            background: white;
-            border-left: 4px solid;
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        
-        .reserva-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 8px;
-        }
-        
-        .reserva-nombre {
-            font-weight: 600;
-            font-size: 16px;
-        }
-        
-        .reserva-fechas {
-            font-size: 13px;
-            color: #6c757d;
-            margin: 8px 0;
-        }
-        
-        .reserva-actions {
-            margin-top: 10px;
-            display: flex;
-            gap: 8px;
-        }
+        .reserva-card { background: white; border-left: 4px solid; border-radius: 12px; padding: 15px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .reserva-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+        .reserva-nombre { font-weight: 600; font-size: 16px; }
         
         @media (max-width: 768px) {
-            .admin-header {
-                flex-direction: column;
-                text-align: center;
-            }
-            .admin-nav {
-                justify-content: center;
-                padding: 0 10px;
-            }
-            .admin-content {
-                padding: 0 15px;
-            }
-            .kpi-grid {
-                grid-template-columns: 1fr;
-            }
-            .data-table {
-                font-size: 12px;
-            }
-            .data-table th,
-            .data-table td {
-                padding: 8px;
-            }
+            .admin-nav { justify-content: center; padding: 0 10px; }
+            .admin-content { padding: 0 15px; }
+            .kpi-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
 
-<div id="loginContainer" class="login-container" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #1e3c2c 0%, #2d5a27 100%);">
+<div id="loginContainer" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #1e3c2c 0%, #2d5a27 100%);">
     <div class="login-box" style="background: white; padding: 40px; border-radius: 24px; width: 350px; text-align: center;">
         <h2 style="color: #2d5a27;">📊 Dashboard Admin</h2>
         <input type="email" id="email" placeholder="Email" style="width:100%; padding:12px; margin:10px 0; border:1px solid #ddd; border-radius:12px;">
@@ -462,7 +102,6 @@
     
     <div class="admin-nav">
         <button class="nav-item active" data-tab="dashboard"><span class="material-icons">dashboard</span> Dashboard</button>
-        <button class="nav-item" data-tab="calendario"><span class="material-icons">calendar_month</span> Calendario</button>
         <button class="nav-item" data-tab="reservas"><span class="material-icons">inventory</span> Reservas</button>
         <button class="nav-item" data-tab="tareas"><span class="material-icons">assignment</span> Tareas</button>
         <button class="nav-item" data-tab="colaboradores"><span class="material-icons">people</span> Colaboradores</button>
@@ -471,7 +110,7 @@
     </div>
     
     <div class="admin-content">
-        <!-- Panel Dashboard -->
+        <!-- Dashboard -->
         <div id="dashboardPanel" class="panel active">
             <div class="kpi-grid" id="kpiContainer">
                 <div class="kpi-card"><div class="kpi-number">-</div><div class="kpi-label">Total Reservas</div></div>
@@ -479,709 +118,428 @@
                 <div class="kpi-card"><div class="kpi-number">-</div><div class="kpi-label">Clientes</div></div>
                 <div class="kpi-card"><div class="kpi-number">-</div><div class="kpi-label">Tareas Activas</div></div>
             </div>
-            
-            <div class="card">
-                <h2><span class="material-icons">event</span> Próximos Check-ins (próximos 7 días)</h2>
-                <div id="proximosCheckins"></div>
-            </div>
-            
-            <div class="card">
-                <h2><span class="material-icons">receipt</span> Últimos Pagos</h2>
-                <div id="ultimosPagos"></div>
-            </div>
+            <div class="card"><h2>📅 Próximos Check-ins</h2><div id="proximosCheckins"></div></div>
+            <div class="card"><h2>💰 Últimos Pagos</h2><div id="ultimosPagos"></div></div>
         </div>
         
-        <!-- Panel Calendario -->
-        <div id="calendarioPanel" class="panel">
-            <div class="card">
-                <div id="calendar"></div>
-                <div class="calendar-legend" style="display: flex; justify-content: center; gap: 30px; margin-top: 20px; flex-wrap: wrap;">
-                    <div><span style="display:inline-block; width:20px; height:20px; background:#FF9800; border-radius:4px;"></span> Cabaña 1</div>
-                    <div><span style="display:inline-block; width:20px; height:20px; background:#3498db; border-radius:4px;"></span> Cabaña 2</div>
-                    <div><span style="display:inline-block; width:20px; height:20px; background:#2ecc71; border-radius:4px;"></span> Cabaña 3</div>
-                    <div><span style="display:inline-block; width:20px; height:20px; background:#9b59b6; border-radius:4px;"></span> Manuales</div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Panel Reservas (Actuales + Historial) -->
+        <!-- Reservas -->
         <div id="reservasPanel" class="panel">
-            <div class="card">
-                <h2><span class="material-icons">today</span> Reservas en Curso y Futuras</h2>
-                <div class="filtros">
-                    <button class="filtro-btn active" data-filtro="todas">Todas</button>
-                    <button class="filtro-btn" data-filtro="futuras">Futuras</button>
-                    <button class="filtro-btn" data-filtro="activas">Activas</button>
-                    <button class="filtro-btn" data-filtro="airbnb">Airbnb</button>
-                    <button class="filtro-btn" data-filtro="directa">Directas</button>
-                </div>
-                <div id="reservasActualesList"></div>
-            </div>
-            
-            <div class="card">
-                <h2><span class="material-icons">history</span> Historial de Reservas</h2>
-                <div class="filtros">
-                    <button class="filtro-btn active" data-filtro-historial="todas">Todas</button>
-                    <button class="filtro-btn" data-filtro-historial="2024">2024</button>
-                    <button class="filtro-btn" data-filtro-historial="2025">2025</button>
-                    <button class="filtro-btn" data-filtro-historial="2026">2026</button>
-                </div>
-                <div id="historialReservasList"></div>
-            </div>
+            <div class="card"><h2>🏠 Reservas</h2><div id="reservasList"></div></div>
         </div>
         
-        <!-- Panel Tareas -->
+        <!-- Tareas -->
         <div id="tareasPanel" class="panel">
-            <div class="card">
-                <h2><span class="material-icons">edit</span> Gestión de Tareas</h2>
-                <div id="tasksList"></div>
-                <button class="btn-sm" onclick="abrirModalNuevaTarea()" style="background:#2d5a27; color:white; padding:10px 20px; margin-top:20px; width:100%;">+ Agregar Nueva Tarea</button>
+            <div class="card"><h2>📋 Gestión de Tareas</h2>
+                <button class="btn-primary" onclick="abrirModalNuevaTarea()">+ Nueva Tarea</button>
+                <div id="tareasList" style="margin-top: 20px;"></div>
             </div>
         </div>
         
-        <!-- Panel Colaboradores -->
+        <!-- Colaboradores -->
         <div id="colaboradoresPanel" class="panel">
-            <div class="card">
-                <h2><span class="material-icons">history</span> Historial de Actividades por Colaborador</h2>
-                <div class="colaborador-selector">
-                    <label>Seleccionar colaborador:</label>
-                    <select id="colaboradorSelect">
-                        <option value="">Seleccione un colaborador...</option>
-                    </select>
-                </div>
+            <div class="card"><h2>👥 Gestión de Colaboradores</h2>
+                <button class="btn-primary" onclick="abrirModalNuevoColaborador()">+ Nuevo Colaborador</button>
+                <div id="colaboradoresList" style="margin-top: 20px;"></div>
+            </div>
+            <div class="card"><h2>📊 Actividad por Colaborador</h2>
+                <select id="colaboradorSelect" style="padding: 10px; border-radius: 8px; margin-bottom: 15px;">
+                    <option value="">Seleccionar colaborador...</option>
+                </select>
                 <div id="historialColaborador"></div>
             </div>
         </div>
         
-        <!-- Panel Clientes -->
+        <!-- Clientes -->
         <div id="clientesPanel" class="panel">
-            <div class="card">
-                <h2><span class="material-icons">group</span> Lista de Clientes</h2>
-                <div id="clientesList"></div>
-                <button class="btn-sm" onclick="abrirModalNuevoCliente()" style="background:#2d5a27; color:white; padding:10px 20px; margin-top:20px; width:100%;">+ Nuevo Cliente</button>
+            <div class="card"><h2>👤 Clientes</h2>
+                <button class="btn-primary" onclick="abrirModalNuevoCliente()">+ Nuevo Cliente</button>
+                <div id="clientesList" style="margin-top: 20px;"></div>
             </div>
         </div>
         
-        <!-- Panel Pagos -->
+        <!-- Pagos -->
         <div id="pagosPanel" class="panel">
-            <div class="card">
-                <h2><span class="material-icons">receipt</span> Registro de Pagos</h2>
-                <div id="pagosList"></div>
-                <button class="btn-sm" onclick="abrirModalNuevoPago()" style="background:#2d5a27; color:white; padding:10px 20px; margin-top:20px; width:100%;">+ Nuevo Pago</button>
+            <div class="card"><h2>💰 Pagos</h2>
+                <button class="btn-primary" onclick="abrirModalNuevoPago()">+ Nuevo Pago</button>
+                <div id="pagosList" style="margin-top: 20px;"></div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal Nueva Tarea -->
-<div id="modalTarea" class="modal">
-    <div class="modal-content">
-        <h3>➕ Nueva Tarea</h3>
-        <div class="form-group"><label>Nombre de la tarea *</label><input type="text" id="tareaNombre" placeholder="Ej: Limpiar piscina"></div>
-        <div class="form-group"><label>Descripción</label><textarea id="tareaDescripcion" rows="2"></textarea></div>
-        <div class="form-group"><label>Prioridad</label><select id="tareaPrioridad"><option value="baja">Baja</option><option value="media" selected>Media</option><option value="alta">Alta</option></select></div>
-        <div class="form-group"><label>Recurrencia</label><select id="tareaRecurrencia"><option value="0">Una vez</option><option value="1">Diaria</option><option value="7">Semanal</option><option value="30">Mensual</option></select></div>
-        <div class="modal-buttons"><button onclick="cerrarModalTarea()" class="btn-sm">Cancelar</button><button onclick="guardarNuevaTarea()" class="btn-sm" style="background:#2d5a27; color:white;">Guardar</button></div>
-    </div>
-</div>
+<!-- Modales -->
+<div id="modalTarea" class="modal"><div class="modal-content"><h3>➕ Nueva Tarea</h3>
+    <div class="form-group"><label>Nombre *</label><input type="text" id="tareaNombre"></div>
+    <div class="form-group"><label>Descripción</label><textarea id="tareaDescripcion" rows="2"></textarea></div>
+    <div class="form-group"><label>Prioridad</label><select id="tareaPrioridad"><option value="baja">Baja</option><option value="media" selected>Media</option><option value="alta">Alta</option></select></div>
+    <div class="form-group"><label>Fecha inicio *</label><input type="date" id="tareaFechaInicio"></div>
+    <div class="form-group"><label>Recurrencia</label><select id="tareaRecurrencia"><option value="0">Una vez</option><option value="1">Diaria</option><option value="7">Semanal</option><option value="30">Mensual</option></select></div>
+    <div class="modal-buttons"><button onclick="cerrarModalTarea()">Cancelar</button><button class="btn-primary" onclick="guardarNuevaTarea()">Guardar</button></div>
+</div></div>
 
-<!-- Modal Historial Tarea -->
-<div id="modalHistorialTarea" class="modal">
-    <div class="modal-content">
-        <h3 id="modalHistorialTitulo">📋 Historial de Tarea</h3>
-        <div id="modalHistorialContenido"></div>
-        <div class="modal-buttons"><button onclick="cerrarModalHistorialTarea()" class="btn-sm">Cerrar</button></div>
-    </div>
-</div>
+<div id="modalColaborador" class="modal"><div class="modal-content"><h3 id="modalColabTitulo">👤 Nuevo Colaborador</h3>
+    <input type="hidden" id="editColabId">
+    <div class="form-group"><label>Email *</label><input type="email" id="colabEmail"></div>
+    <div class="form-group"><label>Contraseña</label><input type="password" id="colabPassword"><small>Mínimo 6 caracteres. Dejar en blanco para mantener (edición).</small></div>
+    <div class="form-group"><label>Nombre</label><input type="text" id="colabNombre"></div>
+    <div class="form-group"><label>Teléfono</label><input type="text" id="colabTelefono"></div>
+    <div class="form-group"><label>Rol</label><select id="colabRol"><option value="user">Colaborador</option><option value="admin">Administrador</option></select></div>
+    <div class="modal-buttons"><button onclick="cerrarModalColaborador()">Cancelar</button><button class="btn-primary" onclick="guardarColaborador()">Guardar</button></div>
+</div></div>
+
+<div id="modalCliente" class="modal"><div class="modal-content"><h3>➕ Nuevo Cliente</h3>
+    <div class="form-group"><label>Nombre *</label><input type="text" id="clienteNombre"></div>
+    <div class="form-group"><label>WhatsApp</label><input type="text" id="clienteWhatsapp"></div>
+    <div class="form-group"><label>Nacionalidad</label><input type="text" id="clienteNacionalidad"></div>
+    <div class="form-group"><label>Email</label><input type="email" id="clienteEmail"></div>
+    <div class="modal-buttons"><button onclick="cerrarModalCliente()">Cancelar</button><button class="btn-primary" onclick="guardarCliente()">Guardar</button></div>
+</div></div>
+
+<div id="modalPago" class="modal"><div class="modal-content"><h3>💰 Nuevo Pago</h3>
+    <div class="form-group"><label>Cliente</label><select id="pagoClienteSelect"></select></div>
+    <div class="form-group"><label>Monto *</label><input type="number" id="pagoMonto" step="0.01"></div>
+    <div class="form-group"><label>Moneda</label><select id="pagoMoneda"><option value="BRL">BRL (Real)</option><option value="USD">USD (Dólar)</option></select></div>
+    <div class="form-group"><label>Método</label><select id="pagoMetodo"><option value="pix">PIX</option><option value="transferencia">Transferencia</option><option value="efectivo">Efectivo</option></select></div>
+    <div class="form-group"><label>Observaciones</label><input type="text" id="pagoObservaciones"></div>
+    <div class="modal-buttons"><button onclick="cerrarModalPago()">Cancelar</button><button class="btn-primary" onclick="guardarPago()">Guardar</button></div>
+</div></div>
 
 <script>
-    console.log('🚀 Dashboard Admin iniciado');
+// Configuración UNIFICADA
+const firebaseConfig = {
+    apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
+    authDomain: "casaverdecanas-199.firebaseapp.com",
+    projectId: "casaverdecanas-199",
+    storageBucket: "casaverdecanas-199.firebasestorage.app"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+let currentUser = null;
+let tareasCache = [];
+let reservasCache = [];
+let clientesCache = [];
+let pagosCache = [];
+let historialCache = [];
+let colaboradoresCache = [];
+
+function escapeHtml(s) { if (!s) return ''; return s.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]||m)); }
+
+// ========== AUTENTICACIÓN ==========
+async function login() {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const errorDiv = document.getElementById('loginError');
+    try {
+        const cred = await auth.signInWithEmailAndPassword(email, password);
+        const userDoc = await db.collection('usuarios').doc(cred.user.uid).get();
+        if (!userDoc.exists || userDoc.data().rol !== 'admin') {
+            await auth.signOut();
+            errorDiv.textContent = 'Acceso solo para administradores';
+            return;
+        }
+        currentUser = cred.user;
+        document.getElementById('loginContainer').style.display = 'none';
+        document.getElementById('mainPanel').style.display = 'block';
+        document.getElementById('userNameDisplay').textContent = userDoc.data().nombre || email;
+        cargarTodosLosDatos();
+    } catch(error) {
+        errorDiv.textContent = 'Email o contraseña incorrectos';
+    }
+}
+
+function logout() { auth.signOut().then(() => location.reload()); }
+
+// ========== CARGA DE DATOS ==========
+async function cargarTodosLosDatos() {
+    await Promise.all([
+        cargarTareas(), cargarReservas(), cargarClientes(), cargarPagos(), cargarHistorial(), cargarColaboradores()
+    ]);
+    actualizarDashboard();
+    renderizarReservas();
+    renderizarTareasAdmin();
+    renderizarColaboradores();
+    renderizarClientes();
+    renderizarPagos();
+    cargarSelectColaboradores();
+}
+
+async function cargarTareas() { const snap = await db.collection('tareas').get(); tareasCache = snap.docs.map(d => ({ id: d.id, ...d.data() })); }
+async function cargarReservas() { const snap = await db.collection('reservas').get(); reservasCache = snap.docs.map(d => ({ id: d.id, ...d.data() })); }
+async function cargarClientes() { const snap = await db.collection('clientes').get(); clientesCache = snap.docs.map(d => ({ id: d.id, ...d.data() })); }
+async function cargarPagos() { const snap = await db.collection('pagos').orderBy('creadoEn', 'desc').get(); pagosCache = snap.docs.map(d => ({ id: d.id, ...d.data() })); }
+async function cargarHistorial() { const snap = await db.collection('historial').get(); historialCache = snap.docs.map(d => ({ id: d.id, ...d.data() })); }
+async function cargarColaboradores() { const snap = await db.collection('usuarios').get(); colaboradoresCache = snap.docs.map(d => ({ id: d.id, ...d.data() })); }
+
+// ========== DASHBOARD ==========
+function actualizarDashboard() {
+    const hoy = new Date();
+    const activas = reservasCache.filter(r => { const co = r.checkOut?.toDate?.() || new Date(r.checkOut); return co >= hoy; });
+    document.getElementById('kpiContainer').innerHTML = `
+        <div class="kpi-card"><div class="kpi-number">${reservasCache.length}</div><div class="kpi-label">Total Reservas</div></div>
+        <div class="kpi-card"><div class="kpi-number">${activas.length}</div><div class="kpi-label">Reservas Activas</div></div>
+        <div class="kpi-card"><div class="kpi-number">${clientesCache.length}</div><div class="kpi-label">Clientes</div></div>
+        <div class="kpi-card"><div class="kpi-number">${tareasCache.filter(t => t.activa !== false).length}</div><div class="kpi-label">Tareas Activas</div></div>
+    `;
     
-    // ========== CONFIGURACIÓN FIREBASE ==========
-    const firebaseConfig = {
-        apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
-        authDomain: "tatareas-d8a80.firebaseapp.com",
-        projectId: "tatareas-d8a80",
-        storageBucket: "tatareas-d8a80.firebasestorage.app",
-        messagingSenderId: "709332495480",
-        appId: "1:709332495480:web:7060b2c75984352354918d"
-    };
+    const proximos = reservasCache.filter(r => { const ci = r.checkIn?.toDate?.() || new Date(r.checkIn); const diff = Math.ceil((ci - hoy) / (86400000)); return diff >= 0 && diff <= 7; }).slice(0, 10);
+    document.getElementById('proximosCheckins').innerHTML = proximos.length ? proximos.map(r => `<div style="padding:10px; border-bottom:1px solid #eee;">📅 ${r.nombre} - ${(r.checkIn?.toDate?.() || new Date(r.checkIn)).toLocaleDateString()}</div>`).join('') : '<div class="empty-state">No hay check-ins próximos</div>';
     
-    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
+    const ultimosPagos = pagosCache.slice(0, 10);
+    document.getElementById('ultimosPagos').innerHTML = ultimosPagos.length ? ultimosPagos.map(p => `<div style="padding:10px; border-bottom:1px solid #eee;">💰 ${p.clienteNombre || p.clienteId} - ${p.moneda === 'USD' ? 'USD' : 'R$'} ${p.monto?.toFixed(2)}</div>`).join('') : '<div class="empty-state">No hay pagos registrados</div>';
+}
+
+// ========== RESERVAS ==========
+function renderizarReservas() {
+    const container = document.getElementById('reservasList');
+    if (!reservasCache.length) { container.innerHTML = '<div class="empty-state">No hay reservas</div>'; return; }
+    container.innerHTML = reservasCache.map(r => {
+        const ci = r.checkIn?.toDate?.() || new Date(r.checkIn);
+        const co = r.checkOut?.toDate?.() || new Date(r.checkOut);
+        return `<div class="reserva-card" style="border-left-color: #2d5a27;"><div class="reserva-header"><div class="reserva-nombre">${escapeHtml(r.nombre)}</div><div>Cabaña ${r.caba}</div></div><div>📅 ${ci.toLocaleDateString()} → ${co.toLocaleDateString()}</div><div>💰 Total: R$ ${(r.totalBRL || 0).toFixed(2)}</div></div>`;
+    }).join('');
+}
+
+// ========== TAREAS ADMIN ==========
+function renderizarTareasAdmin() {
+    const container = document.getElementById('tareasList');
+    if (!tareasCache.length) { container.innerHTML = '<div class="empty-state">No hay tareas</div>'; return; }
+    container.innerHTML = `<table class="data-table"><thead><th>Nombre</th><th>Prioridad</th><th>Recurrencia</th><th>Estado</th><th>Acciones</th></thead><tbody>${
+        tareasCache.map(t => `<tr><td>${escapeHtml(t.nombre)}</td><td>${t.prioridad || 'media'}</td><td>${t.recurrencia === 0 ? 'Una vez' : (t.recurrencia === 1 ? 'Diaria' : (t.recurrencia === 7 ? 'Semanal' : 'Mensual'))}</td><td>${t.activa !== false ? '✅ Activa' : '❌ Inactiva'}</td><td><button class="btn-sm btn-edit" onclick="editarTarea('${t.id}')">Editar</button></td></tr>`).join('')
+    }</tbody></table>`;
+}
+
+function abrirModalNuevaTarea() {
+    document.getElementById('tareaFechaInicio').value = new Date().toISOString().split('T')[0];
+    document.getElementById('modalTarea').style.display = 'flex';
+}
+function cerrarModalTarea() { document.getElementById('modalTarea').style.display = 'none'; }
+async function guardarNuevaTarea() {
+    const nombre = document.getElementById('tareaNombre').value.trim();
+    if (!nombre) { alert('Ingresa el nombre'); return; }
+    await db.collection('tareas').add({
+        nombre, descripcion: document.getElementById('tareaDescripcion').value,
+        prioridad: document.getElementById('tareaPrioridad').value,
+        fechaInicio: document.getElementById('tareaFechaInicio').value,
+        recurrencia: parseInt(document.getElementById('tareaRecurrencia').value),
+        activa: true, creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    cerrarModalTarea();
+    await cargarTareas();
+    renderizarTareasAdmin();
+    alert('✅ Tarea creada');
+}
+function editarTarea(id) { alert('Función de edición en desarrollo - Próximamente'); }
+
+// ========== COLABORADORES ==========
+function renderizarColaboradores() {
+    const container = document.getElementById('colaboradoresList');
+    if (!colaboradoresCache.length) { container.innerHTML = '<div class="empty-state">No hay colaboradores</div>'; return; }
+    container.innerHTML = `<table class="data-table"><thead><th>Email</th><th>Nombre</th><th>Rol</th><th>Acciones</th></thead><tbody>${
+        colaboradoresCache.map(c => `<tr><td>${escapeHtml(c.email)}</td><td>${escapeHtml(c.nombre || '-')}</td><td><span class="badge ${c.rol === 'admin' ? 'badge-admin' : 'badge-user'}">${c.rol === 'admin' ? 'Admin' : 'User'}</span></td><td><button class="btn-sm btn-edit" onclick="editarColaborador('${c.id}')">Editar</button> ${c.id !== currentUser?.uid ? `<button class="btn-sm btn-delete" onclick="eliminarColaborador('${c.id}')">Eliminar</button>` : ''}</td></tr>`).join('')
+    }</tbody></table>`;
+}
+
+function abrirModalNuevoColaborador() {
+    document.getElementById('modalColabTitulo').innerHTML = '👤 Nuevo Colaborador';
+    document.getElementById('editColabId').value = '';
+    document.getElementById('colabEmail').value = '';
+    document.getElementById('colabPassword').value = '';
+    document.getElementById('colabPassword').required = true;
+    document.getElementById('colabNombre').value = '';
+    document.getElementById('colabTelefono').value = '';
+    document.getElementById('colabRol').value = 'user';
+    document.getElementById('modalColaborador').style.display = 'flex';
+}
+function cerrarModalColaborador() { document.getElementById('modalColaborador').style.display = 'none'; }
+
+async function guardarColaborador() {
+    const email = document.getElementById('colabEmail').value.trim();
+    const password = document.getElementById('colabPassword').value;
+    const editId = document.getElementById('editColabId').value;
+    if (!email) { alert('Email es obligatorio'); return; }
+    try {
+        if (editId) {
+            const updateData = { nombre: document.getElementById('colabNombre').value, telefono: document.getElementById('colabTelefono').value, rol: document.getElementById('colabRol').value };
+            await db.collection('usuarios').doc(editId).update(updateData);
+            alert('✅ Colaborador actualizado');
+        } else {
+            if (!password || password.length < 6) { alert('Contraseña debe tener al menos 6 caracteres'); return; }
+            const userCred = await auth.createUserWithEmailAndPassword(email, password);
+            await db.collection('usuarios').doc(userCred.user.uid).set({
+                email, nombre: document.getElementById('colabNombre').value,
+                telefono: document.getElementById('colabTelefono').value,
+                rol: document.getElementById('colabRol').value, activo: true,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            alert('✅ Colaborador creado');
+        }
+        cerrarModalColaborador();
+        await cargarColaboradores();
+        renderizarColaboradores();
+        cargarSelectColaboradores();
+    } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function editarColaborador(id) {
+    const colab = colaboradoresCache.find(c => c.id === id);
+    if (!colab) return;
+    document.getElementById('modalColabTitulo').innerHTML = '✏️ Editar Colaborador';
+    document.getElementById('editColabId').value = id;
+    document.getElementById('colabEmail').value = colab.email;
+    document.getElementById('colabPassword').value = '';
+    document.getElementById('colabPassword').required = false;
+    document.getElementById('colabNombre').value = colab.nombre || '';
+    document.getElementById('colabTelefono').value = colab.telefono || '';
+    document.getElementById('colabRol').value = colab.rol || 'user';
+    document.getElementById('modalColaborador').style.display = 'flex';
+}
+
+async function eliminarColaborador(id) {
+    if (!confirm('¿Eliminar este colaborador?')) return;
+    await db.collection('usuarios').doc(id).delete();
+    await cargarColaboradores();
+    renderizarColaboradores();
+    cargarSelectColaboradores();
+    alert('✅ Colaborador eliminado');
+}
+
+async function cargarSelectColaboradores() {
+    const select = document.getElementById('colaboradorSelect');
+    if (!select) return;
+    select.innerHTML = '<option value="">Seleccionar colaborador...</option>';
+    colaboradoresCache.filter(c => c.rol === 'user').forEach(c => {
+        select.innerHTML += `<option value="${c.id}">${escapeHtml(c.nombre || c.email)}</option>`;
+    });
+    select.onchange = () => renderizarHistorialColaborador();
+}
+
+async function renderizarHistorialColaborador() {
+    const userId = document.getElementById('colaboradorSelect').value;
+    const container = document.getElementById('historialColaborador');
+    if (!userId) { container.innerHTML = '<div class="empty-state">Seleccione un colaborador</div>'; return; }
+    const historial = historialCache.filter(h => h.usuarioId === userId).slice(0, 50);
+    if (!historial.length) { container.innerHTML = '<div class="empty-state">Sin actividad registrada</div>'; return; }
+    let html = '<table class="data-table"><thead><th>Fecha</th><th>Tarea</th></thead><tbody>';
+    for (const h of historial) {
+        const fecha = h.timestamp?.toDate?.() || new Date();
+        const tarea = tareasCache.find(t => t.id === h.tareaId);
+        html += `<tr><td>${fecha.toLocaleDateString()}</td><td>${escapeHtml(tarea?.nombre || 'Tarea eliminada')}</td></tr>`;
+    }
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+}
+
+// ========== CLIENTES ==========
+function renderizarClientes() {
+    const container = document.getElementById('clientesList');
+    if (!clientesCache.length) { container.innerHTML = '<div class="empty-state">No hay clientes</div>'; return; }
+    container.innerHTML = `<table class="data-table"><thead><th>Nombre</th><th>WhatsApp</th><th>Nacionalidad</th><th>Email</th></thead><tbody>${
+        clientesCache.map(c => `<tr><td>${escapeHtml(c.nombre)}</td><td>${escapeHtml(c.whatsapp || '-')}</td><td>${escapeHtml(c.nacionalidad || '-')}</td><td>${escapeHtml(c.email || '-')}</td></tr>`).join('')
+    }</tbody></table>`;
+}
+
+function abrirModalNuevoCliente() {
+    document.getElementById('clienteNombre').value = '';
+    document.getElementById('clienteWhatsapp').value = '';
+    document.getElementById('clienteNacionalidad').value = '';
+    document.getElementById('clienteEmail').value = '';
+    document.getElementById('modalCliente').style.display = 'flex';
+}
+function cerrarModalCliente() { document.getElementById('modalCliente').style.display = 'none'; }
+async function guardarCliente() {
+    const nombre = document.getElementById('clienteNombre').value.trim();
+    if (!nombre) { alert('Ingresa el nombre'); return; }
+    await db.collection('clientes').add({
+        nombre, whatsapp: document.getElementById('clienteWhatsapp').value,
+        nacionalidad: document.getElementById('clienteNacionalidad').value,
+        email: document.getElementById('clienteEmail').value,
+        creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    cerrarModalCliente();
+    await cargarClientes();
+    renderizarClientes();
+    alert('✅ Cliente agregado');
+}
+
+// ========== PAGOS ==========
+function renderizarPagos() {
+    const container = document.getElementById('pagosList');
+    if (!pagosCache.length) { container.innerHTML = '<div class="empty-state">No hay pagos</div>'; return; }
+    let totalBRL = 0, totalUSD = 0;
+    let html = `<table class="data-table"><thead><th>Fecha</th><th>Cliente</th><th>Monto</th><th>Método</th></thead><tbody>`;
+    for (const p of pagosCache) {
+        const fecha = p.creadoEn?.toDate?.() || new Date();
+        if (p.moneda === 'USD') totalUSD += p.monto; else totalBRL += p.monto;
+        html += `<tr><td>${fecha.toLocaleDateString()}</td><td>${escapeHtml(p.clienteNombre || p.clienteId)}</td><td>${p.moneda === 'USD' ? 'USD' : 'R$'} ${p.monto?.toFixed(2)}</td><td>${p.metodo || '-'}</td></tr>`;
+    }
+    html += `<tr style="background:#e8f5e9; font-weight:bold;"><td colspan="2">TOTALES</td><td>R$ ${totalBRL.toFixed(2)}</td><td>USD ${totalUSD.toFixed(2)}</td></tr>`;
+    html += `</tbody></table>`;
+    container.innerHTML = html;
     
-    let currentUser = null;
-    let calendar = null;
-    let reservasCache = [];
-    let tareasCache = [];
-    let colaboradoresCache = [];
-    let clientesCache = [];
-    let historialCache = [];
-    
-    const GOOGLE_API_KEY = 'AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs';
-    const GOOGLE_CALENDARS = [
-        { id: 'h5a1h0a8dg9rl0oufvq19hn05r4gbubg@import.calendar.google.com', color: '#FF9800', title: 'Cabaña 1' },
-        { id: '60n7foetdu2qvsn16mi7is8j6i4ugm66@import.calendar.google.com', color: '#3498db', title: 'Cabaña 2' },
-        { id: '8i3hl5ppqi6al50kf7casj5n5vl9sp1j@import.calendar.google.com', color: '#2ecc71', title: 'Cabaña 3' }
-    ];
-    
-    // ========== AUTENTICACIÓN ==========
-    async function login() {
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        const errorDiv = document.getElementById('loginError');
-        try {
-            const userCredential = await auth.signInWithEmailAndPassword(email, password);
-            const userDoc = await db.collection('usuarios').doc(userCredential.user.uid).get();
-            if (!userDoc.exists || userDoc.data().rol !== 'admin') {
-                await auth.signOut();
-                errorDiv.textContent = 'Acceso solo para administradores';
-                return;
-            }
-            currentUser = userCredential.user;
+    // Cargar select de clientes para el modal de pago
+    const select = document.getElementById('pagoClienteSelect');
+    if (select) {
+        select.innerHTML = '<option value="">Seleccionar cliente...</option>';
+        clientesCache.forEach(c => { select.innerHTML += `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`; });
+    }
+}
+
+function abrirModalNuevoPago() {
+    document.getElementById('pagoMonto').value = '';
+    document.getElementById('pagoObservaciones').value = '';
+    document.getElementById('modalPago').style.display = 'flex';
+}
+function cerrarModalPago() { document.getElementById('modalPago').style.display = 'none'; }
+async function guardarPago() {
+    const clienteId = document.getElementById('pagoClienteSelect').value;
+    if (!clienteId) { alert('Selecciona un cliente'); return; }
+    const monto = parseFloat(document.getElementById('pagoMonto').value);
+    if (!monto || monto <= 0) { alert('Monto válido requerido'); return; }
+    const cliente = clientesCache.find(c => c.id === clienteId);
+    await db.collection('pagos').add({
+        clienteId, clienteNombre: cliente.nombre, monto,
+        moneda: document.getElementById('pagoMoneda').value,
+        metodo: document.getElementById('pagoMetodo').value,
+        observaciones: document.getElementById('pagoObservaciones').value,
+        creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    cerrarModalPago();
+    await cargarPagos();
+    renderizarPagos();
+    alert('✅ Pago registrado');
+}
+
+// ========== NAVEGACIÓN ==========
+document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(`${btn.dataset.tab}Panel`).classList.add('active');
+    });
+});
+
+auth.onAuthStateChanged(async (user) => {
+    if (user) {
+        const userDoc = await db.collection('usuarios').doc(user.uid).get();
+        if (userDoc.exists && userDoc.data().rol === 'admin') {
+            currentUser = user;
             document.getElementById('loginContainer').style.display = 'none';
             document.getElementById('mainPanel').style.display = 'block';
-            document.getElementById('userNameDisplay').textContent = userDoc.data().nombre || email;
+            document.getElementById('userNameDisplay').textContent = userDoc.data().nombre || user.email;
             cargarTodosLosDatos();
-        } catch (error) {
-            errorDiv.textContent = 'Email o contraseña incorrectos';
         }
     }
-    
-    async function logout() {
-        await auth.signOut();
-        window.location.reload();
-    }
-    
-    // ========== CARGA DE DATOS ==========
-    async function cargarTodosLosDatos() {
-        await Promise.all([
-            cargarReservas(),
-            cargarTareas(),
-            cargarColaboradores(),
-            cargarClientes(),
-            cargarHistorial(),
-            cargarPagos()
-        ]);
-        actualizarDashboard();
-        cargarCalendario();
-        renderizarReservas();
-        renderizarTareas();
-        renderizarColaboradoresSelect();
-        renderizarClientes();
-        renderizarPagos();
-    }
-    
-    async function cargarReservas() {
-        const snapshot = await db.collection('reservas').orderBy('checkIn', 'asc').get();
-        reservasCache = [];
-        snapshot.forEach(doc => reservasCache.push({ id: doc.id, ...doc.data() }));
-        console.log(`📋 Reservas cargadas: ${reservasCache.length}`);
-    }
-    
-    async function cargarTareas() {
-        const snapshot = await db.collection('tareas').get();
-        tareasCache = [];
-        snapshot.forEach(doc => tareasCache.push({ id: doc.id, ...doc.data() }));
-        console.log(`📋 Tareas cargadas: ${tareasCache.length}`);
-    }
-    
-    async function cargarColaboradores() {
-        const snapshot = await db.collection('usuarios').where('rol', '==', 'user').get();
-        colaboradoresCache = [];
-        snapshot.forEach(doc => colaboradoresCache.push({ id: doc.id, ...doc.data() }));
-        console.log(`👥 Colaboradores cargados: ${colaboradoresCache.length}`);
-    }
-    
-    async function cargarClientes() {
-        const snapshot = await db.collection('clientes').orderBy('nombre').get();
-        clientesCache = [];
-        snapshot.forEach(doc => clientesCache.push({ id: doc.id, ...doc.data() }));
-    }
-    
-    async function cargarHistorial() {
-        const snapshot = await db.collection('historial').orderBy('timestamp', 'desc').get();
-        historialCache = [];
-        snapshot.forEach(doc => historialCache.push({ id: doc.id, ...doc.data() }));
-    }
-    
-    async function cargarPagos() {
-        const snapshot = await db.collection('pagos').orderBy('creadoEn', 'desc').get();
-        pagosCache = [];
-        snapshot.forEach(doc => pagosCache.push({ id: doc.id, ...doc.data() }));
-    }
-    
-    // ========== DASHBOARD ==========
-    function actualizarDashboard() {
-        const hoy = new Date();
-        const reservasActivas = reservasCache.filter(r => {
-            const checkOut = r.checkOut?.toDate?.() || new Date(r.checkOut);
-            return checkOut >= hoy;
-        });
-        const reservasFuturas = reservasCache.filter(r => {
-            const checkIn = r.checkIn?.toDate?.() || new Date(r.checkIn);
-            return checkIn >= hoy;
-        });
-        
-        document.getElementById('kpiContainer').innerHTML = `
-            <div class="kpi-card"><div class="kpi-number">${reservasCache.length}</div><div class="kpi-label">Total Reservas</div></div>
-            <div class="kpi-card"><div class="kpi-number">${reservasActivas.length}</div><div class="kpi-label">Reservas Activas</div></div>
-            <div class="kpi-card"><div class="kpi-number">${clientesCache.length}</div><div class="kpi-label">Clientes</div></div>
-            <div class="kpi-card"><div class="kpi-number">${tareasCache.filter(t => t.activa !== false).length}</div><div class="kpi-label">Tareas Activas</div></div>
-        `;
-        
-        // Próximos check-ins (próximos 7 días)
-        const proximos7 = reservasCache.filter(r => {
-            const checkIn = r.checkIn?.toDate?.() || new Date(r.checkIn);
-            const diff = Math.ceil((checkIn - hoy) / (1000 * 60 * 60 * 24));
-            return diff >= 0 && diff <= 7;
-        }).sort((a, b) => (a.checkIn?.toDate?.() || new Date(a.checkIn)) - (b.checkIn?.toDate?.() || new Date(b.checkIn)));
-        
-        const container = document.getElementById('proximosCheckins');
-        if (proximos7.length === 0) {
-            container.innerHTML = '<div class="empty-state">📭 No hay check-ins en los próximos 7 días</div>';
-        } else {
-            container.innerHTML = proximos7.map(r => {
-                const checkIn = r.checkIn?.toDate?.() || new Date(r.checkIn);
-                return `
-                    <div style="padding: 12px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                        <div><strong>${escapeHtml(r.nombre)}</strong> - <span class="cabaña-badge cabaña-${r.caba}">Cabaña ${r.caba}</span></div>
-                        <div>📅 ${checkIn.toLocaleDateString('es-ES')}</div>
-                        <div><span class="badge ${r.origen === 'airbnb' ? 'badge-airbnb' : 'badge-directa'}">${r.origen === 'airbnb' ? 'Airbnb' : 'Directa'}</span></div>
-                    </div>
-                `;
-            }).join('');
-        }
-        
-        // Últimos pagos
-        const ultimosPagos = pagosCache?.slice(0, 10) || [];
-        const pagosContainer = document.getElementById('ultimosPagos');
-        if (ultimosPagos.length === 0) {
-            pagosContainer.innerHTML = '<div class="empty-state">💰 No hay pagos registrados</div>';
-        } else {
-            pagosContainer.innerHTML = ultimosPagos.map(p => {
-                const fecha = p.creadoEn?.toDate?.() || new Date();
-                return `
-                    <div style="padding: 12px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-                        <span><strong>${escapeHtml(p.clienteNombre || p.clienteId)}</strong></span>
-                        <span>${p.moneda === 'USD' ? 'USD' : 'R$'} ${p.monto?.toFixed(2) || '0'}</span>
-                        <span>${p.metodo || '-'}</span>
-                        <span>${fecha.toLocaleDateString('es-ES')}</span>
-                    </div>
-                `;
-            }).join('');
-        }
-    }
-    
-    // ========== CALENDARIO ==========
-    async function cargarCalendario() {
-        const calendarEl = document.getElementById('calendar');
-        if (!calendarEl) return;
-        
-        let allEvents = [];
-        
-        for (const cal of GOOGLE_CALENDARS) {
-            const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?key=${GOOGLE_API_KEY}&singleEvents=true&orderBy=startTime`;
-            try {
-                const res = await fetch(url);
-                const data = await res.json();
-                if (data.items) {
-                    data.items.forEach(event => {
-                        if (event.summary) {
-                            allEvents.push({
-                                title: event.summary,
-                                start: event.start.dateTime || event.start.date,
-                                end: event.end.dateTime || event.end.date,
-                                color: cal.color,
-                                textColor: 'white'
-                            });
-                        }
-                    });
-                }
-            } catch(e) { console.error(e); }
-        }
-        
-        reservasCache.forEach(r => {
-            if (r.origen === 'directa') {
-                const checkIn = r.checkIn?.toDate?.() || new Date(r.checkIn);
-                const checkOut = r.checkOut?.toDate?.() || new Date(r.checkOut);
-                allEvents.push({
-                    title: `${r.nombre} (Manual)`,
-                    start: checkIn,
-                    end: checkOut,
-                    color: '#9b59b6',
-                    textColor: 'white'
-                });
-            }
-        });
-        
-        if (calendar) {
-            calendar.removeAllEvents();
-            calendar.addEventSource(allEvents);
-        } else {
-            calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'dayGridMonth',
-                locale: 'es',
-                headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
-                firstDay: 1,
-                height: 'auto',
-                events: allEvents,
-                eventClick: (info) => alert(`📅 ${info.event.title}\n📆 ${info.event.start.toLocaleDateString()}`)
-            });
-            calendar.render();
-        }
-    }
-    
-    // ========== RESERVAS ==========
-    let filtroActual = 'todas';
-    let filtroHistorialActual = 'todas';
-    
-    function renderizarReservas() {
-        const hoy = new Date();
-        let reservasFiltradas = reservasCache.filter(r => {
-            const checkIn = r.checkIn?.toDate?.() || new Date(r.checkIn);
-            if (filtroActual === 'futuras') return checkIn >= hoy;
-            if (filtroActual === 'activas') {
-                const checkOut = r.checkOut?.toDate?.() || new Date(r.checkOut);
-                return checkIn <= hoy && checkOut >= hoy;
-            }
-            if (filtroActual === 'airbnb') return r.origen === 'airbnb';
-            if (filtroActual === 'directa') return r.origen === 'directa';
-            return true;
-        }).sort((a, b) => (a.checkIn?.toDate?.() || new Date(a.checkIn)) - (b.checkIn?.toDate?.() || new Date(b.checkIn)));
-        
-        const container = document.getElementById('reservasActualesList');
-        if (reservasFiltradas.length === 0) {
-            container.innerHTML = '<div class="empty-state">📭 No hay reservas</div>';
-        } else {
-            container.innerHTML = reservasFiltradas.map(r => {
-                const checkIn = r.checkIn?.toDate?.() || new Date(r.checkIn);
-                const checkOut = r.checkOut?.toDate?.() || new Date(r.checkOut);
-                const dias = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
-                const estadoPago = r.estadoPago || 'pendiente';
-                return `
-                    <div class="reserva-card" style="border-left-color: ${r.caba == 1 ? '#FF9800' : (r.caba == 2 ? '#3498db' : '#2ecc71')}">
-                        <div class="reserva-header">
-                            <div class="reserva-nombre">${escapeHtml(r.nombre)}</div>
-                            <div><span class="cabaña-badge cabaña-${r.caba}">Cabaña ${r.caba}</span> <span class="badge badge-${estadoPago}">${estadoPago === 'pendiente' ? 'Pendiente' : (estadoPago === 'parcial' ? 'Parcial' : 'Pagado')}</span></div>
-                        </div>
-                        <div class="reserva-fechas">📅 ${checkIn.toLocaleDateString('es-ES')} → ${checkOut.toLocaleDateString('es-ES')} (${dias} días)</div>
-                        <div class="reserva-fechas">💰 Total: R$ ${(r.totalBRL || 0).toFixed(2)} | ${r.origen === 'airbnb' ? 'Airbnb' : 'Directa'}</div>
-                        <div class="reserva-actions">
-                            <button class="btn-sm btn-view" onclick="verDetalleReserva('${r.id}')">Ver</button>
-                            <button class="btn-sm btn-edit" onclick="editarReserva('${r.id}')">Editar</button>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-        
-        // Historial de reservas (pasadas)
-        let historialFiltrado = reservasCache.filter(r => {
-            const checkOut = r.checkOut?.toDate?.() || new Date(r.checkOut);
-            if (filtroHistorialActual !== 'todas') {
-                const año = checkOut.getFullYear().toString();
-                return año === filtroHistorialActual;
-            }
-            return checkOut < hoy;
-        }).sort((a, b) => (b.checkOut?.toDate?.() || new Date(b.checkOut)) - (a.checkOut?.toDate?.() || new Date(a.checkOut)));
-        
-        const historialContainer = document.getElementById('historialReservasList');
-        if (historialFiltrado.length === 0) {
-            historialContainer.innerHTML = '<div class="empty-state">📭 No hay reservas pasadas</div>';
-        } else {
-            historialContainer.innerHTML = historialFiltrado.map(r => {
-                const checkIn = r.checkIn?.toDate?.() || new Date(r.checkIn);
-                const checkOut = r.checkOut?.toDate?.() || new Date(r.checkOut);
-                const dias = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
-                return `
-                    <div class="reserva-card" style="border-left-color: ${r.caba == 1 ? '#FF9800' : (r.caba == 2 ? '#3498db' : '#2ecc71')}">
-                        <div class="reserva-header">
-                            <div class="reserva-nombre">${escapeHtml(r.nombre)}</div>
-                            <div><span class="cabaña-badge cabaña-${r.caba}">Cabaña ${r.caba}</span></div>
-                        </div>
-                        <div class="reserva-fechas">📅 ${checkIn.toLocaleDateString('es-ES')} → ${checkOut.toLocaleDateString('es-ES')} (${dias} días)</div>
-                        <div class="reserva-fechas">💰 Total: R$ ${(r.totalBRL || 0).toFixed(2)}</div>
-                        <div class="reserva-actions">
-                            <button class="btn-sm btn-view" onclick="verDetalleReserva('${r.id}')">Ver</button>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-    }
-    
-    function verDetalleReserva(id) {
-        const reserva = reservasCache.find(r => r.id === id);
-        if (reserva) {
-            const checkIn = reserva.checkIn?.toDate?.() || new Date(reserva.checkIn);
-            const checkOut = reserva.checkOut?.toDate?.() || new Date(reserva.checkOut);
-            alert(`📋 DETALLE DE RESERVA\n\nCliente: ${reserva.nombre}\nCabaña: ${reserva.caba}\nCheck-in: ${checkIn.toLocaleDateString('es-ES')}\nCheck-out: ${checkOut.toLocaleDateString('es-ES')}\nOrigen: ${reserva.origen === 'airbnb' ? 'Airbnb' : 'Directa'}\nTotal: R$ ${(reserva.totalBRL || 0).toFixed(2)}`);
-        }
-    }
-    
-    function editarReserva(id) {
-        alert('Función de edición en desarrollo');
-    }
-    
-    // ========== TAREAS ==========
-    function renderizarTareas() {
-        const container = document.getElementById('tasksList');
-        if (tareasCache.length === 0) {
-            container.innerHTML = '<div class="empty-state">📋 No hay tareas creadas</div>';
-            return;
-        }
-        
-        container.innerHTML = tareasCache.map(t => {
-            const tareaHistorial = historialCache.filter(h => h.tareaId === t.id).slice(0, 5);
-            return `
-                <div class="reserva-card" style="border-left-color: ${t.prioridad === 'alta' ? '#e74c3c' : (t.prioridad === 'media' ? '#f39c12' : '#27ae60')}">
-                    <div class="reserva-header">
-                        <div class="reserva-nombre">${escapeHtml(t.nombre)}</div>
-                        <div><span class="badge">${t.prioridad || 'media'}</span></div>
-                    </div>
-                    <div class="reserva-fechas">📅 Inicio: ${t.fechaInicio || 'No definida'} | 🔄 ${traducirRecurrencia(t.recurrencia)}</div>
-                    ${t.descripcion ? `<div class="reserva-fechas">📝 ${escapeHtml(t.descripcion)}</div>` : ''}
-                    <div class="reserva-actions">
-                        <button class="btn-sm btn-view" onclick="verHistorialTarea('${t.id}', '${escapeHtml(t.nombre)}')">Historial</button>
-                        <button class="btn-sm btn-edit" onclick="editarTarea('${t.id}')">Editar</button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-    
-    function traducirRecurrencia(num) {
-        if (num === 0) return 'Una vez';
-        if (num === 1) return 'Diaria';
-        if (num === 7) return 'Semanal';
-        if (num === 30) return 'Mensual';
-        return `Cada ${num} días`;
-    }
-    
-    async function verHistorialTarea(tareaId, tareaNombre) {
-        const historial = historialCache.filter(h => h.tareaId === tareaId);
-        let html = `<div style="max-height: 300px; overflow-y: auto;">`;
-        if (historial.length === 0) {
-            html += '<div class="empty-state">📭 No hay registros de esta tarea</div>';
-        } else {
-            for (const h of historial) {
-                const fecha = h.timestamp?.toDate?.() || new Date();
-                let nombreUsuario = h.usuarioId;
-                const colaborador = colaboradoresCache.find(c => c.id === h.usuarioId);
-                if (colaborador) nombreUsuario = colaborador.nombre || colaborador.email;
-                html += `<div style="padding: 8px; border-bottom: 1px solid #eee;">✅ ${fecha.toLocaleDateString('es-ES')} - ${escapeHtml(nombreUsuario)}</div>`;
-            }
-        }
-        html += `</div>`;
-        document.getElementById('modalHistorialTitulo').innerHTML = `📋 Historial: ${tareaNombre}`;
-        document.getElementById('modalHistorialContenido').innerHTML = html;
-        document.getElementById('modalHistorialTarea').style.display = 'flex';
-    }
-    
-    function cerrarModalHistorialTarea() {
-        document.getElementById('modalHistorialTarea').style.display = 'none';
-    }
-    
-    function abrirModalNuevaTarea() {
-        document.getElementById('modalTarea').style.display = 'flex';
-    }
-    
-    function cerrarModalTarea() {
-        document.getElementById('modalTarea').style.display = 'none';
-    }
-    
-    async function guardarNuevaTarea() {
-        const nombre = document.getElementById('tareaNombre').value.trim();
-        if (!nombre) { alert('Ingresa el nombre de la tarea'); return; }
-        await db.collection('tareas').add({
-            nombre: nombre,
-            descripcion: document.getElementById('tareaDescripcion').value,
-            prioridad: document.getElementById('tareaPrioridad').value,
-            fechaInicio: new Date().toISOString().split('T')[0],
-            recurrencia: parseInt(document.getElementById('tareaRecurrencia').value),
-            activa: true,
-            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        cerrarModalTarea();
-        await cargarTareas();
-        renderizarTareas();
-        alert('✅ Tarea creada');
-    }
-    
-    // ========== COLABORADORES ==========
-    function renderizarColaboradoresSelect() {
-        const select = document.getElementById('colaboradorSelect');
-        select.innerHTML = '<option value="">Seleccione un colaborador...</option>';
-        colaboradoresCache.forEach(c => {
-            select.innerHTML += `<option value="${c.id}">${escapeHtml(c.nombre || c.email)}</option>`;
-        });
-        select.onchange = () => renderizarHistorialColaborador();
-    }
-    
-    async function renderizarHistorialColaborador() {
-        const colaboradorId = document.getElementById('colaboradorSelect').value;
-        const container = document.getElementById('historialColaborador');
-        if (!colaboradorId) {
-            container.innerHTML = '<div class="empty-state">👥 Seleccione un colaborador para ver su historial</div>';
-            return;
-        }
-        
-        const colaborador = colaboradoresCache.find(c => c.id === colaboradorId);
-        const historialColaborador = historialCache.filter(h => h.usuarioId === colaboradorId).slice(0, 50);
-        
-        if (historialColaborador.length === 0) {
-            container.innerHTML = '<div class="empty-state">📭 No hay actividades registradas para este colaborador</div>';
-            return;
-        }
-        
-        let html = `<table class="data-table"><thead><th>Fecha</th><th>Tarea</th></thead><tbody>`;
-        for (const h of historialColaborador) {
-            const fecha = h.timestamp?.toDate?.() || new Date();
-            const tarea = tareasCache.find(t => t.id === h.tareaId);
-            html += `<tr><td>${fecha.toLocaleDateString('es-ES')}</td><td>${escapeHtml(tarea?.nombre || 'Tarea eliminada')}</td></tr>`;
-        }
-        html += `</tbody></table>`;
-        container.innerHTML = html;
-    }
-    
-    // ========== CLIENTES ==========
-    function renderizarClientes() {
-        const container = document.getElementById('clientesList');
-        if (clientesCache.length === 0) {
-            container.innerHTML = '<div class="empty-state">👥 No hay clientes registrados</div>';
-            return;
-        }
-        
-        let html = `<table class="data-table"><thead><th>Nombre</th><th>WhatsApp</th><th>Nacionalidad</th><th>Reservas</th></thead><tbody>`;
-        for (const c of clientesCache) {
-            const reservasCliente = reservasCache.filter(r => r.nombre === c.nombre);
-            html += `<tr><td><strong>${escapeHtml(c.nombre)}</strong></td><td>${escapeHtml(c.whatsapp || '-')}</td><td>${escapeHtml(c.nacionalidad || '-')}</td><td>${reservasCliente.length}</td></tr>`;
-        }
-        html += `</tbody></table>`;
-        container.innerHTML = html;
-    }
-    
-    function abrirModalNuevoCliente() {
-        const nombre = prompt('Nombre del cliente:');
-        if (!nombre) return;
-        const whatsapp = prompt('WhatsApp (opcional):');
-        const nacionalidad = prompt('Nacionalidad (opcional):');
-        db.collection('clientes').add({
-            nombre: nombre,
-            whatsapp: whatsapp || '',
-            nacionalidad: nacionalidad || '',
-            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-        }).then(() => {
-            cargarClientes();
-            renderizarClientes();
-            alert('✅ Cliente agregado');
-        });
-    }
-    
-    // ========== PAGOS ==========
-    let pagosCache = [];
-    
-    function renderizarPagos() {
-        const container = document.getElementById('pagosList');
-        if (!pagosCache || pagosCache.length === 0) {
-            container.innerHTML = '<div class="empty-state">💰 No hay pagos registrados</div>';
-            return;
-        }
-        
-        let totalBRL = 0;
-        let totalUSD = 0;
-        let html = `<table class="data-table"><thead><th>Fecha</th><th>Cliente</th><th>Monto</th><th>Método</th><th>Tipo</th></thead><tbody>`;
-        for (const p of pagosCache) {
-            const fecha = p.creadoEn?.toDate?.() || new Date();
-            if (p.moneda === 'USD') totalUSD += p.monto;
-            else totalBRL += p.monto;
-            html += `<tr><td>${fecha.toLocaleDateString('es-ES')}</td><td>${escapeHtml(p.clienteNombre || p.clienteId)}</td><td>${p.moneda === 'USD' ? 'USD' : 'R$'} ${p.monto?.toFixed(2)}</td><td>${p.metodo || '-'}</td><td>${p.tipo || 'Pago'}</td></tr>`;
-        }
-        html += `<tr style="background:#e8f5e9; font-weight:bold;"><td colspan="2">TOTALES</td><td>R$ ${totalBRL.toFixed(2)}</td><td colspan="2">USD ${totalUSD.toFixed(2)}</td></tr>`;
-        html += `</tbody></table>`;
-        container.innerHTML = html;
-    }
-    
-    function abrirModalNuevoPago() {
-        const cliente = prompt('Nombre del cliente:');
-        if (!cliente) return;
-        const monto = parseFloat(prompt('Monto:'));
-        if (!monto) return;
-        const moneda = prompt('Moneda (BRL/USD):', 'BRL');
-        db.collection('pagos').add({
-            clienteNombre: cliente,
-            monto: monto,
-            moneda: moneda === 'USD' ? 'USD' : 'BRL',
-            metodo: 'manual',
-            tipo: 'pago',
-            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-        }).then(() => {
-            cargarPagos();
-            renderizarPagos();
-            alert('✅ Pago registrado');
-        });
-    }
-    
-    // ========== EVENTOS Y FILTROS ==========
-    function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m)); }
-    
-    document.querySelectorAll('.nav-item').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-            btn.classList.add('active');
-            document.getElementById(`${btn.dataset.tab}Panel`).classList.add('active');
-            if (btn.dataset.tab === 'calendario' && calendar) calendar.updateSize();
-        });
-    });
-    
-    document.querySelectorAll('[data-filtro]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('[data-filtro]').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            filtroActual = btn.dataset.filtro;
-            renderizarReservas();
-        });
-    });
-    
-    document.querySelectorAll('[data-filtro-historial]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('[data-filtro-historial]').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            filtroHistorialActual = btn.dataset.filtroHistorial;
-            renderizarReservas();
-        });
-    });
-    
-    auth.onAuthStateChanged(async (user) => {
-        if (user) {
-            const userDoc = await db.collection('usuarios').doc(user.uid).get();
-            if (userDoc.exists && userDoc.data().rol === 'admin') {
-                document.getElementById('loginContainer').style.display = 'none';
-                document.getElementById('mainPanel').style.display = 'block';
-                document.getElementById('userNameDisplay').textContent = userDoc.data().nombre || user.email;
-                cargarTodosLosDatos();
-            } else if (userDoc.exists) {
-                window.location.href = 'colaborador.html';
-            } else {
-                auth.signOut();
-            }
-        }
-    });
-    
-    window.login = login;
-    window.logout = logout;
-    window.verDetalleReserva = verDetalleReserva;
-    window.editarReserva = editarReserva;
-    window.verHistorialTarea = verHistorialTarea;
-    window.cerrarModalHistorialTarea = cerrarModalHistorialTarea;
-    window.abrirModalNuevaTarea = abrirModalNuevaTarea;
-    window.cerrarModalTarea = cerrarModalTarea;
-    window.guardarNuevaTarea = guardarNuevaTarea;
-    window.abrirModalNuevoCliente = abrirModalNuevoCliente;
-    window.abrirModalNuevoPago = abrirModalNuevoPago;
+});
+
+window.login = login; window.logout = logout;
+window.abrirModalNuevaTarea = abrirModalNuevaTarea; window.cerrarModalTarea = cerrarModalTarea; window.guardarNuevaTarea = guardarNuevaTarea; window.editarTarea = editarTarea;
+window.abrirModalNuevoColaborador = abrirModalNuevoColaborador; window.cerrarModalColaborador = cerrarModalColaborador; window.guardarColaborador = guardarColaborador; window.editarColaborador = editarColaborador; window.eliminarColaborador = eliminarColaborador;
+window.abrirModalNuevoCliente = abrirModalNuevoCliente; window.cerrarModalCliente = cerrarModalCliente; window.guardarCliente = guardarCliente;
+window.abrirModalNuevoPago = abrirModalNuevoPago; window.cerrarModalPago = cerrarModalPago; window.guardarPago = guardarPago;
 </script>
 </body>
 </html>
