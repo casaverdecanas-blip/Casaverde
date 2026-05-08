@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Migrar Campo Calendar - Casa Verde Canas</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { background: linear-gradient(135deg, #1e3c2c, #2d5a27); min-height: 100vh; padding: 20px; display: flex; align-items: center; justify-content: center; }
+        .card { background: white; border-radius: 20px; padding: 32px; max-width: 600px; width: 100%; box-shadow: 0 20px 40px rgba(0,0,0,0.2); }
+        h2 { color: #2d5a27; margin-bottom: 8px; }
+        .subtitle { color: #888; font-size: 13px; margin-bottom: 24px; }
+        .aviso { background: #fff8e1; border: 1.5px solid #ffe082; border-radius: 10px; padding: 12px 16px; font-size: 13px; color: #7a6a3a; margin-bottom: 20px; }
+        .cabana-item { background: #f8f9fa; border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1.5px solid #e9ecef; }
+        .cabana-nombre { font-weight: 700; color: #2c3e50; margin-bottom: 10px; }
+        .campo-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+        .campo-label { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; }
+        .campo-valor { font-size: 13px; color: #555; word-break: break-all; background: #f0f0f0; padding: 6px 10px; border-radius: 6px; font-family: monospace; }
+        .campo-input { width: 100%; padding: 8px 12px; border: 1.5px solid #ddd; border-radius: 8px; font-size: 13px; font-family: monospace; }
+        .campo-input:focus { outline: none; border-color: #2d5a27; }
+        .btn { padding: 10px 22px; border: none; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 14px; transition: opacity 0.2s; }
+        .btn:hover { opacity: 0.85; }
+        .btn-primary { background: #2d5a27; color: white; }
+        .btn-danger  { background: #e74c3c; color: white; }
+        .btn-full    { width: 100%; margin-top: 16px; padding: 14px; font-size: 15px; }
+        .log { background: #1a1a2e; border-radius: 12px; padding: 16px; margin-top: 20px; font-family: monospace; font-size: 12px; max-height: 250px; overflow-y: auto; }
+        .log-ok   { color: #2ecc71; }
+        .log-err  { color: #e74c3c; }
+        .log-info { color: #3498db; }
+        .log-warn { color: #f39c12; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; margin-left: 8px; }
+        .badge-ok   { background: #e8f5e9; color: #27ae60; }
+        .badge-warn { background: #fff3e0; color: #f39c12; }
+        .badge-none { background: #f0f0f0; color: #888; }
+        .loading { text-align: center; padding: 30px; color: #888; }
+        #loginSection { display: block; }
+        #mainSection  { display: none; }
+        input[type=email], input[type=password] { width: 100%; padding: 11px 14px; border: 1.5px solid #ddd; border-radius: 10px; font-size: 14px; margin-bottom: 10px; outline: none; }
+        input:focus { border-color: #2d5a27; }
+        .err-msg { color: #e74c3c; font-size: 13px; margin-top: 6px; }
+    </style>
+</head>
+<body>
+<div class="card">
+
+    <!-- LOGIN -->
+    <div id="loginSection">
+        <h2>🔄 Migrar Campo Calendar</h2>
+        <p class="subtitle">Herramienta para migrar <code>google_calendar_iframe</code> → <code>google_calendar_id</code></p>
+        <div class="aviso">⚠️ Esta herramienta es de uso único. Eliminala del servidor después de usarla.</div>
+        <input type="email"    id="email"    placeholder="Email administrador">
+        <input type="password" id="password" placeholder="Contraseña">
+        <button class="btn btn-primary btn-full" onclick="login()">Ingresar</button>
+        <div class="err-msg" id="loginError"></div>
+    </div>
+
+    <!-- PANEL PRINCIPAL -->
+    <div id="mainSection">
+        <h2>🔄 Migrar Campo Calendar</h2>
+        <p class="subtitle">Revisá los datos y aplicá la migración cabaña por cabaña o todas juntas.</p>
+
+        <div class="aviso">
+            📋 <strong>Qué hace esta herramienta:</strong><br>
+            1. Lee el campo <code>google_calendar_iframe</code> de cada cabaña<br>
+            2. Copia el valor al campo nuevo <code>google_calendar_id</code><br>
+            3. Elimina el campo viejo <code>google_calendar_iframe</code>
+        </div>
+
+        <div id="cabanasContainer"><div class="loading">Cargando cabañas...</div></div>
+
+        <button class="btn btn-primary btn-full" onclick="migrarTodas()">
+            ✅ Migrar todas las cabañas
+        </button>
+
+        <div class="log" id="logContainer">
+            <div class="log-info">// Esperando acción...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey:    "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
+        authDomain:"casaverdecanas-199.firebaseapp.com",
+        projectId: "casaverdecanas-199"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db   = firebase.firestore();
+
+    let cabanasData = [];
+
+    // ── LOGIN ──────────────────────────────────────────────
+    async function login() {
+        const email    = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+        const errDiv   = document.getElementById('loginError');
+        errDiv.textContent = '';
+        try {
+            const cred = await auth.signInWithEmailAndPassword(email, password);
+            const userDoc = await db.collection('usuarios').doc(cred.user.uid).get();
+            if (!userDoc.exists || userDoc.data().rol !== 'admin') {
+                await auth.signOut();
+                errDiv.textContent = 'No tenés permisos de administrador';
+                return;
+            }
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('mainSection').style.display  = 'block';
+            cargarCabanas();
+        } catch(e) {
+            errDiv.textContent = 'Error: ' + e.message;
+        }
+    }
+
+    auth.onAuthStateChanged(async (user) => {
+        if (!user) return;
+        const userDoc = await db.collection('usuarios').doc(user.uid).get();
+        if (userDoc.exists && userDoc.data().rol === 'admin') {
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('mainSection').style.display  = 'block';
+            cargarCabanas();
+        }
+    });
+
+    // ── CARGAR CABAÑAS ─────────────────────────────────────
+    async function cargarCabanas() {
+        const snap = await db.collection('cabanas').orderBy('orden').get();
+        cabanasData = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+        renderCabanas();
+    }
+
+    function renderCabanas() {
+        const container = document.getElementById('cabanasContainer');
+        if (!cabanasData.length) {
+            container.innerHTML = '<div class="loading">No hay cabañas</div>';
+            return;
+        }
+
+        container.innerHTML = cabanasData.map((c, idx) => {
+            const tieneViejo  = c.google_calendar_iframe !== undefined && c.google_calendar_iframe !== '';
+            const tieneNuevo  = c.google_calendar_id    !== undefined && c.google_calendar_id    !== '';
+            const nombre      = c.nombre?.es || c.docId;
+
+            let badgeHtml = '';
+            if (tieneNuevo)       badgeHtml = '<span class="badge badge-ok">✅ Ya migrado</span>';
+            else if (tieneViejo)  badgeHtml = '<span class="badge badge-warn">⚠️ Pendiente</span>';
+            else                  badgeHtml = '<span class="badge badge-none">Sin calendario</span>';
+
+            return `
+                <div class="cabana-item" id="cabana-${c.docId}">
+                    <div class="cabana-nombre">🏠 ${nombre} (ID ${c.id}) ${badgeHtml}</div>
+
+                    ${tieneViejo ? `
+                        <div class="campo-row">
+                            <span class="campo-label">Campo VIEJO (google_calendar_iframe)</span>
+                            <span class="campo-valor">${c.google_calendar_iframe}</span>
+                        </div>
+                    ` : ''}
+
+                    <div class="campo-row">
+                        <span class="campo-label">Campo NUEVO (google_calendar_id) — editá si necesitás</span>
+                        <input class="campo-input" type="text"
+                            id="calId-${c.docId}"
+                            value="${c.google_calendar_id || c.google_calendar_iframe || ''}"
+                            placeholder="abc123@group.calendar.google.com">
+                    </div>
+
+                    <button class="btn btn-primary btn-sm" onclick="migrarUna('${c.docId}')">
+                        Migrar esta cabaña
+                    </button>
+                    ${tieneNuevo && !tieneViejo ? '' : ''}
+                </div>
+            `;
+        }).join('');
+    }
+
+    // ── LOG ────────────────────────────────────────────────
+    function log(msg, tipo = 'info') {
+        const el   = document.getElementById('logContainer');
+        const line = document.createElement('div');
+        line.className = `log-${tipo}`;
+        line.textContent = `[${new Date().toLocaleTimeString('es-AR')}] ${msg}`;
+        el.appendChild(line);
+        el.scrollTop = el.scrollHeight;
+    }
+
+    // ── MIGRAR UNA ─────────────────────────────────────────
+    window.migrarUna = async function(docId) {
+        const cabana  = cabanasData.find(c => c.docId === docId);
+        const calId   = document.getElementById(`calId-${docId}`)?.value.trim();
+        const nombre  = cabana?.nombre?.es || docId;
+
+        if (!calId) {
+            log(`⚠️ ${nombre}: no tiene Calendar ID — omitida`, 'warn');
+            return;
+        }
+
+        try {
+            const updates = {
+                google_calendar_id: calId,
+                google_calendar_iframe: firebase.firestore.FieldValue.delete()
+            };
+            await db.collection('cabanas').doc(docId).update(updates);
+            log(`✅ ${nombre}: migrada correctamente → ${calId}`, 'ok');
+
+            // Actualizar cache local
+            const idx = cabanasData.findIndex(c => c.docId === docId);
+            if (idx >= 0) {
+                cabanasData[idx].google_calendar_id    = calId;
+                cabanasData[idx].google_calendar_iframe = undefined;
+            }
+            renderCabanas();
+        } catch(e) {
+            log(`❌ ${nombre}: error — ${e.message}`, 'err');
+        }
+    };
+
+    // ── MIGRAR TODAS ───────────────────────────────────────
+    window.migrarTodas = async function() {
+        if (!confirm('¿Migrar todas las cabañas? Se copiará google_calendar_iframe → google_calendar_id y se eliminará el campo viejo.')) return;
+        log('── Iniciando migración de todas las cabañas ──', 'info');
+        for (const c of cabanasData) {
+            await migrarUna(c.docId);
+        }
+        log('── Migración completada ──', 'info');
+    };
+</script>
+</body>
+</html>
