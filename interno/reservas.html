@@ -3,300 +3,231 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nueva Reserva - CasaVerdeCanas</title>
-    
+    <title>Reservas - Casa Verde Canas</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <link rel="stylesheet" href="/css/admin-style.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { background: #f5f7fa; }
+        .admin-header { background: #2d5a27; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+        .admin-nav { background: white; padding: 0 25px; display: flex; gap: 5px; border-bottom: 1px solid #e0e0e0; flex-wrap: wrap; }
+        .nav-item { padding: 14px 20px; background: none; border: none; cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; gap: 8px; color: #6c757d; text-decoration: none; }
+        .nav-item.active { color: #2d5a27; border-bottom: 3px solid #2d5a27; }
+        .admin-content { max-width: 1400px; margin: 30px auto; padding: 0 25px; }
+        .card { background: white; border-radius: 20px; padding: 25px; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .card h2 { color: #2d5a27; margin-bottom: 20px; border-bottom: 2px solid #e8f5e9; padding-bottom: 10px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 15px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; margin: 5px; }
+        .btn-primary { background: #2d5a27; color: white; }
+        .btn-success { background: #27ae60; color: white; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-secondary { background: #95a5a6; color: white; }
+        .reserva-card { background: #f8f9fa; border-radius: 12px; padding: 15px; margin-bottom: 15px; border-left: 4px solid #2d5a27; }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+        .badge-confirmada { background: #e8f5e9; color: #27ae60; }
+        .badge-pendiente { background: #fff3e0; color: #f39c12; }
+        .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; }
+        .modal-content { background:white; padding:30px; border-radius:20px; width:90%; max-width:600px; max-height:90vh; overflow-y:auto; }
+        @media (max-width:768px){ .form-row{ grid-template-columns:1fr; } }
+    </style>
 </head>
 <body>
-
-<div id="loginContainer" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #1e3c2c 0%, #2d5a27 100%);">
-    <div style="background: white; padding: 40px; border-radius: 24px; width: 350px; text-align: center;">
-        <h2 style="color: #2d5a27;">➕ Nueva Reserva</h2>
-        <input type="email" id="email" placeholder="Email" style="width:100%; padding:12px; margin:10px 0; border:1px solid #ddd; border-radius:12px;">
-        <input type="password" id="password" placeholder="Contraseña" style="width:100%; padding:12px; margin:10px 0; border:1px solid #ddd; border-radius:12px;">
-        <button onclick="login()" style="width:100%; padding:12px; background:#2d5a27; color:white; border:none; border-radius:12px;">Ingresar</button>
-        <div id="loginError" style="color:red; margin-top:10px;"></div>
+<div id="loginContainer" style="display: flex; justify-content: center; align-items: center; min-height: 100vh;">
+    <div style="background:white; padding:40px; border-radius:24px; width:350px; text-align:center;">
+        <h2>📅 Reservas</h2>
+        <input type="email" id="email" placeholder="Email">
+        <input type="password" id="password" placeholder="Contraseña">
+        <button onclick="login()">Ingresar</button>
+        <div id="loginError" style="color:red;"></div>
     </div>
 </div>
-
-<div id="mainPanel" style="display: none;">
-    <div class="admin-header">
-        <h1><span class="material-icons">add_circle</span> Nueva Reserva Directa</h1>
-        <div class="user-info">
-            <span class="material-icons">account_circle</span>
-            <span id="userEmail"></span>
-            <button class="logout-btn" onclick="logout()"><span class="material-icons">logout</span> Salir</button>
-        </div>
-    </div>
-    
+<div id="mainPanel" style="display:none;">
+    <div class="admin-header"><h1>📅 Reservas</h1><div><span id="userEmail"></span><button class="btn-secondary" onclick="logout()">Salir</button></div></div>
     <div class="admin-nav">
-        <a href="dashboard.html" class="nav-item"><span class="material-icons">dashboard</span> Dashboard</a>
-        <a href="calendario.html" class="nav-item"><span class="material-icons">calendar_month</span> Calendario</a>
-        <a href="reservas.html" class="nav-item active"><span class="material-icons">add_circle</span> Nueva Reserva</a>
-        <a href="clientes.html" class="nav-item"><span class="material-icons">people</span> Clientes</a>
-        <a href="pagos.html" class="nav-item"><span class="material-icons">payments</span> Pagos</a>
+        <a href="dashboard.html" class="nav-item">Dashboard</a>
+        <a href="reservas.html" class="nav-item active">Reservas</a>
+        <a href="presupuestos.html" class="nav-item">Presupuestos</a>
+        <a href="cabanas-admin.html" class="nav-item">Cabañas</a>
+        <a href="clientes.html" class="nav-item">Clientes</a>
+        <a href="pagos.html" class="nav-item">Pagos</a>
     </div>
-    
     <div class="admin-content">
-        <div class="card">
-            <h2><span class="material-icons">hotel</span> Datos de la Reserva</h2>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    <label>👤 Nombre del cliente *</label>
-                    <input type="text" id="nombre" placeholder="Nombre completo" required>
-                </div>
-                <div class="form-group">
-                    <label>📱 WhatsApp</label>
-                    <input type="text" id="whatsapp" placeholder="+55 11 99999-9999">
-                </div>
-                <div class="form-group">
-                    <label>🌎 Nacionalidad</label>
-                    <input type="text" id="nacionalidad" placeholder="Ej: Argentina, Brasil">
-                </div>
-            </div>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    <label>🏠 Cabaña *</label>
-                    <select id="cabaña">
-                        <option value="1">Cabaña 1 (Naranja) - Frente</option>
-                        <option value="2">Cabaña 2 (Azul) - Depa abajo</option>
-                        <option value="3">Cabaña 3 (Verde) - Loft</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>📅 Check-in *</label>
-                    <input type="date" id="checkIn" required>
-                </div>
-                <div class="form-group">
-                    <label>📅 Check-out *</label>
-                    <input type="date" id="checkOut" required>
-                </div>
-            </div>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    <label>👥 Cantidad de huéspedes</label>
-                    <input type="number" id="huespedes" min="1" max="20" value="2">
-                </div>
-                <div class="form-group">
-                    <label>💰 Precio por día (BRL)</label>
-                    <input type="number" id="precioDiario" value="250" step="10">
-                </div>
-                <div class="form-group">
-                    <label>🧹 Costo limpieza (BRL)</label>
-                    <input type="number" id="costoLimpieza" value="150" step="10">
-                </div>
-            </div>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    <label>💱 Tipo de cambio (1 USD = ? BRL)</label>
-                    <input type="number" id="tipoCambio" value="5.30" step="0.01">
-                </div>
-                <div class="form-group">
-                    <label>👤 Usuario que gestiona</label>
-                    <select id="gestion"></select>
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <label>📝 Observaciones</label>
-                <textarea id="observaciones" rows="3" placeholder="Notas adicionales..."></textarea>
-            </div>
-            
-            <div id="preview" style="background: #e8f5e9; padding: 15px; border-radius: 12px; margin: 20px 0;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                    <span>🏠 Estadía:</span>
-                    <span id="diasPreview">0 días</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                    <span>💰 Subtotal (BRL):</span>
-                    <span id="subtotalPreview">R$ 0,00</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                    <span>🧹 Limpieza:</span>
-                    <span id="limpiezaPreview">R$ 150,00</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.1rem; margin-top: 8px; padding-top: 8px; border-top: 1px solid #c8e6c9;">
-                    <span>💵 TOTAL:</span>
-                    <span id="totalPreview">R$ 0,00</span>
-                </div>
-                <div id="usdPreview" style="font-size: 12px; color: #2d5a27; text-align: right; margin-top: 8px;"></div>
-            </div>
-            
-            <div style="display: flex; gap: 15px; justify-content: flex-end;">
-                <button class="btn-secondary" onclick="limpiarFormulario()"><span class="material-icons">refresh</span> Limpiar</button>
-                <button class="btn-primary" onclick="guardarReserva()"><span class="material-icons">save</span> Guardar Reserva</button>
-            </div>
-        </div>
+        <div class="card"><h2>Listado de Reservas</h2><button class="btn-primary" onclick="nuevaReserva()">+ Nueva Reserva</button><div id="reservasList"></div></div>
     </div>
 </div>
-
-<script src="/js/auth-core.js"></script>
+<!-- Modal Reserva -->
+<div id="modalReserva" class="modal">
+    <div class="modal-content">
+        <h3 id="modalTitle">Nueva Reserva</h3>
+        <input type="hidden" id="reservaId">
+        <div class="form-row"><div class="form-group"><label>Cabaña</label><select id="cabañaSelect"></select></div><div class="form-group"><label>Check-in</label><input type="date" id="checkIn"></div><div class="form-group"><label>Check-out</label><input type="date" id="checkOut"></div></div>
+        <div class="form-row"><div class="form-group"><label>Nombre cliente</label><input type="text" id="clienteNombre"></div><div class="form-group"><label>Adultos</label><input type="number" id="adultos" value="2"></div><div class="form-group"><label>Niños</label><input type="number" id="ninos" value="0"></div></div>
+        <div class="form-group"><label>Origen</label><select id="origen"><option value="directa">Directa</option><option value="airbnb">Airbnb</option><option value="presupuesto">Presupuesto</option></select></div>
+        <div class="form-group"><label>Notas</label><textarea id="notas" rows="2"></textarea></div>
+        <div id="precioCalculado" style="background:#e8f5e9; padding:10px; border-radius:8px; margin:10px 0;"></div>
+        <div><button class="btn-primary" onclick="guardarReserva()">Guardar</button><button class="btn-secondary" onclick="cerrarModal()">Cancelar</button></div>
+    </div>
+</div>
 <script>
-    let usuariosList = [];
-    
-    function calcularDias() {
-        const checkIn = document.getElementById('checkIn').value;
-        const checkOut = document.getElementById('checkOut').value;
-        if (checkIn && checkOut) {
-            const inicio = new Date(checkIn);
-            const fin = new Date(checkOut);
-            const diff = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24));
-            return diff > 0 ? diff : 0;
-        }
-        return 0;
-    }
-    
-    function actualizarPreview() {
-        const dias = calcularDias();
-        const precioDiario = parseFloat(document.getElementById('precioDiario').value) || 0;
-        const costoLimpieza = parseFloat(document.getElementById('costoLimpieza').value) || 0;
-        const tipoCambio = parseFloat(document.getElementById('tipoCambio').value) || 5.30;
-        
-        const subtotal = dias * precioDiario;
-        const total = subtotal + costoLimpieza;
-        const totalUSD = total / tipoCambio;
-        
-        document.getElementById('diasPreview').textContent = `${dias} ${dias === 1 ? 'día' : 'días'}`;
-        document.getElementById('subtotalPreview').textContent = `R$ ${subtotal.toFixed(2)}`;
-        document.getElementById('limpiezaPreview').textContent = `R$ ${costoLimpieza.toFixed(2)}`;
-        document.getElementById('totalPreview').textContent = `R$ ${total.toFixed(2)}`;
-        document.getElementById('usdPreview').innerHTML = `≈ USD ${totalUSD.toFixed(2)} (1 USD = R$ ${tipoCambio.toFixed(2)})`;
-    }
-    
-    async function cargarUsuarios() {
+    const firebaseConfig = { apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4", authDomain: "casaverdecanas-199.firebaseapp.com", projectId: "casaverdecanas-199" };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    let currentUser = null;
+    let cabanas = [];
+
+    async function login() {
+        const email = document.getElementById('email').value, password = document.getElementById('password').value;
         try {
-            const snapshot = await db.collection('usuarios').get();
-            usuariosList = [];
-            snapshot.forEach(doc => usuariosList.push({ id: doc.id, ...doc.data() }));
-            const select = document.getElementById('gestion');
-            select.innerHTML = '<option value="">Seleccionar usuario...</option>';
-            usuariosList.forEach(u => {
-                const nombre = u.nombre || u.email || u.id;
-                select.innerHTML += `<option value="${u.id}">${escapeHtml(nombre)}</option>`;
-            });
-        } catch (error) {
-            console.error('Error cargando usuarios:', error);
-        }
+            const cred = await auth.signInWithEmailAndPassword(email, password);
+            const userDoc = await db.collection('usuarios').doc(cred.user.uid).get();
+            if(userDoc.exists && userDoc.data().rol === 'admin') {
+                currentUser = cred.user;
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('mainPanel').style.display = 'block';
+                document.getElementById('userEmail').textContent = email;
+                cargarCabanasSelect();
+                cargarReservas();
+            } else alert('No eres admin');
+        } catch(e) { document.getElementById('loginError').innerText = e.message; }
     }
-    
+    function logout() { auth.signOut().then(()=>location.reload()); }
+    async function cargarCabanasSelect() {
+        const snap = await db.collection('cabanas').where('activa','==',true).orderBy('orden').get();
+        cabanas = snap.docs.map(d=>({ id: d.id, ...d.data() }));
+        const select = document.getElementById('cabañaSelect');
+        select.innerHTML = cabanas.map(c=>`<option value="${c.id}">${c.nombre?.es||c.id}</option>`).join('');
+    }
+    async function cargarReservas() {
+        const snap = await db.collection('reservas').orderBy('checkIn','desc').get();
+        const container = document.getElementById('reservasList');
+        if(snap.empty) { container.innerHTML='<div>No hay reservas</div>'; return; }
+        container.innerHTML = snap.docs.map(doc=>{
+            const r = doc.data();
+            const checkIn = r.checkIn?.toDate?.()?.toLocaleDateString() || '';
+            const checkOut = r.checkOut?.toDate?.()?.toLocaleDateString() || '';
+            return `<div class="reserva-card"><strong>${r.nombre}</strong> - Cabaña ${r.caba}<br>${checkIn} → ${checkOut}<br>Total: R$ ${r.totalBRL?.toFixed(2)}<br><span class="badge ${r.estado==='confirmada'?'badge-confirmada':'badge-pendiente'}">${r.estado||'confirmada'}</span><br><button class="btn-sm btn-primary" onclick="editarReserva('${doc.id}')">Editar</button> <button class="btn-sm btn-danger" onclick="eliminarReserva('${doc.id}')">Eliminar</button></div>`;
+        }).join('');
+    }
+    function nuevaReserva() {
+        document.getElementById('modalTitle').innerText = 'Nueva Reserva';
+        document.getElementById('reservaId').value = '';
+        document.getElementById('clienteNombre').value = '';
+        document.getElementById('checkIn').value = '';
+        document.getElementById('checkOut').value = '';
+        document.getElementById('adultos').value = '2';
+        document.getElementById('ninos').value = '0';
+        document.getElementById('origen').value = 'directa';
+        document.getElementById('notas').value = '';
+        document.getElementById('precioCalculado').innerHTML = '';
+        document.getElementById('modalReserva').style.display = 'flex';
+    }
+    async function editarReserva(id) {
+        const doc = await db.collection('reservas').doc(id).get();
+        if(!doc.exists) return;
+        const r = doc.data();
+        document.getElementById('modalTitle').innerText = 'Editar Reserva';
+        document.getElementById('reservaId').value = id;
+        document.getElementById('cabañaSelect').value = r.caba;
+        document.getElementById('clienteNombre').value = r.nombre;
+        document.getElementById('checkIn').value = r.checkIn?.toDate?.()?.toISOString().split('T')[0] || '';
+        document.getElementById('checkOut').value = r.checkOut?.toDate?.()?.toISOString().split('T')[0] || '';
+        document.getElementById('adultos').value = r.adultos || 2;
+        document.getElementById('ninos').value = r.ninos || 0;
+        document.getElementById('origen').value = r.origen || 'directa';
+        document.getElementById('notas').value = r.notas || '';
+        document.getElementById('precioCalculado').innerHTML = `Total calculado: R$ ${r.totalBRL?.toFixed(2)}`;
+        document.getElementById('modalReserva').style.display = 'flex';
+    }
+    function cerrarModal() { document.getElementById('modalReserva').style.display = 'none'; }
     async function guardarReserva() {
-        const nombre = document.getElementById('nombre').value.trim();
-        if (!nombre) { alert('Ingresa el nombre del cliente'); return; }
-        
+        const id = document.getElementById('reservaId').value;
+        const caba = parseInt(document.getElementById('cabañaSelect').value);
+        const nombre = document.getElementById('clienteNombre').value.trim();
+        if(!nombre) { alert('Nombre del cliente requerido'); return; }
         const checkIn = document.getElementById('checkIn').value;
         const checkOut = document.getElementById('checkOut').value;
-        if (!checkIn || !checkOut) { alert('Ingresa las fechas'); return; }
-        
-        const dias = calcularDias();
-        if (dias <= 0) { alert('Check-out debe ser posterior a check-in'); return; }
-        
-        const precioDiario = parseFloat(document.getElementById('precioDiario').value) || 0;
-        const costoLimpieza = parseFloat(document.getElementById('costoLimpieza').value) || 0;
-        const tipoCambio = parseFloat(document.getElementById('tipoCambio').value) || 5.30;
-        const subtotal = dias * precioDiario;
-        const totalBRL = subtotal + costoLimpieza;
-        const totalUSD = totalBRL / tipoCambio;
-        
-        const data = {
-            caba: document.getElementById('cabaña').value,
+        if(!checkIn || !checkOut) { alert('Fechas requeridas'); return; }
+        const adultos = parseInt(document.getElementById('adultos').value) || 0;
+        const ninos = parseInt(document.getElementById('ninos').value) || 0;
+        const origen = document.getElementById('origen').value;
+        const notas = document.getElementById('notas').value;
+        // Calcular precio usando tarifas de la cabaña
+        const cabanaDoc = await db.collection('cabanas').doc(caba.toString()).get();
+        const cabanaData = cabanaDoc.data();
+        const tarifas = cabanaData.tarifas;
+        const personasExtra = Math.max(0, (adultos+ninos) - (cabanaData.capacidad?.base||2));
+        let totalNoches = 0;
+        let fecha = new Date(checkIn);
+        const fin = new Date(checkOut);
+        while(fecha < fin) {
+            const fechaStr = fecha.toISOString().split('T')[0];
+            const intervalo = (tarifas.intervalos || []).find(i=> i.desde <= fechaStr && i.hasta >= fechaStr);
+            const precioNoche = intervalo ? intervalo.precioNoche : tarifas.precioBase;
+            const precioExtra = intervalo ? intervalo.precioExtra : tarifas.precioExtraPersona;
+            totalNoches += precioNoche + (personasExtra * precioExtra);
+            fecha.setDate(fecha.getDate()+1);
+        }
+        const total = totalNoches + tarifas.precioLimpieza;
+        const reservaData = {
+            caba: caba,
             nombre: nombre,
             checkIn: firebase.firestore.Timestamp.fromDate(new Date(checkIn)),
             checkOut: firebase.firestore.Timestamp.fromDate(new Date(checkOut)),
-            huespedes: document.getElementById('huespedes').value,
-            observaciones: document.getElementById('observaciones').value,
-            origen: 'directa',
-            gestion: document.getElementById('gestion').value,
-            precioDiarioBRL: precioDiario,
-            costoLimpiezaBRL: costoLimpieza,
-            subtotalBRL: subtotal,
-            totalBRL: totalBRL,
-            totalUSD: totalUSD,
-            tipoCambio: tipoCambio,
-            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            adultos: adultos, ninos: ninos, huespedes: adultos+ninos,
+            origen: origen, notas: notas, estado: 'confirmada',
+            totalBRL: total, subtotalBRL: totalNoches, costoLimpiezaBRL: tarifas.precioLimpieza,
+            actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
         };
-        
-        // Guardar también en clientes si no existe
-        const clienteExistente = await db.collection('clientes').where('nombre', '==', nombre).get();
-        if (clienteExistente.empty) {
-            await db.collection('clientes').add({
-                nombre: nombre,
-                whatsapp: document.getElementById('whatsapp').value,
-                nacionalidad: document.getElementById('nacionalidad').value,
-                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-            });
-        }
-        
-        await db.collection('reservas').add(data);
-        alert(`✅ Reserva creada para ${nombre}\nTotal: R$ ${totalBRL.toFixed(2)} (USD ${totalUSD.toFixed(2)})`);
-        limpiarFormulario();
+        try {
+            if(id) {
+                await db.collection('reservas').doc(id).update(reservaData);
+                alert('Reserva actualizada');
+            } else {
+                reservaData.creadoEn = firebase.firestore.FieldValue.serverTimestamp();
+                reservaData.creadoPor = currentUser.uid;
+                const ref = await db.collection('reservas').add(reservaData);
+                // Crear tarea de limpieza automática
+                await crearTareaLimpieza(ref.id, reservaData);
+                alert('Reserva creada y tarea de limpieza generada');
+            }
+            cerrarModal();
+            cargarReservas();
+        } catch(e) { alert('Error: '+e.message); }
     }
-    
-    function limpiarFormulario() {
-        document.getElementById('nombre').value = '';
-        document.getElementById('whatsapp').value = '';
-        document.getElementById('nacionalidad').value = '';
-        document.getElementById('cabaña').value = '1';
-        document.getElementById('checkIn').value = '';
-        document.getElementById('checkOut').value = '';
-        document.getElementById('huespedes').value = '2';
-        document.getElementById('precioDiario').value = '250';
-        document.getElementById('costoLimpieza').value = '150';
-        document.getElementById('tipoCambio').value = '5.30';
-        document.getElementById('observaciones').value = '';
-        document.getElementById('gestion').value = '';
-        actualizarPreview();
+    async function crearTareaLimpieza(reservaId, reserva) {
+        const checkOut = reserva.checkOut.toDate();
+        const checkIn = reserva.checkIn.toDate();
+        const fechaInicio = new Date(checkOut);
+        fechaInicio.setHours(checkOut.getHours()+1);
+        const fechaFin = new Date(checkIn);
+        fechaFin.setHours(checkIn.getHours()-1);
+        const descripcion = `Check-out: ${checkOut.toLocaleString()}\nCheck-in: ${checkIn.toLocaleString()}\nHuéspedes: ${reserva.huespedes}\nMonto limpieza: R$ ${reserva.costoLimpiezaBRL}`;
+        await db.collection('tareas').add({
+            nombre: `🧹 Limpiar Cabaña ${reserva.caba} - ${reserva.nombre}`,
+            descripcion: descripcion,
+            tipo: 'limpieza',
+            prioridad: 'alta',
+            fechaInicio: fechaFin.toISOString().split('T')[0],
+            recurrencia: 0,
+            activa: true,
+            completada: false,
+            reservaId: reservaId,
+            cabaña: reserva.caba,
+            montoLimpieza: reserva.costoLimpiezaBRL,
+            colaboradores: [],
+            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        });
     }
-    
-    document.getElementById('checkIn').addEventListener('change', actualizarPreview);
-    document.getElementById('checkOut').addEventListener('change', actualizarPreview);
-    document.getElementById('precioDiario').addEventListener('input', actualizarPreview);
-    document.getElementById('costoLimpieza').addEventListener('input', actualizarPreview);
-    document.getElementById('tipoCambio').addEventListener('input', actualizarPreview);
-    
-    async function login() {
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        const errorDiv = document.getElementById('loginError');
-        const result = await loginAdmin(email, password);
-        if (result.success) {
-            document.getElementById('loginContainer').style.display = 'none';
-            document.getElementById('mainPanel').style.display = 'block';
-            document.getElementById('userEmail').textContent = result.user.email;
-            cargarUsuarios();
-            actualizarPreview();
-        } else {
-            errorDiv.textContent = result.error;
-        }
-    }
-    
-    async function logout() {
-        await logoutAdmin();
-        window.location.reload();
-    }
-    
-    checkAdmin().then(isAdmin => {
-        if (isAdmin) {
-            document.getElementById('loginContainer').style.display = 'none';
-            document.getElementById('mainPanel').style.display = 'block';
-            document.getElementById('userEmail').textContent = currentUser.email;
-            cargarUsuarios();
-            actualizarPreview();
-        }
-    });
-    
-    window.login = login;
-    window.logout = logout;
-    window.limpiarFormulario = limpiarFormulario;
-    window.guardarReserva = guardarReserva;
+    async function eliminarReserva(id) { if(confirm('¿Eliminar reserva?')){ await db.collection('reservas').doc(id).delete(); cargarReservas(); } }
+    window.nuevaReserva = nuevaReserva; window.editarReserva = editarReserva; window.guardarReserva = guardarReserva; window.cerrarModal = cerrarModal; window.eliminarReserva = eliminarReserva;
+    window.login = login; window.logout = logout;
+    auth.onAuthStateChanged(user=>{ if(user) login(); });
 </script>
 </body>
 </html>
