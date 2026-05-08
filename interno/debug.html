@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug - Casa Verde Canas</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: monospace; }
+        body { background: #1a1a2e; color: #e0e0e0; padding: 16px; font-size: 13px; }
+        h2 { color: #00d4aa; margin-bottom: 16px; font-size: 16px; }
+        .section { background: #16213e; border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+        .section h3 { color: #0f9b8e; margin-bottom: 10px; font-size: 13px; text-transform: uppercase; }
+        .log-entry { padding: 6px 8px; border-radius: 6px; margin-bottom: 6px; word-break: break-all; line-height: 1.5; }
+        .log-ok      { background: #0d3b2e; color: #2ecc71; }
+        .log-error   { background: #3b0d0d; color: #e74c3c; }
+        .log-warn    { background: #3b2e0d; color: #f39c12; }
+        .log-info    { background: #0d1e3b; color: #3498db; }
+        .log-default { background: #222; color: #ccc; }
+        .btn { display: inline-block; padding: 10px 20px; background: #00d4aa; color: #1a1a2e; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; margin: 6px 4px; font-size: 13px; }
+        .btn-red { background: #e74c3c; color: white; }
+        .status-chip { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; margin-left: 8px; }
+        .chip-ok  { background: #2ecc71; color: #1a1a2e; }
+        .chip-err { background: #e74c3c; color: white; }
+        .chip-load { background: #f39c12; color: #1a1a2e; }
+        #loginTestResult { margin-top: 10px; }
+        input { width: 100%; padding: 10px; margin: 6px 0; background: #222; border: 1px solid #444; border-radius: 8px; color: white; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<h2>🔍 Debug — Casa Verde Canas</h2>
+
+<!-- 1. SCRIPTS -->
+<div class="section">
+    <h3>1. Carga de scripts</h3>
+    <div id="scriptsStatus"><div class="log-entry log-warn">⏳ Verificando...</div></div>
+</div>
+
+<!-- 2. FIREBASE -->
+<div class="section">
+    <h3>2. Firebase</h3>
+    <div id="firebaseStatus"><div class="log-entry log-warn">⏳ Verificando...</div></div>
+</div>
+
+<!-- 3. UTILS.JS -->
+<div class="section">
+    <h3>3. utils.js / CVC</h3>
+    <div id="cvcStatus"><div class="log-entry log-warn">⏳ Verificando...</div></div>
+</div>
+
+<!-- 4. TEST LOGIN -->
+<div class="section">
+    <h3>4. Test de login</h3>
+    <input type="email"    id="testEmail"    placeholder="Email admin">
+    <input type="password" id="testPassword" placeholder="Contraseña">
+    <button class="btn" onclick="testLogin()">Probar login</button>
+    <div id="loginTestResult"></div>
+</div>
+
+<!-- 5. CONSOLA -->
+<div class="section">
+    <h3>5. Consola (errores capturados)</h3>
+    <button class="btn btn-red" onclick="limpiarConsola()">Limpiar</button>
+    <div id="consoleOutput"></div>
+</div>
+
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"
+    onload="marcarScript('firebase-app', true)"
+    onerror="marcarScript('firebase-app', false)"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"
+    onload="marcarScript('firebase-auth', true)"
+    onerror="marcarScript('firebase-auth', false)"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"
+    onload="marcarScript('firebase-firestore', true)"
+    onerror="marcarScript('firebase-firestore', false)"></script>
+<script src="utils.js"
+    onload="marcarScript('utils.js', true)"
+    onerror="marcarScript('utils.js', false)"></script>
+
+<script>
+// ── Capturar errores globales ─────────────────────────
+const logs = [];
+
+function addLog(msg, tipo) {
+    logs.push({ msg, tipo, time: new Date().toLocaleTimeString('es-AR') });
+    renderLogs();
+}
+
+function renderLogs() {
+    const el = document.getElementById('consoleOutput');
+    if (!logs.length) { el.innerHTML = '<div class="log-entry log-default">Sin errores capturados ✅</div>'; return; }
+    el.innerHTML = logs.map(l =>
+        `<div class="log-entry log-${l.tipo}">[${l.time}] ${escHtml(l.msg)}</div>`
+    ).join('');
+}
+
+window.onerror = function(msg, src, line, col, err) {
+    addLog(`❌ ${msg} (${src}:${line}:${col})`, 'error');
+    return false;
+};
+
+window.addEventListener('unhandledrejection', function(e) {
+    addLog(`❌ Promise rechazada: ${e.reason?.message || e.reason}`, 'error');
+});
+
+// Override console
+const _origError = console.error.bind(console);
+const _origWarn  = console.warn.bind(console);
+const _origLog   = console.log.bind(console);
+console.error = (...a) => { addLog('ERR: ' + a.join(' '), 'error'); _origError(...a); };
+console.warn  = (...a) => { addLog('WARN: ' + a.join(' '), 'warn');  _origWarn(...a); };
+
+window.limpiarConsola = () => { logs.length = 0; renderLogs(); };
+
+// ── Estado de scripts ──────────────────────────────────
+const scriptStatus = {};
+window.marcarScript = function(nombre, ok) {
+    scriptStatus[nombre] = ok;
+    renderScripts();
+};
+
+function renderScripts() {
+    const nombres = ['firebase-app', 'firebase-auth', 'firebase-firestore', 'utils.js'];
+    document.getElementById('scriptsStatus').innerHTML = nombres.map(n => {
+        const estado = scriptStatus[n];
+        const chip = estado === undefined ? 'chip-load' : (estado ? 'chip-ok' : 'chip-err');
+        const txt  = estado === undefined ? '⏳' : (estado ? '✅ OK' : '❌ Error');
+        return `<div class="log-entry ${estado === false ? 'log-error' : (estado ? 'log-ok' : 'log-warn')}">
+            ${n} <span class="status-chip ${chip}">${txt}</span>
+        </div>`;
+    }).join('');
+}
+renderScripts();
+
+// ── Verificar Firebase ─────────────────────────────────
+function verificarFirebase() {
+    const el = document.getElementById('firebaseStatus');
+    try {
+        if (typeof firebase === 'undefined') throw new Error('firebase no definido');
+        if (!firebase.apps.length) {
+            // Si utils.js no lo inicializó, intentar acá
+            firebase.initializeApp({
+                apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
+                authDomain: "casaverdecanas-199.firebaseapp.com",
+                projectId: "casaverdecanas-199"
+            });
+        }
+        const app = firebase.app();
+        el.innerHTML = `<div class="log-entry log-ok">✅ Firebase inicializado<br>App: ${app.name} | Project: ${app.options.projectId}</div>`;
+    } catch(e) {
+        el.innerHTML = `<div class="log-entry log-error">❌ ${e.message}</div>`;
+        addLog('Firebase error: ' + e.message, 'error');
+    }
+}
+
+// ── Verificar CVC (utils.js) ───────────────────────────
+function verificarCVC() {
+    const el = document.getElementById('cvcStatus');
+    try {
+        if (typeof CVC === 'undefined') throw new Error('CVC no definido — utils.js no cargó o tiene un error interno');
+        const metodos = ['verificarAuth', 'calcularPrecio', 'crearTareaLimpieza', 'cerrarSesion', 'escapeHtml'];
+        const faltantes = metodos.filter(m => typeof CVC[m] !== 'function');
+        if (faltantes.length) throw new Error('Métodos faltantes en CVC: ' + faltantes.join(', '));
+        el.innerHTML = `<div class="log-entry log-ok">✅ CVC cargado correctamente<br>Métodos: ${metodos.join(', ')}</div>`;
+    } catch(e) {
+        el.innerHTML = `<div class="log-entry log-error">❌ ${e.message}</div>`;
+        addLog('CVC error: ' + e.message, 'error');
+    }
+}
+
+// ── Test login ─────────────────────────────────────────
+window.testLogin = async function() {
+    const email    = document.getElementById('testEmail').value.trim();
+    const password = document.getElementById('testPassword').value;
+    const result   = document.getElementById('loginTestResult');
+
+    if (!email || !password) {
+        result.innerHTML = '<div class="log-entry log-warn">⚠️ Ingresá email y contraseña</div>';
+        return;
+    }
+
+    result.innerHTML = '<div class="log-entry log-warn">⏳ Intentando login...</div>';
+
+    try {
+        const auth = firebase.auth();
+        const db   = firebase.firestore();
+        const cred = await auth.signInWithEmailAndPassword(email, password);
+        result.innerHTML = `<div class="log-entry log-ok">✅ Auth OK — UID: ${cred.user.uid}</div>`;
+
+        // Verificar doc en usuarios
+        try {
+            const userDoc = await db.collection('usuarios').doc(cred.user.uid).get();
+            if (!userDoc.exists) {
+                result.innerHTML += `<div class="log-entry log-error">❌ No existe doc en /usuarios/${cred.user.uid}</div>`;
+            } else {
+                const data = userDoc.data();
+                result.innerHTML += `<div class="log-entry log-ok">✅ Usuario encontrado<br>Nombre: ${data.nombre || '—'}<br>Rol: ${data.rol}<br>Activo: ${data.activo}</div>`;
+                if (!data.activo) result.innerHTML += `<div class="log-entry log-error">❌ Usuario inactivo — no puede ingresar</div>`;
+                if (!data.rol)    result.innerHTML += `<div class="log-entry log-error">❌ Campo 'rol' vacío o faltante</div>`;
+            }
+        } catch(e2) {
+            result.innerHTML += `<div class="log-entry log-error">❌ Error leyendo Firestore: ${e2.message}</div>`;
+        }
+
+        await auth.signOut();
+        result.innerHTML += `<div class="log-entry log-info">ℹ️ Sesión cerrada después del test</div>`;
+
+    } catch(e) {
+        const msgs = {
+            'auth/user-not-found':    'Usuario no encontrado',
+            'auth/wrong-password':    'Contraseña incorrecta',
+            'auth/invalid-email':     'Email inválido',
+            'auth/too-many-requests': 'Demasiados intentos',
+            'auth/network-request-failed': 'Error de red'
+        };
+        result.innerHTML = `<div class="log-entry log-error">❌ ${msgs[e.code] || e.message}<br>Código: ${e.code || '—'}</div>`;
+        addLog('Login error: ' + (e.code || e.message), 'error');
+    }
+};
+
+function escHtml(s) { if (!s) return ''; return String(s).replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]||m)); }
+
+// ── Init — esperar que carguen los scripts ─────────────
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        verificarFirebase();
+        verificarCVC();
+        renderLogs();
+        if (!logs.length) {
+            document.getElementById('consoleOutput').innerHTML =
+                '<div class="log-entry log-ok">Sin errores capturados ✅</div>';
+        }
+    }, 800);
+});
+</script>
+</body>
+</html>
