@@ -4,260 +4,567 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Presupuestos - Casa Verde Canas</title>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
         body { background: #f5f7fa; }
-        .admin-header { background: #2d5a27; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
-        .admin-nav { background: white; padding: 0 25px; display: flex; gap: 5px; border-bottom: 1px solid #e0e0e0; flex-wrap: wrap; }
-        .nav-item { padding: 14px 20px; background: none; border: none; cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; gap: 8px; color: #6c757d; text-decoration: none; }
-        .nav-item.active { color: #2d5a27; border-bottom: 3px solid #2d5a27; }
-        .admin-content { max-width: 1400px; margin: 30px auto; padding: 0 25px; }
-        .card { background: white; border-radius: 20px; padding: 25px; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-        .card h2 { color: #2d5a27; margin-bottom: 20px; border-bottom: 2px solid #e8f5e9; padding-bottom: 10px; }
+
+        .admin-header {
+            background: linear-gradient(135deg, #2d5a27, #1e3f1a);
+            color: white; padding: 14px 28px;
+            display: flex; justify-content: space-between; align-items: center;
+            flex-wrap: wrap; gap: 10px;
+            position: sticky; top: 0; z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+        }
+        .admin-header h1 { display: flex; align-items: center; gap: 10px; font-size: 1.2rem; }
+        .user-chip {
+            display: flex; align-items: center; gap: 12px;
+            background: rgba(255,255,255,0.15); padding: 6px 16px; border-radius: 40px; font-size: 14px;
+        }
+        .btn-logout {
+            background: rgba(231,76,60,0.85); color: white; border: none;
+            padding: 6px 14px; border-radius: 30px; cursor: pointer; font-size: 13px;
+            display: flex; align-items: center; gap: 5px;
+        }
+
+        .admin-nav {
+            background: white; padding: 0 28px;
+            display: flex; gap: 4px; border-bottom: 1px solid #e0e0e0; overflow-x: auto;
+        }
+        .nav-item {
+            padding: 13px 18px; background: none; border: none;
+            border-bottom: 3px solid transparent; cursor: pointer;
+            font-weight: 500; font-size: 14px; color: #6c757d;
+            text-decoration: none; white-space: nowrap;
+            display: inline-flex; align-items: center; gap: 6px; transition: color 0.2s;
+        }
+        .nav-item:hover { color: #2d5a27; }
+        .nav-item.active { color: #2d5a27; border-bottom-color: #2d5a27; }
+
+        .admin-content { max-width: 1400px; margin: 30px auto; padding: 0 28px; }
+
+        .layout { display: grid; grid-template-columns: 1fr 1.4fr; gap: 24px; }
+
+        .card {
+            background: white; border-radius: 20px; padding: 26px;
+            margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .card h2 {
+            color: #2d5a27; font-size: 1.1rem; margin-bottom: 20px;
+            padding-bottom: 12px; border-bottom: 2px solid #e8f5e9;
+            display: flex; align-items: center; gap: 8px;
+        }
+
         .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; }
-        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 15px; }
-        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; margin: 5px; }
-        .btn-primary { background: #2d5a27; color: white; }
-        .btn-success { background: #27ae60; color: white; }
-        .btn-warning { background: #f39c12; color: white; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: #555; }
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%; padding: 10px 12px; border: 1.5px solid #ddd;
+            border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s;
+        }
+        .form-group input:focus,
+        .form-group select:focus { border-color: #2d5a27; }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 14px; }
+
+        .btn { padding: 10px 20px; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; margin: 4px; transition: opacity 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+        .btn:hover { opacity: 0.87; }
+        .btn-primary   { background: #2d5a27; color: white; }
+        .btn-success   { background: #27ae60; color: white; }
+        .btn-warning   { background: #f39c12; color: white; }
+        .btn-danger    { background: #e74c3c; color: white; }
         .btn-secondary { background: #95a5a6; color: white; }
-        .presupuesto-card { background: #f8f9fa; border-radius: 12px; padding: 15px; margin-bottom: 15px; border-left: 4px solid #f39c12; }
-        .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-        .badge-pendiente { background: #fff3e0; color: #f39c12; }
-        .badge-confirmado { background: #e8f5e9; color: #27ae60; }
-        .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; }
-        .modal-content { background:white; padding:30px; border-radius:20px; width:90%; max-width:500px; }
-        @media (max-width:768px){ .form-row{ grid-template-columns:1fr; } }
+        .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+        .precio-box {
+            background: linear-gradient(135deg, #e8f5e9, #f0f9f0);
+            border-radius: 14px; padding: 18px; margin: 16px 0;
+            border: 1.5px solid #c8e6c9; display: none;
+        }
+        .precio-box .precio-linea { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; }
+        .precio-box .precio-total { display: flex; justify-content: space-between; padding: 10px 0 4px; font-size: 18px; font-weight: 800; color: #2d5a27; border-top: 2px solid #c8e6c9; margin-top: 6px; }
+
+        /* Lista presupuestos */
+        .presupuesto-card {
+            border: 1.5px solid #e9ecef; border-radius: 14px; padding: 16px;
+            margin-bottom: 12px; transition: border-color 0.2s;
+        }
+        .presupuesto-card:hover { border-color: #a3c9a8; }
+        .presupuesto-card.confirmado { border-left: 5px solid #27ae60; opacity: 0.75; }
+        .presupuesto-card.pendiente  { border-left: 5px solid #f39c12; }
+
+        .pres-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+        .pres-nombre { font-weight: 700; font-size: 15px; color: #2c3e50; }
+        .pres-detalle { font-size: 13px; color: #777; line-height: 1.7; }
+        .pres-total   { font-size: 16px; font-weight: 800; color: #2d5a27; }
+
+        /* Modal pago */
+        .modal {
+            display: none; position: fixed; top:0; left:0;
+            width:100%; height:100%; background:rgba(0,0,0,0.55);
+            z-index:1000; justify-content:center; align-items:center;
+        }
+        .modal.open { display: flex; }
+        .modal-content {
+            background: white; padding: 30px; border-radius: 22px;
+            width: 95%; max-width: 500px; max-height: 92vh; overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        .modal-title {
+            font-size: 1.1rem; font-weight: 700; color: #2d5a27;
+            margin-bottom: 20px; padding-bottom: 12px;
+            border-bottom: 2px solid #e8f5e9;
+        }
+        .resumen-pago {
+            background: #f8f9fa; border-radius: 12px; padding: 14px;
+            margin-bottom: 16px; font-size: 13px; line-height: 1.8; color: #555;
+        }
+        .resumen-pago strong { color: #2c3e50; }
+
+        .empty-state { text-align: center; padding: 40px; color: #bbb; font-size: 14px; }
+        .loading-state { text-align: center; padding: 30px; color: #888; }
+
+        @media (max-width: 900px) {
+            .layout { grid-template-columns: 1fr; }
+            .admin-content { padding: 0 16px; }
+        }
     </style>
 </head>
 <body>
-<div id="loginContainer" style="display: flex; justify-content: center; align-items: center; min-height: 100vh;">
-    <div style="background:white; padding:40px; border-radius:24px; width:350px; text-align:center;">
-        <h2>📊 Presupuestos</h2>
-        <input type="email" id="email" placeholder="Email">
-        <input type="password" id="password" placeholder="Contraseña">
-        <button onclick="login()">Ingresar</button>
-        <div id="loginError" style="color:red;"></div>
+
+<div class="admin-header">
+    <h1><span class="material-icons">request_quote</span> Presupuestos</h1>
+    <div class="user-chip">
+        <span id="userName">—</span>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons" style="font-size:15px;">logout</span> Salir
+        </button>
     </div>
 </div>
-<div id="mainPanel" style="display:none;">
-    <div class="admin-header"><h1>📊 Presupuestos</h1><div><span id="userEmail"></span><button class="btn-secondary" onclick="logout()">Salir</button></div></div>
-    <div class="admin-nav">
-        <a href="dashboard.html" class="nav-item">Dashboard</a>
-        <a href="reservas.html" class="nav-item">Reservas</a>
-        <a href="presupuestos.html" class="nav-item active">Presupuestos</a>
-        <a href="cabanas-admin.html" class="nav-item">Cabañas</a>
-        <a href="clientes.html" class="nav-item">Clientes</a>
-        <a href="pagos.html" class="nav-item">Pagos</a>
-    </div>
-    <div class="admin-content">
-        <div class="card"><h2>Nuevo Presupuesto</h2>
-            <div class="form-row"><div class="form-group"><label>Cabaña</label><select id="cabañaSelect"></select></div><div class="form-group"><label>Check-in</label><input type="date" id="checkIn"></div><div class="form-group"><label>Check-out</label><input type="date" id="checkOut"></div></div>
-            <div class="form-row"><div class="form-group"><label>Adultos</label><input type="number" id="adultos" value="2"></div><div class="form-group"><label>Niños</label><input type="number" id="ninos" value="0"></div></div>
-            <div class="form-group"><label>Nombre del cliente</label><input type="text" id="clienteNombre" placeholder="Opcional"></div>
-            <div class="form-group"><label>Notas / requerimientos</label><textarea id="notas" rows="2"></textarea></div>
-            <div id="precioPreview" style="background:#e8f5e9; padding:10px; border-radius:8px; margin:10px 0;"></div>
-            <button class="btn-primary" onclick="calcularPresupuesto()">Calcular</button>
-            <button class="btn-success" onclick="guardarPresupuesto()">Guardar Presupuesto</button>
+
+<nav class="admin-nav">
+    <a href="dashboard.html"     class="nav-item"><span class="material-icons">dashboard</span> Dashboard</a>
+    <a href="reservas.html"      class="nav-item"><span class="material-icons">event</span> Reservas</a>
+    <a href="presupuestos.html"  class="nav-item active"><span class="material-icons">request_quote</span> Presupuestos</a>
+    <a href="pagos.html"         class="nav-item"><span class="material-icons">payments</span> Pagos</a>
+    <a href="clientes.html"      class="nav-item"><span class="material-icons">people</span> Clientes</a>
+    <a href="cabanas-admin.html" class="nav-item"><span class="material-icons">cottage</span> Cabañas</a>
+    <a href="tareas.html"        class="nav-item"><span class="material-icons">checklist</span> Tareas</a>
+    <a href="calendario.html"    class="nav-item"><span class="material-icons">calendar_month</span> Calendario</a>
+</nav>
+
+<div class="admin-content">
+    <div class="layout">
+
+        <!-- COLUMNA IZQ: Formulario nuevo presupuesto -->
+        <div>
+            <div class="card">
+                <h2><span class="material-icons">calculate</span> Nuevo presupuesto</h2>
+
+                <div class="form-group">
+                    <label>Cabaña *</label>
+                    <select id="cabanaSelect"></select>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Check-in *</label>
+                        <input type="date" id="checkIn">
+                    </div>
+                    <div class="form-group">
+                        <label>Check-out *</label>
+                        <input type="date" id="checkOut">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Adultos</label>
+                        <input type="number" id="adultos" value="2" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Niños</label>
+                        <input type="number" id="ninos" value="0" min="0">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Nombre del cliente</label>
+                    <input type="text" id="clienteNombre" placeholder="Opcional">
+                </div>
+
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="clienteEmail" placeholder="Opcional">
+                </div>
+
+                <div class="form-group">
+                    <label>Teléfono / WhatsApp</label>
+                    <input type="text" id="clienteTel" placeholder="Opcional">
+                </div>
+
+                <div class="form-group">
+                    <label>Notas / requerimientos</label>
+                    <textarea id="notas" rows="2" placeholder="Observaciones especiales..."></textarea>
+                </div>
+
+                <!-- Resultado del cálculo -->
+                <div class="precio-box" id="precioBox">
+                    <div class="precio-linea"><span>🌙 Noches</span><span id="pNoches">—</span></div>
+                    <div class="precio-linea"><span>🏠 Alojamiento</span><span id="pSubtotal">—</span></div>
+                    <div class="precio-linea"><span>🧹 Limpieza</span><span id="pLimpieza">—</span></div>
+                    <div class="precio-total"><span>💰 Total</span><span id="pTotal">—</span></div>
+                </div>
+
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                    <button class="btn btn-secondary" onclick="calcular()">
+                        <span class="material-icons" style="font-size:16px;">calculate</span> Calcular
+                    </button>
+                    <button class="btn btn-primary" onclick="guardarPresupuesto()">
+                        <span class="material-icons" style="font-size:16px;">save</span> Guardar presupuesto
+                    </button>
+                </div>
+            </div>
         </div>
-        <div class="card"><h2>Presupuestos Guardados</h2><div id="presupuestosList"></div></div>
+
+        <!-- COLUMNA DER: Listado -->
+        <div>
+            <div class="card">
+                <h2><span class="material-icons">list</span> Presupuestos guardados</h2>
+
+                <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;">
+                    <button class="btn btn-sm btn-secondary filtro-btn active" data-f="todos">Todos</button>
+                    <button class="btn btn-sm btn-secondary filtro-btn" data-f="pendiente">⏳ Pendientes</button>
+                    <button class="btn btn-sm btn-secondary filtro-btn" data-f="confirmado">✅ Confirmados</button>
+                </div>
+
+                <div id="presupuestosList"><div class="loading-state">Cargando...</div></div>
+            </div>
+        </div>
+
     </div>
 </div>
-<!-- Modal para registrar pago y convertir en reserva -->
+
+<!-- MODAL: Registrar pago y confirmar reserva -->
 <div id="modalPago" class="modal">
     <div class="modal-content">
-        <h3>💰 Registrar Pago y Confirmar Reserva</h3>
+        <div class="modal-title">💰 Registrar pago y confirmar reserva</div>
         <input type="hidden" id="presupuestoId">
-        <div class="form-group"><label>Monto recibido (R$)</label><input type="number" id="montoPago" step="0.01"></div>
-        <div class="form-group"><label>Método de pago</label><select id="metodoPago"><option value="pix">PIX</option><option value="transferencia">Transferencia</option><option value="efectivo">Efectivo</option><option value="tarjeta">Tarjeta</option></select></div>
-        <div class="form-group"><label>Observaciones</label><input type="text" id="obsPago"></div>
-        <button class="btn-success" onclick="confirmarReservaConPago()">Confirmar Reserva</button>
-        <button class="btn-secondary" onclick="cerrarModalPago()">Cancelar</button>
+
+        <div class="resumen-pago" id="resumenPago"></div>
+
+        <div class="form-group">
+            <label>Monto recibido (R$) *</label>
+            <input type="number" id="montoPago" step="0.01" min="0.01">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Método de pago</label>
+                <select id="metodoPago">
+                    <option value="pix">PIX</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="efectivo">Efectivo</option>
+                    <option value="tarjeta">Tarjeta</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Tipo de pago</label>
+                <select id="tipoPago">
+                    <option value="total">Total</option>
+                    <option value="seña">Seña</option>
+                    <option value="parcial">Parcial</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Observaciones</label>
+            <input type="text" id="obsPago" placeholder="Opcional">
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+            <button class="btn btn-success" onclick="confirmarConPago()">
+                <span class="material-icons" style="font-size:16px;">check_circle</span> Confirmar reserva
+            </button>
+            <button class="btn btn-secondary" onclick="cerrarModalPago()">Cancelar</button>
+        </div>
     </div>
 </div>
-<script>
-    const firebaseConfig = { apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4", authDomain: "casaverdecanas-199.firebaseapp.com", projectId: "casaverdecanas-199" };
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-    let currentUser = null;
-    let cabanas = [];
-    let ultimoCalculo = null;
 
-    async function login() {
-        const email = document.getElementById('email').value, password = document.getElementById('password').value;
-        try {
-            const cred = await auth.signInWithEmailAndPassword(email, password);
-            const userDoc = await db.collection('usuarios').doc(cred.user.uid).get();
-            if(userDoc.exists && userDoc.data().rol === 'admin') {
-                currentUser = cred.user;
-                document.getElementById('loginContainer').style.display = 'none';
-                document.getElementById('mainPanel').style.display = 'block';
-                document.getElementById('userEmail').textContent = email;
-                cargarCabanasSelect();
-                cargarPresupuestos();
-            } else alert('No eres admin');
-        } catch(e) { document.getElementById('loginError').innerText = e.message; }
-    }
-    function logout() { auth.signOut().then(()=>location.reload()); }
-    async function cargarCabanasSelect() {
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async () => {
+    const { user, userData } = await CVC.verificarAuth('admin');
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+
+    const db = CVC.db;
+    const { escapeHtml, badgeEstado, calcularPrecio, crearTareaLimpieza, formatFecha } = CVC;
+
+    let cabanasCache = [];
+    let presupuestosCache = [];
+    let ultimoCalculo = null;
+    let filtroActual = 'todos';
+
+    // ── Cargar cabañas ────────────────────────────────────
+    async function cargarCabanas() {
         const snap = await db.collection('cabanas').where('activa','==',true).orderBy('orden').get();
-        cabanas = snap.docs.map(d=>({ id: d.id, ...d.data() }));
-        const select = document.getElementById('cabañaSelect');
-        select.innerHTML = cabanas.map(c=>`<option value="${c.id}">${c.nombre?.es||c.id}</option>`).join('');
+        cabanasCache = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+        const select = document.getElementById('cabanaSelect');
+        select.innerHTML = cabanasCache.map(c =>
+            `<option value="${c.id}">${escapeHtml(c.nombre?.es || c.docId)}</option>`
+        ).join('');
     }
-    async function calcularPresupuesto() {
-        const cabaId = parseInt(document.getElementById('cabañaSelect').value);
-        const checkIn = document.getElementById('checkIn').value;
+
+    // ── Calcular precio ───────────────────────────────────
+    window.calcular = function() {
+        const cabaId  = parseInt(document.getElementById('cabanaSelect').value);
+        const checkIn  = document.getElementById('checkIn').value;
         const checkOut = document.getElementById('checkOut').value;
-        const adultos = parseInt(document.getElementById('adultos').value)||0;
-        const ninos = parseInt(document.getElementById('ninos').value)||0;
-        if(!checkIn || !checkOut) { alert('Selecciona fechas'); return; }
-        const cabana = cabanas.find(c=>c.id==cabaId);
-        if(!cabana) return;
-        const tarifas = cabana.tarifas;
-        const personasExtra = Math.max(0, (adultos+ninos) - (cabana.capacidad?.base||2));
-        let totalNoches = 0;
-        let fecha = new Date(checkIn);
-        const fin = new Date(checkOut);
-        while(fecha < fin) {
-            const fechaStr = fecha.toISOString().split('T')[0];
-            const intervalo = (tarifas.intervalos || []).find(i=> i.desde <= fechaStr && i.hasta >= fechaStr);
-            const precioNoche = intervalo ? intervalo.precioNoche : tarifas.precioBase;
-            const precioExtra = intervalo ? intervalo.precioExtra : tarifas.precioExtraPersona;
-            totalNoches += precioNoche + (personasExtra * precioExtra);
-            fecha.setDate(fecha.getDate()+1);
-        }
-        const total = totalNoches + tarifas.precioLimpieza;
-        document.getElementById('precioPreview').innerHTML = `💰 Total: R$ ${total.toFixed(2)} (${Math.ceil((new Date(checkOut)-new Date(checkIn))/(86400000))} noches)`;
-        ultimoCalculo = { cabaId, checkIn, checkOut, adultos, ninos, totalNoches, total, limpieza: tarifas.precioLimpieza };
-    }
-    async function guardarPresupuesto() {
-        if(!ultimoCalculo) { alert('Primero calcula el presupuesto'); return; }
-        const clienteNombre = document.getElementById('clienteNombre').value.trim() || 'Cliente sin nombre';
-        const notas = document.getElementById('notas').value;
+        const adultos  = parseInt(document.getElementById('adultos').value) || 0;
+        const ninos    = parseInt(document.getElementById('ninos').value) || 0;
+
+        if (!checkIn || !checkOut) { alert('Ingresá las fechas primero'); return; }
+        if (checkOut <= checkIn)   { alert('El check-out debe ser posterior al check-in'); return; }
+
+        const cabana = cabanasCache.find(c => c.id == cabaId);
+        if (!cabana) return;
+
+        ultimoCalculo = { ...calcularPrecio(cabana, checkIn, checkOut, adultos, ninos), cabaId, checkIn, checkOut, adultos, ninos };
+
+        document.getElementById('pNoches').textContent   = ultimoCalculo.noches;
+        document.getElementById('pSubtotal').textContent = `R$ ${ultimoCalculo.subtotal.toFixed(2)}`;
+        document.getElementById('pLimpieza').textContent = `R$ ${ultimoCalculo.limpieza.toFixed(2)}`;
+        document.getElementById('pTotal').textContent    = `R$ ${ultimoCalculo.total.toFixed(2)}`;
+        document.getElementById('precioBox').style.display = 'block';
+    };
+
+    // ── Guardar presupuesto ───────────────────────────────
+    window.guardarPresupuesto = async function() {
+        if (!ultimoCalculo) { alert('Calculá el precio primero'); return; }
+
+        const clienteNombre = document.getElementById('clienteNombre').value.trim() || 'Sin nombre';
+        const email  = document.getElementById('clienteEmail').value.trim();
+        const tel    = document.getElementById('clienteTel').value.trim();
+        const notas  = document.getElementById('notas').value.trim();
+
         await db.collection('presupuestos').add({
-            ...ultimoCalculo,
+            caba:           ultimoCalculo.cabaId,
+            checkIn:        ultimoCalculo.checkIn,
+            checkOut:       ultimoCalculo.checkOut,
+            adultos:        ultimoCalculo.adultos,
+            ninos:          ultimoCalculo.ninos,
+            huespedes:      ultimoCalculo.adultos + ultimoCalculo.ninos,
+            totalBRL:       ultimoCalculo.total,
+            subtotalBRL:    ultimoCalculo.subtotal,
+            costoLimpiezaBRL: ultimoCalculo.limpieza,
+            noches:         ultimoCalculo.noches,
             clienteNombre,
+            email,
+            telefono: tel,
             notas,
             estado: 'pendiente',
-            creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
-            creadoPor: currentUser.uid
+            creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
+            creadoPor: user.uid
         });
-        alert('Presupuesto guardado');
+
+        alert('✅ Presupuesto guardado');
+        // Limpiar formulario
         document.getElementById('clienteNombre').value = '';
-        document.getElementById('notas').value = '';
+        document.getElementById('clienteEmail').value  = '';
+        document.getElementById('clienteTel').value    = '';
+        document.getElementById('notas').value         = '';
+        document.getElementById('checkIn').value       = '';
+        document.getElementById('checkOut').value      = '';
+        document.getElementById('precioBox').style.display = 'none';
         ultimoCalculo = null;
-        document.getElementById('precioPreview').innerHTML = '';
         cargarPresupuestos();
-    }
+    };
+
+    // ── Cargar listado ────────────────────────────────────
     async function cargarPresupuestos() {
         const snap = await db.collection('presupuestos').orderBy('creadoEn','desc').get();
+        presupuestosCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderPresupuestos();
+    }
+
+    function renderPresupuestos() {
+        const lista = filtroActual === 'todos'
+            ? presupuestosCache
+            : presupuestosCache.filter(p => p.estado === filtroActual);
+
         const container = document.getElementById('presupuestosList');
-        if(snap.empty) { container.innerHTML='<div>No hay presupuestos</div>'; return; }
-        container.innerHTML = snap.docs.map(doc=>{
-            const p = doc.data();
-            return `<div class="presupuesto-card">
-                <strong>${p.clienteNombre}</strong> - Cabaña ${p.cabaId}<br>
-                ${p.checkIn} → ${p.checkOut}<br>
-                Adultos: ${p.adultos}, Niños: ${p.ninos}<br>
-                <strong>Total: R$ ${p.total.toFixed(2)}</strong><br>
-                <span class="badge badge-pendiente">Pendiente</span><br>
-                <button class="btn-sm btn-success" onclick="abrirModalPago('${doc.id}', ${p.total.toFixed(2)})">Registrar pago y confirmar</button>
-                <button class="btn-sm btn-danger" onclick="eliminarPresupuesto('${doc.id}')">Eliminar</button>
-            </div>`;
+        if (!lista.length) {
+            container.innerHTML = '<div class="empty-state">No hay presupuestos</div>';
+            return;
+        }
+
+        container.innerHTML = lista.map(p => {
+            const esConfirmado = p.estado === 'confirmado';
+            const cabana = cabanasCache.find(c => c.id == p.caba);
+            const nombreCabana = cabana ? escapeHtml(cabana.nombre?.es || `Cabaña ${p.caba}`) : `Cabaña ${p.caba}`;
+
+            return `
+                <div class="presupuesto-card ${p.estado}">
+                    <div class="pres-header">
+                        <div>
+                            <div class="pres-nombre">${escapeHtml(p.clienteNombre || 'Sin nombre')}</div>
+                            <div class="pres-detalle">
+                                ${nombreCabana} · ${p.checkIn} → ${p.checkOut}<br>
+                                ${p.adultos} adulto(s)${p.ninos ? `, ${p.ninos} niño(s)` : ''} · ${p.noches} noche(s)
+                                ${p.email ? `<br>✉️ ${escapeHtml(p.email)}` : ''}
+                                ${p.telefono ? `<br>📱 ${escapeHtml(p.telefono)}` : ''}
+                                ${p.notas ? `<br>📝 ${escapeHtml(p.notas)}` : ''}
+                                ${esConfirmado && p.reservaId ? `<br>✅ Reserva generada` : ''}
+                            </div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div class="pres-total">R$ ${(p.totalBRL||0).toFixed(2)}</div>
+                            ${badgeEstado(p.estado === 'pendiente' ? 'pendiente' : 'confirmada')}
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;">
+                        ${!esConfirmado ? `
+                            <button class="btn btn-sm btn-success" onclick="abrirModalPago('${p.id}')">
+                                💰 Registrar pago y confirmar
+                            </button>
+                        ` : `
+                            <span style="font-size:12px; color:#27ae60; font-weight:600;">✅ Ya confirmado</span>
+                        `}
+                        <button class="btn btn-sm btn-danger" onclick="eliminarPresupuesto('${p.id}', ${esConfirmado})">Eliminar</button>
+                    </div>
+                </div>
+            `;
         }).join('');
     }
-    function abrirModalPago(id, total) {
+
+    // ── Filtros ───────────────────────────────────────────
+    document.querySelectorAll('.filtro-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            filtroActual = btn.dataset.f;
+            renderPresupuestos();
+        });
+    });
+
+    // ── Modal pago ────────────────────────────────────────
+    window.abrirModalPago = function(id) {
+        const p = presupuestosCache.find(x => x.id === id);
+        if (!p) return;
         document.getElementById('presupuestoId').value = id;
-        document.getElementById('montoPago').value = total;
+        document.getElementById('montoPago').value = (p.totalBRL || 0).toFixed(2);
         document.getElementById('metodoPago').value = 'pix';
+        document.getElementById('tipoPago').value = 'total';
         document.getElementById('obsPago').value = '';
-        document.getElementById('modalPago').style.display = 'flex';
-    }
-    function cerrarModalPago() { document.getElementById('modalPago').style.display = 'none'; }
-    async function confirmarReservaConPago() {
+
+        const cabana = cabanasCache.find(c => c.id == p.caba);
+        document.getElementById('resumenPago').innerHTML = `
+            <strong>Cliente:</strong> ${escapeHtml(p.clienteNombre || '—')}<br>
+            <strong>Cabaña:</strong> ${cabana ? escapeHtml(cabana.nombre?.es) : `Cabaña ${p.caba}`}<br>
+            <strong>Fechas:</strong> ${p.checkIn} → ${p.checkOut} (${p.noches} noches)<br>
+            <strong>Huéspedes:</strong> ${p.adultos} adulto(s)${p.ninos ? `, ${p.ninos} niño(s)` : ''}<br>
+            <strong>Total presupuestado:</strong> R$ ${(p.totalBRL||0).toFixed(2)}
+        `;
+        document.getElementById('modalPago').classList.add('open');
+    };
+
+    window.cerrarModalPago = function() {
+        document.getElementById('modalPago').classList.remove('open');
+    };
+
+    // ── Confirmar con pago ────────────────────────────────
+    window.confirmarConPago = async function() {
         const presupuestoId = document.getElementById('presupuestoId').value;
-        const monto = parseFloat(document.getElementById('montoPago').value);
+        const monto  = parseFloat(document.getElementById('montoPago').value);
         const metodo = document.getElementById('metodoPago').value;
-        const obs = document.getElementById('obsPago').value;
-        if(isNaN(monto) || monto<=0) { alert('Monto válido requerido'); return; }
-        const docPresup = await db.collection('presupuestos').doc(presupuestoId).get();
-        if(!docPresup.exists) return;
-        const p = docPresup.data();
+        const tipo   = document.getElementById('tipoPago').value;
+        const obs    = document.getElementById('obsPago').value.trim();
+
+        if (!monto || monto <= 0) { alert('Ingresá un monto válido'); return; }
+
+        const p = presupuestosCache.find(x => x.id === presupuestoId);
+        if (!p) return;
+
         // Crear reserva
         const reservaData = {
-            caba: p.cabaId,
-            nombre: p.clienteNombre,
-            checkIn: firebase.firestore.Timestamp.fromDate(new Date(p.checkIn)),
-            checkOut: firebase.firestore.Timestamp.fromDate(new Date(p.checkOut)),
-            adultos: p.adultos, ninos: p.ninos, huespedes: p.adultos+p.ninos,
-            origen: 'presupuesto',
-            estado: 'confirmada',
-            totalBRL: p.total,
-            subtotalBRL: p.totalNoches,
-            costoLimpiezaBRL: p.limpieza,
-            notas: p.notas,
-            creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
-            creadoPor: currentUser.uid
+            caba:     p.caba,
+            nombre:   p.clienteNombre || 'Sin nombre',
+            checkIn:  firebase.firestore.Timestamp.fromDate(new Date(p.checkIn  + 'T12:00:00')),
+            checkOut: firebase.firestore.Timestamp.fromDate(new Date(p.checkOut + 'T12:00:00')),
+            adultos:  p.adultos,
+            ninos:    p.ninos,
+            huespedes: p.huespedes || (p.adultos + p.ninos),
+            origen:   'presupuesto',
+            estado:   'confirmada',
+            totalBRL:         p.totalBRL,
+            subtotalBRL:      p.subtotalBRL,
+            costoLimpiezaBRL: p.costoLimpiezaBRL,
+            noches:           p.noches,
+            notas:    p.notas || '',
+            creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
+            creadoPor: user.uid
         };
-        const reservaRef = await db.collection('reservas').add(reservaData);
-        // Registrar pago
-        await db.collection('pagos').add({
-            reservaId: reservaRef.id,
-            clienteNombre: p.clienteNombre,
-            monto: monto,
-            moneda: 'BRL',
-            metodo: metodo,
-            tipo: 'total',
-            observaciones: obs,
-            creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
-            creadoPor: currentUser.uid
-        });
-        // Crear tarea de limpieza automática
-        await crearTareaLimpieza(reservaRef.id, reservaData);
-        // Marcar presupuesto como confirmado
-        await db.collection('presupuestos').doc(presupuestoId).update({ estado: 'confirmado', reservaId: reservaRef.id });
-        alert(`✅ Reserva confirmada para ${p.clienteNombre}\n💰 Total R$ ${p.total.toFixed(2)}\n🧹 Tarea de limpieza generada`);
-        cerrarModalPago();
+
+        try {
+            // 1. Crear reserva
+            const reservaRef = await db.collection('reservas').add(reservaData);
+
+            // 2. Registrar pago
+            await db.collection('pagos').add({
+                reservaId:      reservaRef.id,
+                clienteNombre:  p.clienteNombre || 'Sin nombre',
+                monto,
+                moneda:         'BRL',
+                metodo,
+                tipo,
+                observaciones:  obs,
+                creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
+                creadoPor: user.uid
+            });
+
+            // 3. Crear tarea de limpieza
+            await crearTareaLimpieza(reservaRef.id, reservaData, user.uid);
+
+            // 4. Marcar presupuesto como confirmado
+            await db.collection('presupuestos').doc(presupuestoId).update({
+                estado:    'confirmado',
+                reservaId: reservaRef.id,
+                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            alert(`✅ Reserva confirmada para ${p.clienteNombre}\n💰 Pago de R$ ${monto.toFixed(2)} registrado\n🧹 Tarea de limpieza generada`);
+            cerrarModalPago();
+            cargarPresupuestos();
+
+        } catch(e) { alert('Error: ' + e.message); }
+    };
+
+    // ── Eliminar presupuesto ──────────────────────────────
+    window.eliminarPresupuesto = async function(id, esConfirmado) {
+        const msg = esConfirmado
+            ? '⚠️ Este presupuesto ya fue confirmado y tiene una reserva asociada. ¿Eliminar solo el presupuesto?'
+            : '¿Eliminar este presupuesto?';
+        if (!confirm(msg)) return;
+        await db.collection('presupuestos').doc(id).delete();
         cargarPresupuestos();
-        cargarReservasEnDashboard();
+    };
+
+    // ── Abrir modal directo si viene con ?nuevo=1 ─────────
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('nuevo')) {
+        // scroll al formulario
+        document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
     }
-    async function crearTareaLimpieza(reservaId, reserva) {
-        const checkOut = reserva.checkOut.toDate();
-        const checkIn = reserva.checkIn.toDate();
-        const fechaFin = new Date(checkIn);
-        fechaFin.setHours(checkIn.getHours()-1);
-        const descripcion = `Check-out: ${checkOut.toLocaleString()}\nCheck-in: ${checkIn.toLocaleString()}\nHuéspedes: ${reserva.huespedes}\nMonto limpieza: R$ ${reserva.costoLimpiezaBRL}`;
-        await db.collection('tareas').add({
-            nombre: `🧹 Limpiar Cabaña ${reserva.caba} - ${reserva.nombre}`,
-            descripcion: descripcion,
-            tipo: 'limpieza',
-            prioridad: 'alta',
-            fechaInicio: fechaFin.toISOString().split('T')[0],
-            recurrencia: 0,
-            activa: true,
-            completada: false,
-            reservaId: reservaId,
-            cabaña: reserva.caba,
-            montoLimpieza: reserva.costoLimpiezaBRL,
-            colaboradores: [],
-            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-        });
-    }
-    async function eliminarPresupuesto(id) { if(confirm('¿Eliminar presupuesto?')){ await db.collection('presupuestos').doc(id).delete(); cargarPresupuestos(); } }
-    async function cargarReservasEnDashboard() { /* opcional, solo refresca */ }
-    window.calcularPresupuesto = calcularPresupuesto; window.guardarPresupuesto = guardarPresupuesto;
-    window.abrirModalPago = abrirModalPago; window.cerrarModalPago = cerrarModalPago; window.confirmarReservaConPago = confirmarReservaConPago;
-    window.eliminarPresupuesto = eliminarPresupuesto;
-    window.login = login; window.logout = logout;
-    auth.onAuthStateChanged(user=>{ if(user) login(); });
+
+    // ── Init ──────────────────────────────────────────────
+    await cargarCabanas();
+    await cargarPresupuestos();
+
+})();
 </script>
 </body>
 </html>
