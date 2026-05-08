@@ -4,173 +4,434 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clientes - Casa Verde Canas</title>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
         body { background: #f5f7fa; }
-        .admin-header { background: #2d5a27; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
-        .admin-nav { background: white; padding: 0 25px; display: flex; gap: 5px; border-bottom: 1px solid #e0e0e0; flex-wrap: wrap; }
-        .nav-item { padding: 14px 20px; background: none; border: none; cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; gap: 8px; color: #6c757d; text-decoration: none; }
-        .nav-item.active { color: #2d5a27; border-bottom: 3px solid #2d5a27; }
-        .admin-content { max-width: 1400px; margin: 30px auto; padding: 0 25px; }
-        .card { background: white; border-radius: 20px; padding: 25px; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-        .card h2 { color: #2d5a27; margin-bottom: 20px; border-bottom: 2px solid #e8f5e9; padding-bottom: 10px; }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; }
-        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 15px; }
-        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; margin: 5px; }
-        .btn-primary { background: #2d5a27; color: white; }
-        .btn-success { background: #27ae60; color: white; }
+
+        .admin-header {
+            background: linear-gradient(135deg, #2d5a27, #1e3f1a);
+            color: white; padding: 14px 28px;
+            display: flex; justify-content: space-between; align-items: center;
+            flex-wrap: wrap; gap: 10px;
+            position: sticky; top: 0; z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+        }
+        .admin-header h1 { display: flex; align-items: center; gap: 10px; font-size: 1.2rem; }
+        .user-chip {
+            display: flex; align-items: center; gap: 12px;
+            background: rgba(255,255,255,0.15); padding: 6px 16px; border-radius: 40px; font-size: 14px;
+        }
+        .btn-logout {
+            background: rgba(231,76,60,0.85); color: white; border: none;
+            padding: 6px 14px; border-radius: 30px; cursor: pointer; font-size: 13px;
+            display: flex; align-items: center; gap: 5px;
+        }
+
+        .admin-nav {
+            background: white; padding: 0 28px;
+            display: flex; gap: 4px; border-bottom: 1px solid #e0e0e0; overflow-x: auto;
+        }
+        .nav-item {
+            padding: 13px 18px; background: none; border: none;
+            border-bottom: 3px solid transparent; cursor: pointer;
+            font-weight: 500; font-size: 14px; color: #6c757d;
+            text-decoration: none; white-space: nowrap;
+            display: inline-flex; align-items: center; gap: 6px; transition: color 0.2s;
+        }
+        .nav-item:hover { color: #2d5a27; }
+        .nav-item.active { color: #2d5a27; border-bottom-color: #2d5a27; }
+
+        .admin-content { max-width: 1400px; margin: 30px auto; padding: 0 28px; }
+
+        .card {
+            background: white; border-radius: 20px; padding: 26px;
+            margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .card h2 {
+            color: #2d5a27; font-size: 1.1rem; margin-bottom: 20px;
+            padding-bottom: 12px; border-bottom: 2px solid #e8f5e9;
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        /* Buscador */
+        .search-bar {
+            display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center;
+        }
+        .search-input {
+            flex: 1; min-width: 220px; padding: 10px 14px;
+            border: 1.5px solid #ddd; border-radius: 10px; font-size: 14px; outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-input:focus { border-color: #2d5a27; }
+
+        /* Tabla */
+        .data-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .data-table th {
+            padding: 11px 14px; text-align: left;
+            background: #f8f9fa; color: #2d5a27; font-weight: 700;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .data-table td { padding: 11px 14px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+        .data-table tr:hover td { background: #fafff9; }
+
+        /* Botones */
+        .btn { padding: 9px 20px; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; margin: 3px; transition: opacity 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+        .btn:hover { opacity: 0.87; }
+        .btn-primary   { background: #2d5a27; color: white; }
+        .btn-success   { background: #27ae60; color: white; }
+        .btn-danger    { background: #e74c3c; color: white; }
         .btn-secondary { background: #95a5a6; color: white; }
-        .btn-danger { background: #e74c3c; color: white; }
-        .data-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        .data-table th, .data-table td { padding: 12px; text-align: left; border-bottom: 1px solid #e9ecef; }
-        .data-table th { background: #f8f9fa; color: #2d5a27; }
-        .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; }
-        .modal-content { background:white; padding:30px; border-radius:20px; width:90%; max-width:500px; }
-        @media (max-width:768px){ .form-row{ grid-template-columns:1fr; } }
+        .btn-info      { background: #3498db; color: white; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+        /* Modal */
+        .modal {
+            display: none; position: fixed; top:0; left:0;
+            width:100%; height:100%; background:rgba(0,0,0,0.55);
+            z-index:1000; justify-content:center; align-items:flex-start; padding-top: 60px;
+        }
+        .modal.open { display: flex; }
+        .modal-content {
+            background: white; padding: 30px; border-radius: 22px;
+            width: 95%; max-width: 580px; max-height: 85vh; overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        .modal-title {
+            font-size: 1.1rem; font-weight: 700; color: #2d5a27;
+            margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #e8f5e9;
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: #555; }
+        .form-group input,
+        .form-group select { width: 100%; padding: 10px 12px; border: 1.5px solid #ddd; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; }
+        .form-group input:focus,
+        .form-group select:focus { border-color: #2d5a27; }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 14px; }
+
+        /* Historial reservas en modal */
+        .historial-title {
+            font-weight: 700; color: #2d5a27; font-size: 13px;
+            margin: 20px 0 10px; padding-top: 16px;
+            border-top: 1px solid #e9ecef;
+        }
+        .reserva-mini {
+            background: #f8f9fa; border-radius: 10px; padding: 10px 14px;
+            margin-bottom: 8px; font-size: 13px; line-height: 1.7;
+            border-left: 4px solid #2d5a27;
+        }
+        .reserva-mini.anulada { border-left-color: #e74c3c; opacity: 0.7; }
+        .reserva-mini.finalizada { border-left-color: #5c6bc0; }
+
+        /* Badge nacionalidad */
+        .badge-nac {
+            background: #e3f2fd; color: #1565c0;
+            padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;
+        }
+
+        .empty-state  { text-align: center; padding: 40px; color: #bbb; font-size: 14px; }
+        .loading-state { text-align: center; padding: 30px; color: #888; }
+
+        @media (max-width: 768px) {
+            .admin-content { padding: 0 16px; }
+            .data-table { font-size: 12px; }
+            .data-table th, .data-table td { padding: 8px; }
+        }
     </style>
 </head>
 <body>
-<div id="loginContainer" style="display: flex; justify-content: center; align-items: center; min-height: 100vh;">
-    <div style="background:white; padding:40px; border-radius:24px; width:350px; text-align:center;">
-        <h2>👥 Clientes</h2>
-        <input type="email" id="email" placeholder="Email">
-        <input type="password" id="password" placeholder="Contraseña">
-        <button onclick="login()">Ingresar</button>
-        <div id="loginError" style="color:red;"></div>
+
+<div class="admin-header">
+    <h1><span class="material-icons">people</span> Clientes</h1>
+    <div class="user-chip">
+        <span id="userName">—</span>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons" style="font-size:15px;">logout</span> Salir
+        </button>
     </div>
 </div>
-<div id="mainPanel" style="display:none;">
-    <div class="admin-header"><h1>👥 Clientes</h1><div><span id="userEmail"></span><button class="btn-secondary" onclick="logout()">Salir</button></div></div>
-    <div class="admin-nav">
-        <a href="dashboard.html" class="nav-item">Dashboard</a>
-        <a href="reservas.html" class="nav-item">Reservas</a>
-        <a href="presupuestos.html" class="nav-item">Presupuestos</a>
-        <a href="cabanas-admin.html" class="nav-item">Cabañas</a>
-        <a href="clientes.html" class="nav-item active">Clientes</a>
-        <a href="pagos.html" class="nav-item">Pagos</a>
-    </div>
-    <div class="admin-content">
-        <div class="card"><h2>Lista de Clientes</h2><button class="btn-primary" onclick="nuevoCliente()">+ Nuevo Cliente</button><div id="clientesList"></div></div>
+
+<nav class="admin-nav">
+    <a href="dashboard.html"     class="nav-item"><span class="material-icons">dashboard</span> Dashboard</a>
+    <a href="reservas.html"      class="nav-item"><span class="material-icons">event</span> Reservas</a>
+    <a href="presupuestos.html"  class="nav-item"><span class="material-icons">request_quote</span> Presupuestos</a>
+    <a href="pagos.html"         class="nav-item"><span class="material-icons">payments</span> Pagos</a>
+    <a href="clientes.html"      class="nav-item active"><span class="material-icons">people</span> Clientes</a>
+    <a href="cabanas-admin.html" class="nav-item"><span class="material-icons">cottage</span> Cabañas</a>
+    <a href="tareas.html"        class="nav-item"><span class="material-icons">checklist</span> Tareas</a>
+    <a href="calendario.html"    class="nav-item"><span class="material-icons">calendar_month</span> Calendario</a>
+</nav>
+
+<div class="admin-content">
+    <div class="card">
+        <h2><span class="material-icons">people</span> Lista de clientes</h2>
+
+        <div class="search-bar">
+            <input class="search-input" type="text" id="busqueda" placeholder="🔍 Buscar por nombre, email o WhatsApp..." oninput="filtrarClientes()">
+            <button class="btn btn-primary" onclick="abrirModalNuevo()">
+                <span class="material-icons" style="font-size:16px;">person_add</span> Nuevo cliente
+            </button>
+        </div>
+
+        <div id="clientesContainer"><div class="loading-state">Cargando clientes...</div></div>
     </div>
 </div>
-<!-- Modal Cliente -->
+
+<!-- MODAL: Crear / Editar cliente -->
 <div id="modalCliente" class="modal">
     <div class="modal-content">
-        <h3 id="modalTitle">Nuevo Cliente</h3>
+        <div class="modal-title" id="modalTitulo">
+            <span class="material-icons">person</span> Nuevo cliente
+        </div>
         <input type="hidden" id="clienteId">
-        <div class="form-group"><label>Nombre completo *</label><input type="text" id="nombre"></div>
-        <div class="form-row"><div class="form-group"><label>WhatsApp</label><input type="text" id="whatsapp"></div><div class="form-group"><label>Email</label><input type="email" id="emailCliente"></div></div>
-        <div class="form-group"><label>Nacionalidad</label><input type="text" id="nacionalidad"></div>
-        <div><button class="btn-success" onclick="guardarCliente()">Guardar</button><button class="btn-secondary" onclick="cerrarModal()">Cancelar</button></div>
+
+        <div class="form-group">
+            <label>Nombre completo *</label>
+            <input type="text" id="nombre" placeholder="Juan García">
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>WhatsApp</label>
+                <input type="text" id="whatsapp" placeholder="+54 9 11 1234-5678">
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="emailCliente" placeholder="juan@email.com">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Nacionalidad</label>
+            <input type="text" id="nacionalidad" placeholder="Argentina">
+        </div>
+
+        <!-- Historial de reservas (solo al editar) -->
+        <div id="historialContainer"></div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;">
+            <button class="btn btn-success" onclick="guardarCliente()">
+                <span class="material-icons" style="font-size:16px;">save</span> Guardar
+            </button>
+            <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+        </div>
     </div>
 </div>
+
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
 <script>
-    const firebaseConfig = { apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4", authDomain: "casaverdecanas-199.firebaseapp.com", projectId: "casaverdecanas-199" };
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-    let currentUser = null;
+(async () => {
+    const { user, userData } = await CVC.verificarAuth('admin');
+    document.getElementById('userName').textContent = userData.nombre || user.email;
 
-    async function login() {
-        const email = document.getElementById('email').value, password = document.getElementById('password').value;
-        try {
-            const cred = await auth.signInWithEmailAndPassword(email, password);
-            const userDoc = await db.collection('usuarios').doc(cred.user.uid).get();
-            if(userDoc.exists && userDoc.data().rol === 'admin') {
-                currentUser = cred.user;
-                document.getElementById('loginContainer').style.display = 'none';
-                document.getElementById('mainPanel').style.display = 'block';
-                document.getElementById('userEmail').textContent = email;
-                cargarClientes();
-            } else alert('No eres admin');
-        } catch(e) { document.getElementById('loginError').innerText = e.message; }
+    const db = CVC.db;
+    const { escapeHtml, badgeEstado, formatFecha } = CVC;
+
+    let clientesCache  = [];
+    let reservasCache  = [];
+    let filtroTexto    = '';
+
+    // ── Cargar todo en paralelo ───────────────────────────
+    async function cargarTodo() {
+        const [clientesSnap, reservasSnap] = await Promise.all([
+            db.collection('clientes').orderBy('nombre').get(),
+            db.collection('reservas').orderBy('checkIn', 'desc').get()
+        ]);
+
+        clientesCache = clientesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        reservasCache = reservasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        renderClientes();
     }
-    function logout() { auth.signOut().then(()=>location.reload()); }
 
-    async function cargarClientes() {
-        const snap = await db.collection('clientes').orderBy('nombre').get();
-        const container = document.getElementById('clientesList');
-        if(snap.empty) { container.innerHTML = '<div>No hay clientes</div>'; return; }
-        let html = `<table class="data-table"><thead><th>Nombre</th><th>WhatsApp</th><th>Email</th><th>Nacionalidad</th><th>Reservas</th><th>Acciones</th></thead><tbody>`;
-        for(const doc of snap.docs){
-            const c = doc.data();
-            const reservasSnap = await db.collection('reservas').where('nombre','==',c.nombre).get();
-            html += `<tr>
-                <td>${escapeHtml(c.nombre)}</td><td>${escapeHtml(c.whatsapp||'-')}</td><td>${escapeHtml(c.email||'-')}</td><td>${escapeHtml(c.nacionalidad||'-')}</td>
-                <td>${reservasSnap.size}</td><td><button class="btn-sm btn-primary" onclick="editarCliente('${doc.id}')">Editar</button> <button class="btn-sm btn-danger" onclick="eliminarCliente('${doc.id}')">Eliminar</button></td>
-            </tr>`;
+    // ── Filtrar ───────────────────────────────────────────
+    window.filtrarClientes = function() {
+        filtroTexto = document.getElementById('busqueda').value.toLowerCase().trim();
+        renderClientes();
+    };
+
+    // ── Render tabla ──────────────────────────────────────
+    function renderClientes() {
+        const lista = filtroTexto
+            ? clientesCache.filter(c =>
+                (c.nombre || '').toLowerCase().includes(filtroTexto) ||
+                (c.email  || '').toLowerCase().includes(filtroTexto) ||
+                (c.whatsapp || '').toLowerCase().includes(filtroTexto)
+              )
+            : clientesCache;
+
+        const container = document.getElementById('clientesContainer');
+
+        if (!lista.length) {
+            container.innerHTML = '<div class="empty-state">No se encontraron clientes</div>';
+            return;
         }
-        html += `</tbody></table>`;
-        container.innerHTML = html;
+
+        // Contar reservas por clienteId (en memoria, sin N consultas)
+        const reservasPorCliente = {};
+        reservasCache.forEach(r => {
+            if (r.clienteId) {
+                reservasPorCliente[r.clienteId] = (reservasPorCliente[r.clienteId] || 0) + 1;
+            }
+        });
+
+        // Total gastado por clienteId
+        const gastosPorCliente = {};
+        reservasCache.forEach(r => {
+            if (r.clienteId && r.estado !== 'anulada') {
+                gastosPorCliente[r.clienteId] = (gastosPorCliente[r.clienteId] || 0) + (r.totalBRL || 0);
+            }
+        });
+
+        container.innerHTML = `
+            <div style="overflow-x:auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>WhatsApp</th>
+                            <th>Email</th>
+                            <th>Nacionalidad</th>
+                            <th>Reservas</th>
+                            <th>Total gastado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${lista.map(c => `
+                            <tr>
+                                <td><strong>${escapeHtml(c.nombre)}</strong></td>
+                                <td>
+                                    ${c.whatsapp
+                                        ? `<a href="https://wa.me/${c.whatsapp.replace(/\D/g,'')}" target="_blank" style="color:#25D366; font-weight:600; text-decoration:none;">📱 ${escapeHtml(c.whatsapp)}</a>`
+                                        : '—'}
+                                </td>
+                                <td>${c.email ? escapeHtml(c.email) : '—'}</td>
+                                <td>${c.nacionalidad ? `<span class="badge-nac">${escapeHtml(c.nacionalidad)}</span>` : '—'}</td>
+                                <td style="text-align:center; font-weight:700; color:#2d5a27;">${reservasPorCliente[c.id] || 0}</td>
+                                <td style="font-weight:600;">
+                                    ${gastosPorCliente[c.id] ? `R$ ${gastosPorCliente[c.id].toFixed(2)}` : '—'}
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" onclick="abrirModalEditar('${c.id}')">Ver / Editar</button>
+                                    <button class="btn btn-sm btn-danger"  onclick="eliminarCliente('${c.id}', '${escapeHtml(c.nombre)}')">Eliminar</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
     }
 
-    function nuevoCliente() {
-        document.getElementById('modalTitle').innerText = 'Nuevo Cliente';
+    // ── Modal nuevo ───────────────────────────────────────
+    window.abrirModalNuevo = function() {
+        document.getElementById('modalTitulo').innerHTML = '<span class="material-icons">person_add</span> Nuevo cliente';
         document.getElementById('clienteId').value = '';
-        document.getElementById('nombre').value = '';
-        document.getElementById('whatsapp').value = '';
+        document.getElementById('nombre').value      = '';
+        document.getElementById('whatsapp').value    = '';
         document.getElementById('emailCliente').value = '';
         document.getElementById('nacionalidad').value = '';
-        document.getElementById('modalCliente').style.display = 'flex';
-    }
+        document.getElementById('historialContainer').innerHTML = '';
+        document.getElementById('modalCliente').classList.add('open');
+    };
 
-    async function editarCliente(id) {
-        const doc = await db.collection('clientes').doc(id).get();
-        if(!doc.exists) return;
-        const c = doc.data();
-        document.getElementById('modalTitle').innerText = 'Editar Cliente';
-        document.getElementById('clienteId').value = id;
-        document.getElementById('nombre').value = c.nombre || '';
-        document.getElementById('whatsapp').value = c.whatsapp || '';
-        document.getElementById('emailCliente').value = c.email || '';
-        document.getElementById('nacionalidad').value = c.nacionalidad || '';
-        document.getElementById('modalCliente').style.display = 'flex';
-    }
+    // ── Modal editar ──────────────────────────────────────
+    window.abrirModalEditar = function(id) {
+        const c = clientesCache.find(x => x.id === id);
+        if (!c) return;
 
-    async function guardarCliente() {
-        const id = document.getElementById('clienteId').value;
+        document.getElementById('modalTitulo').innerHTML = '<span class="material-icons">edit</span> Editar cliente';
+        document.getElementById('clienteId').value       = id;
+        document.getElementById('nombre').value          = c.nombre || '';
+        document.getElementById('whatsapp').value        = c.whatsapp || '';
+        document.getElementById('emailCliente').value    = c.email || '';
+        document.getElementById('nacionalidad').value    = c.nacionalidad || '';
+
+        // Historial de reservas del cliente (en memoria)
+        const reservasCliente = reservasCache.filter(r => r.clienteId === id);
+
+        if (reservasCliente.length) {
+            document.getElementById('historialContainer').innerHTML = `
+                <div class="historial-title">
+                    <span class="material-icons" style="font-size:15px; vertical-align:middle;">history</span>
+                    Historial de reservas (${reservasCliente.length})
+                </div>
+                ${reservasCliente.map(r => `
+                    <div class="reserva-mini ${r.estado}">
+                        <strong>Cabaña ${r.caba}</strong> · ${formatFecha(r.checkIn)} → ${formatFecha(r.checkOut)}<br>
+                        ${r.huespedes || r.adultos} huésped(es) · R$ ${(r.totalBRL||0).toFixed(2)}
+                        · ${badgeEstado(r.estado)}
+                    </div>
+                `).join('')}
+            `;
+        } else {
+            document.getElementById('historialContainer').innerHTML = `
+                <div class="historial-title">Historial de reservas</div>
+                <div style="color:#bbb; font-size:13px; padding:10px 0;">Sin reservas registradas con este cliente</div>
+            `;
+        }
+
+        document.getElementById('modalCliente').classList.add('open');
+    };
+
+    window.cerrarModal = function() {
+        document.getElementById('modalCliente').classList.remove('open');
+    };
+
+    // ── Guardar cliente ───────────────────────────────────
+    window.guardarCliente = async function() {
+        const id     = document.getElementById('clienteId').value;
         const nombre = document.getElementById('nombre').value.trim();
-        if(!nombre) { alert('El nombre es obligatorio'); return; }
+        if (!nombre) { alert('El nombre es obligatorio'); return; }
+
         const data = {
-            nombre: nombre,
-            whatsapp: document.getElementById('whatsapp').value,
-            email: document.getElementById('emailCliente').value,
-            nacionalidad: document.getElementById('nacionalidad').value,
+            nombre,
+            whatsapp:     document.getElementById('whatsapp').value.trim(),
+            email:        document.getElementById('emailCliente').value.trim(),
+            nacionalidad: document.getElementById('nacionalidad').value.trim(),
             actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
         };
-        if(!id) data.creadoEn = firebase.firestore.FieldValue.serverTimestamp();
+
         try {
-            if(id) await db.collection('clientes').doc(id).update(data);
-            else await db.collection('clientes').add(data);
-            alert('Cliente guardado');
+            if (id) {
+                await db.collection('clientes').doc(id).update(data);
+            } else {
+                data.creadoEn = firebase.firestore.FieldValue.serverTimestamp();
+                await db.collection('clientes').add(data);
+            }
+            alert('✅ Cliente guardado');
             cerrarModal();
-            cargarClientes();
-        } catch(e) { alert('Error: '+e.message); }
-    }
+            cargarTodo();
+        } catch(e) { alert('Error: ' + e.message); }
+    };
 
-    async function eliminarCliente(id) {
-        if(confirm('¿Eliminar cliente? Se eliminará de la base de datos, pero las reservas quedarán con el nombre.')) {
-            await db.collection('clientes').doc(id).delete();
-            cargarClientes();
+    // ── Eliminar cliente ──────────────────────────────────
+    window.eliminarCliente = async function(id, nombre) {
+        const reservasDelCliente = reservasCache.filter(r => r.clienteId === id);
+        let msg = `¿Eliminar a "${nombre}"?`;
+        if (reservasDelCliente.length) {
+            msg += `\n\n⚠️ Tiene ${reservasDelCliente.length} reserva(s) asociada(s). Las reservas no se eliminarán pero quedarán sin referencia al cliente.`;
         }
-    }
+        if (!confirm(msg)) return;
+        await db.collection('clientes').doc(id).delete();
+        cargarTodo();
+    };
 
-    function cerrarModal() { document.getElementById('modalCliente').style.display = 'none'; }
+    // ── Abrir modal directo si viene con ?nuevo=1 ─────────
+    const params = new URLSearchParams(window.location.search);
 
-    function escapeHtml(str) {
-        if(!str) return '';
-        return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]||m));
-    }
+    await cargarTodo();
 
-    window.nuevoCliente = nuevoCliente; window.editarCliente = editarCliente; window.guardarCliente = guardarCliente; window.eliminarCliente = eliminarCliente; window.cerrarModal = cerrarModal;
-    window.login = login; window.logout = logout;
-    auth.onAuthStateChanged(user=>{ if(user) login(); });
+    if (params.get('nuevo')) abrirModalNuevo();
+
+})();
 </script>
 </body>
 </html>
