@@ -4,261 +4,585 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Calendario - Casa Verde Canas</title>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
         body { background: #f5f7fa; }
-        .admin-header { background: #2d5a27; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
-        .admin-nav { background: white; padding: 0 25px; display: flex; gap: 5px; border-bottom: 1px solid #e0e0e0; flex-wrap: wrap; }
-        .nav-item { padding: 14px 20px; background: none; border: none; cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; gap: 8px; color: #6c757d; text-decoration: none; }
-        .nav-item.active { color: #2d5a27; border-bottom: 3px solid #2d5a27; }
-        .admin-content { max-width: 1400px; margin: 30px auto; padding: 0 25px; }
-        .card { background: white; border-radius: 20px; padding: 25px; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-        .card h2 { color: #2d5a27; margin-bottom: 20px; border-bottom: 2px solid #e8f5e9; padding-bottom: 10px; }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; }
-        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; margin: 5px; }
-        .btn-primary { background: #2d5a27; color: white; }
+
+        .admin-header {
+            background: linear-gradient(135deg, #2d5a27, #1e3f1a);
+            color: white; padding: 14px 28px;
+            display: flex; justify-content: space-between; align-items: center;
+            flex-wrap: wrap; gap: 10px;
+            position: sticky; top: 0; z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+        }
+        .admin-header h1 { display: flex; align-items: center; gap: 10px; font-size: 1.2rem; }
+        .user-chip {
+            display: flex; align-items: center; gap: 12px;
+            background: rgba(255,255,255,0.15); padding: 6px 16px; border-radius: 40px; font-size: 14px;
+        }
+        .btn-logout {
+            background: rgba(231,76,60,0.85); color: white; border: none;
+            padding: 6px 14px; border-radius: 30px; cursor: pointer; font-size: 13px;
+            display: flex; align-items: center; gap: 5px;
+        }
+
+        .admin-nav {
+            background: white; padding: 0 28px;
+            display: flex; gap: 4px; border-bottom: 1px solid #e0e0e0; overflow-x: auto;
+        }
+        .nav-item {
+            padding: 13px 18px; background: none; border: none;
+            border-bottom: 3px solid transparent; cursor: pointer;
+            font-weight: 500; font-size: 14px; color: #6c757d;
+            text-decoration: none; white-space: nowrap;
+            display: inline-flex; align-items: center; gap: 6px; transition: color 0.2s;
+        }
+        .nav-item:hover { color: #2d5a27; }
+        .nav-item.active { color: #2d5a27; border-bottom-color: #2d5a27; }
+
+        .admin-content { max-width: 1400px; margin: 30px auto; padding: 0 28px; }
+
+        .card {
+            background: white; border-radius: 20px; padding: 26px;
+            margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        /* Leyenda dinámica */
+        .calendar-legend {
+            display: flex; flex-wrap: wrap; gap: 16px;
+            margin-bottom: 20px; align-items: center;
+        }
+        .legend-item {
+            display: flex; align-items: center; gap: 7px;
+            font-size: 13px; font-weight: 600; color: #555;
+        }
+        .legend-dot {
+            width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0;
+        }
+
+        /* Filtros cabañas */
+        .filtros-cabanas {
+            display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px;
+        }
+        .filtro-cab {
+            padding: 6px 16px; border-radius: 30px; border: 2px solid transparent;
+            font-size: 13px; font-weight: 600; cursor: pointer;
+            transition: all 0.2s; background: white;
+        }
+        .filtro-cab.activo { color: white; }
+        .filtro-cab.inactivo { background: #f0f0f0 !important; color: #aaa !important; border-color: #ddd !important; }
+
+        /* Botones */
+        .btn { padding: 9px 20px; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; margin: 3px; transition: opacity 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+        .btn:hover { opacity: 0.87; }
+        .btn-primary   { background: #2d5a27; color: white; }
+        .btn-success   { background: #27ae60; color: white; }
         .btn-secondary { background: #95a5a6; color: white; }
-        .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; }
-        .modal-content { background:white; padding:30px; border-radius:20px; width:90%; max-width:500px; }
-        .calendar-legend { display: flex; justify-content: center; gap: 30px; margin-top: 20px; flex-wrap: wrap; }
-        .legend-color { display: inline-block; width: 20px; height: 20px; border-radius: 4px; margin-right: 5px; vertical-align: middle; }
-        @media (max-width:768px){ .admin-nav{ overflow-x:auto; } }
+        .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+        /* Modal */
+        .modal {
+            display: none; position: fixed; top:0; left:0;
+            width:100%; height:100%; background:rgba(0,0,0,0.55);
+            z-index:1000; justify-content:center; align-items:flex-start; padding: 60px 16px;
+            overflow-y: auto;
+        }
+        .modal.open { display: flex; }
+        .modal-content {
+            background: white; padding: 30px; border-radius: 22px;
+            width: 100%; max-width: 560px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        .modal-title {
+            font-size: 1.1rem; font-weight: 700; color: #2d5a27;
+            margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #e8f5e9;
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: #555; }
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%; padding: 10px 12px; border: 1.5px solid #ddd;
+            border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s;
+        }
+        .form-group input:focus,
+        .form-group select:focus { border-color: #2d5a27; }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 14px; }
+
+        .precio-box {
+            background: #e8f5e9; border-radius: 12px; padding: 14px;
+            margin: 14px 0; font-size: 14px; line-height: 1.8; display: none;
+        }
+        .precio-box strong { color: #2d5a27; }
+
+        /* Info popup de evento */
+        .evento-info {
+            background: white; border-radius: 16px; padding: 20px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            position: fixed; z-index: 2000;
+            min-width: 260px; max-width: 340px;
+            border-top: 4px solid #2d5a27;
+        }
+        .evento-info h4 { color: #2d5a27; margin-bottom: 10px; font-size: 14px; }
+        .evento-info p  { font-size: 13px; color: #555; line-height: 1.7; }
+        .evento-info .close-info {
+            position: absolute; top: 8px; right: 12px;
+            background: none; border: none; cursor: pointer;
+            font-size: 20px; color: #aaa;
+        }
+
+        .loading-state { text-align: center; padding: 30px; color: #888; }
+
+        @media (max-width: 768px) {
+            .admin-content { padding: 0 16px; }
+        }
     </style>
 </head>
 <body>
-<div id="loginContainer" style="display: flex; justify-content: center; align-items: center; min-height: 100vh;">
-    <div style="background:white; padding:40px; border-radius:24px; width:350px; text-align:center;">
-        <h2>📅 Calendario</h2>
-        <input type="email" id="email" placeholder="Email">
-        <input type="password" id="password" placeholder="Contraseña">
-        <button onclick="login()">Ingresar</button>
-        <div id="loginError" style="color:red;"></div>
+
+<div class="admin-header">
+    <h1><span class="material-icons">calendar_month</span> Calendario de ocupación</h1>
+    <div class="user-chip">
+        <span id="userName">—</span>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons" style="font-size:15px;">logout</span> Salir
+        </button>
     </div>
 </div>
-<div id="mainPanel" style="display:none;">
-    <div class="admin-header"><h1>📅 Calendario de Ocupación</h1><div><span id="userEmail"></span><button class="btn-secondary" onclick="logout()">Salir</button></div></div>
-    <div class="admin-nav">
-        <a href="dashboard.html" class="nav-item">Dashboard</a>
-        <a href="reservas.html" class="nav-item">Reservas</a>
-        <a href="presupuestos.html" class="nav-item">Presupuestos</a>
-        <a href="cabanas-admin.html" class="nav-item">Cabañas</a>
-        <a href="calendario.html" class="nav-item active">Calendario</a>
+
+<nav class="admin-nav">
+    <a href="dashboard.html"     class="nav-item"><span class="material-icons">dashboard</span> Dashboard</a>
+    <a href="reservas.html"      class="nav-item"><span class="material-icons">event</span> Reservas</a>
+    <a href="presupuestos.html"  class="nav-item"><span class="material-icons">request_quote</span> Presupuestos</a>
+    <a href="pagos.html"         class="nav-item"><span class="material-icons">payments</span> Pagos</a>
+    <a href="clientes.html"      class="nav-item"><span class="material-icons">people</span> Clientes</a>
+    <a href="cabanas-admin.html" class="nav-item"><span class="material-icons">cottage</span> Cabañas</a>
+    <a href="tareas.html"        class="nav-item"><span class="material-icons">checklist</span> Tareas</a>
+    <a href="calendario.html"    class="nav-item active"><span class="material-icons">calendar_month</span> Calendario</a>
+</nav>
+
+<div class="admin-content">
+    <div class="card">
+
+        <!-- Leyenda dinámica -->
+        <div class="calendar-legend" id="leyenda">
+            <div class="loading-state">Cargando cabañas...</div>
+        </div>
+
+        <!-- Filtros por cabaña -->
+        <div class="filtros-cabanas" id="filtrosCabanas"></div>
+
+        <!-- Leyenda tareas -->
+        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:20px;">
+            <div class="legend-item"><div class="legend-dot" style="background:#95a5a6;"></div> Limpieza pendiente</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#27ae60;"></div> Limpieza completada</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#e74c3c; opacity:0.5;"></div> Anulada</div>
+        </div>
+
+        <!-- Calendario -->
+        <div id="calendar"></div>
     </div>
-    <div class="admin-content">
-        <div class="card">
-            <div id="calendar"></div>
-            <div class="calendar-legend">
-                <div><span class="legend-color" style="background:#FF9800;"></span> Cabaña 1</div>
-                <div><span class="legend-color" style="background:#3498db;"></span> Cabaña 2</div>
-                <div><span class="legend-color" style="background:#2ecc71;"></span> Cabaña 3</div>
-                <div><span class="legend-color" style="background:#9b59b6;"></span> Manual / Presupuesto</div>
+</div>
+
+<!-- MODAL: Reserva rápida -->
+<div id="modalReserva" class="modal">
+    <div class="modal-content">
+        <div class="modal-title">
+            <span class="material-icons">add_circle</span> Nueva reserva rápida
+        </div>
+        <input type="hidden" id="fechaInicio">
+        <input type="hidden" id="fechaFin">
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Check-in</label>
+                <input type="date" id="checkInDisplay" readonly style="background:#f8f9fa; cursor:default;">
             </div>
+            <div class="form-group">
+                <label>Check-out</label>
+                <input type="date" id="checkOutDisplay" readonly style="background:#f8f9fa; cursor:default;">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Cabaña *</label>
+            <select id="cabanaSelect" onchange="calcularEstimado()"></select>
+        </div>
+
+        <div class="form-group">
+            <label>Estado *</label>
+            <select id="estadoSelect">
+                <option value="confirmada">Confirmada</option>
+                <option value="pendiente">Pendiente</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Nombre del cliente *</label>
+            <input type="text" id="clienteNombre" placeholder="Nombre completo">
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Adultos</label>
+                <input type="number" id="adultos" value="2" min="1" onchange="calcularEstimado()">
+            </div>
+            <div class="form-group">
+                <label>Niños</label>
+                <input type="number" id="ninos" value="0" min="0" onchange="calcularEstimado()">
+            </div>
+            <div class="form-group">
+                <label>Origen</label>
+                <select id="origen">
+                    <option value="directa">Directa</option>
+                    <option value="airbnb">Airbnb</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Notas</label>
+            <textarea id="notas" rows="2" placeholder="Observaciones..."></textarea>
+        </div>
+
+        <div class="precio-box" id="precioBox">
+            <strong>🌙 Noches:</strong> <span id="pNoches">—</span><br>
+            <strong>🏠 Alojamiento:</strong> <span id="pSubtotal">—</span><br>
+            <strong>🧹 Limpieza:</strong> <span id="pLimpieza">—</span><br>
+            <strong>💰 Total:</strong> <span id="pTotal">—</span>
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+            <button class="btn btn-primary" onclick="crearReservaRapida()">
+                <span class="material-icons" style="font-size:16px;">save</span> Guardar reserva
+            </button>
+            <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
         </div>
     </div>
 </div>
-<!-- Modal para crear reserva rápida -->
-<div id="modalReserva" class="modal">
-    <div class="modal-content">
-        <h3>Nueva Reserva</h3>
-        <input type="hidden" id="fechaInicio">
-        <input type="hidden" id="fechaFin">
-        <div class="form-group"><label>Cabaña</label><select id="cabañaSelect"></select></div>
-        <div class="form-group"><label>Cliente</label><input type="text" id="clienteNombre" placeholder="Nombre completo"></div>
-        <div class="form-group"><label>Adultos</label><input type="number" id="adultos" value="2"></div>
-        <div class="form-group"><label>Niños</label><input type="number" id="ninos" value="0"></div>
-        <div class="form-group"><label>Origen</label><select id="origen"><option value="directa">Directa</option><option value="airbnb">Airbnb</option></select></div>
-        <div class="form-group"><label>Notas</label><textarea id="notas" rows="2"></textarea></div>
-        <div id="precioEstimado" style="background:#e8f5e9; padding:8px; border-radius:8px; margin:10px 0;"></div>
-        <button class="btn-primary" onclick="crearReservaRapida()">Guardar Reserva</button>
-        <button class="btn-secondary" onclick="cerrarModal()">Cancelar</button>
+
+<!-- Popup info evento -->
+<div id="eventoInfo" class="evento-info" style="display:none;">
+    <button class="close-info" onclick="cerrarInfoEvento()">×</button>
+    <h4 id="infoTitulo"></h4>
+    <p id="infoDetalle"></p>
+    <div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;">
+        <a id="infoLinkReserva" href="#" class="btn btn-sm btn-primary" style="display:none;">Ver reserva →</a>
     </div>
 </div>
-<script>
-    const firebaseConfig = { apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4", authDomain: "casaverdecanas-199.firebaseapp.com", projectId: "casaverdecanas-199" };
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-    let currentUser = null;
-    let calendar = null;
-    let cabanas = [];
 
-    async function login() {
-        const email = document.getElementById('email').value, password = document.getElementById('password').value;
-        try {
-            const cred = await auth.signInWithEmailAndPassword(email, password);
-            const userDoc = await db.collection('usuarios').doc(cred.user.uid).get();
-            if(userDoc.exists && userDoc.data().rol === 'admin') {
-                currentUser = cred.user;
-                document.getElementById('loginContainer').style.display = 'none';
-                document.getElementById('mainPanel').style.display = 'block';
-                document.getElementById('userEmail').textContent = email;
-                await cargarCabanasSelect();
-                await cargarEventos();
-            } else alert('No eres admin');
-        } catch(e) { document.getElementById('loginError').innerText = e.message; }
-    }
-    function logout() { auth.signOut().then(()=>location.reload()); }
-    async function cargarCabanasSelect() {
+<!-- Firebase + FullCalendar -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script src="utils.js"></script>
+<script>
+(async () => {
+    const { user, userData } = await CVC.verificarAuth('admin');
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+
+    const db = CVC.db;
+    const { escapeHtml, calcularPrecio, crearTareaLimpieza, colorCabana, badgeEstado, formatFecha } = CVC;
+
+    let cabanasCache = [];
+    let calendar     = null;
+    let ultimoPrecio = null;
+    let filtrosActivos = new Set(); // IDs de cabañas visibles
+
+    // ── Cargar cabañas ────────────────────────────────────
+    async function cargarCabanas() {
         const snap = await db.collection('cabanas').where('activa','==',true).orderBy('orden').get();
-        cabanas = snap.docs.map(d=>({ id: d.id, ...d.data() }));
-        const select = document.getElementById('cabañaSelect');
-        select.innerHTML = cabanas.map(c=>`<option value="${c.id}">${c.nombre?.es||c.id}</option>`).join('');
+        cabanasCache = snap.docs.map((d, i) => ({
+            docId: d.id,
+            color: colorCabana(i),
+            ...d.data()
+        }));
+
+        // Todas activas por defecto
+        cabanasCache.forEach(c => filtrosActivos.add(c.id));
+
+        // Leyenda
+        const leyenda = document.getElementById('leyenda');
+        leyenda.innerHTML = cabanasCache.map(c =>
+            `<div class="legend-item">
+                <div class="legend-dot" style="background:${c.color};"></div>
+                ${escapeHtml(c.nombre?.es || `Cabaña ${c.id}`)}
+            </div>`
+        ).join('');
+
+        // Filtros
+        const filtrosEl = document.getElementById('filtrosCabanas');
+        filtrosEl.innerHTML = cabanasCache.map(c =>
+            `<button class="filtro-cab activo" data-caba="${c.id}"
+                style="border-color:${c.color}; color:${c.color}; background:${c.color}22;"
+                onclick="toggleFiltro(${c.id}, '${c.color}', this)">
+                ${escapeHtml(c.nombre?.es || `Cabaña ${c.id}`)}
+            </button>`
+        ).join('') + `
+            <button class="filtro-cab activo" data-caba="tareas"
+                style="border-color:#95a5a6; color:#95a5a6; background:#95a5a622;"
+                onclick="toggleFiltro('tareas', '#95a5a6', this)">
+                🧹 Tareas
+            </button>`;
+
+        // Select del modal
+        const select = document.getElementById('cabanaSelect');
+        select.innerHTML = cabanasCache.map(c =>
+            `<option value="${c.id}">${escapeHtml(c.nombre?.es || `Cabaña ${c.id}`)}</option>`
+        ).join('');
     }
-    async function cargarEventos() {
-        const reservasSnap = await db.collection('reservas').get();
+
+    // ── Toggle filtro ─────────────────────────────────────
+    window.toggleFiltro = function(cabaId, color, btn) {
+        if (filtrosActivos.has(cabaId)) {
+            filtrosActivos.delete(cabaId);
+            btn.classList.add('inactivo');
+            btn.classList.remove('activo');
+        } else {
+            filtrosActivos.add(cabaId);
+            btn.classList.remove('inactivo');
+            btn.classList.add('activo');
+        }
+        calendar?.refetchEvents();
+    };
+
+    // ── Cargar eventos ────────────────────────────────────
+    async function obtenerEventos() {
+        const [reservasSnap, tareasSnap] = await Promise.all([
+            db.collection('reservas').get(),
+            db.collection('tareas').where('tipo','==','limpieza').get()
+        ]);
+
         const eventos = [];
-        const colores = {1:'#FF9800',2:'#3498db',3:'#2ecc71'};
-        reservasSnap.forEach(doc=>{
+
+        // Reservas
+        reservasSnap.forEach(doc => {
             const r = doc.data();
-            const start = r.checkIn?.toDate?.() || new Date(r.checkIn);
-            const end = r.checkOut?.toDate?.() || new Date(r.checkOut);
-            const color = colores[r.caba] || '#9b59b6';
+            if (r.estado === 'anulada') {
+                // Mostrar anuladas con opacidad si el filtro de su cabaña está activo
+                if (!filtrosActivos.has(r.caba)) return;
+                eventos.push({
+                    title:     `❌ ${r.nombre} (C${r.caba})`,
+                    start:     r.checkIn?.toDate?.(),
+                    end:       r.checkOut?.toDate?.(),
+                    color:     '#e74c3c',
+                    textColor: 'white',
+                    opacity:   0.4,
+                    extendedProps: { tipo: 'reserva', reservaId: doc.id, estado: r.estado, caba: r.caba, nombre: r.nombre, huespedes: r.huespedes, totalBRL: r.totalBRL }
+                });
+                return;
+            }
+            if (!filtrosActivos.has(r.caba)) return;
+
+            const cabana = cabanasCache.find(c => c.id == r.caba);
+            const color  = cabana?.color || '#95a5a6';
+            const prefix = r.estado === 'pendiente' ? '⏳ ' : '';
+
             eventos.push({
-                title: `${r.nombre} (Cabaña ${r.caba})`,
-                start: start,
-                end: end,
-                color: color,
+                title:     `${prefix}${r.nombre} (C${r.caba})`,
+                start:     r.checkIn?.toDate?.(),
+                end:       r.checkOut?.toDate?.(),
+                color:     r.estado === 'pendiente' ? color + 'aa' : color,
                 textColor: 'white',
-                extendedProps: { id: doc.id, caba: r.caba }
+                borderColor: r.estado === 'pendiente' ? color : color,
+                extendedProps: { tipo: 'reserva', reservaId: doc.id, estado: r.estado, caba: r.caba, nombre: r.nombre, huespedes: r.huespedes, totalBRL: r.totalBRL, origen: r.origen }
             });
         });
+
+        // Tareas de limpieza
+        if (filtrosActivos.has('tareas')) {
+            tareasSnap.forEach(doc => {
+                const t = doc.data();
+                if (!t.fechaInicio) return;
+                const color = t.completada ? '#27ae60' : '#95a5a6';
+                eventos.push({
+                    title:     `🧹 C${t.cabaña} ${t.completada ? '✅' : ''}`,
+                    start:     t.fechaInicio,
+                    allDay:    true,
+                    color,
+                    textColor: 'white',
+                    extendedProps: { tipo: 'tarea', tareaId: doc.id, completada: t.completada, cabaña: t.cabaña, montoLimpieza: t.montoLimpieza }
+                });
+            });
+        }
+
+        return eventos;
+    }
+
+    // ── Inicializar calendario ────────────────────────────
+    function iniciarCalendario() {
         const calendarEl = document.getElementById('calendar');
-        if(calendar) calendar.destroy();
         calendar = new FullCalendar.Calendar(calendarEl, {
-            initialView: 'dayGridMonth',
-            locale: 'es',
-            headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
-            selectable: true,
-            select: (info) => abrirModalNuevaReserva(info.startStr, info.endStr),
-            events: eventos,
-            eventClick: (info) => alert(`Reserva: ${info.event.title}\nFechas: ${info.event.start.toLocaleDateString()} - ${info.event.end.toLocaleDateString()}`)
+            initialView:  'dayGridMonth',
+            locale:       'es',
+            height:       'auto',
+            headerToolbar: {
+                left:   'prev,next today',
+                center: 'title',
+                right:  'dayGridMonth,timeGridWeek,listWeek'
+            },
+            selectable:   true,
+            selectMirror: true,
+            select: (info) => {
+                abrirModalNuevaReserva(info.startStr, info.endStr);
+            },
+            events: async () => await obtenerEventos(),
+            eventClick: (info) => mostrarInfoEvento(info),
+            eventDidMount: (info) => {
+                // Opacidad para anuladas
+                if (info.event.extendedProps.estado === 'anulada') {
+                    info.el.style.opacity = '0.45';
+                }
+            }
         });
         calendar.render();
     }
-    function abrirModalNuevaReserva(start, end) {
-        document.getElementById('fechaInicio').value = start;
-        document.getElementById('fechaFin').value = end;
-        document.getElementById('clienteNombre').value = '';
-        document.getElementById('adultos').value = '2';
-        document.getElementById('ninos').value = '0';
-        document.getElementById('origen').value = 'directa';
-        document.getElementById('notas').value = '';
-        document.getElementById('precioEstimado').innerHTML = '';
-        document.getElementById('modalReserva').style.display = 'flex';
-        // calcular precio estimado al cambiar cabaña o fechas
-        const calcular = async () => {
-            const cabaId = parseInt(document.getElementById('cabañaSelect').value);
-            const checkIn = document.getElementById('fechaInicio').value;
-            const checkOut = document.getElementById('fechaFin').value;
-            const adultos = parseInt(document.getElementById('adultos').value)||0;
-            const ninos = parseInt(document.getElementById('ninos').value)||0;
-            if(!cabaId || !checkIn || !checkOut) return;
-            const cabana = cabanas.find(c=>c.id==cabaId);
-            if(!cabana) return;
-            const tarifas = cabana.tarifas;
-            const personasExtra = Math.max(0, (adultos+ninos) - (cabana.capacidad?.base||2));
-            let totalNoches = 0;
-            let fecha = new Date(checkIn);
-            const fin = new Date(checkOut);
-            while(fecha < fin) {
-                const fechaStr = fecha.toISOString().split('T')[0];
-                const intervalo = (tarifas.intervalos || []).find(i=> i.desde <= fechaStr && i.hasta >= fechaStr);
-                const precioNoche = intervalo ? intervalo.precioNoche : tarifas.precioBase;
-                const precioExtra = intervalo ? intervalo.precioExtra : tarifas.precioExtraPersona;
-                totalNoches += precioNoche + (personasExtra * precioExtra);
-                fecha.setDate(fecha.getDate()+1);
-            }
-            const total = totalNoches + tarifas.precioLimpieza;
-            document.getElementById('precioEstimado').innerHTML = `💰 Total estimado: R$ ${total.toFixed(2)}`;
-        };
-        document.getElementById('cabañaSelect').onchange = calcular;
-        document.getElementById('adultos').onchange = calcular;
-        document.getElementById('ninos').onchange = calcular;
-        calcular();
-    }
-    async function crearReservaRapida() {
-        const cabaId = parseInt(document.getElementById('cabañaSelect').value);
-        const clienteNombre = document.getElementById('clienteNombre').value.trim();
-        if(!clienteNombre) { alert('Nombre del cliente requerido'); return; }
-        const start = document.getElementById('fechaInicio').value;
-        const end = document.getElementById('fechaFin').value;
-        const adultos = parseInt(document.getElementById('adultos').value)||0;
-        const ninos = parseInt(document.getElementById('ninos').value)||0;
-        const origen = document.getElementById('origen').value;
-        const notas = document.getElementById('notas').value;
-        // calcular total
-        const cabana = cabanas.find(c=>c.id==cabaId);
-        if(!cabana) return;
-        const tarifas = cabana.tarifas;
-        const personasExtra = Math.max(0, (adultos+ninos) - (cabana.capacidad?.base||2));
-        let totalNoches = 0;
-        let fecha = new Date(start);
-        const fin = new Date(end);
-        while(fecha < fin) {
-            const fechaStr = fecha.toISOString().split('T')[0];
-            const intervalo = (tarifas.intervalos || []).find(i=> i.desde <= fechaStr && i.hasta >= fechaStr);
-            const precioNoche = intervalo ? intervalo.precioNoche : tarifas.precioBase;
-            const precioExtra = intervalo ? intervalo.precioExtra : tarifas.precioExtraPersona;
-            totalNoches += precioNoche + (personasExtra * precioExtra);
-            fecha.setDate(fecha.getDate()+1);
+
+    // ── Info popup al hacer click en evento ───────────────
+    function mostrarInfoEvento(info) {
+        cerrarInfoEvento();
+        const ep    = info.event.extendedProps;
+        const el    = document.getElementById('eventoInfo');
+        const titulo = document.getElementById('infoTitulo');
+        const detalle = document.getElementById('infoDetalle');
+        const linkRes = document.getElementById('infoLinkReserva');
+
+        if (ep.tipo === 'reserva') {
+            titulo.textContent = info.event.title;
+            detalle.innerHTML =
+                `Estado: ${ep.estado}<br>` +
+                `Cabaña: ${ep.caba}<br>` +
+                `Huéspedes: ${ep.huespedes || '—'}<br>` +
+                `Total: R$ ${(ep.totalBRL||0).toFixed(2)}<br>` +
+                `Origen: ${ep.origen || '—'}`;
+            linkRes.href = `reservas.html?id=${ep.reservaId}`;
+            linkRes.style.display = 'inline-flex';
+        } else {
+            titulo.textContent = `🧹 Limpieza Cabaña ${ep.cabaña}`;
+            detalle.innerHTML =
+                `Estado: ${ep.completada ? '✅ Completada' : '⏳ Pendiente'}<br>` +
+                `Monto: R$ ${ep.montoLimpieza || '—'}`;
+            linkRes.style.display = 'none';
         }
-        const total = totalNoches + tarifas.precioLimpieza;
+
+        // Posicionar cerca del click
+        const rect = info.el.getBoundingClientRect();
+        el.style.top  = `${rect.bottom + window.scrollY + 8}px`;
+        el.style.left = `${Math.min(rect.left, window.innerWidth - 360)}px`;
+        el.style.display = 'block';
+    }
+
+    window.cerrarInfoEvento = function() {
+        document.getElementById('eventoInfo').style.display = 'none';
+    };
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.evento-info') && !e.target.closest('.fc-event')) {
+            cerrarInfoEvento();
+        }
+    });
+
+    // ── Modal nueva reserva rápida ────────────────────────
+    window.abrirModalNuevaReserva = function(start, end) {
+        document.getElementById('fechaInicio').value    = start;
+        document.getElementById('fechaFin').value       = end;
+        document.getElementById('checkInDisplay').value  = start;
+        document.getElementById('checkOutDisplay').value = end;
+        document.getElementById('clienteNombre').value  = '';
+        document.getElementById('estadoSelect').value   = 'confirmada';
+        document.getElementById('adultos').value        = '2';
+        document.getElementById('ninos').value          = '0';
+        document.getElementById('origen').value        = 'directa';
+        document.getElementById('notas').value          = '';
+        document.getElementById('precioBox').style.display = 'none';
+        ultimoPrecio = null;
+        calcularEstimado();
+        document.getElementById('modalReserva').classList.add('open');
+    };
+
+    window.cerrarModal = function() {
+        document.getElementById('modalReserva').classList.remove('open');
+    };
+
+    // ── Calcular precio estimado ──────────────────────────
+    window.calcularEstimado = function() {
+        const cabaId  = parseInt(document.getElementById('cabanaSelect').value);
+        const checkIn  = document.getElementById('fechaInicio').value;
+        const checkOut = document.getElementById('fechaFin').value;
+        const adultos  = parseInt(document.getElementById('adultos').value) || 0;
+        const ninos    = parseInt(document.getElementById('ninos').value) || 0;
+        if (!checkIn || !checkOut || !cabaId) return;
+
+        const cabana = cabanasCache.find(c => c.id == cabaId);
+        if (!cabana) return;
+
+        ultimoPrecio = calcularPrecio(cabana, checkIn, checkOut, adultos, ninos);
+        document.getElementById('pNoches').textContent   = ultimoPrecio.noches;
+        document.getElementById('pSubtotal').textContent = `R$ ${ultimoPrecio.subtotal.toFixed(2)}`;
+        document.getElementById('pLimpieza').textContent = `R$ ${ultimoPrecio.limpieza.toFixed(2)}`;
+        document.getElementById('pTotal').textContent    = `R$ ${ultimoPrecio.total.toFixed(2)}`;
+        document.getElementById('precioBox').style.display = 'block';
+    };
+
+    // ── Crear reserva rápida ──────────────────────────────
+    window.crearReservaRapida = async function() {
+        const cabaId = parseInt(document.getElementById('cabanaSelect').value);
+        const nombre = document.getElementById('clienteNombre').value.trim();
+        const start  = document.getElementById('fechaInicio').value;
+        const end    = document.getElementById('fechaFin').value;
+        const adultos = parseInt(document.getElementById('adultos').value) || 0;
+        const ninos   = parseInt(document.getElementById('ninos').value) || 0;
+        const estado  = document.getElementById('estadoSelect').value;
+        const origen  = document.getElementById('origen').value;
+        const notas   = document.getElementById('notas').value.trim();
+
+        if (!nombre) { alert('El nombre del cliente es requerido'); return; }
+        if (!start || !end) { alert('Las fechas son requeridas'); return; }
+
+        const cabana = cabanasCache.find(c => c.id == cabaId);
+        if (!cabana) return;
+
+        if (!ultimoPrecio) ultimoPrecio = calcularPrecio(cabana, start, end, adultos, ninos);
+
         const reservaData = {
-            caba: cabaId,
-            nombre: clienteNombre,
-            checkIn: firebase.firestore.Timestamp.fromDate(new Date(start)),
-            checkOut: firebase.firestore.Timestamp.fromDate(new Date(end)),
-            adultos, ninos, huespedes: adultos+ninos,
-            origen, notas,
-            estado: 'confirmada',
-            totalBRL: total,
-            subtotalBRL: totalNoches,
-            costoLimpiezaBRL: tarifas.precioLimpieza,
-            creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
-            creadoPor: currentUser.uid
+            caba:     cabaId,
+            nombre,
+            checkIn:  firebase.firestore.Timestamp.fromDate(new Date(start + 'T12:00:00')),
+            checkOut: firebase.firestore.Timestamp.fromDate(new Date(end   + 'T12:00:00')),
+            adultos, ninos,
+            huespedes: adultos + ninos,
+            origen, notas, estado,
+            totalBRL:         ultimoPrecio.total,
+            subtotalBRL:      ultimoPrecio.subtotal,
+            costoLimpiezaBRL: ultimoPrecio.limpieza,
+            noches:           ultimoPrecio.noches,
+            creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
+            creadoPor: user.uid
         };
+
         try {
             const ref = await db.collection('reservas').add(reservaData);
-            await crearTareaLimpieza(ref.id, reservaData);
-            alert('Reserva creada y tarea de limpieza generada');
+            if (estado === 'confirmada') {
+                await crearTareaLimpieza(ref.id, reservaData, user.uid);
+                alert('✅ Reserva creada y tarea de limpieza generada');
+            } else {
+                alert('✅ Reserva creada como pendiente');
+            }
             cerrarModal();
-            cargarEventos();
-        } catch(e) { alert('Error: '+e.message); }
-    }
-    async function crearTareaLimpieza(reservaId, reserva) {
-        const checkOut = reserva.checkOut.toDate();
-        const checkIn = reserva.checkIn.toDate();
-        const fechaFin = new Date(checkIn);
-        fechaFin.setHours(checkIn.getHours()-1);
-        const descripcion = `Check-out: ${checkOut.toLocaleString()}\nCheck-in: ${checkIn.toLocaleString()}\nHuéspedes: ${reserva.huespedes}\nMonto limpieza: R$ ${reserva.costoLimpiezaBRL}`;
-        await db.collection('tareas').add({
-            nombre: `🧹 Limpiar Cabaña ${reserva.caba} - ${reserva.nombre}`,
-            descripcion: descripcion,
-            tipo: 'limpieza',
-            prioridad: 'alta',
-            fechaInicio: fechaFin.toISOString().split('T')[0],
-            recurrencia: 0,
-            activa: true,
-            completada: false,
-            reservaId: reservaId,
-            cabaña: reserva.caba,
-            montoLimpieza: reserva.costoLimpiezaBRL,
-            colaboradores: [],
-            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-        });
-    }
-    function cerrarModal() { document.getElementById('modalReserva').style.display = 'none'; }
-    window.crearReservaRapida = crearReservaRapida; window.cerrarModal = cerrarModal;
-    window.login = login; window.logout = logout;
-    auth.onAuthStateChanged(user=>{ if(user) login(); });
+            calendar.refetchEvents();
+        } catch(e) { alert('Error: ' + e.message); }
+    };
+
+    // ── Init ──────────────────────────────────────────────
+    await cargarCabanas();
+    iniciarCalendario();
+
+})();
 </script>
 </body>
 </html>
