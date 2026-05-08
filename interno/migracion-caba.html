@@ -3,629 +3,323 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Migración de Cabañas - Casa Verde Canas</title>
-    
+    <title>Migración y Consolidación de Cabañas - Casa Verde Canas</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
         body { background: linear-gradient(135deg, #1e3c2c 0%, #2d5a27 100%); min-height: 100vh; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        
+        .container { max-width: 1000px; margin: 0 auto; }
         .card { background: white; border-radius: 20px; padding: 25px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        .card h2 { color: #2d5a27; display: flex; align-items: center; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #e8f5e9; padding-bottom: 10px; }
-        .card h3 { color: #2d5a27; margin: 15px 0 10px 0; }
-        
-        .login-box { background: white; padding: 40px; border-radius: 24px; max-width: 400px; margin: 50px auto; text-align: center; }
-        .login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 12px; }
-        .login-box button { width: 100%; padding: 12px; background: #2d5a27; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; }
-        
-        .btn { padding: 10px 20px; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; margin: 5px; transition: all 0.2s; }
+        .card h2 { color: #2d5a27; margin-bottom: 20px; border-bottom: 2px solid #e8f5e9; padding-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; margin: 5px; }
         .btn-primary { background: #2d5a27; color: white; }
-        .btn-primary:hover { background: #1e3f1a; transform: translateY(-2px); }
         .btn-success { background: #27ae60; color: white; }
         .btn-warning { background: #f39c12; color: white; }
-        .btn-danger { background: #e74c3c; color: white; }
         .btn-secondary { background: #95a5a6; color: white; }
-        
         .status { padding: 12px; border-radius: 12px; margin: 15px 0; display: none; }
         .status.success { background: #d4edda; color: #155724; display: block; }
         .status.error { background: #f8d7da; color: #721c24; display: block; }
         .status.info { background: #d1ecf1; color: #0c5460; display: block; }
         .status.warning { background: #fff3cd; color: #856404; display: block; }
-        
-        .progress-bar { width: 100%; height: 25px; background: #e9ecef; border-radius: 12px; overflow: hidden; margin: 10px 0; }
-        .progress-fill { height: 100%; background: #2d5a27; width: 0%; transition: width 0.3s; border-radius: 12px; line-height: 25px; color: white; text-align: center; font-size: 12px; }
-        
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .stat-card { background: #f8f9fa; padding: 15px; border-radius: 12px; text-align: center; }
-        .stat-number { font-size: 28px; font-weight: bold; color: #2d5a27; }
-        .stat-label { color: #6c757d; font-size: 12px; }
-        
-        .data-preview { max-height: 300px; overflow-y: auto; background: #1e1e1e; color: #d4d4d4; border-radius: 12px; padding: 15px; font-family: monospace; font-size: 12px; margin: 10px 0; }
-        .data-preview pre { margin: 0; white-space: pre-wrap; }
-        
+        .progress-bar { width: 100%; height: 20px; background: #e9ecef; border-radius: 10px; overflow: hidden; margin: 10px 0; }
+        .progress-fill { height: 100%; background: #2d5a27; width: 0%; transition: width 0.3s; border-radius: 10px; }
+        .login-box { background: white; padding: 40px; border-radius: 24px; max-width: 400px; margin: 50px auto; text-align: center; }
+        .login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 12px; }
+        pre { background: #f4f4f4; padding: 15px; border-radius: 12px; overflow-x: auto; font-size: 12px; margin-top: 15px; }
         .button-group { display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0; }
-        
-        @media (max-width: 768px) { .btn { width: 100%; } .button-group { flex-direction: column; } }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Pantalla de Login -->
-        <div id="loginScreen" class="login-box">
-            <h2 style="color: #2d5a27;">🔄 Migración de Cabañas</h2>
-            <p style="color: #666; margin-bottom: 20px;">Herramienta para migrar datos desde Realtime Database a Firestore</p>
-            <input type="email" id="adminEmail" placeholder="Email del administrador">
-            <input type="password" id="adminPassword" placeholder="Contraseña">
-            <button onclick="loginAdmin()">Ingresar</button>
-            <div id="loginError" style="color: red; margin-top: 10px;"></div>
+<div class="container">
+    <div id="loginScreen" class="login-box">
+        <h2 style="color:#2d5a27;">🔄 Migración de Cabañas</h2>
+        <input type="email" id="email" placeholder="Email administrador">
+        <input type="password" id="password" placeholder="Contraseña">
+        <button onclick="login()" class="btn-primary">Ingresar</button>
+        <div id="loginError" style="color:red; margin-top:10px;"></div>
+    </div>
+
+    <div id="mainPanel" style="display: none;">
+        <div class="card" style="background:#2d5a27; color:white;">
+            <h2 style="color:white; border:none;">🏠 Migración y Consolidación de Cabañas</h2>
+            <div><span id="userEmail"></span> <button class="btn btn-secondary" onclick="logout()">Salir</button></div>
         </div>
-        
-        <!-- Panel Principal -->
-        <div id="mainPanel" style="display: none;">
-            <!-- Header -->
-            <div class="card" style="background: #2d5a27; color: white;">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-                    <h2 style="color: white; border: none;">
-                        <span class="material-icons">database</span> Migración de Cabañas
-                    </h2>
-                    <div><span id="userEmailDisplay" style="margin-right: 15px;"></span><button class="btn btn-secondary" onclick="logout()">Cerrar Sesión</button></div>
-                </div>
+
+        <div id="statusMessage" class="status"></div>
+
+        <div class="card">
+            <h2><span class="material-icons">cloud_download</span> 1. Importar desde Realtime Database</h2>
+            <p>Lee los datos de <code>siteData/apartments</code> (cabin-1, cabin-2, cabin-3) y los guarda/actualiza en Firestore con la estructura unificada.</p>
+            <div class="button-group">
+                <button class="btn btn-primary" onclick="importarDesdeRTDB()">📥 Importar desde RTDB</button>
+                <button class="btn btn-secondary" onclick="verDatosRTDB()">👁️ Ver datos en RTDB</button>
             </div>
-            
-            <div id="statusMessage" class="status"></div>
-            
-            <!-- Estadísticas de Origen (RTDB) -->
-            <div class="card">
-                <h2><span class="material-icons">cloud_queue</span> Datos de Origen (Realtime Database)</h2>
-                <div class="stats-grid" id="statsOrigen">
-                    <div class="stat-card"><div class="stat-number">-</div><div class="stat-label">Cabañas</div></div>
-                    <div class="stat-card"><div class="stat-number">-</div><div class="stat-label">Fotos</div></div>
-                    <div class="stat-card"><div class="stat-number">-</div><div class="stat-label">Categorías</div></div>
-                </div>
-                <div class="button-group">
-                    <button class="btn btn-primary" onclick="cargarDatosOrigen()"><span class="material-icons">refresh</span> Cargar desde RTDB</button>
-                    <button class="btn btn-secondary" onclick="verDatosOrigen()"><span class="material-icons">visibility</span> Ver Datos Crudos</button>
-                </div>
-                <div id="origenPreview" class="data-preview" style="display: none;"></div>
+            <div id="importResult" class="status info" style="display:none;"></div>
+        </div>
+
+        <div class="card">
+            <h2><span class="material-icons">cleaning_services</span> 2. Consolidar datos en Firestore</h2>
+            <p>Normaliza todas las cabañas en Firestore: añade campos faltantes (capacidad, camas, comodidades, tarifas con intervalos). No borra información existente.</p>
+            <div class="button-group">
+                <button class="btn btn-warning" onclick="consolidarFirestore()">🔄 Consolidar Firestore</button>
+                <button class="btn btn-secondary" onclick="verCabanasFirestore()">👁️ Ver cabañas en Firestore</button>
             </div>
-            
-            <!-- Estadísticas de Destino (Firestore) -->
-            <div class="card">
-                <h2><span class="material-icons">cloud_done</span> Datos de Destino (Firestore)</h2>
-                <div class="stats-grid" id="statsDestino">
-                    <div class="stat-card"><div class="stat-number">-</div><div class="stat-label">Cabañas</div></div>
-                    <div class="stat-card"><div class="stat-number">-</div><div class="stat-label">Documentos</div></div>
-                </div>
-                <div class="button-group">
-                    <button class="btn btn-primary" onclick="cargarDatosDestino()"><span class="material-icons">refresh</span> Cargar desde Firestore</button>
-                    <button class="btn btn-secondary" onclick="verDatosDestino()"><span class="material-icons">visibility</span> Ver Datos en Firestore</button>
-                </div>
-                <div id="destinoPreview" class="data-preview" style="display: none;"></div>
-            </div>
-            
-            <!-- Migración -->
-            <div class="card">
-                <h2><span class="material-icons">sync</span> Migración de Datos</h2>
-                <p style="margin-bottom: 15px; color: #666; background: #fff3cd; padding: 10px; border-radius: 8px;">
-                    ⚠️ <strong>Importante:</strong> Esta herramienta migrará los datos de cabañas desde Realtime Database a Firestore.
-                    <strong>No se perderán datos existentes</strong> - solo se agregarán los que falten o se actualizarán.
-                </p>
-                
-                <div class="stats-grid" id="migracionStats">
-                    <div class="stat-card"><div class="stat-number">-</div><div class="stat-label">Por migrar</div></div>
-                    <div class="stat-card"><div class="stat-number">-</div><div class="stat-label">Por actualizar</div></div>
-                    <div class="stat-card"><div class="stat-number">-</div><div class="stat-label">Ya existentes</div></div>
-                </div>
-                
-                <div id="migrationProgress" class="progress-bar" style="display: none;">
-                    <div class="progress-fill">0%</div>
-                </div>
-                
-                <div class="button-group">
-                    <button class="btn btn-primary" onclick="analizarMigracion()"><span class="material-icons">analytics</span> Analizar Migración</button>
-                    <button class="btn btn-success" onclick="ejecutarMigracion()" id="migrateBtn"><span class="material-icons">play_arrow</span> Ejecutar Migración</button>
-                    <button class="btn btn-warning" onclick="migrarSoloFotos()"><span class="material-icons">photo_library</span> Migrar Solo Fotos</button>
-                </div>
-            </div>
-            
-            <!-- Resultados de la migración -->
-            <div class="card" id="resultadosCard" style="display: none;">
-                <h2><span class="material-icons">fact_check</span> Resultados de la Migración</h2>
-                <div id="resultadosContent"></div>
-            </div>
+            <div id="consolidateResult" class="status info" style="display:none;"></div>
+        </div>
+
+        <div class="card">
+            <h2><span class="material-icons">fact_check</span> 3. Verificar resultado</h2>
+            <button class="btn btn-success" onclick="mostrarResumen()">📊 Mostrar resumen</button>
+            <div id="resumen" style="margin-top:15px;"></div>
         </div>
     </div>
-    
-    <script>
-    // ============================================
-    // CONFIGURACIÓN DE FIREBASE
-    // ============================================
-    
-    const MAIN_CONFIG = {
+</div>
+
+<script>
+    // Configuración unificada (Firestore + RTDB)
+    const firebaseConfig = {
         apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
         authDomain: "casaverdecanas-199.firebaseapp.com",
         databaseURL: "https://casaverdecanas-199-default-rtdb.firebaseio.com",
-        projectId: "casaverdecanas-199",
-        storageBucket: "casaverdecanas-199.firebasestorage.app"
+        projectId: "casaverdecanas-199"
     };
-    
-    let mainApp = null;
-    let db = null;      // Firestore
-    let rtdb = null;    // Realtime Database
-    let auth = null;
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const rtdb = firebase.database();
+
     let currentUser = null;
-    
-    // Cache de datos
-    let datosOrigen = null;      // Datos de RTDB
-    let datosDestino = [];       // Datos de Firestore
-    let analisis = {
-        porMigrar: [],
-        porActualizar: [],
-        existentes: []
-    };
-    
-    // Mapeo de IDs de cabañas
-    const ID_MAPPING = {
-        'cabin-1': 1,
-        'cabin-2': 2,
-        'cabin-3': 3
-    };
-    
-    // ============================================
-    // INICIALIZACIÓN
-    // ============================================
-    
-    function inicializarFirebase() {
-        if (!firebase.apps.length) {
-            mainApp = firebase.initializeApp(MAIN_CONFIG);
-        } else {
-            mainApp = firebase.app();
-        }
-        db = mainApp.firestore();
-        rtdb = mainApp.database();
-        auth = mainApp.auth();
-    }
-    
-    // ============================================
-    // AUTENTICACIÓN
-    // ============================================
-    
-    async function loginAdmin() {
-        const email = document.getElementById('adminEmail').value;
-        const password = document.getElementById('adminPassword').value;
+
+    // ==================== AUTENTICACIÓN ====================
+    async function login() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
         const errorDiv = document.getElementById('loginError');
-        
-        if (!email || !password) {
-            errorDiv.textContent = 'Ingresa email y contraseña';
-            return;
-        }
-        
         try {
-            inicializarFirebase();
-            const userCredential = await auth.signInWithEmailAndPassword(email, password);
-            const userDoc = await db.collection('usuarios').doc(userCredential.user.uid).get();
-            
+            const cred = await auth.signInWithEmailAndPassword(email, password);
+            const userDoc = await db.collection('usuarios').doc(cred.user.uid).get();
             if (userDoc.exists && userDoc.data().rol === 'admin') {
-                currentUser = userCredential.user;
+                currentUser = cred.user;
                 document.getElementById('loginScreen').style.display = 'none';
                 document.getElementById('mainPanel').style.display = 'block';
-                document.getElementById('userEmailDisplay').textContent = userCredential.user.email;
+                document.getElementById('userEmail').textContent = email;
                 mostrarMensaje('✅ Conectado como administrador', 'success');
-                
-                // Cargar datos iniciales
-                await cargarDatosOrigen();
-                await cargarDatosDestino();
             } else {
-                await auth.signOut();
                 errorDiv.textContent = 'No tienes permisos de administrador';
+                await auth.signOut();
             }
-        } catch (error) {
-            errorDiv.textContent = 'Error: ' + error.message;
-        }
+        } catch(e) { errorDiv.textContent = 'Error: ' + e.message; }
     }
-    
-    function logout() {
-        auth.signOut().then(() => location.reload());
-    }
-    
-    // ============================================
-    // UTILIDADES
-    // ============================================
-    
+    function logout() { auth.signOut().then(() => location.reload()); }
     function mostrarMensaje(msg, tipo) {
         const div = document.getElementById('statusMessage');
         div.textContent = msg;
         div.className = `status ${tipo}`;
-        setTimeout(() => { div.style.display = 'none'; div.className = 'status'; }, 5000);
+        setTimeout(() => div.style.display = 'none', 5000);
         div.style.display = 'block';
     }
-    
-    function escapeHtml(str) {
-        if (!str) return '';
-        return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
-    }
-    
-    // ============================================
-    // CARGA DE DATOS DE ORIGEN (RTDB)
-    // ============================================
-    
-    async function cargarDatosOrigen() {
-        mostrarMensaje('📡 Cargando datos desde Realtime Database...', 'info');
-        
+    function escapeHtml(s) { if (!s) return ''; return s.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]||m)); }
+
+    // ==================== 1. IMPORTAR DESDE RTDB ====================
+    async function importarDesdeRTDB() {
+        const resultDiv = document.getElementById('importResult');
+        resultDiv.style.display = 'block';
+        resultDiv.className = 'status info';
+        resultDiv.innerHTML = '⏳ Leyendo datos de Realtime Database...';
         try {
             const snapshot = await rtdb.ref('siteData/apartments').once('value');
-            datosOrigen = snapshot.val();
+            const apartments = snapshot.val();
+            if (!apartments) throw new Error('No se encontraron datos en siteData/apartments');
             
-            if (!datosOrigen) {
-                mostrarMensaje('⚠️ No se encontraron datos en siteData/apartments', 'warning');
-                document.getElementById('statsOrigen').innerHTML = `
-                    <div class="stat-card"><div class="stat-number">0</div><div class="stat-label">Cabañas</div></div>
-                    <div class="stat-card"><div class="stat-number">0</div><div class="stat-label">Fotos</div></div>
-                    <div class="stat-card"><div class="stat-number">0</div><div class="stat-label">Categorías</div></div>
-                `;
-                return;
-            }
-            
-            // Contar fotos y categorías
-            let totalFotos = 0;
-            let totalCategorias = 0;
-            
-            for (const apt of Object.values(datosOrigen)) {
+            let creadas = 0, actualizadas = 0;
+            const mapping = { 'cabin-1':1, 'cabin-2':2, 'cabin-3':3 };
+            for (const [oldId, apt] of Object.entries(apartments)) {
+                const idNum = mapping[oldId];
+                if (!idNum) continue;
+                
+                // Extraer fotos de las categorías
+                let fotos = [];
                 if (apt.categories) {
-                    totalCategorias += Object.keys(apt.categories).length;
                     for (const cat of Object.values(apt.categories)) {
-                        if (cat.photos) totalFotos += cat.photos.length;
+                        if (cat.photos && cat.photos.length) {
+                            fotos = cat.photos.map(p => p.url);
+                            break;
+                        }
                     }
                 }
-            }
-            
-            document.getElementById('statsOrigen').innerHTML = `
-                <div class="stat-card"><div class="stat-number">${Object.keys(datosOrigen).length}</div><div class="stat-label">Cabañas</div></div>
-                <div class="stat-card"><div class="stat-number">${totalFotos}</div><div class="stat-label">Fotos</div></div>
-                <div class="stat-card"><div class="stat-number">${totalCategorias}</div><div class="stat-label">Categorías</div></div>
-            `;
-            
-            mostrarMensaje(`✅ Encontradas ${Object.keys(datosOrigen).length} cabañas en RTDB`, 'success');
-            
-        } catch (error) {
-            mostrarMensaje('❌ Error cargando datos de origen: ' + error.message, 'error');
-        }
-    }
-    
-    function verDatosOrigen() {
-        const preview = document.getElementById('origenPreview');
-        if (!datosOrigen) {
-            preview.innerHTML = '<pre>No hay datos cargados. Haz clic en "Cargar desde RTDB" primero.</pre>';
-        } else {
-            preview.innerHTML = `<pre>${JSON.stringify(datosOrigen, null, 2)}</pre>`;
-        }
-        preview.style.display = 'block';
-    }
-    
-    // ============================================
-    // CARGA DE DATOS DE DESTINO (FIRESTORE)
-    // ============================================
-    
-    async function cargarDatosDestino() {
-        mostrarMensaje('📡 Cargando datos desde Firestore...', 'info');
-        
-        try {
-            const snapshot = await db.collection('cabanas').get();
-            datosDestino = [];
-            snapshot.forEach(doc => {
-                datosDestino.push({ id: doc.id, ...doc.data() });
-            });
-            
-            document.getElementById('statsDestino').innerHTML = `
-                <div class="stat-card"><div class="stat-number">${datosDestino.length}</div><div class="stat-label">Cabañas</div></div>
-                <div class="stat-card"><div class="stat-number">${datosDestino.length}</div><div class="stat-label">Documentos</div></div>
-            `;
-            
-            mostrarMensaje(`✅ Encontradas ${datosDestino.length} cabañas en Firestore`, 'success');
-            
-        } catch (error) {
-            mostrarMensaje('❌ Error cargando datos de destino: ' + error.message, 'error');
-        }
-    }
-    
-    function verDatosDestino() {
-        const preview = document.getElementById('destinoPreview');
-        if (datosDestino.length === 0) {
-            preview.innerHTML = '<pre>No hay datos en Firestore. Aún no se ha migrado nada.</pre>';
-        } else {
-            preview.innerHTML = `<pre>${JSON.stringify(datosDestino, null, 2)}</pre>`;
-        }
-        preview.style.display = 'block';
-    }
-    
-    // ============================================
-    // ANÁLISIS DE MIGRACIÓN
-    // ============================================
-    
-    async function analizarMigracion() {
-        if (!datosOrigen) {
-            mostrarMensaje('⚠️ Primero carga los datos de origen (RTDB)', 'warning');
-            return;
-        }
-        
-        mostrarMensaje('🔍 Analizando datos para migración...', 'info');
-        
-        const idsDestino = new Set(datosDestino.map(d => d.id.toString()));
-        analisis = {
-            porMigrar: [],
-            porActualizar: [],
-            existentes: []
-        };
-        
-        for (const [oldId, apt] of Object.entries(datosOrigen)) {
-            const newId = ID_MAPPING[oldId] || oldId;
-            const newIdStr = newId.toString();
-            
-            if (!idsDestino.has(newIdStr)) {
-                analisis.porMigrar.push({ oldId, newId, apt });
-            } else {
-                const existente = datosDestino.find(d => d.id.toString() === newIdStr);
-                if (existente && existente.migradoDesde !== oldId) {
-                    analisis.porActualizar.push({ oldId, newId, apt, existente });
-                } else {
-                    analisis.existentes.push({ oldId, newId });
-                }
-            }
-        }
-        
-        document.getElementById('migracionStats').innerHTML = `
-            <div class="stat-card"><div class="stat-number" style="color: #e74c3c;">${analisis.porMigrar.length}</div><div class="stat-label">Por migrar</div></div>
-            <div class="stat-card"><div class="stat-number" style="color: #f39c12;">${analisis.porActualizar.length}</div><div class="stat-label">Por actualizar</div></div>
-            <div class="stat-card"><div class="stat-number" style="color: #27ae60;">${analisis.existentes.length}</div><div class="stat-label">Ya existentes</div></div>
-        `;
-        
-        mostrarMensaje(`📊 Análisis: ${analisis.porMigrar.length} nuevas, ${analisis.porActualizar.length} para actualizar`, 'info');
-    }
-    
-    // ============================================
-    // CONVERSIÓN DE DATOS
-    // ============================================
-    
-    function convertirDatosCabaña(oldId, apt, newId) {
-        // Extraer fotos de las categorías
-        let fotos = [];
-        if (apt.categories) {
-            for (const cat of Object.values(apt.categories)) {
-                if (cat.photos && cat.photos.length) {
-                    fotos = cat.photos.map(p => p.url);
-                    break;
-                }
-            }
-        }
-        
-        // Extraer características
-        const caracteristicas = {
-            es: apt.features?.es || [],
-            pt: apt.features?.pt || [],
-            en: apt.features?.en || []
-        };
-        
-        // Convertir arrays de características a strings si es necesario
-        if (typeof caracteristicas.es === 'string') caracteristicas.es = caracteristicas.es.split('\n').filter(l => l.trim());
-        if (typeof caracteristicas.pt === 'string') caracteristicas.pt = caracteristicas.pt.split('\n').filter(l => l.trim());
-        if (typeof caracteristicas.en === 'string') caracteristicas.en = caracteristicas.en.split('\n').filter(l => l.trim());
-        
-        return {
-            id: newId,
-            nombre: apt.name || { es: `Cabaña ${newId}`, pt: `Cabana ${newId}`, en: `Cabin ${newId}` },
-            descripcion: apt.description || { es: "", pt: "", en: "" },
-            capacidadBase: 2,
-            capacidadMaxima: 4,
-            camas: "1 cama queen + 1 sofá cama",
-            metrosCuadrados: 35 + (newId * 5),
-            fotos: fotos,
-            orden: newId,
-            activa: true,
-            caracteristicas: caracteristicas,
-            notaEspecial: apt.specialNote || { es: "", pt: "", en: "" },
-            airbnb_url: apt.airbnb_url || "",
-            google_calendar_iframe: apt.google_calendar_iframe || "",
-            tarifas: {
-                precioBase: 250,
-                precioExtraPersona: 50,
-                precioLimpieza: 150,
-                intervalos: []
-            },
-            migradoDesde: oldId,
-            migradoEn: firebase.firestore.FieldValue.serverTimestamp()
-        };
-    }
-    
-    // ============================================
-    // EJECUCIÓN DE MIGRACIÓN
-    // ============================================
-    
-    async function ejecutarMigracion() {
-        if (!datosOrigen) {
-            mostrarMensaje('⚠️ Primero carga los datos de origen (RTDB)', 'warning');
-            return;
-        }
-        
-        if (analisis.porMigrar.length === 0 && analisis.porActualizar.length === 0) {
-            mostrarMensaje('✅ No hay datos pendientes de migrar o actualizar', 'success');
-            return;
-        }
-        
-        const total = analisis.porMigrar.length + analisis.porActualizar.length;
-        if (!confirm(`⚠️ ¿Migrar/actualizar ${total} cabañas?\n\n- Nuevas: ${analisis.porMigrar.length}\n- Actualizar: ${analisis.porActualizar.length}\n\nEste proceso NO eliminará datos existentes.`)) {
-            return;
-        }
-        
-        mostrarMensaje('🚀 Iniciando migración...', 'info');
-        document.getElementById('migrationProgress').style.display = 'block';
-        
-        let migrados = 0;
-        let actualizados = 0;
-        let errores = 0;
-        const resultados = [];
-        
-        // Migrar nuevas cabañas
-        for (const item of analisis.porMigrar) {
-            try {
-                const data = convertirDatosCabaña(item.oldId, item.apt, item.newId);
-                await db.collection('cabanas').doc(item.newId.toString()).set(data);
-                migrados++;
-                resultados.push(`✅ Migrada: ${item.oldId} → Cabaña ${item.newId}`);
+                // Extraer características (comodidades)
+                let comodidades = [];
+                if (apt.features && apt.features.es) comodidades = apt.features.es;
                 
-                const porcentaje = ((migrados + actualizados) / total) * 100;
-                document.querySelector('#migrationProgress .progress-fill').style.width = `${porcentaje}%`;
-                document.querySelector('#migrationProgress .progress-fill').textContent = `${Math.round(porcentaje)}%`;
-            } catch (e) {
-                errores++;
-                resultados.push(`❌ Error migrando ${item.oldId}: ${e.message}`);
-            }
-        }
-        
-        // Actualizar cabañas existentes
-        for (const item of analisis.porActualizar) {
-            try {
-                const data = convertirDatosCabaña(item.oldId, item.apt, item.newId);
-                await db.collection('cabanas').doc(item.newId.toString()).update({
-                    nombre: data.nombre,
-                    descripcion: data.descripcion,
-                    fotos: data.fotos,
-                    caracteristicas: data.caracteristicas,
-                    notaEspecial: data.notaEspecial,
-                    airbnb_url: data.airbnb_url,
-                    google_calendar_iframe: data.google_calendar_iframe,
+                // Estructura base unificada
+                const newData = {
+                    id: idNum,
+                    orden: idNum,
+                    activa: true,
+                    nombre: apt.name || { es: `Cabaña ${idNum}`, pt: `Cabana ${idNum}`, en: `Cabin ${idNum}` },
+                    descripcion: apt.description || { es: '', pt: '', en: '' },
+                    capacidad: { base: 2, max: 4 },
+                    camas: { dobles: 1, individuales: 0 },
+                    comodidades: comodidades,
+                    fotos: fotos,
+                    airbnb_url: apt.airbnb_url || '',
+                    google_calendar_iframe: apt.google_calendar_iframe || '',
+                    tarifas: {
+                        precioBase: 250,
+                        precioExtraPersona: 50,
+                        precioLimpieza: 150,
+                        intervalos: []
+                    },
                     actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                actualizados++;
-                resultados.push(`🔄 Actualizada: Cabaña ${item.newId}`);
+                };
                 
-                const porcentaje = ((migrados + actualizados) / total) * 100;
-                document.querySelector('#migrationProgress .progress-fill').style.width = `${porcentaje}%`;
-                document.querySelector('#migrationProgress .progress-fill').textContent = `${Math.round(porcentaje)}%`;
-            } catch (e) {
-                errores++;
-                resultados.push(`❌ Error actualizando cabaña ${item.newId}: ${e.message}`);
-            }
-        }
-        
-        document.getElementById('migrationProgress').style.display = 'none';
-        document.querySelector('#migrationProgress .progress-fill').style.width = '0%';
-        document.querySelector('#migrationProgress .progress-fill').textContent = '0%';
-        
-        // Mostrar resultados
-        const resultadosDiv = document.getElementById('resultadosContent');
-        resultadosDiv.innerHTML = `
-            <div class="stats-grid">
-                <div class="stat-card"><div class="stat-number" style="color:#27ae60;">${migrados}</div><div class="stat-label">Migradas</div></div>
-                <div class="stat-card"><div class="stat-number" style="color:#f39c12;">${actualizados}</div><div class="stat-label">Actualizadas</div></div>
-                <div class="stat-card"><div class="stat-number" style="color:#e74c3c;">${errores}</div><div class="stat-label">Errores</div></div>
-            </div>
-            <div class="data-preview" style="max-height: 200px;">
-                <pre>${resultados.map(r => escapeHtml(r)).join('\n')}</pre>
-            </div>
-        `;
-        document.getElementById('resultadosCard').style.display = 'block';
-        
-        mostrarMensaje(`✅ Migración completada: ${migrados} migradas, ${actualizados} actualizadas, ${errores} errores`, 'success');
-        
-        // Recargar datos de destino
-        await cargarDatosDestino();
-        await analizarMigracion();
-    }
-    
-    // ============================================
-    // MIGRAR SOLO FOTOS
-    // ============================================
-    
-    async function migrarSoloFotos() {
-        if (!datosOrigen) {
-            mostrarMensaje('⚠️ Primero carga los datos de origen (RTDB)', 'warning');
-            return;
-        }
-        
-        mostrarMensaje('📸 Migrando solo las fotos...', 'info');
-        
-        let actualizadas = 0;
-        
-        for (const [oldId, apt] of Object.entries(datosOrigen)) {
-            const newId = ID_MAPPING[oldId] || oldId;
-            
-            // Extraer fotos
-            let fotos = [];
-            if (apt.categories) {
-                for (const cat of Object.values(apt.categories)) {
-                    if (cat.photos && cat.photos.length) {
-                        fotos = cat.photos.map(p => p.url);
-                        break;
-                    }
-                }
-            }
-            
-            if (fotos.length > 0) {
-                try {
-                    await db.collection('cabanas').doc(newId.toString()).update({
-                        fotos: fotos,
-                        fotosActualizadasEn: firebase.firestore.FieldValue.serverTimestamp()
+                const docRef = db.collection('cabanas').doc(idNum.toString());
+                const docSnap = await docRef.get();
+                if (docSnap.exists) {
+                    // Actualizar solo campos que vienen de RTDB y no sobrescribir los que ya existen manualmente (ej. tarifas)
+                    await docRef.update({
+                        nombre: newData.nombre,
+                        descripcion: newData.descripcion,
+                        fotos: newData.fotos,
+                        comodidades: newData.comodidades,
+                        airbnb_url: newData.airbnb_url,
+                        google_calendar_iframe: newData.google_calendar_iframe,
+                        actualizadoEn: newData.actualizadoEn
                     });
                     actualizadas++;
-                } catch (e) {
-                    // Si no existe el documento, crearlo solo con fotos
-                    if (e.message.includes('no such document')) {
-                        await db.collection('cabanas').doc(newId.toString()).set({
-                            id: newId,
-                            fotos: fotos,
-                            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                        actualizadas++;
-                    }
+                } else {
+                    newData.creadoEn = firebase.firestore.FieldValue.serverTimestamp();
+                    await docRef.set(newData);
+                    creadas++;
                 }
             }
+            resultDiv.className = 'status success';
+            resultDiv.innerHTML = `✅ Importación completada: ${creadas} cabañas creadas, ${actualizadas} actualizadas.`;
+            mostrarMensaje('Importación exitosa', 'success');
+        } catch (e) {
+            resultDiv.className = 'status error';
+            resultDiv.innerHTML = `❌ Error: ${e.message}`;
         }
-        
-        mostrarMensaje(`✅ Fotos migradas: ${actualizadas} cabañas actualizadas`, 'success');
-        await cargarDatosDestino();
     }
-    
-    // ============================================
-    // EXPORTAR FUNCIONES GLOBALES
-    // ============================================
-    
-    window.loginAdmin = loginAdmin;
-    window.logout = logout;
-    window.cargarDatosOrigen = cargarDatosOrigen;
-    window.verDatosOrigen = verDatosOrigen;
-    window.cargarDatosDestino = cargarDatosDestino;
-    window.verDatosDestino = verDatosDestino;
-    window.analizarMigracion = analizarMigracion;
-    window.ejecutarMigracion = ejecutarMigracion;
-    window.migrarSoloFotos = migrarSoloFotos;
-    
-    // Inicializar
-    inicializarFirebase();
-    
-    // Verificar sesión al cargar
+
+    async function verDatosRTDB() {
+        try {
+            const snapshot = await rtdb.ref('siteData/apartments').once('value');
+            const data = snapshot.val();
+            const resultDiv = document.getElementById('importResult');
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'status info';
+            resultDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+        } catch(e) { alert('Error: ' + e.message); }
+    }
+
+    // ==================== 2. CONSOLIDAR FIRESTORE ====================
+    async function consolidarFirestore() {
+        const resultDiv = document.getElementById('consolidateResult');
+        resultDiv.style.display = 'block';
+        resultDiv.className = 'status info';
+        resultDiv.innerHTML = '⏳ Consolidando datos en Firestore...';
+        try {
+            const snapshot = await db.collection('cabanas').get();
+            let actualizadas = 0;
+            for (const doc of snapshot.docs) {
+                const data = doc.data();
+                const updates = {};
+                
+                // Asegurar que tenga 'capacidad'
+                if (!data.capacidad) {
+                    updates.capacidad = { base: data.capacidadBase || 2, max: data.capacidadMax || 4 };
+                }
+                // Asegurar que tenga 'camas'
+                if (!data.camas) {
+                    updates.camas = { dobles: data.camasDobles || 1, individuales: data.camasIndividuales || 0 };
+                }
+                // Asegurar 'comodidades' como array (si es objeto con idiomas, convertirlo a array plano)
+                if (!data.comodidades) {
+                    if (data.caracteristicas && data.caracteristicas.es) updates.comodidades = data.caracteristicas.es;
+                    else updates.comodidades = [];
+                }
+                // Asegurar 'tarifas' con intervalos
+                if (!data.tarifas || !data.tarifas.intervalos) {
+                    updates.tarifas = {
+                        precioBase: data.tarifas?.precioBase || data.precioBase || 250,
+                        precioExtraPersona: data.tarifas?.precioExtraPersona || data.precioExtra || 50,
+                        precioLimpieza: data.tarifas?.precioLimpieza || data.precioLimpieza || 150,
+                        intervalos: data.tarifas?.intervalos || []
+                    };
+                }
+                // Asegurar 'orden'
+                if (!data.orden) updates.orden = data.id || parseInt(doc.id);
+                // Asegurar 'activa'
+                if (data.activa === undefined) updates.activa = true;
+                
+                if (Object.keys(updates).length) {
+                    await db.collection('cabanas').doc(doc.id).update(updates);
+                    actualizadas++;
+                }
+            }
+            resultDiv.className = 'status success';
+            resultDiv.innerHTML = `✅ Consolidación completada: ${actualizadas} cabañas actualizadas.`;
+            mostrarMensaje('Consolidación exitosa', 'success');
+        } catch(e) {
+            resultDiv.className = 'status error';
+            resultDiv.innerHTML = `❌ Error: ${e.message}`;
+        }
+    }
+
+    async function verCabanasFirestore() {
+        const snapshot = await db.collection('cabanas').get();
+        const data = [];
+        snapshot.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
+        const resultDiv = document.getElementById('consolidateResult');
+        resultDiv.style.display = 'block';
+        resultDiv.className = 'status info';
+        resultDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+    }
+
+    // ==================== 3. RESUMEN ====================
+    async function mostrarResumen() {
+        const snapshot = await db.collection('cabanas').get();
+        let html = '<table style="width:100%; border-collapse:collapse;">';
+        html += '<tr style="background:#e8f5e9;"><th>ID</th><th>Nombre (ES)</th><th>Capacidad</th><th>Camas</th><th>Precio base</th><th>Limpieza</th><th>Fotos</th></tr>';
+        for (const doc of snapshot.docs) {
+            const c = doc.data();
+            html += `<tr style="border-bottom:1px solid #ddd;">
+                <td>${c.id}</td>
+                <td>${escapeHtml(c.nombre?.es || '-')}</td>
+                <td>${c.capacidad?.base}/${c.capacidad?.max}</td>
+                <td>${c.camas?.dobles}D / ${c.camas?.individuales}I</td>
+                <td>R$ ${c.tarifas?.precioBase || 0}</td>
+                <td>R$ ${c.tarifas?.precioLimpieza || 0}</td>
+                <td>${c.fotos?.length || 0}</td>
+            </tr>`;
+        }
+        html += '</table>';
+        document.getElementById('resumen').innerHTML = html;
+    }
+
+    // Exponer funciones globales
+    window.login = login; window.logout = logout;
+    window.importarDesdeRTDB = importarDesdeRTDB; window.verDatosRTDB = verDatosRTDB;
+    window.consolidarFirestore = consolidarFirestore; window.verCabanasFirestore = verCabanasFirestore;
+    window.mostrarResumen = mostrarResumen;
+
+    // Si ya hay sesión activa, mostrar panel directamente
     auth.onAuthStateChanged(async (user) => {
         if (user) {
-            try {
-                const userDoc = await db.collection('usuarios').doc(user.uid).get();
-                if (userDoc.exists && userDoc.data().rol === 'admin') {
-                    currentUser = user;
-                    document.getElementById('loginScreen').style.display = 'none';
-                    document.getElementById('mainPanel').style.display = 'block';
-                    document.getElementById('userEmailDisplay').textContent = user.email;
-                    mostrarMensaje('✅ Conectado como administrador', 'success');
-                    await cargarDatosOrigen();
-                    await cargarDatosDestino();
-                }
-            } catch(e) {}
+            const userDoc = await db.collection('usuarios').doc(user.uid).get();
+            if (userDoc.exists && userDoc.data().rol === 'admin') {
+                currentUser = user;
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('mainPanel').style.display = 'block';
+                document.getElementById('userEmail').textContent = user.email;
+            }
         }
     });
-    </script>
+</script>
 </body>
 </html>
