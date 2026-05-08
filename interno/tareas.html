@@ -4,253 +4,570 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mis Tareas - Casa Verde Canas</title>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
-        body { background: linear-gradient(135deg, #1e3c2c 0%, #2d5a27 100%); min-height: 100vh; }
-        .app-header { background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.08); position: sticky; top: 0; z-index: 100; }
-        .header-content { max-width: 1200px; margin: 0 auto; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
-        .user-info { display: flex; align-items: center; gap: 15px; background: #f0f2f5; padding: 8px 16px; border-radius: 40px; }
-        .logout-btn { background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 40px; cursor: pointer; display: flex; align-items: center; gap: 6px; text-decoration: none; }
-        .main-content { max-width: 1200px; margin: 24px auto; padding: 0 24px; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 15px; margin-bottom: 20px; }
-        .stat-card { background: white; padding: 18px; border-radius: 16px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-        .stat-number { font-size: 30px; font-weight: bold; color: #2d5a27; }
-        .tabs-section { background: white; padding: 7px 18px; border-radius: 60px; margin-bottom: 20px; display: inline-flex; gap: 6px; }
-        .tab-btn { padding: 9px 18px; border: none; background: transparent; border-radius: 40px; cursor: pointer; font-weight: 500; color: #6c757d; }
+        body { background: linear-gradient(160deg, #1e3c2c 0%, #2d5a27 100%); min-height: 100vh; }
+
+        /* ── HEADER ── */
+        .app-header {
+            background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            position: sticky; top: 0; z-index: 100;
+        }
+        .header-content {
+            max-width: 900px; margin: 0 auto; padding: 14px 24px;
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+        }
+        .header-content h1 { color: #2d5a27; display: flex; align-items: center; gap: 10px; font-size: 1.2rem; }
+        .user-chip {
+            display: flex; align-items: center; gap: 12px;
+            background: #f0f2f5; padding: 8px 16px; border-radius: 40px; font-size: 14px;
+        }
+        .btn-logout {
+            background: #e74c3c; color: white; border: none;
+            padding: 7px 14px; border-radius: 30px; cursor: pointer; font-size: 13px;
+            display: flex; align-items: center; gap: 5px;
+        }
+
+        /* ── CONTENIDO ── */
+        .main-content { max-width: 900px; margin: 24px auto; padding: 0 20px; }
+
+        /* Stats */
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(130px,1fr));
+            gap: 14px; margin-bottom: 20px;
+        }
+        .stat-card {
+            background: white; padding: 16px; border-radius: 16px;
+            text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .stat-number { font-size: 28px; font-weight: 800; color: #2d5a27; }
+        .stat-label  { font-size: 12px; color: #888; margin-top: 4px; }
+
+        /* Tabs */
+        .tabs-section {
+            background: white; padding: 6px; border-radius: 50px;
+            margin-bottom: 20px; display: inline-flex; gap: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .tab-btn {
+            padding: 8px 20px; border: none; background: transparent;
+            border-radius: 40px; cursor: pointer; font-weight: 600; font-size: 13px;
+            color: #6c757d; transition: all 0.2s;
+        }
         .tab-btn.active { background: #2d5a27; color: white; }
-        .tasks-container { background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-        .tasks-header { padding: 18px 22px; border-bottom: 1px solid #e9ecef; }
-        .tasks-list { padding: 14px 22px; display: flex; flex-direction: column; gap: 12px; }
-        .task-card { background: white; border: 2px solid #e9ecef; border-radius: 15px; padding: 15px 18px; cursor: pointer; transition: all 0.2s; }
-        .task-card:hover { transform: translateX(4px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        .task-card.completed { background: #f8f9fa; opacity: 0.8; cursor: default; }
-        .task-card.completed .task-name { text-decoration: line-through; color: #adb5bd; }
-        .task-name { font-size: 16px; font-weight: 600; color: #2c3e50; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        .task-badge { background: #e8f4fd; color: #1a6a9a; padding: 3px 9px; border-radius: 20px; font-size: 11px; }
-        .task-meta { font-size: 13px; color: #6c757d; margin: 8px 0 0 18px; }
-        .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; }
-        .modal-content { background:white; padding:25px; border-radius:20px; width:90%; max-width:500px; max-height:90vh; overflow-y:auto; }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
-        .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 8px; }
-        .colab-row { background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 10px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-        .btn { padding: 8px 16px; border: none; border-radius: 8px; cursor: pointer; margin: 5px; }
-        .btn-primary { background: #2d5a27; color: white; }
+
+        /* Task cards */
+        .tasks-list { display: flex; flex-direction: column; gap: 14px; }
+
+        .task-card {
+            background: white; border-radius: 18px; padding: 18px 20px;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.07); border-left: 5px solid #e9ecef;
+            transition: all 0.2s;
+        }
+        .task-card.limpieza  { border-left-color: #3498db; }
+        .task-card.general   { border-left-color: #2d5a27; }
+        .task-card.en_curso  { border-left-color: #f39c12; background: #fffdf5; }
+        .task-card.completada { border-left-color: #27ae60; opacity: 0.75; }
+
+        .task-top { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+        .task-nombre { font-size: 15px; font-weight: 700; color: #2c3e50; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .task-badge {
+            padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
+        }
+        .badge-limpieza  { background: #e3f2fd; color: #1565c0; }
+        .badge-general   { background: #e8f5e9; color: #2d5a27; }
+        .badge-en-curso  { background: #fff3e0; color: #e65100; }
+        .badge-completada { background: #e8f5e9; color: #27ae60; }
+        .badge-alta   { background: #fdecea; color: #c0392b; }
+        .badge-media  { background: #fff8e1; color: #f57f17; }
+        .badge-baja   { background: #f1f8e9; color: #558b2f; }
+
+        .task-meta { font-size: 13px; color: #888; margin-top: 8px; line-height: 1.7; }
+        .task-desc {
+            font-size: 13px; color: #555; margin-top: 10px;
+            background: #f8f9fa; border-radius: 10px; padding: 10px 14px;
+            white-space: pre-line; line-height: 1.6;
+        }
+
+        /* Colaboradores en curso */
+        .colabs-en-curso {
+            margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px;
+        }
+        .colab-chip {
+            background: #e8f5e9; color: #2d5a27; padding: 4px 12px;
+            border-radius: 20px; font-size: 12px; font-weight: 600;
+            display: flex; align-items: center; gap: 5px;
+        }
+        .colab-chip.activo { background: #fff3e0; color: #e65100; }
+
+        /* Botones de acción */
+        .task-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+        .btn { padding: 9px 18px; border: none; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s; }
+        .btn:hover { opacity: 0.88; transform: translateY(-1px); }
+        .btn-primary   { background: #2d5a27; color: white; }
+        .btn-success   { background: #27ae60; color: white; }
+        .btn-warning   { background: #f39c12; color: white; }
+        .btn-danger    { background: #e74c3c; color: white; }
         .btn-secondary { background: #95a5a6; color: white; }
-        .empty-state { text-align: center; padding: 40px; color: #999; }
-        @media (max-width:768px){ .colab-row{ flex-direction:column; } }
+        .btn-info      { background: #3498db; color: white; }
+        .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+        /* ── MODAL ── */
+        .modal {
+            display: none; position: fixed; top:0; left:0;
+            width:100%; height:100%; background:rgba(0,0,0,0.6);
+            z-index:1000; justify-content:center; align-items:flex-start; padding: 40px 16px;
+            overflow-y: auto;
+        }
+        .modal.open { display: flex; }
+        .modal-content {
+            background: white; padding: 28px; border-radius: 22px;
+            width: 100%; max-width: 560px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+        }
+        .modal-title {
+            font-size: 1.1rem; font-weight: 700; color: #2d5a27;
+            margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #e8f5e9;
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        /* Info reserva en modal */
+        .reserva-info {
+            background: #f0f9f0; border: 1.5px solid #c8e6c9; border-radius: 14px;
+            padding: 14px 16px; margin-bottom: 18px; font-size: 13px; line-height: 1.9;
+        }
+        .reserva-info strong { color: #2d5a27; }
+        .reserva-info .separador { border-top: 1px dashed #a5d6a7; margin: 8px 0; }
+
+        /* Colaboradores en modal */
+        .colab-row-modal {
+            background: #f8f9fa; border-radius: 12px; padding: 12px 14px;
+            margin-bottom: 10px; display: flex; align-items: center;
+            gap: 10px; flex-wrap: wrap;
+        }
+        .colab-nombre-modal { font-weight: 700; font-size: 14px; flex: 2; min-width: 120px; }
+        .colab-tiempo {
+            display: flex; flex-direction: column; gap: 3px;
+            flex: 3; min-width: 160px; font-size: 12px; color: #777;
+        }
+        .colab-monto { font-weight: 700; color: #2d5a27; font-size: 14px; white-space: nowrap; }
+
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: #555; }
+        .form-group input { width: 100%; padding: 10px 12px; border: 1.5px solid #ddd; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; }
+        .form-group input:focus { border-color: #2d5a27; }
+
+        .monto-box {
+            background: #e8f5e9; border-radius: 12px; padding: 14px 16px;
+            margin: 14px 0; font-size: 14px; line-height: 1.8;
+        }
+        .monto-box .total-line { font-size: 18px; font-weight: 800; color: #2d5a27; margin-top: 6px; }
+
+        .empty-state  { text-align: center; padding: 50px 20px; color: rgba(255,255,255,0.7); font-size: 15px; }
+        .loading-state { text-align: center; padding: 40px; color: rgba(255,255,255,0.7); }
+
+        @media (max-width: 600px) {
+            .main-content { padding: 0 12px; }
+            .task-card { padding: 14px; }
+        }
     </style>
 </head>
 <body>
-<div id="privateArea">
-    <header class="app-header">
-        <div class="header-content">
-            <h1 style="color:#2d5a27;"><span class="material-icons">checklist</span> Mis Tareas</h1>
-            <div class="user-info"><span id="userName"></span><a href="login.html" id="logoutBtn" class="logout-btn">Salir</a></div>
-        </div>
-    </header>
-    <main class="main-content">
-        <div class="stats-grid">
-            <div class="stat-card"><div class="stat-number" id="pendientesCount">0</div><div>Pendientes</div></div>
-            <div class="stat-card"><div class="stat-number" id="totalCount">0</div><div>Activas</div></div>
-        </div>
-        <div class="tabs-section">
-            <button class="tab-btn active" data-filter="pendientes">📋 Pendientes</button>
-            <button class="tab-btn" data-filter="completadas">✅ Completadas</button>
-        </div>
-        <div id="tasksContainer"></div>
-    </main>
-</div>
 
-<!-- Modal para completar tarea de limpieza -->
-<div id="modalLimpieza" class="modal">
+<header class="app-header">
+    <div class="header-content">
+        <h1><span class="material-icons">checklist</span> Mis Tareas</h1>
+        <div class="user-chip">
+            <span class="material-icons" style="font-size:18px; color:#2d5a27;">person</span>
+            <span id="userName">—</span>
+            <button class="btn-logout" onclick="CVC.cerrarSesion()">
+                <span class="material-icons" style="font-size:14px;">logout</span> Salir
+            </button>
+        </div>
+    </div>
+</header>
+
+<main class="main-content">
+    <div class="stats-grid">
+        <div class="stat-card"><div class="stat-number" id="statPendientes">0</div><div class="stat-label">Pendientes</div></div>
+        <div class="stat-card"><div class="stat-number" id="statEnCurso">0</div><div class="stat-label">En curso</div></div>
+        <div class="stat-card"><div class="stat-number" id="statCompletadas">0</div><div class="stat-label">Completadas hoy</div></div>
+    </div>
+
+    <div class="tabs-section">
+        <button class="tab-btn active" data-filter="pendientes">📋 Pendientes</button>
+        <button class="tab-btn" data-filter="en_curso">⚙️ En curso</button>
+        <button class="tab-btn" data-filter="completadas">✅ Completadas</button>
+    </div>
+
+    <div id="tareasContainer"><div class="loading-state">Cargando tareas...</div></div>
+</main>
+
+<!-- MODAL: Detalle / acciones de tarea de limpieza -->
+<div id="modalTarea" class="modal">
     <div class="modal-content">
-        <h3>🧹 Completar tarea de limpieza</h3>
-        <input type="hidden" id="tareaId">
-        <div class="form-group"><label>Tarea</label><p id="tareaNombre" style="font-weight:bold;"></p></div>
-        <div class="form-group"><label>Colaboradores que participaron</label><div id="colabsList"></div><button type="button" class="btn-secondary" onclick="agregarColab()">+ Agregar colaborador</button></div>
-        <div class="form-row" style="display:flex; gap:10px;"><div class="form-group"><label>Hora inicio</label><input type="datetime-local" id="inicioGlobal"></div><div class="form-group"><label>Hora fin</label><input type="datetime-local" id="finGlobal"></div></div>
-        <div class="form-group"><label>Monto total limpieza (R$)</label><input type="number" id="montoTotal" step="10" readonly></div>
-        <div><button class="btn-primary" onclick="completarLimpieza()">Completar</button><button class="btn-secondary" onclick="cerrarModalLimpieza()">Cancelar</button></div>
+        <div class="modal-title" id="modalTituloTexto">
+            <span class="material-icons">cleaning_services</span> Tarea de limpieza
+        </div>
+
+        <input type="hidden" id="tareaIdModal">
+
+        <!-- Info de la reserva -->
+        <div id="reservaInfoBox" class="reserva-info" style="display:none;"></div>
+
+        <!-- Colaboradores activos -->
+        <div id="colabsActivos" style="margin-bottom:14px; display:none;">
+            <div style="font-weight:700; font-size:13px; color:#555; margin-bottom:8px;">👷 Colaboradores trabajando:</div>
+            <div id="colabsActivosList"></div>
+        </div>
+
+        <!-- Acciones según estado -->
+        <div id="accionesModal"></div>
+
+        <button class="btn btn-secondary" onclick="cerrarModal()" style="margin-top:12px;">Cerrar</button>
     </div>
 </div>
 
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
 <script>
-    const firebaseConfig = { apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4", authDomain: "casaverdecanas-199.firebaseapp.com", projectId: "casaverdecanas-199" };
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-    let currentUser = null;
-    let tareasCache = [];
-    let usuariosCache = [];
-    let currentFilter = 'pendientes';
-    let colaboradoresTemp = [];
+(async () => {
+    const { user, userData } = await CVC.verificarAuth(['admin', 'user']);
+    document.getElementById('userName').textContent = userData.nombre || user.email;
 
-    auth.onAuthStateChanged(async (user) => {
-        if(user){
-            currentUser = user;
-            const userDoc = await db.collection('usuarios').doc(user.uid).get();
-            document.getElementById('userName').innerText = userDoc.data()?.nombre || user.email;
-            cargarDatos();
-        } else {
-            window.location.href = 'login.html';
-        }
-    });
+    const db  = CVC.db;
+    const { escapeHtml, formatFecha, formatFechaHora, iniciarTarea, terminarTarea } = CVC;
 
-    async function cargarDatos() {
-        const tareasSnap = await db.collection('tareas').where('activa','==',true).orderBy('fechaInicio','asc').get();
-        tareasCache = tareasSnap.docs.map(d=>({ id: d.id, ...d.data() }));
-        const usersSnap = await db.collection('usuarios').get();
-        usuariosCache = usersSnap.docs.map(d=>({ id: d.id, ...d.data() }));
+    const currentUser = { uid: user.uid, nombre: userData.nombre || user.email };
+
+    let tareasCache   = [];
+    let filtroActual  = 'pendientes';
+    let tareaActual   = null;   // tarea abierta en modal
+
+    // ── Cargar tareas ─────────────────────────────────────
+    async function cargarTareas() {
+        const snap = await db.collection('tareas')
+            .where('activa', '==', true)
+            .orderBy('fechaInicio', 'asc')
+            .get();
+        tareasCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         actualizarStats();
-        renderizarTareas();
+        renderTareas();
     }
 
     function actualizarStats() {
-        const pendientes = tareasCache.filter(t => !t.completada);
-        document.getElementById('pendientesCount').innerText = pendientes.length;
-        document.getElementById('totalCount').innerText = tareasCache.length;
+        const hoy = new Date().toISOString().split('T')[0];
+        document.getElementById('statPendientes').textContent =
+            tareasCache.filter(t => !t.completada && t.estado !== 'en_curso').length;
+        document.getElementById('statEnCurso').textContent =
+            tareasCache.filter(t => t.estado === 'en_curso').length;
+        document.getElementById('statCompletadas').textContent =
+            tareasCache.filter(t => t.completada && t.completadaEn?.toDate?.()?.toISOString().split('T')[0] === hoy).length;
     }
 
-    function renderizarTareas() {
-        const filtradas = tareasCache.filter(t => currentFilter === 'pendientes' ? !t.completada : t.completada);
-        const container = document.getElementById('tasksContainer');
-        if(filtradas.length === 0){
-            container.innerHTML = `<div class="tasks-container"><div class="empty-state">📭 No hay tareas ${currentFilter === 'pendientes' ? 'pendientes' : 'completadas'}</div></div>`;
+    // ── Render lista ──────────────────────────────────────
+    function renderTareas() {
+        let lista;
+        if (filtroActual === 'pendientes') {
+            lista = tareasCache.filter(t => !t.completada && t.estado !== 'en_curso');
+        } else if (filtroActual === 'en_curso') {
+            lista = tareasCache.filter(t => t.estado === 'en_curso' && !t.completada);
+        } else {
+            lista = tareasCache.filter(t => t.completada);
+        }
+
+        const container = document.getElementById('tareasContainer');
+
+        if (!lista.length) {
+            container.innerHTML = `<div class="empty-state">📭 No hay tareas ${filtroActual === 'pendientes' ? 'pendientes' : filtroActual === 'en_curso' ? 'en curso' : 'completadas'}</div>`;
             return;
         }
-        let html = `<div class="tasks-container"><div class="tasks-header"><h2>${currentFilter === 'pendientes' ? 'Pendientes' : 'Completadas'}</h2></div><div class="tasks-list">`;
-        for(const t of filtradas){
-            const esLimpieza = t.tipo === 'limpieza';
-            html += `
-                <div class="task-card ${t.completada ? 'completed' : ''}" data-id="${t.id}" data-tipo="${t.tipo||'general'}">
-                    <div class="task-name"><span>${escapeHtml(t.nombre)}</span> ${esLimpieza ? '<span class="task-badge">🧹 Limpieza</span>' : ''}</div>
-                    ${t.descripcion ? `<div class="task-meta">📝 ${escapeHtml(t.descripcion)}</div>` : ''}
-                    <div class="task-meta">📅 Límite: ${t.fechaInicio || '—'} | ⭐ ${t.prioridad||'media'}</div>
-                    ${t.completada && t.colaboradores ? `<div class="task-meta">🧹 ${t.colaboradores.map(c=>c.nombre).join(', ')}</div>` : ''}
-                </div>
-            `;
-        }
-        html += `</div></div>`;
-        container.innerHTML = html;
-        if(currentFilter === 'pendientes'){
-            document.querySelectorAll('.task-card:not(.completed)').forEach(card => {
-                card.addEventListener('click', async (e) => {
-                    const id = card.dataset.id;
-                    const tarea = tareasCache.find(t=>t.id===id);
-                    if(tarea.tipo === 'limpieza') abrirModalLimpieza(tarea);
-                    else if(confirm(`¿Marcar "${tarea.nombre}" como realizada?`)) await completarGeneral(tarea.id);
-                });
+
+        container.innerHTML = `<div class="tasks-list">${lista.map(t => renderTareaCard(t)).join('')}</div>`;
+
+        // Eventos click en cards
+        document.querySelectorAll('.task-card[data-id]').forEach(card => {
+            card.addEventListener('click', () => {
+                const tarea = tareasCache.find(t => t.id === card.dataset.id);
+                if (tarea) abrirModal(tarea);
             });
-        }
+        });
     }
 
-    async function completarGeneral(tareaId){
+    function renderTareaCard(t) {
+        const esLimpieza = t.tipo === 'limpieza';
+        const estadoCard = t.completada ? 'completada' : (t.estado === 'en_curso' ? 'en_curso' : t.tipo || 'general');
+
+        // Colaboradores activos (sin horaFin)
+        const colabsActivos = (t.colaboradores || []).filter(c => c.horaInicio && !c.horaFin);
+        // Colaborador actual
+        const yoInicie = (t.colaboradores || []).find(c => c.uid === currentUser.uid && c.horaInicio && !c.horaFin);
+
+        let estadoBadge = '';
+        if (t.completada) estadoBadge = '<span class="task-badge badge-completada">✅ Completada</span>';
+        else if (t.estado === 'en_curso') estadoBadge = '<span class="task-badge badge-en-curso">⚙️ En curso</span>';
+
+        return `
+            <div class="task-card ${estadoCard}" data-id="${t.id}" style="cursor:${t.completada ? 'default' : 'pointer'}">
+                <div class="task-top">
+                    <div class="task-nombre">
+                        ${escapeHtml(t.nombre)}
+                        ${esLimpieza ? '<span class="task-badge badge-limpieza">🧹 Limpieza</span>' : '<span class="task-badge badge-general">📋 General</span>'}
+                        ${estadoBadge}
+                        <span class="task-badge badge-${t.prioridad || 'media'}">${t.prioridad || 'media'}</span>
+                    </div>
+                </div>
+
+                <div class="task-meta">
+                    📅 Fecha límite: <strong>${t.fechaInicio || '—'}</strong>
+                    ${esLimpieza && t.cabaña ? ` · 🏠 Cabaña ${t.cabaña}` : ''}
+                    ${esLimpieza && t.montoLimpieza ? ` · 💰 R$ ${t.montoLimpieza}` : ''}
+                </div>
+
+                ${t.descripcion ? `<div class="task-desc">${escapeHtml(t.descripcion)}</div>` : ''}
+
+                ${colabsActivos.length ? `
+                    <div class="colabs-en-curso">
+                        ${colabsActivos.map(c => `
+                            <span class="colab-chip ${c.uid === currentUser.uid ? 'activo' : ''}">
+                                <span class="material-icons" style="font-size:14px;">engineering</span>
+                                ${escapeHtml(c.nombre)} ${c.uid === currentUser.uid ? '(vos)' : ''}
+                            </span>
+                        `).join('')}
+                    </div>
+                ` : ''}
+
+                ${t.completada && t.colaboradores?.length ? `
+                    <div class="task-meta" style="margin-top:10px;">
+                        ✅ Completada ${t.completadaEn ? formatFechaHora(t.completadaEn) : ''}<br>
+                        👷 ${t.colaboradores.map(c => `${escapeHtml(c.nombre)} (${c.horas?.toFixed(1)}h · R$ ${c.montoRecibido?.toFixed(2)})`).join(' · ')}
+                    </div>
+                ` : ''}
+
+                ${!t.completada ? `
+                    <div class="task-actions" onclick="event.stopPropagation()">
+                        ${esLimpieza ? `
+                            ${!yoInicie
+                                ? `<button class="btn btn-primary" onclick="accionIniciar('${t.id}')"><span class="material-icons" style="font-size:15px;">play_arrow</span> Iniciar</button>`
+                                : `<span style="font-size:13px; color:#e65100; font-weight:700;">⏱️ Trabajando...</span>`
+                            }
+                            ${t.estado === 'en_curso'
+                                ? `<button class="btn btn-success" onclick="accionTerminar('${t.id}')"><span class="material-icons" style="font-size:15px;">check_circle</span> Terminar tarea</button>`
+                                : ''
+                            }
+                            <button class="btn btn-info btn-sm" onclick="abrirModal(tareasCache.find(x=>x.id==='${t.id}'))">Ver detalle</button>
+                        ` : `
+                            <button class="btn btn-success" onclick="accionCompletarGeneral('${t.id}', '${escapeHtml(t.nombre)}')">
+                                <span class="material-icons" style="font-size:15px;">check</span> Marcar como realizada
+                            </button>
+                        `}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    // ── Acciones rápidas ──────────────────────────────────
+    window.accionIniciar = async function(tareaId) {
+        try {
+            await iniciarTarea(tareaId, currentUser);
+            await cargarTareas();
+        } catch(e) { alert(e.message); }
+    };
+
+    window.accionTerminar = async function(tareaId) {
+        if (!confirm('¿Terminar la tarea? Se cerrará para todos los colaboradores y se calcularán los montos proporcionales.')) return;
+        try {
+            const colabs = await terminarTarea(tareaId, currentUser);
+            const resumen = colabs.map(c =>
+                `${c.nombre}: ${c.horas?.toFixed(1)}h → R$ ${c.montoRecibido?.toFixed(2)}`
+            ).join('\n');
+            alert(`✅ Tarea completada\n\n${resumen}`);
+            await cargarTareas();
+        } catch(e) { alert(e.message); }
+    };
+
+    window.accionCompletarGeneral = async function(tareaId, nombre) {
+        if (!confirm(`¿Marcar "${nombre}" como realizada?`)) return;
         await db.collection('tareas').doc(tareaId).update({
-            completada: true,
+            completada:   true,
+            estado:       'completada',
             completadaEn: firebase.firestore.FieldValue.serverTimestamp(),
             completadaPor: currentUser.uid
         });
-        await cargarDatos();
-        alert('✅ Tarea completada');
-    }
+        await cargarTareas();
+    };
 
-    function abrirModalLimpieza(tarea){
-        colaboradoresTemp = [];
-        document.getElementById('tareaId').value = tarea.id;
-        document.getElementById('tareaNombre').innerText = tarea.nombre;
-        document.getElementById('montoTotal').value = tarea.montoLimpieza || 0;
-        document.getElementById('inicioGlobal').value = '';
-        document.getElementById('finGlobal').value = '';
-        renderizarColaboradores();
-        document.getElementById('modalLimpieza').style.display = 'flex';
-    }
+    // ── Modal de detalle ──────────────────────────────────
+    window.abrirModal = async function(tarea) {
+        tareaActual = tarea;
+        document.getElementById('tareaIdModal').value = tarea.id;
+        document.getElementById('modalTituloTexto').innerHTML =
+            `<span class="material-icons">${tarea.tipo === 'limpieza' ? 'cleaning_services' : 'checklist'}</span> ${escapeHtml(tarea.nombre)}`;
 
-    function renderizarColaboradores(){
-        const container = document.getElementById('colabsList');
-        if(colaboradoresTemp.length === 0){
-            container.innerHTML = '<p style="color:#999;">Agrega al menos un colaborador</p>';
-            return;
+        // Info de la reserva si es limpieza
+        const infoBox = document.getElementById('reservaInfoBox');
+        if (tarea.tipo === 'limpieza' && tarea.reservaId) {
+            try {
+                const reservaDoc = await db.collection('reservas').doc(tarea.reservaId).get();
+                if (reservaDoc.exists) {
+                    const r = reservaDoc.data();
+                    const checkOut = r.checkOut?.toDate?.() ? r.checkOut.toDate().toLocaleString('es-AR') : '—';
+                    const checkIn  = r.checkIn?.toDate?.()  ? r.checkIn.toDate().toLocaleString('es-AR')  : '—';
+
+                    let proximoHtml = '';
+                    if (tarea.proximaReservaHuesped) {
+                        const proxCI = tarea.proximaReservaCheckIn?.toDate?.()
+                            ? tarea.proximaReservaCheckIn.toDate().toLocaleString('es-AR') : '—';
+                        proximoHtml = `
+                            <div class="separador"></div>
+                            <strong>🛎️ Próximo huésped:</strong> ${escapeHtml(tarea.proximaReservaHuesped)}<br>
+                            <strong>📅 Check-in siguiente:</strong> ${proxCI}
+                        `;
+                    }
+
+                    infoBox.innerHTML = `
+                        <strong>🏠 Cabaña:</strong> ${r.caba}<br>
+                        <strong>🚪 Huésped saliente:</strong> ${escapeHtml(r.nombre)}<br>
+                        <strong>👥 Huéspedes:</strong> ${r.huespedes || r.adultos}<br>
+                        <strong>📅 Check-out:</strong> ${checkOut}<br>
+                        ${r.notas ? `<strong>📝 Notas:</strong> ${escapeHtml(r.notas)}<br>` : ''}
+                        ${proximoHtml}
+                        <div class="separador"></div>
+                        <strong>💰 Monto limpieza:</strong> R$ ${tarea.montoLimpieza || 0}
+                    `;
+                    infoBox.style.display = 'block';
+                }
+            } catch(e) { infoBox.style.display = 'none'; }
+        } else {
+            infoBox.style.display = 'none';
         }
-        let html = '';
-        colaboradoresTemp.forEach((col,idx)=>{
-            html += `<div class="colab-row">
-                        <select class="colab-select" data-idx="${idx}" style="flex:2;">
-                            <option value="">Seleccionar</option>
-                            ${usuariosCache.filter(u=>u.rol==='user' || u.rol==='admin').map(u=>`<option value="${u.id}" ${col.uid===u.id ? 'selected' : ''}>${escapeHtml(u.nombre || u.email)}</option>`).join('')}
-                        </select>
-                        <input type="time" class="colab-inicio" data-idx="${idx}" placeholder="Hora inicio" value="${col.horaInicio||''}" style="flex:1;">
-                        <input type="time" class="colab-fin" data-idx="${idx}" placeholder="Hora fin" value="${col.horaFin||''}" style="flex:1;">
-                        <button class="btn-secondary" onclick="eliminarColab(${idx})">✖</button>
-                    </div>`;
-        });
-        container.innerHTML = html;
-        document.querySelectorAll('.colab-select').forEach(sel=>sel.addEventListener('change',(e)=>{const idx=e.target.dataset.idx; colaboradoresTemp[idx].uid=e.target.value; const u=usuariosCache.find(u=>u.id===e.target.value); colaboradoresTemp[idx].nombre=u?.nombre||u?.email||'';}));
-        document.querySelectorAll('.colab-inicio').forEach(inp=>inp.addEventListener('change',(e)=>{colaboradoresTemp[e.target.dataset.idx].horaInicio=e.target.value;}));
-        document.querySelectorAll('.colab-fin').forEach(inp=>inp.addEventListener('change',(e)=>{colaboradoresTemp[e.target.dataset.idx].horaFin=e.target.value;}));
-    }
 
-    function agregarColab(){ colaboradoresTemp.push({ uid: '', nombre: '', horaInicio: '', horaFin: '' }); renderizarColaboradores(); }
-    function eliminarColab(idx){ colaboradoresTemp.splice(idx,1); renderizarColaboradores(); }
-
-    async function completarLimpieza(){
-        const tareaId = document.getElementById('tareaId').value;
-        const inicioGlobal = document.getElementById('inicioGlobal').value;
-        const finGlobal = document.getElementById('finGlobal').value;
-        const montoTotal = parseFloat(document.getElementById('montoTotal').value);
-        const colaboradoresValidos = colaboradoresTemp.filter(c=>c.uid && c.horaInicio && c.horaFin);
-        if(colaboradoresValidos.length === 0){ alert('Agrega al menos un colaborador con horas'); return; }
-        if(!inicioGlobal || !finGlobal){ alert('Ingresa hora inicio y fin global'); return; }
-        const montoPorPersona = montoTotal / colaboradoresValidos.length;
-        const colaboradoresConDetalle = colaboradoresValidos.map(c=>{
-            const user = usuariosCache.find(u=>u.id===c.uid);
-            return { uid: c.uid, nombre: user?.nombre || user?.email || c.uid, horaInicio: c.horaInicio, horaFin: c.horaFin, montoRecibido: montoPorPersona, pagado: false };
-        });
-        await db.collection('tareas').doc(tareaId).update({
-            completada: true,
-            completadaEn: firebase.firestore.FieldValue.serverTimestamp(),
-            completadaPor: currentUser.uid,
-            fechaHoraInicio: new Date(inicioGlobal),
-            fechaHoraFin: new Date(finGlobal),
-            colaboradores: colaboradoresConDetalle,
-            montoPorPersona: montoPorPersona
-        });
-        for(const col of colaboradoresConDetalle){
-            await db.collection('pagos_pendientes').add({
-                colaboradorId: col.uid,
-                colaboradorNombre: col.nombre,
-                tareaId: tareaId,
-                monto: col.montoRecibido,
-                moneda: 'BRL',
-                concepto: `Limpieza - ${new Date().toLocaleDateString()}`,
-                pagado: false,
-                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-            });
+        // Colaboradores activos
+        const colabsActivos = (tarea.colaboradores || []).filter(c => c.horaInicio && !c.horaFin);
+        const colabsBox = document.getElementById('colabsActivos');
+        if (colabsActivos.length) {
+            document.getElementById('colabsActivosList').innerHTML = colabsActivos.map(c => {
+                const inicio = c.horaInicio?.toDate?.() ? c.horaInicio.toDate().toLocaleTimeString('es-AR') : '—';
+                return `
+                    <div class="colab-row-modal">
+                        <div class="colab-nombre-modal">${escapeHtml(c.nombre)} ${c.uid === currentUser.uid ? '<span style="color:#e65100;">(vos)</span>' : ''}</div>
+                        <div class="colab-tiempo">
+                            <span>⏱️ Inicio: ${inicio}</span>
+                            <span style="color:#f39c12;">Trabajando...</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            colabsBox.style.display = 'block';
+        } else {
+            colabsBox.style.display = 'none';
         }
-        alert(`✅ Tarea completada\n🧹 ${colaboradoresValidos.length} colaborador(es)\n💰 R$ ${montoPorPersona.toFixed(2)} para cada uno`);
-        cerrarModalLimpieza();
-        await cargarDatos();
-    }
 
-    function cerrarModalLimpieza(){ document.getElementById('modalLimpieza').style.display = 'none'; }
+        // Colaboradores que terminaron
+        const colabsTerminados = (tarea.colaboradores || []).filter(c => c.horaFin);
+        let colabsTerminadosHtml = '';
+        if (colabsTerminados.length) {
+            colabsTerminadosHtml = `
+                <div style="font-weight:700; font-size:13px; color:#555; margin-bottom:8px;">✅ Ya terminaron:</div>
+                ${colabsTerminados.map(c => {
+                    const inicio = c.horaInicio?.toDate?.() ? c.horaInicio.toDate().toLocaleTimeString('es-AR') : '—';
+                    const fin    = c.horaFin?.toDate?.()    ? c.horaFin.toDate().toLocaleTimeString('es-AR')    : '—';
+                    return `
+                        <div class="colab-row-modal">
+                            <div class="colab-nombre-modal">${escapeHtml(c.nombre)}</div>
+                            <div class="colab-tiempo">
+                                <span>Inicio: ${inicio}</span>
+                                <span>Fin: ${fin}</span>
+                            </div>
+                            <div class="colab-monto">${c.horas?.toFixed(1) || '—'}h</div>
+                        </div>
+                    `;
+                }).join('')}
+            `;
+        }
 
-    document.querySelectorAll('.tab-btn').forEach(btn=>{
-        btn.addEventListener('click',()=>{
-            document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+        // Acciones según estado
+        const yoInicie = (tarea.colaboradores || []).find(c => c.uid === currentUser.uid && c.horaInicio && !c.horaFin);
+        const accionesEl = document.getElementById('accionesModal');
+
+        if (tarea.completada) {
+            // Mostrar resumen final
+            const totalHoras = (tarea.colaboradores || []).reduce((s,c) => s + (c.horas||0), 0);
+            accionesEl.innerHTML = `
+                ${colabsTerminadosHtml}
+                <div class="monto-box" style="margin-top:14px;">
+                    <div>✅ Completada el ${tarea.completadaEn ? formatFechaHora(tarea.completadaEn) : '—'}</div>
+                    <div>⏱️ Total horas trabajadas: ${totalHoras.toFixed(1)}h</div>
+                    <div class="total-line">💰 Monto distribuido: R$ ${tarea.montoLimpieza || 0}</div>
+                    <div style="margin-top:8px; font-size:13px;">
+                        ${(tarea.colaboradores||[]).map(c =>
+                            `👷 ${escapeHtml(c.nombre)}: ${c.horas?.toFixed(1)}h → <strong>R$ ${c.montoRecibido?.toFixed(2)}</strong>`
+                        ).join('<br>')}
+                    </div>
+                </div>
+            `;
+        } else if (tarea.tipo === 'limpieza') {
+            accionesEl.innerHTML = `
+                ${colabsTerminadosHtml ? `<div style="margin-bottom:14px;">${colabsTerminadosHtml}</div>` : ''}
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                    ${!yoInicie
+                        ? `<button class="btn btn-primary" onclick="cerrarModal(); accionIniciar('${tarea.id}')">
+                               <span class="material-icons" style="font-size:15px;">play_arrow</span> Iniciar mi trabajo
+                           </button>`
+                        : `<div style="background:#fff3e0; border-radius:10px; padding:10px 14px; font-size:13px; color:#e65100; font-weight:700;">
+                               ⏱️ Estás trabajando desde ${(tarea.colaboradores||[]).find(c=>c.uid===currentUser.uid)?.horaInicio?.toDate?.()?.toLocaleTimeString('es-AR') || '—'}
+                           </div>`
+                    }
+                    ${tarea.estado === 'en_curso'
+                        ? `<button class="btn btn-success" onclick="cerrarModal(); accionTerminar('${tarea.id}')">
+                               <span class="material-icons" style="font-size:15px;">check_circle</span> Terminar tarea
+                           </button>`
+                        : ''
+                    }
+                </div>
+            `;
+        } else {
+            accionesEl.innerHTML = `
+                <button class="btn btn-success" onclick="cerrarModal(); accionCompletarGeneral('${tarea.id}', '${escapeHtml(tarea.nombre)}')">
+                    <span class="material-icons" style="font-size:15px;">check</span> Marcar como realizada
+                </button>
+            `;
+        }
+
+        document.getElementById('modalTarea').classList.add('open');
+    };
+
+    window.cerrarModal = function() {
+        document.getElementById('modalTarea').classList.remove('open');
+    };
+
+    // Cerrar modal al hacer click fuera
+    document.getElementById('modalTarea').addEventListener('click', function(e) {
+        if (e.target === this) cerrarModal();
+    });
+
+    // ── Tabs ──────────────────────────────────────────────
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            currentFilter = btn.dataset.filter;
-            renderizarTareas();
+            filtroActual = btn.dataset.filter;
+            renderTareas();
         });
     });
-    document.getElementById('logoutBtn')?.addEventListener('click',()=>auth.signOut());
 
-    function escapeHtml(s){ if(!s) return ''; return s.replace(/[&<>]/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]||m)); }
+    // ── Init ──────────────────────────────────────────────
+    await cargarTareas();
 
-    window.agregarColab = agregarColab; window.eliminarColab = eliminarColab; window.completarLimpieza = completarLimpieza; window.cerrarModalLimpieza = cerrarModalLimpieza;
+    // Refrescar cada 30 segundos para ver cambios de otros colaboradores
+    setInterval(cargarTareas, 30000);
+
+})();
 </script>
 </body>
 </html>
