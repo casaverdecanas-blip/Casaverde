@@ -4,153 +4,614 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pagos - Casa Verde Canas</title>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
         body { background: #f5f7fa; }
-        .admin-header { background: #2d5a27; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
-        .admin-nav { background: white; padding: 0 25px; display: flex; gap: 5px; border-bottom: 1px solid #e0e0e0; flex-wrap: wrap; }
-        .nav-item { padding: 14px 20px; background: none; border: none; cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; gap: 8px; color: #6c757d; text-decoration: none; }
-        .nav-item.active { color: #2d5a27; border-bottom: 3px solid #2d5a27; }
-        .admin-content { max-width: 1400px; margin: 30px auto; padding: 0 25px; }
-        .card { background: white; border-radius: 20px; padding: 25px; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-        .card h2 { color: #2d5a27; margin-bottom: 20px; border-bottom: 2px solid #e8f5e9; padding-bottom: 10px; }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; }
-        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 15px; }
-        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; margin: 5px; }
-        .btn-primary { background: #2d5a27; color: white; }
-        .btn-success { background: #27ae60; color: white; }
+
+        .admin-header {
+            background: linear-gradient(135deg, #2d5a27, #1e3f1a);
+            color: white; padding: 14px 28px;
+            display: flex; justify-content: space-between; align-items: center;
+            flex-wrap: wrap; gap: 10px;
+            position: sticky; top: 0; z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+        }
+        .admin-header h1 { display: flex; align-items: center; gap: 10px; font-size: 1.2rem; }
+        .user-chip {
+            display: flex; align-items: center; gap: 12px;
+            background: rgba(255,255,255,0.15); padding: 6px 16px; border-radius: 40px; font-size: 14px;
+        }
+        .btn-logout {
+            background: rgba(231,76,60,0.85); color: white; border: none;
+            padding: 6px 14px; border-radius: 30px; cursor: pointer; font-size: 13px;
+            display: flex; align-items: center; gap: 5px;
+        }
+
+        .admin-nav {
+            background: white; padding: 0 28px;
+            display: flex; gap: 4px; border-bottom: 1px solid #e0e0e0; overflow-x: auto;
+        }
+        .nav-item {
+            padding: 13px 18px; background: none; border: none;
+            border-bottom: 3px solid transparent; cursor: pointer;
+            font-weight: 500; font-size: 14px; color: #6c757d;
+            text-decoration: none; white-space: nowrap;
+            display: inline-flex; align-items: center; gap: 6px; transition: color 0.2s;
+        }
+        .nav-item:hover { color: #2d5a27; }
+        .nav-item.active { color: #2d5a27; border-bottom-color: #2d5a27; }
+
+        .admin-content { max-width: 1400px; margin: 30px auto; padding: 0 28px; }
+
+        .card {
+            background: white; border-radius: 20px; padding: 26px;
+            margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .card h2 {
+            color: #2d5a27; font-size: 1.1rem; margin-bottom: 20px;
+            padding-bottom: 12px; border-bottom: 2px solid #e8f5e9;
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        /* KPIs */
+        .kpi-row {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr));
+            gap: 16px; margin-bottom: 28px;
+        }
+        .kpi-card {
+            background: white; padding: 18px; border-radius: 16px;
+            border-left: 4px solid #2d5a27; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .kpi-card.warning { border-left-color: #f39c12; }
+        .kpi-card.info    { border-left-color: #3498db; }
+        .kpi-number { font-size: 26px; font-weight: 800; color: #2d5a27; }
+        .kpi-card.warning .kpi-number { color: #f39c12; }
+        .kpi-card.info    .kpi-number { color: #3498db; }
+        .kpi-label { font-size: 12px; color: #888; margin-top: 4px; }
+
+        /* Tabla */
+        .data-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .data-table th {
+            padding: 11px 14px; text-align: left;
+            background: #f8f9fa; color: #2d5a27; font-weight: 700;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .data-table td { padding: 11px 14px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+        .data-table tr:hover td { background: #fafff9; }
+        .data-table tfoot td { background: #e8f5e9; font-weight: 700; padding: 12px 14px; }
+
+        /* Botones */
+        .btn { padding: 9px 20px; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; margin: 3px; transition: opacity 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+        .btn:hover { opacity: 0.87; }
+        .btn-primary   { background: #2d5a27; color: white; }
+        .btn-success   { background: #27ae60; color: white; }
+        .btn-danger    { background: #e74c3c; color: white; }
         .btn-secondary { background: #95a5a6; color: white; }
-        .data-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        .data-table th, .data-table td { padding: 12px; text-align: left; border-bottom: 1px solid #e9ecef; }
-        .data-table th { background: #f8f9fa; color: #2d5a27; }
-        .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; }
-        .modal-content { background:white; padding:30px; border-radius:20px; width:90%; max-width:500px; }
-        @media (max-width:768px){ .form-row{ grid-template-columns:1fr; } }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+        /* Tabs */
+        .tabs-bar {
+            display: flex; gap: 6px; margin-bottom: 20px;
+            background: #f8f9fa; padding: 6px; border-radius: 12px; width: fit-content;
+        }
+        .tab-btn {
+            padding: 8px 20px; border: none; border-radius: 8px;
+            cursor: pointer; font-weight: 600; font-size: 13px;
+            color: #6c757d; background: transparent; transition: all 0.2s;
+        }
+        .tab-btn.active { background: #2d5a27; color: white; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* Saldo badge */
+        .saldo-ok      { color: #27ae60; font-weight: 700; }
+        .saldo-parcial { color: #f39c12; font-weight: 700; }
+        .saldo-deuda   { color: #e74c3c; font-weight: 700; }
+
+        /* Modal */
+        .modal {
+            display: none; position: fixed; top:0; left:0;
+            width:100%; height:100%; background:rgba(0,0,0,0.55);
+            z-index:1000; justify-content:center; align-items:center;
+        }
+        .modal.open { display: flex; }
+        .modal-content {
+            background: white; padding: 30px; border-radius: 22px;
+            width: 95%; max-width: 540px; max-height: 92vh; overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        .modal-title {
+            font-size: 1.1rem; font-weight: 700; color: #2d5a27;
+            margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #e8f5e9;
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: #555; }
+        .form-group input,
+        .form-group select { width: 100%; padding: 10px 12px; border: 1.5px solid #ddd; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; }
+        .form-group input:focus,
+        .form-group select:focus { border-color: #2d5a27; }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 14px; }
+
+        .saldo-box {
+            background: #fff8e1; border: 1.5px solid #ffe082;
+            border-radius: 12px; padding: 14px; margin: 14px 0; font-size: 14px; line-height: 1.9;
+        }
+        .saldo-box .saldo-pendiente { font-size: 18px; font-weight: 800; color: #f39c12; }
+
+        /* Pagos pendientes colaboradores */
+        .pago-colab-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0; border-bottom: 1px solid #f0f0f0; flex-wrap: wrap; gap: 8px;
+        }
+        .pago-colab-row:last-child { border-bottom: none; }
+        .pago-colab-nombre { font-weight: 600; font-size: 14px; }
+        .pago-colab-detalle { font-size: 12px; color: #888; }
+        .badge-pagado    { background: #e8f5e9; color: #27ae60; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+        .badge-pendiente { background: #fff3e0; color: #f39c12; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+
+        .empty-state  { text-align: center; padding: 40px; color: #bbb; font-size: 14px; }
+        .loading-state { text-align: center; padding: 30px; color: #888; }
+
+        @media (max-width: 768px) {
+            .admin-content { padding: 0 16px; }
+            .data-table { font-size: 12px; }
+            .data-table th, .data-table td { padding: 8px; }
+        }
     </style>
 </head>
 <body>
-<div id="loginContainer" style="display: flex; justify-content: center; align-items: center; min-height: 100vh;">
-    <div style="background:white; padding:40px; border-radius:24px; width:350px; text-align:center;">
-        <h2>💰 Pagos</h2>
-        <input type="email" id="email" placeholder="Email">
-        <input type="password" id="password" placeholder="Contraseña">
-        <button onclick="login()">Ingresar</button>
-        <div id="loginError" style="color:red;"></div>
+
+<div class="admin-header">
+    <h1><span class="material-icons">payments</span> Pagos</h1>
+    <div class="user-chip">
+        <span id="userName">—</span>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons" style="font-size:15px;">logout</span> Salir
+        </button>
     </div>
 </div>
-<div id="mainPanel" style="display:none;">
-    <div class="admin-header"><h1>💰 Pagos</h1><div><span id="userEmail"></span><button class="btn-secondary" onclick="logout()">Salir</button></div></div>
-    <div class="admin-nav">
-        <a href="dashboard.html" class="nav-item">Dashboard</a>
-        <a href="reservas.html" class="nav-item">Reservas</a>
-        <a href="presupuestos.html" class="nav-item">Presupuestos</a>
-        <a href="cabanas-admin.html" class="nav-item">Cabañas</a>
-        <a href="clientes.html" class="nav-item">Clientes</a>
-        <a href="pagos.html" class="nav-item active">Pagos</a>
+
+<nav class="admin-nav">
+    <a href="dashboard.html"     class="nav-item"><span class="material-icons">dashboard</span> Dashboard</a>
+    <a href="reservas.html"      class="nav-item"><span class="material-icons">event</span> Reservas</a>
+    <a href="presupuestos.html"  class="nav-item"><span class="material-icons">request_quote</span> Presupuestos</a>
+    <a href="pagos.html"         class="nav-item active"><span class="material-icons">payments</span> Pagos</a>
+    <a href="clientes.html"      class="nav-item"><span class="material-icons">people</span> Clientes</a>
+    <a href="cabanas-admin.html" class="nav-item"><span class="material-icons">cottage</span> Cabañas</a>
+    <a href="tareas.html"        class="nav-item"><span class="material-icons">checklist</span> Tareas</a>
+    <a href="calendario.html"    class="nav-item"><span class="material-icons">calendar_month</span> Calendario</a>
+</nav>
+
+<div class="admin-content">
+
+    <!-- KPIs -->
+    <div class="kpi-row" id="kpiRow">
+        <div class="loading-state" style="grid-column:1/-1;">Cargando...</div>
     </div>
-    <div class="admin-content">
-        <div class="card"><h2>Registro de Pagos</h2><button class="btn-primary" onclick="nuevoPago()">+ Nuevo Pago</button><div id="pagosList"></div></div>
+
+    <!-- Tabs -->
+    <div class="tabs-bar">
+        <button class="tab-btn active" data-tab="clientes">💰 Pagos de clientes</button>
+        <button class="tab-btn" data-tab="colaboradores">👷 Pagos a colaboradores</button>
     </div>
+
+    <!-- TAB: Pagos de clientes -->
+    <div id="clientesPanel" class="tab-panel active">
+        <div class="card">
+            <h2><span class="material-icons">payments</span> Pagos de clientes</h2>
+            <button class="btn btn-primary" onclick="abrirModalNuevoPago()" style="margin-bottom:16px;">
+                <span class="material-icons" style="font-size:16px;">add</span> Registrar pago
+            </button>
+            <div id="pagosContainer"><div class="loading-state">Cargando...</div></div>
+        </div>
+    </div>
+
+    <!-- TAB: Pagos a colaboradores -->
+    <div id="colaboradoresPanel" class="tab-panel">
+        <div class="card">
+            <h2><span class="material-icons">engineering</span> Pagos pendientes a colaboradores</h2>
+            <div id="pagosColabContainer"><div class="loading-state">Cargando...</div></div>
+        </div>
+    </div>
+
 </div>
-<!-- Modal Pago -->
+
+<!-- MODAL: Nuevo pago de cliente -->
 <div id="modalPago" class="modal">
     <div class="modal-content">
-        <h3 id="modalTitle">Registrar Pago</h3>
+        <div class="modal-title">
+            <span class="material-icons">add_card</span> Registrar pago
+        </div>
         <input type="hidden" id="pagoId">
-        <div class="form-group"><label>Reserva (cliente)</label><select id="reservaSelect"></select></div>
-        <div class="form-row"><div class="form-group"><label>Monto</label><input type="number" id="monto" step="0.01"></div><div class="form-group"><label>Moneda</label><select id="moneda"><option value="BRL">BRL</option><option value="USD">USD</option></select></div></div>
-        <div class="form-row"><div class="form-group"><label>Método</label><select id="metodo"><option value="pix">PIX</option><option value="transferencia">Transferencia</option><option value="efectivo">Efectivo</option><option value="tarjeta">Tarjeta</option></select></div><div class="form-group"><label>Tipo</label><select id="tipo"><option value="seña">Seña</option><option value="parcial">Parcial</option><option value="total">Total</option></select></div></div>
-        <div class="form-group"><label>Observaciones</label><input type="text" id="observaciones"></div>
-        <div><button class="btn-success" onclick="guardarPago()">Guardar</button><button class="btn-secondary" onclick="cerrarModal()">Cancelar</button></div>
+
+        <div class="form-group">
+            <label>Reserva *</label>
+            <select id="reservaSelect" onchange="actualizarSaldo()"></select>
+        </div>
+
+        <!-- Saldo pendiente -->
+        <div class="saldo-box" id="saldoBox" style="display:none;">
+            <div>Total reserva: <strong id="saldoTotal">—</strong></div>
+            <div>Ya pagado: <strong id="saldoPagado">—</strong></div>
+            <div>Saldo pendiente: <span class="saldo-pendiente" id="saldoPendiente">—</span></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Monto *</label>
+                <input type="number" id="monto" step="0.01" min="0.01">
+            </div>
+            <div class="form-group">
+                <label>Moneda</label>
+                <select id="moneda">
+                    <option value="BRL">BRL (R$)</option>
+                    <option value="USD">USD (US$)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Método</label>
+                <select id="metodo">
+                    <option value="pix">PIX</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="efectivo">Efectivo</option>
+                    <option value="tarjeta">Tarjeta</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Tipo</label>
+                <select id="tipo">
+                    <option value="seña">Seña</option>
+                    <option value="parcial">Parcial</option>
+                    <option value="total">Total</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Observaciones</label>
+            <input type="text" id="observaciones" placeholder="Opcional">
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+            <button class="btn btn-success" onclick="guardarPago()">
+                <span class="material-icons" style="font-size:16px;">save</span> Guardar
+            </button>
+            <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+        </div>
     </div>
 </div>
-<script>
-    const firebaseConfig = { apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4", authDomain: "casaverdecanas-199.firebaseapp.com", projectId: "casaverdecanas-199" };
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-    let currentUser = null;
-    let reservasCache = [];
 
-    async function login() {
-        const email = document.getElementById('email').value, password = document.getElementById('password').value;
-        try {
-            const cred = await auth.signInWithEmailAndPassword(email, password);
-            const userDoc = await db.collection('usuarios').doc(cred.user.uid).get();
-            if(userDoc.exists && userDoc.data().rol === 'admin') {
-                currentUser = cred.user;
-                document.getElementById('loginContainer').style.display = 'none';
-                document.getElementById('mainPanel').style.display = 'block';
-                document.getElementById('userEmail').textContent = email;
-                cargarReservasSelect();
-                cargarPagos();
-            } else alert('No eres admin');
-        } catch(e) { document.getElementById('loginError').innerText = e.message; }
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async () => {
+    const { user, userData } = await CVC.verificarAuth('admin');
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+
+    const db = CVC.db;
+    const { escapeHtml, formatFecha, formatFechaHora } = CVC;
+
+    let reservasCache = [];
+    let pagosCache    = [];
+    let pagosColabCache = [];
+
+    // ── Tabs ──────────────────────────────────────────────
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById(btn.dataset.tab + 'Panel').classList.add('active');
+            if (btn.dataset.tab === 'colaboradores') cargarPagosColaboradores();
+        });
+    });
+
+    // ── Cargar datos iniciales ────────────────────────────
+    async function cargarTodo() {
+        const [reservasSnap, pagosSnap] = await Promise.all([
+            db.collection('reservas')
+                .where('estado', 'in', ['confirmada', 'pendiente', 'finalizada'])
+                .orderBy('checkIn', 'desc').get(),
+            db.collection('pagos').orderBy('creadoEn', 'desc').get()
+        ]);
+
+        reservasCache = reservasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        pagosCache    = pagosSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        cargarSelectReservas();
+        renderKPIs();
+        renderPagos();
     }
-    function logout() { auth.signOut().then(()=>location.reload()); }
-    async function cargarReservasSelect() {
-        const snap = await db.collection('reservas').orderBy('checkIn','desc').get();
-        reservasCache = snap.docs.map(d=>({ id: d.id, ...d.data() }));
+
+    // ── Select de reservas ────────────────────────────────
+    function cargarSelectReservas() {
         const select = document.getElementById('reservaSelect');
-        select.innerHTML = reservasCache.map(r=>`<option value="${r.id}">${r.nombre} - Cabaña ${r.caba} (${r.checkIn?.toDate?.()?.toLocaleDateString()||''})</option>`).join('');
+        select.innerHTML = '<option value="">— Seleccionar reserva —</option>' +
+            reservasCache.map(r =>
+                `<option value="${r.id}" data-total="${r.totalBRL||0}">
+                    ${escapeHtml(r.nombre)} — Cabaña ${r.caba} (${formatFecha(r.checkIn)})
+                </option>`
+            ).join('');
     }
-    async function cargarPagos() {
-        const snap = await db.collection('pagos').orderBy('creadoEn','desc').get();
-        const container = document.getElementById('pagosList');
-        if(snap.empty) { container.innerHTML='<div>No hay pagos registrados</div>'; return; }
-        let totalBRL=0, totalUSD=0;
-        let html = `<table class="data-table"><thead><th>Fecha</th><th>Reserva</th><th>Cliente</th><th>Monto</th><th>Método</th><th>Tipo</th></thead><tbody>`;
-        for(const doc of snap.docs){
-            const p = doc.data();
-            const fecha = p.creadoEn?.toDate?.()?.toLocaleDateString() || '';
-            if(p.moneda === 'USD') totalUSD += p.monto;
-            else totalBRL += p.monto;
-            html += `<tr><td>${fecha}</td><td>${p.reservaId}</td><td>${p.clienteNombre||''}</td><td>${p.moneda==='USD'?'USD':'R$'} ${p.monto?.toFixed(2)}</td><td>${p.metodo}</td><td>${p.tipo}</td></tr>`;
+
+    // ── KPIs ──────────────────────────────────────────────
+    function renderKPIs() {
+        let totalBRL = 0, totalUSD = 0;
+        const mesActual = new Date();
+        let mesBRL = 0;
+
+        pagosCache.forEach(p => {
+            if (p.moneda === 'USD') totalUSD += p.monto || 0;
+            else totalBRL += p.monto || 0;
+
+            const fecha = p.creadoEn?.toDate?.();
+            if (fecha && fecha.getMonth() === mesActual.getMonth() && fecha.getFullYear() === mesActual.getFullYear()) {
+                if (p.moneda === 'BRL') mesBRL += p.monto || 0;
+            }
+        });
+
+        document.getElementById('kpiRow').innerHTML = `
+            <div class="kpi-card">
+                <div class="kpi-number">R$ ${totalBRL.toLocaleString('es-AR', {minimumFractionDigits:2})}</div>
+                <div class="kpi-label">Total cobrado BRL</div>
+            </div>
+            <div class="kpi-card info">
+                <div class="kpi-number">USD ${totalUSD.toLocaleString('es-AR', {minimumFractionDigits:2})}</div>
+                <div class="kpi-label">Total cobrado USD</div>
+            </div>
+            <div class="kpi-card warning">
+                <div class="kpi-number">R$ ${mesBRL.toLocaleString('es-AR', {minimumFractionDigits:2})}</div>
+                <div class="kpi-label">Cobrado este mes</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-number">${pagosCache.length}</div>
+                <div class="kpi-label">Pagos registrados</div>
+            </div>
+        `;
+    }
+
+    // ── Render tabla pagos ────────────────────────────────
+    function renderPagos() {
+        const container = document.getElementById('pagosContainer');
+        if (!pagosCache.length) {
+            container.innerHTML = '<div class="empty-state">No hay pagos registrados</div>';
+            return;
         }
-        html += `<tr style="background:#e8f5e9; font-weight:bold;"><td colspan="3">TOTALES</td><td>R$ ${totalBRL.toFixed(2)}</td><td colspan="2">USD ${totalUSD.toFixed(2)}</td></tr>`;
-        html += `</tbody></table>`;
-        container.innerHTML = html;
+
+        // Agrupar pagos por reserva para mostrar saldo
+        const pagosPorReserva = {};
+        pagosCache.forEach(p => {
+            if (!pagosPorReserva[p.reservaId]) pagosPorReserva[p.reservaId] = 0;
+            if (p.moneda === 'BRL') pagosPorReserva[p.reservaId] += p.monto || 0;
+        });
+
+        let totalBRL = 0, totalUSD = 0;
+
+        const filas = pagosCache.map(p => {
+            const reserva = reservasCache.find(r => r.id === p.reservaId);
+            const nombreCliente = escapeHtml(p.clienteNombre || reserva?.nombre || '—');
+            const cabana = reserva ? `Cabaña ${reserva.caba}` : '—';
+            const simbolo = p.moneda === 'USD' ? 'USD' : 'R$';
+            if (p.moneda === 'USD') totalUSD += p.monto || 0;
+            else totalBRL += p.monto || 0;
+
+            // Saldo restante de esa reserva
+            let saldoHtml = '';
+            if (reserva && p.moneda === 'BRL') {
+                const totalRes = reserva.totalBRL || 0;
+                const pagado   = pagosPorReserva[p.reservaId] || 0;
+                const saldo    = totalRes - pagado;
+                const cls = saldo <= 0 ? 'saldo-ok' : (pagado > 0 ? 'saldo-parcial' : 'saldo-deuda');
+                saldoHtml = `<span class="${cls}">${saldo <= 0 ? '✅ Saldado' : `Debe R$ ${saldo.toFixed(2)}`}</span>`;
+            }
+
+            return `
+                <tr>
+                    <td>${formatFecha(p.creadoEn)}</td>
+                    <td><strong>${nombreCliente}</strong><br><span style="font-size:12px;color:#888;">${cabana}</span></td>
+                    <td>${simbolo} ${(p.monto||0).toFixed(2)}</td>
+                    <td>${escapeHtml(p.metodo || '—')}</td>
+                    <td>${escapeHtml(p.tipo || '—')}</td>
+                    <td>${saldoHtml}</td>
+                    <td>${escapeHtml(p.observaciones || '—')}</td>
+                    <td><button class="btn btn-sm btn-danger" onclick="eliminarPago('${p.id}')">Eliminar</button></td>
+                </tr>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <div style="overflow-x:auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Cliente / Cabaña</th>
+                            <th>Monto</th>
+                            <th>Método</th>
+                            <th>Tipo</th>
+                            <th>Saldo reserva</th>
+                            <th>Observaciones</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>${filas}</tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="2">TOTALES</td>
+                            <td>R$ ${totalBRL.toFixed(2)} / USD ${totalUSD.toFixed(2)}</td>
+                            <td colspan="5"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        `;
     }
-    function nuevoPago() {
+
+    // ── Saldo al seleccionar reserva ──────────────────────
+    window.actualizarSaldo = async function() {
+        const reservaId = document.getElementById('reservaSelect').value;
+        const saldoBox  = document.getElementById('saldoBox');
+        if (!reservaId) { saldoBox.style.display = 'none'; return; }
+
+        const reserva = reservasCache.find(r => r.id === reservaId);
+        if (!reserva) { saldoBox.style.display = 'none'; return; }
+
+        // Sumar pagos existentes en BRL para esta reserva
+        const pagosSnap = await db.collection('pagos')
+            .where('reservaId', '==', reservaId)
+            .get();
+        let pagado = 0;
+        pagosSnap.docs.forEach(d => {
+            const p = d.data();
+            if (p.moneda === 'BRL') pagado += p.monto || 0;
+        });
+
+        const total   = reserva.totalBRL || 0;
+        const saldo   = total - pagado;
+
+        document.getElementById('saldoTotal').textContent   = `R$ ${total.toFixed(2)}`;
+        document.getElementById('saldoPagado').textContent  = `R$ ${pagado.toFixed(2)}`;
+        document.getElementById('saldoPendiente').textContent = `R$ ${Math.max(0, saldo).toFixed(2)}`;
+        document.getElementById('monto').value = Math.max(0, saldo).toFixed(2);
+        saldoBox.style.display = 'block';
+
+        // Sugerir tipo según saldo
+        const tipoSelect = document.getElementById('tipo');
+        if (saldo <= 0)         tipoSelect.value = 'total';
+        else if (pagado > 0)    tipoSelect.value = 'parcial';
+        else                    tipoSelect.value = 'seña';
+    };
+
+    // ── Modal nuevo pago ──────────────────────────────────
+    window.abrirModalNuevoPago = function() {
         document.getElementById('pagoId').value = '';
+        document.getElementById('reservaSelect').value = '';
         document.getElementById('monto').value = '';
         document.getElementById('moneda').value = 'BRL';
         document.getElementById('metodo').value = 'pix';
-        document.getElementById('tipo').value = 'total';
+        document.getElementById('tipo').value   = 'total';
         document.getElementById('observaciones').value = '';
-        document.getElementById('modalPago').style.display = 'flex';
-    }
-    function cerrarModal() { document.getElementById('modalPago').style.display = 'none'; }
-    async function guardarPago() {
+        document.getElementById('saldoBox').style.display = 'none';
+        document.getElementById('modalPago').classList.add('open');
+    };
+
+    window.cerrarModal = function() {
+        document.getElementById('modalPago').classList.remove('open');
+    };
+
+    // ── Guardar pago ──────────────────────────────────────
+    window.guardarPago = async function() {
         const reservaId = document.getElementById('reservaSelect').value;
-        if(!reservaId) { alert('Selecciona una reserva'); return; }
+        if (!reservaId) { alert('Seleccioná una reserva'); return; }
         const monto = parseFloat(document.getElementById('monto').value);
-        if(isNaN(monto) || monto<=0) { alert('Monto válido'); return; }
-        const reserva = reservasCache.find(r=>r.id===reservaId);
+        if (!monto || monto <= 0) { alert('Ingresá un monto válido'); return; }
+
+        const reserva = reservasCache.find(r => r.id === reservaId);
+
         await db.collection('pagos').add({
-            reservaId: reservaId,
-            clienteNombre: reserva.nombre,
-            monto: monto,
-            moneda: document.getElementById('moneda').value,
-            metodo: document.getElementById('metodo').value,
-            tipo: document.getElementById('tipo').value,
-            observaciones: document.getElementById('observaciones').value,
-            creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
-            creadoPor: currentUser.uid
+            reservaId,
+            clienteNombre: reserva?.nombre || '—',
+            monto,
+            moneda:        document.getElementById('moneda').value,
+            metodo:        document.getElementById('metodo').value,
+            tipo:          document.getElementById('tipo').value,
+            observaciones: document.getElementById('observaciones').value.trim(),
+            creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
+            creadoPor: user.uid
         });
-        alert('Pago registrado');
+
+        alert('✅ Pago registrado');
         cerrarModal();
-        cargarPagos();
+        cargarTodo();
+    };
+
+    // ── Eliminar pago ─────────────────────────────────────
+    window.eliminarPago = async function(id) {
+        if (!confirm('¿Eliminar este pago? Esta acción no se puede deshacer.')) return;
+        await db.collection('pagos').doc(id).delete();
+        cargarTodo();
+    };
+
+    // ── Pagos a colaboradores ─────────────────────────────
+    async function cargarPagosColaboradores() {
+        const snap = await db.collection('pagos_pendientes')
+            .orderBy('creadoEn', 'desc').get();
+        pagosColabCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderPagosColaboradores();
     }
-    window.nuevoPago = nuevoPago; window.guardarPago = guardarPago; window.cerrarModal = cerrarModal;
-    window.login = login; window.logout = logout;
-    auth.onAuthStateChanged(user=>{ if(user) login(); });
+
+    function renderPagosColaboradores() {
+        const container = document.getElementById('pagosColabContainer');
+        if (!pagosColabCache.length) {
+            container.innerHTML = '<div class="empty-state">No hay pagos pendientes a colaboradores</div>';
+            return;
+        }
+
+        // Agrupar por colaborador
+        const porColab = {};
+        pagosColabCache.forEach(p => {
+            const key = p.colaboradorId;
+            if (!porColab[key]) porColab[key] = { nombre: p.colaboradorNombre, items: [], totalPendiente: 0, totalPagado: 0 };
+            porColab[key].items.push(p);
+            if (p.pagado) porColab[key].totalPagado += p.monto || 0;
+            else porColab[key].totalPendiente += p.monto || 0;
+        });
+
+        container.innerHTML = Object.values(porColab).map(colab => `
+            <div style="margin-bottom:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+                    <strong style="font-size:15px;">👷 ${escapeHtml(colab.nombre)}</strong>
+                    <div style="display:flex; gap:10px; font-size:13px;">
+                        <span class="saldo-deuda">Pendiente: R$ ${colab.totalPendiente.toFixed(2)}</span>
+                        <span class="saldo-ok">Pagado: R$ ${colab.totalPagado.toFixed(2)}</span>
+                    </div>
+                </div>
+                ${colab.items.map(item => `
+                    <div class="pago-colab-row">
+                        <div>
+                            <div class="pago-colab-nombre">${escapeHtml(item.concepto || '—')}</div>
+                            <div class="pago-colab-detalle">${formatFecha(item.creadoEn)}</div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <strong>R$ ${(item.monto||0).toFixed(2)}</strong>
+                            <span class="${item.pagado ? 'badge-pagado' : 'badge-pendiente'}">${item.pagado ? '✅ Pagado' : '⏳ Pendiente'}</span>
+                            ${!item.pagado ? `<button class="btn btn-sm btn-success" onclick="marcarPagado('${item.id}')">Marcar pagado</button>` : ''}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            <hr style="border:none; border-top:1px solid #e9ecef; margin:16px 0;">
+        `).join('');
+    }
+
+    window.marcarPagado = async function(id) {
+        if (!confirm('¿Marcar este pago como realizado?')) return;
+        await db.collection('pagos_pendientes').doc(id).update({
+            pagado:    true,
+            fechaPago: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        cargarPagosColaboradores();
+    };
+
+    // ── Abrir modal directo si viene con ?nuevo=1 ─────────
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('nuevo')) {
+        await cargarTodo();
+        abrirModalNuevoPago();
+    } else {
+        await cargarTodo();
+    }
+
+})();
 </script>
 </body>
 </html>
