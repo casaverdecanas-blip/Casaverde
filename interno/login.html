@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - CasaVerdeCanas</title>
+    <title>Login - Casa Verde Canas</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -12,128 +12,89 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
         body { background: linear-gradient(135deg, #1e3c2c 0%, #2d5a27 100%); min-height: 100vh; display: flex; justify-content: center; align-items: center; }
-        
-        .login-box {
-            background: white;
-            padding: 40px;
-            border-radius: 24px;
-            width: 380px;
-            text-align: center;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-        }
-        
-        .login-box h2 {
-            color: #2d5a27;
-            margin-bottom: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-        
-        .login-box input {
-            width: 100%;
-            padding: 14px;
-            margin: 10px 0;
-            border: 1px solid #ddd;
-            border-radius: 12px;
-            font-size: 16px;
-        }
-        
-        .login-box button {
-            width: 100%;
-            padding: 14px;
-            background: #2d5a27;
-            color: white;
-            border: none;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-        
-        .error-msg {
-            color: #e74c3c;
-            margin-top: 10px;
-            font-size: 14px;
-        }
-        
-        .info-msg {
-            color: #6c757d;
-            margin-top: 15px;
-            font-size: 12px;
-        }
+        .login-box { background: white; padding: 40px; border-radius: 24px; width: 380px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.2); }
+        .login-box h2 { color: #2d5a27; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .login-box input { width: 100%; padding: 14px; margin: 10px 0; border: 1px solid #ddd; border-radius: 12px; font-size: 16px; }
+        .login-box button { width: 100%; padding: 14px; background: linear-gradient(135deg, #2d5a27, #1e3f1a); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; font-size: 16px; }
+        .error-msg { color: #e74c3c; margin-top: 10px; font-size: 14px; display: none; }
+        .loading { display: inline-block; width: 20px; height: 20px; border: 2px solid white; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; margin-left: 10px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
     <div class="login-box">
-        <h2><span class="material-icons">cottage</span> CasaVerdeCanas</h2>
+        <h2><span class="material-icons">eco</span> Casa Verde Canas</h2>
+        <p style="color: #666; margin-bottom: 20px;">Acceso al sistema interno</p>
         <input type="email" id="email" placeholder="Email" autocomplete="email">
         <input type="password" id="password" placeholder="Contraseña" autocomplete="current-password">
-        <button onclick="login()">Ingresar</button>
-        <div id="loginError" class="error-msg"></div>
-        <div class="info-msg">
-            💡 Acceso para administradores y colaboradores
-        </div>
+        <button id="loginBtn">Ingresar <span id="loadingSpinner" class="loading" style="display: none;"></span></button>
+        <div id="errorMsg" class="error-msg"></div>
     </div>
 
     <script>
+        // Configuración UNIFICADA
         const firebaseConfig = {
-            apiKey: "AIzaSyDluIIBwIJVkO9DEX4ghJQYhzJAnXtQoKs",
-            authDomain: "tatareas-d8a80.firebaseapp.com",
-            projectId: "tatareas-d8a80",
-            storageBucket: "tatareas-d8a80.firebasestorage.app",
-            messagingSenderId: "709332495480",
-            appId: "1:709332495480:web:7060b2c75984352354918d"
+            apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
+            authDomain: "casaverdecanas-199.firebaseapp.com",
+            projectId: "casaverdecanas-199",
+            storageBucket: "casaverdecanas-199.firebasestorage.app"
         };
         
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
         
+        const loginBtn = document.getElementById('loginBtn');
+        const spinner = document.getElementById('loadingSpinner');
+        const errorDiv = document.getElementById('errorMsg');
+        
         async function login() {
-            const email = document.getElementById('email').value;
+            const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
-            const errorDiv = document.getElementById('loginError');
             
             if (!email || !password) {
                 errorDiv.textContent = 'Ingresa email y contraseña';
+                errorDiv.style.display = 'block';
                 return;
             }
             
+            loginBtn.disabled = true;
+            spinner.style.display = 'inline-block';
+            errorDiv.style.display = 'none';
+            
             try {
                 const userCredential = await auth.signInWithEmailAndPassword(email, password);
-                const userDoc = await db.collection('usuarios').doc(userCredential.user.uid).get();
+                const user = userCredential.user;
                 
-                if (!userDoc.exists) {
-                    await auth.signOut();
-                    errorDiv.textContent = 'Usuario no registrado';
-                    return;
-                }
+                // Obtener rol del usuario
+                const userDoc = await db.collection('usuarios').doc(user.uid).get();
+                const rol = userDoc.exists ? userDoc.data().rol : 'user';
                 
-                const rol = userDoc.data().rol;
-                const nombre = userDoc.data().nombre || email;
-                
-                // Guardar datos en sessionStorage para el panel
-                sessionStorage.setItem('userName', nombre);
-                sessionStorage.setItem('userEmail', email);
-                sessionStorage.setItem('userRol', rol);
-                sessionStorage.setItem('userId', userCredential.user.uid);
-                
+                // Redirigir según rol
                 if (rol === 'admin') {
                     window.location.href = 'dashboard.html';
                 } else {
-                    window.location.href = 'colaborador.html';
+                    window.location.href = 'tareas.html';
                 }
+                
             } catch (error) {
-                errorDiv.textContent = 'Email o contraseña incorrectos';
+                let mensaje = 'Error al iniciar sesión';
+                if (error.code === 'auth/user-not-found') mensaje = 'Usuario no encontrado';
+                else if (error.code === 'auth/wrong-password') mensaje = 'Contraseña incorrecta';
+                else if (error.code === 'auth/invalid-email') mensaje = 'Email inválido';
+                
+                errorDiv.textContent = mensaje;
+                errorDiv.style.display = 'block';
+                loginBtn.disabled = false;
+                spinner.style.display = 'none';
             }
         }
         
-        window.login = login;
+        loginBtn.addEventListener('click', login);
+        document.getElementById('password').addEventListener('keypress', (e) => { if (e.key === 'Enter') login(); });
+        document.getElementById('email').addEventListener('keypress', (e) => { if (e.key === 'Enter') login(); });
     </script>
 </body>
 </html>
