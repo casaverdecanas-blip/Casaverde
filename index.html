@@ -3,13 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    
     <title>Casa Verde Canas | Apartamentos Rústicos en Canasvieiras</title>
     <meta name="description" content="Apartamentos rústicos en un pequeño oasis compartido en Canasvieiras, Florianópolis. Naturaleza, armonía y encuentro a pasos de la playa.">
     
     <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap" rel="stylesheet">
-    
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Ccircle cx='100' cy='100' r='85' fill='none' stroke='%235A3A1F' stroke-width='4'/%3E%3Cpath d='M50 140 C35 110, 40 80, 65 65 C55 95, 55 120, 50 140 Z' fill='%232E7D55'/%3E%3Cpath d='M150 140 C165 110, 160 80, 135 65 C145 95, 145 120, 150 140 Z' fill='%232E7D55'/%3E%3Cpolygon points='65,75 100,50 135,75' fill='none' stroke='%235A3A1F' stroke-width='4'/%3E%3Crect x='70' y='75' width='60' height='40' fill='none' stroke='%235A3A1F' stroke-width='4'/%3E%3Crect x='85' y='85' width='30' height='20' fill='none' stroke='%235A3A1F' stroke-width='3'/%3E%3Cline x1='70' y1='115' x2='130' y2='115' stroke='%235A3A1F' stroke-width='4'/%3E%3Cline x1='80' y1='115' x2='80' y2='145' stroke='%235A3A1F' stroke-width='4'/%3E%3Cline x1='100' y1='115' x2='100' y2='145' stroke='%235A3A1F' stroke-width='4'/%3E%3Cline x1='120' y1='115' x2='120' y2='145' stroke='%235A3A1F' stroke-width='4'/%3E%3C/svg%3E">
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <!-- FullCalendar -->
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
     
     <style>
         :root {
@@ -21,17 +27,8 @@
             --earth-brown: #5A3A1F;
             --leaf-green: #2E7D55;
         }
-
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body { 
-            font-family: 'Quicksand', sans-serif; 
-            background: #FDFDFD; 
-            color: var(--charcoal); 
-            line-height: 1.6; 
-        }
-        
-        /* Header Rústico con Logo */
+        body { font-family: 'Quicksand', sans-serif; background: #FDFDFD; color: var(--charcoal); line-height: 1.6; }
         .hero {
             background: linear-gradient(135deg, var(--forest-green) 0%, #1a3a1c 100%);
             color: white;
@@ -40,7 +37,6 @@
             position: relative;
             border-bottom: 8px solid var(--casa-green);
         }
-        
         .hero::before {
             content: '';
             position: absolute;
@@ -53,22 +49,6 @@
             opacity: 0.3;
             pointer-events: none;
         }
-        
-        .hero h1 { 
-            font-size: 2.8rem; 
-            margin-bottom: 10px; 
-            font-weight: 700;
-            letter-spacing: -0.5px;
-        }
-        
-        .hero .subtitle { 
-            font-size: 1.1rem; 
-            opacity: 0.95; 
-            margin-bottom: 0;
-            white-space: pre-line;
-        }
-        
-        /* Logo y header mejorado */
         .logo-container {
             display: flex;
             align-items: center;
@@ -79,763 +59,472 @@
             position: relative;
             z-index: 2;
         }
-        
-        .logo-svg svg {
-            filter: drop-shadow(0 4px 12px rgba(0,0,0,0.25));
-            transition: all 0.4s cubic-bezier(0.34, 1.2, 0.64, 1);
-        }
-        
-        .logo-svg svg:hover {
-            transform: scale(1.05) rotate(2deg);
-        }
-        
-        .logo-text {
-            text-align: left;
-        }
-        
+        .logo-svg svg { filter: drop-shadow(0 4px 12px rgba(0,0,0,0.25)); transition: all 0.4s; }
         .logo-text h1 {
             font-size: 2.5rem;
             margin-bottom: 5px;
-            letter-spacing: -0.5px;
             background: linear-gradient(135deg, #fff 0%, var(--warm-yellow) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
-        
-        .logo-text .subtitle {
-            font-size: 1rem;
-            opacity: 0.9;
-        }
-        
         .lang-picker {
-            position: absolute; 
-            top: 25px; 
-            right: 30px; 
-            display: flex; 
-            gap: 12px;
-            z-index: 10;
+            position: absolute; top: 25px; right: 30px; display: flex; gap: 12px; z-index: 10;
         }
-        
         .lang-btn {
-            background: rgba(255,255,255,0.15); 
-            border: 1px solid rgba(255,255,255,0.4); 
-            color: white;
-            padding: 8px 18px; 
-            border-radius: 50px; 
-            cursor: pointer; 
-            font-weight: 600;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(5px);
+            background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.4); color: white;
+            padding: 8px 18px; border-radius: 50px; cursor: pointer; font-weight: 600;
+            transition: all 0.3s ease; backdrop-filter: blur(5px);
         }
-        
-        .lang-btn:hover {
-            background: rgba(255,255,255,0.3);
-            transform: translateY(-2px);
-        }
-        
-        .lang-btn.active { 
-            background: var(--warm-yellow); 
-            color: var(--forest-green); 
-            border-color: var(--warm-yellow);
-        }
-        
+        .lang-btn.active { background: var(--warm-yellow); color: var(--forest-green); border-color: var(--warm-yellow); }
         .trust-badges {
-            display: flex; 
-            flex-wrap: wrap; 
-            justify-content: center; 
-            gap: 15px;
-            margin-top: 20px;
-            position: relative;
-            z-index: 2;
+            display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; margin-top: 20px; position: relative; z-index: 2;
         }
-        
         .trust-badges span {
-            background: rgba(255,255,255,0.12); 
-            padding: 8px 22px; 
-            border-radius: 50px;
-            font-size: 0.9rem; 
-            border: 1px solid rgba(255,255,255,0.25);
-            backdrop-filter: blur(4px);
-            transition: all 0.3s ease;
+            background: rgba(255,255,255,0.12); padding: 8px 22px; border-radius: 50px; font-size: 0.9rem;
+            border: 1px solid rgba(255,255,255,0.25); backdrop-filter: blur(4px);
         }
-        
-        .trust-badges span:hover {
-            background: rgba(255,255,255,0.2);
-            transform: translateY(-2px);
-        }
-        
-        .container { 
-            max-width: 1280px; 
-            margin: 0 auto; 
-            padding: 60px 24px; 
-        }
-        
-        /* Sección de descripción principal */
+        .container { max-width: 1280px; margin: 0 auto; padding: 60px 24px; }
         .main-description {
             background: linear-gradient(135deg, #F4F9F4 0%, #EDF5ED 100%);
             border-radius: 32px;
             padding: 50px 40px;
             margin-bottom: 70px;
             text-align: center;
-            border: 1px solid #E2EEE2;
         }
-        
-        .main-description h2 {
-            color: var(--forest-green);
-            font-size: 2rem;
-            margin-bottom: 25px;
-            font-weight: 700;
-        }
-        
-        .main-description p {
-            font-size: 1.1rem;
-            line-height: 1.7;
-            color: var(--charcoal);
-            max-width: 900px;
-            margin: 0 auto;
-            white-space: pre-line;
-        }
-        
-        /* Títulos de sección */
+        .main-description h2 { color: var(--forest-green); font-size: 2rem; margin-bottom: 25px; font-weight: 700; }
+        .main-description p { font-size: 1.1rem; line-height: 1.7; max-width: 900px; margin: 0 auto; white-space: pre-line; }
         section h2 {
-            text-align: center; 
-            font-size: 2.3rem; 
-            color: var(--forest-green);
-            margin-bottom: 50px; 
-            position: relative;
-            font-weight: 700;
+            text-align: center; font-size: 2.3rem; color: var(--forest-green); margin-bottom: 50px; font-weight: 700;
         }
-        
         section h2::after {
-            content: ''; 
-            display: block; 
-            width: 70px; 
-            height: 3px; 
+            content: ''; display: block; width: 70px; height: 3px;
             background: linear-gradient(90deg, var(--casa-green), var(--forest-green));
-            margin: 18px auto; 
-            border-radius: 10px;
+            margin: 18px auto; border-radius: 10px;
         }
-        
-        /* Grid de Cabañas */
         .cabins-grid {
-            display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); 
-            gap: 35px;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 35px;
         }
-        
         .cabin-card {
-            background: white; 
-            border-radius: 28px; 
-            overflow: hidden;
-            box-shadow: 0 12px 35px rgba(0,0,0,0.08); 
-            transition: all 0.4s cubic-bezier(0.2, 0.9, 0.4, 1.1);
-            border: 1px solid #F0F0F0;
-            display: flex; 
-            flex-direction: column;
+            background: white; border-radius: 28px; overflow: hidden;
+            box-shadow: 0 12px 35px rgba(0,0,0,0.08); transition: all 0.4s;
+            border: 1px solid #F0F0F0; display: flex; flex-direction: column;
         }
-        
-        .cabin-card:hover { 
-            transform: translateY(-12px); 
-            box-shadow: 0 20px 45px rgba(0,0,0,0.12);
-        }
-        
-        .cabin-slider { 
-            height: 280px; 
-            position: relative; 
-            background: #E8EDE8; 
-            overflow: hidden; 
-        }
-        
+        .cabin-card:hover { transform: translateY(-12px); box-shadow: 0 20px 45px rgba(0,0,0,0.12); }
+        .cabin-slider { height: 280px; position: relative; background: #E8EDE8; overflow: hidden; }
         .cabin-slide {
-            position: absolute; 
-            width: 100%; 
-            height: 100%; 
-            opacity: 0;
-            transition: opacity 0.8s ease-in-out; 
-            background-size: cover; 
-            background-position: center;
+            position: absolute; width: 100%; height: 100%; opacity: 0;
+            transition: opacity 0.8s ease-in-out; background-size: cover; background-position: center;
         }
-        
-        .cabin-slide.active { 
-            opacity: 1; 
-        }
-        
-        .cabin-content { 
-            padding: 32px 28px; 
-            text-align: center; 
-        }
-        
-        .cabin-content h3 { 
-            color: var(--forest-green); 
-            font-size: 1.7rem; 
-            margin-bottom: 12px; 
-            font-weight: 700;
-        }
-        
-        .cabin-content p { 
-            font-size: 0.95rem; 
-            color: #666; 
-            margin-bottom: 25px; 
-            min-height: 55px;
-            line-height: 1.5;
-        }
-        
+        .cabin-slide.active { opacity: 1; }
+        .cabin-content { padding: 32px 28px; text-align: center; }
+        .cabin-content h3 { color: var(--forest-green); font-size: 1.7rem; margin-bottom: 12px; font-weight: 700; }
+        .cabin-content p { font-size: 0.95rem; color: #666; margin-bottom: 25px; min-height: 55px; line-height: 1.5; }
         .btn {
-            display: inline-block; 
-            background: var(--forest-green); 
-            color: white;
-            padding: 12px 38px; 
-            border-radius: 50px; 
-            text-decoration: none;
-            font-weight: 700; 
-            transition: all 0.3s ease;
-            border: 2px solid transparent;
+            display: inline-block; background: var(--forest-green); color: white;
+            padding: 12px 38px; border-radius: 50px; text-decoration: none;
+            font-weight: 700; transition: all 0.3s ease; border: 2px solid transparent;
         }
-        
-        .btn:hover { 
-            background: transparent; 
-            border-color: var(--forest-green);
-            color: var(--forest-green);
-            transform: translateY(-2px);
+        .btn:hover { background: transparent; border-color: var(--forest-green); color: var(--forest-green); transform: translateY(-2px); }
+        .btn-outline {
+            background: transparent; border-color: var(--forest-green); color: var(--forest-green);
+            margin-left: 10px;
         }
-        
-        /* Espacios Comunes */
-        .common-category {
-            background: linear-gradient(135deg, #F4F9F4 0%, #EDF5ED 100%);
-            border-radius: 32px; 
-            padding: 35px; 
-            margin-bottom: 45px;
-            border: 1px solid #E2EEE2;
-            transition: all 0.3s ease;
-        }
-        
-        .common-category:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.05);
-        }
-        
-        .common-category h3 { 
-            color: var(--forest-green); 
-            margin-bottom: 25px; 
-            font-size: 1.6rem; 
-            font-weight: 700;
-            text-align: center;
-        }
-        
-        .slider-container { 
-            position: relative; 
-            overflow: hidden; 
-            border-radius: 24px; 
-            height: 380px;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-        }
-        
-        .slider-track { 
-            display: flex; 
-            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); 
-            height: 100%; 
-        }
-        
-        .slider-slide { 
-            flex: 0 0 100%; 
-            height: 100%; 
-            position: relative; 
-        }
-        
-        .slider-slide img { 
-            width: 100%; 
-            height: 100%; 
-            object-fit: cover; 
-        }
-        
-        .slider-caption {
-            position: absolute; 
-            bottom: 25px; 
-            left: 25px;
-            background: rgba(0,0,0,0.7);
-            backdrop-filter: blur(8px);
-            color: white;
-            padding: 8px 22px; 
-            border-radius: 50px; 
-            font-weight: 600;
-            font-size: 0.9rem;
-        }
-        
-        .slider-btn {
-            position: absolute; 
-            top: 50%; 
-            transform: translateY(-50%);
-            background: rgba(255,255,255,0.95);
-            border: none; 
-            width: 48px; 
-            height: 48px;
-            border-radius: 50%; 
-            cursor: pointer; 
-            z-index: 10; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-            font-size: 1.3rem;
-            font-weight: bold;
-            color: var(--forest-green);
-            transition: all 0.3s ease;
-        }
-        
-        .slider-btn:hover {
-            background: var(--forest-green);
-            color: white;
-            transform: translateY(-50%) scale(1.05);
-        }
-        
-        .slider-prev { left: 20px; }
-        .slider-next { right: 20px; }
-        
-        /* WhatsApp Float */
         .whatsapp-float {
-            position: fixed; 
-            bottom: 30px; 
-            right: 30px; 
-            width: 65px; 
-            height: 65px;
-            background: #25D366; 
-            border-radius: 50%; 
-            display: flex; 
-            align-items: center;
-            justify-content: center; 
-            box-shadow: 0 8px 25px rgba(37,211,102,0.35);
-            z-index: 999;
-            transition: all 0.3s ease;
-            animation: pulse 2s infinite;
+            position: fixed; bottom: 30px; right: 30px; width: 65px; height: 65px;
+            background: #25D366; border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; box-shadow: 0 8px 25px rgba(37,211,102,0.35);
+            z-index: 999; transition: all 0.3s ease; animation: pulse 2s infinite;
         }
-        
-        .whatsapp-float:hover {
-            transform: scale(1.1);
-            box-shadow: 0 10px 30px rgba(37,211,102,0.5);
-        }
-        
         @keyframes pulse {
             0% { box-shadow: 0 8px 25px rgba(37,211,102,0.35); }
             50% { box-shadow: 0 8px 35px rgba(37,211,102,0.6); }
             100% { box-shadow: 0 8px 25px rgba(37,211,102,0.35); }
         }
-        
-        /* Footer */
-        footer { 
-            background: var(--forest-green); 
-            color: white; 
-            padding: 55px 20px 40px; 
-            text-align: center;
+        footer {
+            background: var(--forest-green); color: white; padding: 55px 20px 40px; text-align: center;
             border-top: 5px solid var(--casa-green);
         }
-        
-        footer p:first-child {
-            font-size: 1.2rem;
-            font-weight: 600;
-        }
-        
-        footer p:last-child {
-            opacity: 0.8;
-            font-size: 0.9rem;
-        }
-
-        /* Estilos Redes Sociales Footer */
         .social-footer {
-            margin-top: 25px;
-            display: flex;
-            justify-content: center;
-            gap: 18px;
+            margin-top: 25px; display: flex; justify-content: center; gap: 18px;
         }
-
         .social-footer a {
-            display: flex;
-            align-items: center;
+            display: flex; align-items: center; justify-content: center;
+            width: 44px; height: 44px; background: rgba(255,255,255,0.08);
+            border-radius: 12px; transition: all 0.4s; border: 1px solid rgba(255,255,255,0.15);
+        }
+        .social-footer svg { fill: var(--casa-green); width: 24px; height: 24px; }
+        .social-footer a:hover { background: var(--warm-yellow); transform: scale(1.1); }
+        .social-footer a:hover svg { fill: var(--forest-green); }
+        
+        /* Modal de disponibilidad */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
             justify-content: center;
-            width: 44px;
-            height: 44px;
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 12px;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            padding: 10px;
+            align-items: center;
         }
-
-        .social-footer svg {
-            fill: var(--casa-green);
-            width: 24px;
-            height: 24px;
+        .modal-content {
+            background: white;
+            border-radius: 28px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 25px;
+            position: relative;
         }
-
-        .social-footer a:hover {
-            background: var(--warm-yellow);
-            transform: scale(1.1) rotate(5deg);
-            border-color: var(--warm-yellow);
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #e9ecef;
+            padding-bottom: 15px;
         }
-
-        .social-footer a:hover svg {
-            fill: var(--forest-green);
+        .modal-header h3 { color: var(--forest-green); }
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 28px;
+            cursor: pointer;
+            color: #999;
         }
-        
-        /* Responsive */
-        @media (max-width: 768px) {
-            .hero {
-                padding: 40px 16px 50px;
-            }
-            
-            .logo-container {
-                flex-direction: column;
-                text-align: center;
-                gap: 18px;
-                margin-top: 15px;
-            }
-            
-            .logo-text {
-                text-align: center;
-            }
-            
-            .logo-text h1 {
-                font-size: 1.8rem;
-            }
-            
-            .logo-svg svg {
-                width: 90px;
-                height: 90px;
-            }
-            
-            .lang-picker {
-                position: relative;
-                top: 0;
-                right: 0;
-                justify-content: center;
-                margin-bottom: 20px;
-            }
-            
-            .slider-container { 
-                height: 260px; 
-            }
-            
-            .container {
-                padding: 40px 16px;
-            }
-            
-            section h2 {
-                font-size: 1.8rem;
-            }
-            
-            .main-description {
-                padding: 30px 20px;
-            }
-            
-            .main-description h2 {
-                font-size: 1.5rem;
-            }
-            
-            .main-description p {
-                font-size: 1rem;
-            }
-            
-            .cabin-card {
-                margin: 0 8px;
-            }
-            
-            .whatsapp-float {
-                width: 55px;
-                height: 55px;
-                bottom: 20px;
-                right: 20px;
-            }
-            
-            .whatsapp-float img {
-                width: 28px;
-            }
-        }
-        
-        @media (max-width: 480px) {
-            .trust-badges span {
-                font-size: 0.75rem;
-                padding: 6px 14px;
-            }
-            
-            .cabin-content {
-                padding: 24px 20px;
-            }
-            
-            .cabin-content h3 {
-                font-size: 1.4rem;
-            }
-        }
-        
-        /* Loading */
-        .loading {
+        .rango-seleccionado {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f5e9;
+            border-radius: 16px;
             text-align: center;
-            padding: 50px;
-            color: var(--forest-green);
-            font-size: 1.2rem;
         }
-        
-        html {
-            scroll-behavior: smooth;
+        .loading { text-align: center; padding: 50px; color: var(--forest-green); font-size: 1.2rem; }
+        @media (max-width: 768px) {
+            .hero { padding: 40px 16px 50px; }
+            .logo-container { flex-direction: column; text-align: center; gap: 18px; }
+            .lang-picker { position: relative; top: 0; right: 0; justify-content: center; margin-bottom: 20px; }
+            .container { padding: 40px 16px; }
+            .cabins-grid { grid-template-columns: 1fr; }
+            .whatsapp-float { width: 55px; height: 55px; bottom: 20px; right: 20px; }
         }
     </style>
-    
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 </head>
 <body>
-
-    <header class="hero">
-        <div class="lang-picker">
-            <button class="lang-btn" data-lang="es" onclick="changeLanguage('es')">ES</button>
-            <button class="lang-btn" data-lang="pt" onclick="changeLanguage('pt')">PT</button>
-            <button class="lang-btn" data-lang="en" onclick="changeLanguage('en')">EN</button>
+<header class="hero">
+    <div class="lang-picker">
+        <button class="lang-btn" data-lang="es" onclick="changeLanguage('es')">ES</button>
+        <button class="lang-btn" data-lang="pt" onclick="changeLanguage('pt')">PT</button>
+        <button class="lang-btn" data-lang="en" onclick="changeLanguage('en')">EN</button>
+    </div>
+    <div class="logo-container">
+        <div class="logo-svg">
+            <svg width="110" height="110" viewBox="0 0 200 200">
+                <circle cx="100" cy="100" r="85" fill="none" stroke="#F9D976" stroke-width="3.5"/>
+                <path d="M50 140 C35 110, 40 80, 65 65 C55 95, 55 120, 50 140 Z" fill="#A3C9A8"/>
+                <path d="M150 140 C165 110, 160 80, 135 65 C145 95, 145 120, 150 140 Z" fill="#A3C9A8"/>
+                <polygon points="65,75 100,50 135,75" fill="none" stroke="#F9D976" stroke-width="3.5"/>
+                <rect x="70" y="75" width="60" height="40" fill="none" stroke="#F9D976" stroke-width="3.5"/>
+                <rect x="85" y="85" width="30" height="20" fill="none" stroke="#F9D976" stroke-width="2.5"/>
+                <line x1="70" y1="115" x2="130" y2="115" stroke="#F9D976" stroke-width="3.5"/>
+                <line x1="80" y1="115" x2="80" y2="145" stroke="#F9D976" stroke-width="3.5"/>
+                <line x1="100" y1="115" x2="100" y2="145" stroke="#F9D976" stroke-width="3.5"/>
+                <line x1="120" y1="115" x2="120" y2="145" stroke="#F9D976" stroke-width="3.5"/>
+            </svg>
         </div>
-        
-        <div class="logo-container">
-            <div class="logo-svg">
-                <svg width="110" height="110" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="100" cy="100" r="85" fill="none" stroke="#F9D976" stroke-width="3.5"/>
-                    <path d="M50 140 C35 110, 40 80, 65 65 C55 95, 55 120, 50 140 Z" fill="#A3C9A8"/>
-                    <path d="M150 140 C165 110, 160 80, 135 65 C145 95, 145 120, 150 140 Z" fill="#A3C9A8"/>
-                    <polygon points="65,75 100,50 135,75" fill="none" stroke="#F9D976" stroke-width="3.5"/>
-                    <rect x="70" y="75" width="60" height="40" fill="none" stroke="#F9D976" stroke-width="3.5"/>
-                    <rect x="85" y="85" width="30" height="20" fill="none" stroke="#F9D976" stroke-width="2.5"/>
-                    <line x1="70" y1="115" x2="130" y2="115" stroke="#F9D976" stroke-width="3.5"/>
-                    <line x1="80" y1="115" x2="80" y2="145" stroke="#F9D976" stroke-width="3.5"/>
-                    <line x1="100" y1="115" x2="100" y2="145" stroke="#F9D976" stroke-width="3.5"/>
-                    <line x1="120" y1="115" x2="120" y2="145" stroke="#F9D976" stroke-width="3.5"/>
-                </svg>
-            </div>
-            <div class="logo-text">
-                <h1 id="site-title">Casa Verde Canas</h1>
-                <p id="site-subtitle" class="subtitle">Cargando...</p>
-            </div>
+        <div class="logo-text">
+            <h1 id="site-title">Casa Verde Canas</h1>
+            <p id="site-subtitle" class="subtitle">Cargando...</p>
         </div>
-        
-        <div class="trust-badges">
-            <span>🏖️ 3 cuadras de la playa</span>
-            <span>🏊‍♀️ Piscina</span>
-            <span>🅿️ Estacionamiento</span>
+    </div>
+    <div class="trust-badges">
+        <span id="badge-beach">🏖️ 3 cuadras de la playa</span>
+        <span id="badge-pool">🏊‍♀️ Piscina</span>
+        <span id="badge-parking">🅿️ Estacionamiento</span>
+    </div>
+</header>
+
+<main class="container">
+    <div id="main-description-container"></div>
+    <section>
+        <h2 id="cabins-title">Nuestras Cabañas</h2>
+        <div id="cabins-container" class="cabins-grid">
+            <div class="loading">🌿 Cargando cabañas...</div>
         </div>
-    </header>
+    </section>
+</main>
 
-    <main class="container">
-        <div id="main-description-container"></div>
-        
-        <section>
-            <h2 id="cabins-title">Cargando...</h2>
-            <div id="cabins-container" class="cabins-grid">
-                <div class="loading">🌿 Cargando cabañas...</div>
-            </div>
-        </section>
-
-        <section style="margin-top: 80px;">
-            <h2 id="common-title">Cargando...</h2>
-            <div id="common-container">
-                <div class="loading">🌿 Cargando espacios...</div>
-            </div>
-        </section>
-    </main>
-
-    <a href="https://wa.me/5548991181246" class="whatsapp-float" target="_blank" rel="noopener noreferrer">
-        <img src="https://cdn-icons-png.flaticon.com/512/124/124034.png" width="32" alt="WhatsApp">
-    </a>
-
-    <footer>
-        <p><strong>Casa Verde Canas</strong> 🌿 - Florianópolis, Brasil</p>
-        <p id="footer-address" style="margin-top:12px; opacity: 0.85;">Cargando dirección...</p>
-        <p style="margin-top:8px; font-size: 0.8rem;">📞 +55 48 99118-1246</p>
-        
-        <div class="social-footer">
-            <a href="https://www.facebook.com/share/1GVcAp3huX/" target="_blank" rel="noopener noreferrer" aria-label="Facebook de Casa Verde Canas">
-                <svg viewBox="0 0 24 24"><path d="M22.675 0h-21.35c-.732 0-1.325.593-1.325 1.325v21.351c0 .731.593 1.324 1.325 1.324h11.495v-9.294h-3.128v-3.622h3.128v-2.671c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.463.099 2.795.143v3.24l-1.918.001c-1.504 0-1.795.715-1.795 1.763v2.313h3.587l-.467 3.622h-3.12v9.293h6.116c.73 0 1.323-.593 1.323-1.325v-21.35c0-.732-.593-1.325-1.325-1.325z"/></svg>
-            </a>
-            <a href="https://www.instagram.com/casaverdecanasvieiras/" target="_blank" rel="noopener noreferrer" aria-label="Instagram de Casa Verde Canas">
-                <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
-            </a>
+<!-- Modal de disponibilidad -->
+<div id="modalDisponibilidad" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modalTitle">📅 Disponibilidad</h3>
+            <button class="close-modal" onclick="cerrarModal()">&times;</button>
         </div>
-    </footer>
+        <div id="calendar"></div>
+        <div id="rangoInfo" class="rango-seleccionado" style="display: none;">
+            <p id="rangoTexto"></p>
+            <button id="btnConsultar" class="btn" onclick="enviarConsultaWhatsApp()">📲 Consultar por WhatsApp</button>
+        </div>
+    </div>
+</div>
 
-    <script>
-        // FIREBASE CONFIG
-        const firebaseConfig = {
-            apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
-            authDomain: "casaverdecanas-199.firebaseapp.com",
-            databaseURL: "https://casaverdecanas-199-default-rtdb.firebaseio.com",
-            projectId: "casaverdecanas-199",
-            storageBucket: "casaverdecanas-199.firebasestorage.app",
-            appId: "1:417825635316:web:ff7f4fe52edcab43d8d7a1"
-        };
-        
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-        
-        let siteData = null;
-        let siteContent = null;
-        let currentLang = localStorage.getItem('lang') || 'es';
-        
-        const FIXED_TRANSLATIONS = {
-            es: { beach: "🏖️ 3 cuadras de la playa", pool: "🏊‍♀️ Piscina", park: "🅿️ Estacionamiento" },
-            pt: { beach: "🏖️ 3 quadras da praia", pool: "🏊‍♀️ Piscina", park: "🅿️ Estacionamento" },
-            en: { beach: "🏖️ 3 blocks to beach", pool: "🏊‍♀️ Pool", park: "🅿️ Free Parking" }
-        };
-        
-        function getText(obj) {
-            if (!obj) return '';
-            return obj[currentLang] || obj.es || Object.values(obj)[0] || '';
+<a href="https://wa.me/5548991181246" class="whatsapp-float" target="_blank" rel="noopener noreferrer">
+    <img src="https://cdn-icons-png.flaticon.com/512/124/124034.png" width="32" alt="WhatsApp">
+</a>
+
+<footer>
+    <p><strong>Casa Verde Canas</strong> 🌿 - Florianópolis, Brasil</p>
+    <p id="footer-address" style="margin-top:12px; opacity: 0.85;">Cargando dirección...</p>
+    <p style="margin-top:8px; font-size: 0.8rem;">📞 +55 48 99118-1246</p>
+    <div class="social-footer">
+        <a href="https://www.facebook.com/share/1GVcAp3huX/" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+            <svg viewBox="0 0 24 24"><path d="M22.675 0h-21.35c-.732 0-1.325.593-1.325 1.325v21.351c0 .731.593 1.324 1.325 1.324h11.495v-9.294h-3.128v-3.622h3.128v-2.671c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.463.099 2.795.143v3.24l-1.918.001c-1.504 0-1.795.715-1.795 1.763v2.313h3.587l-.467 3.622h-3.12v9.293h6.116c.73 0 1.323-.593 1.323-1.325v-21.35c0-.732-.593-1.325-1.325-1.325z"/></svg>
+        </a>
+        <a href="https://www.instagram.com/casaverdecanasvieiras/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+            <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+        </a>
+    </div>
+</footer>
+
+<script>
+    // ==================== CONFIGURACIÓN FIREBASE ====================
+    const firebaseConfig = {
+        apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
+        authDomain: "casaverdecanas-199.firebaseapp.com",
+        projectId: "casaverdecanas-199"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // ==================== MULTILENGUAJE ====================
+    let currentLang = localStorage.getItem('lang') || 'es';
+    let cabanas = [];
+    let currentCabanaId = null;
+    let calendar = null;
+    let selectedRange = null; // { start, end }
+
+    const badgeTranslations = {
+        es: { beach: "🏖️ 3 cuadras de la playa", pool: "🏊‍♀️ Piscina", park: "🅿️ Estacionamiento" },
+        pt: { beach: "🏖️ 3 quadras da praia", pool: "🏊‍♀️ Piscina", park: "🅿️ Estacionamento" },
+        en: { beach: "🏖️ 3 blocks to beach", pool: "🏊‍♀️ Pool", park: "🅿️ Free Parking" }
+    };
+
+    function getText(obj) {
+        if (!obj) return '';
+        return obj[currentLang] || obj.es || Object.values(obj)[0] || '';
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
+    }
+
+    // ==================== CARGAR CABAÑAS DESDE FIRESTORE ====================
+    async function cargarCabanas() {
+        const container = document.getElementById('cabins-container');
+        container.innerHTML = '<div class="loading">🌿 Cargando cabañas...</div>';
+        try {
+            const snapshot = await db.collection('cabanas').where('activa', '==', true).orderBy('orden').get();
+            cabanas = [];
+            snapshot.forEach(doc => cabanas.push({ id: doc.id, ...doc.data() }));
+            renderizarCabanas();
+        } catch (error) {
+            console.error("Error cargando cabañas:", error);
+            container.innerHTML = '<div class="loading">❌ Error al cargar las cabañas. Intente más tarde.</div>';
         }
-        
-        function updateUILanguage() {
-            const badges = document.querySelectorAll('.trust-badges span');
-            if (badges.length >= 3) {
-                badges[0].textContent = FIXED_TRANSLATIONS[currentLang].beach;
-                badges[1].textContent = FIXED_TRANSLATIONS[currentLang].pool;
-                badges[2].textContent = FIXED_TRANSLATIONS[currentLang].park;
-            }
-            
-            if (siteContent?.sectionTitles) {
-                document.getElementById('cabins-title').textContent = getText(siteContent.sectionTitles.cabins) || "Nuestras Cabañas";
-                document.getElementById('common-title').textContent = getText(siteContent.sectionTitles.common) || "Espacios Compartidos";
-            }
-            
-            if (siteContent?.hero?.subtitle) {
-                document.getElementById('site-subtitle').textContent = getText(siteContent.hero.subtitle);
-            }
-            
-            if (siteContent?.address?.displayText) {
-                document.getElementById('footer-address').textContent = getText(siteContent.address.displayText);
-            }
-            
-            if (siteContent?.mainDescription) { renderMainDescription(); }
-            if (siteData) { renderCabins(); renderCommonAreas(); }
+    }
+
+    function renderizarCabanas() {
+        const container = document.getElementById('cabins-container');
+        if (!cabanas.length) {
+            container.innerHTML = '<div class="loading">🏠 No hay cabañas disponibles en este momento.</div>';
+            return;
         }
-        
-        function renderMainDescription() {
-            const container = document.getElementById('main-description-container');
-            if (!siteContent?.mainDescription) { container.innerHTML = ''; return; }
-            const title = getText(siteContent.mainDescription.title);
-            const body = getText(siteContent.mainDescription.body);
-            if (!title && !body) { container.innerHTML = ''; return; }
-            container.innerHTML = `
-                <div class="main-description">
-                    <h2>${escapeHtml(title)}</h2>
-                    <p>${escapeHtml(body).replace(/\n/g, '<br>')}</p>
+        let html = '';
+        cabanas.forEach(cab => {
+            const nombre = getText(cab.nombre);
+            const descripcion = getText(cab.descripcion);
+            const fotos = cab.fotos || [];
+            const slides = fotos.map((url, i) => `<div class="cabin-slide ${i===0?'active':''}" style="background-image:url('${escapeHtml(url)}')"></div>`).join('');
+            html += `
+                <div class="cabin-card" data-id="${cab.id}">
+                    <div class="cabin-slider" id="slider-${cab.id}">
+                        ${slides || '<div class="cabin-slide active" style="background-image:url(\'https://via.placeholder.com/400x280?text=Sin+foto\')"></div>'}
+                    </div>
+                    <div class="cabin-content">
+                        <h3>${escapeHtml(nombre)}</h3>
+                        <p>${escapeHtml(descripcion ? descripcion.substring(0, 100) : '')}${descripcion && descripcion.length > 100 ? '...' : ''}</p>
+                        <button class="btn" onclick="mostrarDisponibilidad(${cab.id})">${currentLang === 'es' ? 'Ver disponibilidad' : (currentLang === 'pt' ? 'Ver disponibilidade' : 'Check availability')}</button>
+                    </div>
                 </div>
             `;
-        }
-        
-        function renderCabins() {
-            const container = document.getElementById('cabins-container');
-            if (!siteData?.apartments) { container.innerHTML = ''; return; }
-            container.innerHTML = '';
-            for (const [id, cabin] of Object.entries(siteData.apartments)) {
-                const photos = [];
-                if (cabin.categories) {
-                    for (const cat of Object.values(cabin.categories)) {
-                        if (cat.photos) photos.push(...cat.photos.map(p => p.url));
-                    }
-                }
-                const name = getText(cabin.name) || id;
-                const description = getText(cabin.description) || '';
-                container.innerHTML += `
-                    <div class="cabin-card" id="card-${id}">
-                        <div class="cabin-slider" id="slider-${id}">
-                            ${photos.slice(0,5).map((url, i) => `
-                                <div class="cabin-slide ${i===0?'active':''}" style="background-image:url('${escapeHtml(url)}')"></div>
-                            `).join('')}
-                        </div>
-                        <div class="cabin-content">
-                            <h3>${escapeHtml(name)}</h3>
-                            <p>${escapeHtml(description.substring(0, 100))}${description.length > 100 ? '...' : ''}</p>
-                            <a href="cabana.html?id=${id}" class="btn">${getText({ es: "Ver Detalles", pt: "Ver Detalhes", en: "View Details" })}</a>
-                        </div>
-                    </div>
-                `;
-                startAutoSlide(id);
-            }
-        }
-        
-        function renderCommonAreas() {
-            const container = document.getElementById('common-container');
-            if (!siteData?.common?.categories) { container.innerHTML = ''; return; }
-            container.innerHTML = '';
-            const sorted = Object.entries(siteData.common.categories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
-            for (const [cid, category] of sorted) {
-                if (!category.photos) continue;
-                const name = getText(category.name) || cid;
-                container.innerHTML += `
-                    <div class="common-category">
-                        <h3>${escapeHtml(name)}</h3>
-                        <div class="slider-container" id="cont-${cid}">
-                            <button class="slider-btn slider-prev" onclick="moveSlide('${cid}', -1)">❮</button>
-                            <div class="slider-track" id="track-${cid}">
-                                ${category.photos.map(photo => `
-                                    <div class="slider-slide">
-                                        <img src="${escapeHtml(photo.url)}" alt="${escapeHtml(getText(photo.desc))}">
-                                        <div class="slider-caption">${escapeHtml(getText(photo.desc))}</div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                            <button class="slider-btn slider-next" onclick="moveSlide('${cid}', 1)">❯</button>
-                        </div>
-                    </div>
-                `;
-                if (!window.sliderPositions) window.sliderPositions = {};
-                window.sliderPositions[cid] = 0;
-            }
-        }
-        
-        let slideIntervals = {};
-        function startAutoSlide(id) {
-            if (slideIntervals[id]) clearInterval(slideIntervals[id]);
-            let cur = 0;
-            slideIntervals[id] = setInterval(() => {
-                const slides = document.querySelectorAll(`#slider-${id} .cabin-slide`);
-                if (!slides.length) return;
-                slides[cur].classList.remove('active');
-                cur = (cur + 1) % slides.length;
-                slides[cur].classList.add('active');
-            }, 4500);
-        }
-        
-        function moveSlide(id, dir) {
-            const track = document.getElementById(`track-${id}`);
-            const total = track.children.length;
-            window.sliderPositions[id] = (window.sliderPositions[id] + dir + total) % total;
-            track.style.transform = `translateX(-${window.sliderPositions[id] * 100}%)`;
-        }
-        
-        function changeLanguage(lang) {
-            currentLang = lang;
-            localStorage.setItem('lang', lang);
-            document.querySelectorAll('.lang-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);
-            });
-            updateUILanguage();
-        }
-        
-        async function loadAllData() {
-            try {
-                const snapshot = await db.ref('siteData').once('value');
-                siteData = snapshot.val() || {};
-                siteContent = siteData.siteContent || null;
-                updateUILanguage();
-            } catch (error) {
-                console.error("Error:", error);
-            }
-        }
-        
-        window.changeLanguage = changeLanguage;
-        window.moveSlide = moveSlide;
-        
-        document.addEventListener('DOMContentLoaded', () => {
-            document.querySelectorAll('.lang-btn').forEach(btn => {
-                if (btn.getAttribute('data-lang') === currentLang) btn.classList.add('active');
-            });
-            loadAllData();
         });
+        container.innerHTML = html;
+        cabanas.forEach(cab => {
+            if (cab.fotos && cab.fotos.length > 1) iniciarSlider(cab.id, cab.fotos.length);
+        });
+    }
+
+    function iniciarSlider(id, total) {
+        let current = 0;
+        setInterval(() => {
+            const slides = document.querySelectorAll(`#slider-${id} .cabin-slide`);
+            if (!slides.length) return;
+            slides[current].classList.remove('active');
+            current = (current + 1) % total;
+            slides[current].classList.add('active');
+        }, 4500);
+    }
+
+    // ==================== DISPONIBILIDAD ====================
+    async function mostrarDisponibilidad(cabanaId) {
+        currentCabanaId = cabanaId;
+        const cabana = cabanas.find(c => c.id == cabanaId);
+        const nombreCabana = getText(cabana.nombre);
+        document.getElementById('modalTitle').innerHTML = `📅 Disponibilidad - ${escapeHtml(nombreCabana)}`;
         
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
+        // Cargar eventos (reservas confirmadas) para esta cabaña
+        const eventos = await cargarEventosReservas(cabanaId);
+        
+        // Inicializar o refrescar el calendario
+        const calendarEl = document.getElementById('calendar');
+        if (calendar) {
+            calendar.destroy();
         }
-    </script>
+        calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            locale: currentLang,
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek'
+            },
+            selectable: true,
+            selectMirror: true,
+            select: (info) => {
+                // Permitir selección de rango de fechas
+                selectedRange = { start: info.startStr, end: info.endStr };
+                const startDate = new Date(info.startStr).toLocaleDateString(currentLang === 'es' ? 'es-ES' : (currentLang === 'pt' ? 'pt-BR' : 'en-US'));
+                const endDate = new Date(info.endStr).toLocaleDateString(currentLang === 'es' ? 'es-ES' : (currentLang === 'pt' ? 'pt-BR' : 'en-US'));
+                document.getElementById('rangoTexto').innerHTML = `${currentLang === 'es' ? 'Fechas seleccionadas:' : (currentLang === 'pt' ? 'Datas selecionadas:' : 'Selected dates:')} ${startDate} → ${endDate}`;
+                document.getElementById('rangoInfo').style.display = 'block';
+            },
+            events: eventos,
+            eventColor: '#e74c3c',
+            eventDisplay: 'block',
+            businessHours: false
+        });
+        calendar.render();
+        document.getElementById('modalDisponibilidad').style.display = 'flex';
+    }
+
+    async function cargarEventosReservas(cabanaId) {
+        // Obtener todas las reservas confirmadas (estado = 'confirmada' o 'verificada' o cualquier estado que indique ocupado)
+        // También considerar presupuestos convertidos en reserva (estado 'confirmada')
+        try {
+            const snapshot = await db.collection('reservas')
+                .where('caba', '==', parseInt(cabanaId))
+                .get();
+            const eventos = [];
+            snapshot.forEach(doc => {
+                const r = doc.data();
+                // Solo si la reserva está confirmada (no pendiente o presupuesto)
+                if (r.estado === 'confirmada' || r.estado === 'verificada' || r.estado === 'pagada') {
+                    const startDate = r.checkIn.toDate ? r.checkIn.toDate().toISOString().split('T')[0] : r.checkIn;
+                    const endDate = r.checkOut.toDate ? r.checkOut.toDate().toISOString().split('T')[0] : r.checkOut;
+                    eventos.push({
+                        title: `Reservado`,
+                        start: startDate,
+                        end: endDate,
+                        allDay: true,
+                        color: '#e74c3c'
+                    });
+                }
+            });
+            return eventos;
+        } catch (error) {
+            console.error("Error cargando reservas:", error);
+            return [];
+        }
+    }
+
+    function cerrarModal() {
+        document.getElementById('modalDisponibilidad').style.display = 'none';
+        if (calendar) {
+            calendar.destroy();
+            calendar = null;
+        }
+        selectedRange = null;
+        document.getElementById('rangoInfo').style.display = 'none';
+    }
+
+    function enviarConsultaWhatsApp() {
+        if (!selectedRange || !currentCabanaId) {
+            alert(currentLang === 'es' ? 'Selecciona un rango de fechas primero' : (currentLang === 'pt' ? 'Selecione um intervalo de datas primeiro' : 'Select a date range first'));
+            return;
+        }
+        const cabana = cabanas.find(c => c.id == currentCabanaId);
+        const nombreCabana = getText(cabana.nombre);
+        const startDate = new Date(selectedRange.start).toLocaleDateString(currentLang === 'es' ? 'es-ES' : (currentLang === 'pt' ? 'pt-BR' : 'en-US'));
+        const endDate = new Date(selectedRange.end).toLocaleDateString(currentLang === 'es' ? 'es-ES' : (currentLang === 'pt' ? 'pt-BR' : 'en-US'));
+        let mensaje = '';
+        if (currentLang === 'es') {
+            mensaje = `Hola, quiero consultar disponibilidad para ${nombreCabana} desde ${startDate} hasta ${endDate}. ¿Podrían confirmarme precio y disponibilidad?`;
+        } else if (currentLang === 'pt') {
+            mensaje = `Olá, gostaria de consultar disponibilidade para ${nombreCabana} de ${startDate} a ${endDate}. Podem confirmar preço e disponibilidade?`;
+        } else {
+            mensaje = `Hello, I would like to check availability for ${nombreCabana} from ${startDate} to ${endDate}. Could you confirm price and availability?`;
+        }
+        const url = `https://wa.me/5548991181246?text=${encodeURIComponent(mensaje)}`;
+        window.open(url, '_blank');
+        cerrarModal();
+    }
+
+    // ==================== CONTENIDO DEL SITIO (estático por ahora) ====================
+    function cargarContenidoSitio() {
+        document.getElementById('site-subtitle').textContent = currentLang === 'es' ? "Pequeño oasis compartido a pasos de la playa" : (currentLang === 'pt' ? "Pequeno oásis compartilhado a poucos passos da praia" : "Small shared oasis steps from the beach");
+        document.getElementById('footer-address').textContent = currentLang === 'es' ? "Rua das Gaivotas, 123 - Canasvieiras, Florianópolis" : (currentLang === 'pt' ? "Rua das Gaivotas, 123 - Canasvieiras, Florianópolis" : "Rua das Gaivotas, 123 - Canasvieiras, Florianópolis");
+        const descContainer = document.getElementById('main-description-container');
+        descContainer.innerHTML = `
+            <div class="main-description">
+                <h2>${currentLang === 'es' ? 'Un lugar para descansar y conectar' : (currentLang === 'pt' ? 'Um lugar para descansar e conectar' : 'A place to rest and connect')}</h2>
+                <p>${currentLang === 'es' ? 'Casa Verde Canas te ofrece apartamentos rústicos completamente equipados, en un ambiente familiar y rodeado de naturaleza. A solo 3 cuadras de la playa de Canasvieiras, con piscina, estacionamiento y una atención personalizada.' : (currentLang === 'pt' ? 'Casa Verde Canas oferece apartamentos rústicos totalmente equipados, em um ambiente familiar e rodeado pela natureza. A apenas 3 quadras da praia de Canasvieiras, com piscina, estacionamento e atendimento personalizado.' : 'Casa Verde Canas offers fully equipped rustic apartments in a family environment surrounded by nature. Just 3 blocks from Canasvieiras beach, with pool, parking and personalized attention.')}</p>
+            </div>
+        `;
+        document.getElementById('badge-beach').textContent = badgeTranslations[currentLang].beach;
+        document.getElementById('badge-pool').textContent = badgeTranslations[currentLang].pool;
+        document.getElementById('badge-parking').textContent = badgeTranslations[currentLang].park;
+        document.getElementById('cabins-title').textContent = currentLang === 'es' ? 'Nuestras Cabañas' : (currentLang === 'pt' ? 'Nossas Cabanas' : 'Our Cabins');
+    }
+
+    function changeLanguage(lang) {
+        currentLang = lang;
+        localStorage.setItem('lang', lang);
+        document.querySelectorAll('.lang-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);
+        });
+        cargarContenidoSitio();
+        renderizarCabanas();
+    }
+
+    // ==================== INICIALIZACIÓN ====================
+    window.changeLanguage = changeLanguage;
+    window.mostrarDisponibilidad = mostrarDisponibilidad;
+    window.cerrarModal = cerrarModal;
+    window.enviarConsultaWhatsApp = enviarConsultaWhatsApp;
+
+    (async function init() {
+        cargarContenidoSitio();
+        await cargarCabanas();
+        document.querySelectorAll('.lang-btn').forEach(btn => {
+            if (btn.getAttribute('data-lang') === currentLang) btn.classList.add('active');
+        });
+    })();
+</script>
 </body>
 </html>
