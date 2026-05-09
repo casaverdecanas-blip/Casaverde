@@ -46,8 +46,7 @@ function badgeEstado(estado) {
 function verificarAuth(rolesPermitidos) {
     const roles = Array.isArray(rolesPermitidos) ? rolesPermitidos : [rolesPermitidos];
     return new Promise((resolve) => {
-        const unsubscribe = auth.onAuthStateChanged(async (user) => {
-            unsubscribe(); // ejecutar solo una vez, evita condición de carrera
+        auth.onAuthStateChanged(async (user) => {
             if (!user) {
                 window.location.href = 'index.html';
                 return;
@@ -60,12 +59,13 @@ function verificarAuth(rolesPermitidos) {
                     return;
                 }
                 const userData = userDoc.data();
-                if (userData.activo === false) {
+                if (!userData.activo) {
                     await auth.signOut();
                     window.location.href = 'index.html';
                     return;
                 }
                 if (!roles.includes(userData.rol)) {
+                    // Rol incorrecto: redirigir según su rol real
                     if (userData.rol === 'user') window.location.href = 'tareas.html';
                     else window.location.href = 'index.html';
                     return;
