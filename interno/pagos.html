@@ -225,11 +225,21 @@
 <script src="utils.js"></script>
 <script>
 (async () => {
-    const { user, userData } = await CVC.verificarAuth('admin');
+    const { user, userData } = await CVC.verificarAuth(['admin','user']);
     document.getElementById('userName').textContent = userData.nombre || user.email;
 
     const db = CVC.db;
     const { escapeHtml, formatFecha, showEmpty, showError, showToast } = CVC;
+    const esAdmin = userData.rol === 'admin';
+
+    // Ocultar elementos admin si es colaborador
+    if (!esAdmin) {
+        document.querySelector('[data-tab="clientes"]').style.display = 'none';
+        document.getElementById('tabClientes').style.display = 'none';
+        document.getElementById('tabColaboradores').style.display = 'block';
+        document.querySelector('[data-tab="colaboradores"]').classList.add('active');
+        document.querySelector('[data-tab="clientes"]').classList.remove('active');
+    }
 
     let reservasCache     = [];
     let pagosCache        = [];
@@ -479,31 +489,40 @@
     // ── Pagos a colaboradores ─────────────────────────────────
     async function cargarPagosColaboradores() {
         try {
-            const snap      = await db.collection('pagos_pendientes').orderBy('creadoEn','desc').get();
+            const esAdmin = userData.rol === 'admin';
+            let snap;
+            if (esAdmin) {
+                snap = await db.collection('honorarios').orderBy('creadoEn','desc').get();
+            } else {
+                snap = await db.collection('honorarios')
+                    .where('colaboradorId','==', user.uid)
+                    .orderBy('creadoEn','desc').get();
+            }
             pagosColabCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             colabCargados   = true;
-            renderPagosColaboradores();
+            renderPagosColaboradores(esAdmin);
         } catch (e) {
             showError('#pagosColabContainer', 'Error al cargar', e.message, cargarPagosColaboradores);
         }
     }
 
-    function renderPagosColaboradores() {
+    function renderPagosColaboradores(esAdmin = true) {
         const container = document.getElementById('pagosColabContainer');
         if (!pagosColabCache.length) {
-            showEmpty(container, 'Sin pagos pendientes', 'No hay montos a pagar a colaboradores.', 'engineering');
+            showEmpty(container, 'Sin honorarios', 'No hay honorarios registrados.', 'engineering');
             return;
         }
 
-        // Agrupar por colaborador
+        // Agrupar por colaborador (admin ve todos, user ve solo los suyos)
         const porColab = {};
         pagosColabCache.forEach(p => {
-            if (!porColab[p.colaboradorId]) {
-                porColab[p.colaboradorId] = { nombre: p.colaboradorNombre, items: [], pendiente: 0, pagado: 0 };
+            const key = p.colaboradorId || 'desconocido';
+            if (!porColab[key]) {
+                porColab[key] = { nombre: p.colaboradorNombre, items: [], pendiente: 0, pagado: 0 };
             }
-            porColab[p.colaboradorId].items.push(p);
-            if (p.pagado) porColab[p.colaboradorId].pagado    += p.monto || 0;
-            else          porColab[p.colaboradorId].pendiente += p.monto || 0;
+            porColab[key].items.push(p);
+            if (p.estado === 'pagado') porColab[key].pagado    += p.monto || 0;
+            else                       porColab[key].pendiente += p.monto || 0;
         });
 
         container.innerHTML = Object.values(porColab).map(c => `
@@ -519,14 +538,14 @@
                     <div class="pago-colab-row">
                         <div>
                             <div style="font-size:var(--text-sm); font-weight:600;">${escapeHtml(item.concepto || '—')}</div>
-                            <div class="text-muted text-xs">${formatFecha(item.creadoEn)}</div>
+                            <div class="text-muted text-xs">${formatFecha(item.creadoEn)} · ${CVC.formatHoras(item.horas || 0)}</div>
                         </div>
                         <div style="display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap;">
                             <strong class="text-mono">R$ ${(item.monto||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong>
-                            <span class="badge ${item.pagado ? 'badge-confirmada' : 'badge-pendiente'}">
-                                ${item.pagado ? '✅ Pagado' : '⏳ Pendiente'}
+                            <span class="badge ${item.estado === 'pagado' ? 'badge-confirmada' : 'badge-pendiente'}">
+                                ${item.estado === 'pagado' ? '✅ Pagado' : '⏳ Pendiente'}
                             </span>
-                            ${!item.pagado ? `
+                            ${esAdmin && item.estado !== 'pagado' ? `
                             <button class="btn btn-primary btn-sm" onclick="marcarPagado('${item.id}')">
                                 <span class="material-icons">check</span> Marcar pagado
                             </button>` : ''}
@@ -536,13 +555,14 @@
     }
 
     window.marcarPagado = async function(id) {
-        if (!confirm('¿Marcar este pago como realizado?')) return;
+        if (!confirm('¿Marcar este honorario como pagado?')) return;
         try {
-            await db.collection('pagos_pendientes').doc(id).update({
-                pagado:    true,
-                fechaPago: firebase.firestore.FieldValue.serverTimestamp()
+            await db.collection('honorarios').doc(id).update({
+                estado:    'pagado',
+                fechaPago: firebase.firestore.FieldValue.serverTimestamp(),
+                pagadoPor: user.uid
             });
-            showToast('Pago marcado como realizado.', 'success');
+            showToast('Honorario marcado como pagado.', 'success');
             await cargarPagosColaboradores();
         } catch (e) { showToast('Error: ' + e.message, 'error'); }
     };
