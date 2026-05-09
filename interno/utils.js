@@ -1,56 +1,84 @@
 // ============================================================
-//  utils.js — Casa Verde Canas
-//  Funciones compartidas para todos los módulos internos
-//  Incluir en cada página de /interno/ antes del script propio:
-//  <script src="utils.js"></script>
+//  utils.js — Casa Verde Canas  v2.0
+//  Funciones compartidas para todos los módulos de /interno/
+//
+//  DEPENDENCIAS (cargar antes en cada HTML):
+//    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+//    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+//    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+//    <script src="utils.js"></script>
+//
+//  EXCEPCIÓN: interno/index.html (login) NO incluye utils.js
 // ============================================================
 
-// ── CONFIGURACIÓN FIREBASE ───────────────────────────────────
-const FIREBASE_CONFIG = {
-    apiKey: "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
-    authDomain: "casaverdecanas-199.firebaseapp.com",
-    projectId: "casaverdecanas-199"
-};
 
-// Inicializa Firebase solo si no fue inicializado antes
-if (!firebase.apps.length) {
-    firebase.initializeApp(FIREBASE_CONFIG);
-}
-const db = firebase.firestore();
+// ── FIREBASE ─────────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+    apiKey:     'AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4',
+    authDomain: 'casaverdecanas-199.firebaseapp.com',
+    projectId:  'casaverdecanas-199'
+};
+if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+const db   = firebase.firestore();
 const auth = firebase.auth();
 
 
-// ── ESTADOS DE RESERVA ───────────────────────────────────────
+// ── CONSTANTES ───────────────────────────────────────────────
 const ESTADOS_RESERVA = {
-    pendiente:  { label: 'Pendiente',  color: '#fff3e0', text: '#f39c12' },
-    confirmada: { label: 'Confirmada', color: '#e8f5e9', text: '#27ae60' },
-    anulada:    { label: 'Anulada',    color: '#fdecea', text: '#e74c3c' },
-    finalizada: { label: 'Finalizada', color: '#e8eaf6', text: '#5c6bc0' }
+    pendiente:  { label: 'Pendiente',  cssClass: 'badge-pendiente'  },
+    confirmada: { label: 'Confirmada', cssClass: 'badge-confirmada' },
+    anulada:    { label: 'Anulada',    cssClass: 'badge-anulada'    },
+    finalizada: { label: 'Finalizada', cssClass: 'badge-finalizada' }
 };
 
-// Genera el HTML del badge de estado
+const ESTADOS_TAREA = {
+    pendiente:  { label: 'Pendiente',  cssClass: 'badge-pendiente' },
+    en_curso:   { label: 'En curso',   cssClass: 'badge-en_curso'  },
+    finalizada: { label: 'Finalizada', cssClass: 'badge-finalizada'}
+};
+
+const PRIORIDADES = {
+    alta:  { label: 'Alta',  cssClass: 'badge-alta'  },
+    media: { label: 'Media', cssClass: 'badge-media' },
+    baja:  { label: 'Baja',  cssClass: 'badge-baja'  }
+};
+
+// Calendar IDs confirmados por cabaña (solo el ID, no el embed)
+const CALENDAR_IDS = {
+    1: '8i3hl5ppqi6al50kf7casj5n5vl9sp1j@import.calendar.google.com',
+    2: '60n7foetdu2qvsn16mi7is8j6i4ugm66@import.calendar.google.com',
+    3: 'h5a1h0a8dg9rl0oufvq19hn05r4gbubg@import.calendar.google.com'
+};
+
+
+// ── BADGES ───────────────────────────────────────────────────
+// Usan clases del design-system.css — sin estilos inline
+
 function badgeEstado(estado) {
-    const e = ESTADOS_RESERVA[estado] || { label: estado, color: '#f0f0f0', text: '#666' };
-    return `<span style="display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; background:${e.color}; color:${e.text};">${e.label}</span>`;
+    const e = ESTADOS_RESERVA[estado] || ESTADOS_TAREA[estado] || { label: estado, cssClass: 'badge-neutral' };
+    return `<span class="badge ${e.cssClass}">${e.label}</span>`;
+}
+
+function badgePrioridad(prioridad) {
+    const p = PRIORIDADES[prioridad] || { label: prioridad, cssClass: 'badge-neutral' };
+    return `<span class="badge ${p.cssClass}">${p.label}</span>`;
 }
 
 
-// ── VERIFICACIÓN DE AUTENTICACIÓN ────────────────────────────
+// ── AUTENTICACIÓN ─────────────────────────────────────────────
 /**
- * Verifica que haya sesión activa y que el rol sea el correcto.
+ * Verifica sesión activa y rol correcto.
+ * Solo bloquea si userData.activo === false (explícito).
  * Redirige a index.html si no cumple.
  *
  * @param {string|string[]} rolesPermitidos  'admin' | 'user' | ['admin','user']
- * @returns {Promise<{user, userData}>}
+ * @returns {Promise<{ user, userData }>}
  */
 function verificarAuth(rolesPermitidos) {
     const roles = Array.isArray(rolesPermitidos) ? rolesPermitidos : [rolesPermitidos];
     return new Promise((resolve) => {
         auth.onAuthStateChanged(async (user) => {
-            if (!user) {
-                window.location.href = 'index.html';
-                return;
-            }
+            if (!user) { window.location.href = 'index.html'; return; }
             try {
                 const userDoc = await db.collection('usuarios').doc(user.uid).get();
                 if (!userDoc.exists) {
@@ -59,17 +87,19 @@ function verificarAuth(rolesPermitidos) {
                     return;
                 }
                 const userData = userDoc.data();
-                if (!userData.activo) {
+
+                // Solo bloquea si activo es EXPLÍCITAMENTE false
+                if (userData.activo === false) {
                     await auth.signOut();
                     window.location.href = 'index.html';
                     return;
                 }
+
                 if (!roles.includes(userData.rol)) {
-                    // Rol incorrecto: redirigir según su rol real
-                    if (userData.rol === 'user') window.location.href = 'tareas.html';
-                    else window.location.href = 'index.html';
+                    window.location.href = userData.rol === 'user' ? 'tareas.html' : 'index.html';
                     return;
                 }
+
                 resolve({ user, userData });
             } catch (e) {
                 console.error('Error verificando auth:', e);
@@ -79,7 +109,6 @@ function verificarAuth(rolesPermitidos) {
     });
 }
 
-// Cierra sesión y vuelve al login
 async function cerrarSesion() {
     await auth.signOut();
     window.location.href = 'index.html';
@@ -88,57 +117,48 @@ async function cerrarSesion() {
 
 // ── CÁLCULO DE PRECIO ────────────────────────────────────────
 /**
- * Calcula el precio total de una estadía usando tarifas base e intervalos.
+ * Calcula precio total usando tarifas base e intervalos de temporada.
  *
- * @param {Object} cabana       Documento completo de la cabaña (con .tarifas)
- * @param {string} checkIn      Fecha ISO: '2025-01-15'
- * @param {string} checkOut     Fecha ISO: '2025-01-20'
+ * @param {Object} cabana    Documento de Firestore (con .tarifas)
+ * @param {string} checkIn   Fecha ISO: '2025-01-15'
+ * @param {string} checkOut  Fecha ISO: '2025-01-20'
  * @param {number} adultos
  * @param {number} ninos
  * @returns {{ noches, subtotal, limpieza, total }}
  */
 function calcularPrecio(cabana, checkIn, checkOut, adultos, ninos) {
-    const tarifas = cabana.tarifas || {};
+    const tarifas       = cabana.tarifas || {};
     const capacidadBase = cabana.capacidad?.base || 2;
     const personasExtra = Math.max(0, (adultos + ninos) - capacidadBase);
 
-    let subtotal = 0;
-    let noches = 0;
-    let fecha = new Date(checkIn + 'T12:00:00'); // mediodía para evitar problemas de timezone
+    let subtotal = 0, noches = 0;
+    let fecha = new Date(checkIn  + 'T12:00:00');
     const fin = new Date(checkOut + 'T12:00:00');
 
     while (fecha < fin) {
-        const fechaStr = fecha.toISOString().split('T')[0];
+        const fechaStr  = fecha.toISOString().split('T')[0];
         const intervalo = (tarifas.intervalos || []).find(i => i.desde <= fechaStr && i.hasta >= fechaStr);
-        const precioNoche = intervalo ? intervalo.precioNoche : (tarifas.precioBase || 0);
-        const precioExtra = intervalo ? intervalo.precioExtra : (tarifas.precioExtraPersona || 0);
-        subtotal += precioNoche + (personasExtra * precioExtra);
+        subtotal += (intervalo ? intervalo.precioNoche     : (tarifas.precioBase         || 0))
+                  + (intervalo ? intervalo.precioExtra     : (tarifas.precioExtraPersona || 0)) * personasExtra;
         fecha.setDate(fecha.getDate() + 1);
         noches++;
     }
 
     const limpieza = tarifas.precioLimpieza || 0;
-    const total = subtotal + limpieza;
-    return { noches, subtotal, limpieza, total };
+    return { noches, subtotal, limpieza, total: subtotal + limpieza };
 }
 
 
 // ── CREAR TAREA DE LIMPIEZA ──────────────────────────────────
 /**
  * Crea una tarea de limpieza al confirmar una reserva.
- * Busca la reserva siguiente en la misma cabaña para mostrar
- * los datos del próximo huésped.
- *
- * @param {string} reservaId    ID del documento en Firestore
- * @param {Object} reservaData  Datos de la reserva confirmada
- * @param {string} creadoPor    UID del usuario que confirma
+ * Busca la próxima reserva en la misma cabaña.
  */
 async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
-    const checkOut = reservaData.checkOut.toDate
+    const checkOut = reservaData.checkOut?.toDate
         ? reservaData.checkOut.toDate()
         : new Date(reservaData.checkOut);
 
-    // Buscar la próxima reserva en la misma cabaña (confirmada o pendiente)
     let proximoHuesped = null;
     try {
         const proxSnap = await db.collection('reservas')
@@ -150,228 +170,391 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
             .get();
 
         if (!proxSnap.empty) {
-            const proxData = proxSnap.docs[0].data();
-            const proxCheckIn = proxData.checkIn.toDate ? proxData.checkIn.toDate() : new Date(proxData.checkIn);
+            const d  = proxSnap.docs[0].data();
+            const ci = d.checkIn?.toDate ? d.checkIn.toDate() : new Date(d.checkIn);
             proximoHuesped = {
-                nombre: proxData.nombre || '—',
-                checkIn: proxCheckIn,
-                huespedes: proxData.huespedes || (proxData.adultos + (proxData.ninos || 0)),
-                notas: proxData.notas || ''
+                nombre:    d.nombre || '—',
+                checkIn:   ci,
+                huespedes: d.huespedes || ((d.adultos || 0) + (d.ninos || 0)),
+                notas:     d.notas || ''
             };
         }
     } catch (e) {
         console.warn('No se pudo buscar próxima reserva:', e);
     }
 
-    // Armar descripción detallada
-    const lineaCheckOut = `🚪 Check-out: ${checkOut.toLocaleDateString('es-AR')} — ${reservaData.nombre} (${reservaData.huespedes} huéspedes)`;
-    const lineaCheckIn = proximoHuesped
-        ? `🛎️ Check-in siguiente: ${proximoHuesped.checkIn.toLocaleDateString('es-AR')} — ${proximoHuesped.nombre} (${proximoHuesped.huespedes} huéspedes)`
-        : `🛎️ Sin reserva siguiente registrada`;
-    const lineaNotas = reservaData.notas ? `📝 Notas reserva actual: ${reservaData.notas}` : '';
-    const lineaNotasProx = proximoHuesped?.notas ? `📝 Notas próxima reserva: ${proximoHuesped.notas}` : '';
-    const lineaMonto = `💰 Monto limpieza: R$ ${reservaData.costoLimpiezaBRL}`;
-
-    const descripcion = [lineaCheckOut, lineaCheckIn, lineaNotas, lineaNotasProx, lineaMonto]
-        .filter(Boolean)
-        .join('\n');
+    const descripcion = [
+        `🚪 Check-out: ${checkOut.toLocaleDateString('es-AR')} — ${reservaData.nombre} (${reservaData.huespedes} huéspedes)`,
+        proximoHuesped
+            ? `🛎️ Check-in siguiente: ${proximoHuesped.checkIn.toLocaleDateString('es-AR')} — ${proximoHuesped.nombre} (${proximoHuesped.huespedes} huéspedes)`
+            : `🛎️ Sin reserva siguiente registrada`,
+        reservaData.notas     ? `📝 Notas actuales: ${reservaData.notas}`   : '',
+        proximoHuesped?.notas ? `📝 Notas próxima: ${proximoHuesped.notas}` : '',
+        `💰 Monto limpieza: R$ ${reservaData.costoLimpiezaBRL || 0}`
+    ].filter(Boolean).join('\n');
 
     await db.collection('tareas').add({
-        nombre: `🧹 Limpiar Cabaña ${reservaData.caba} — ${reservaData.nombre}`,
-        descripcion: descripcion,
-        tipo: 'limpieza',
-        prioridad: 'alta',
-        estado: 'pendiente',             // pendiente | en_curso | completada
+        nombre:      `🧹 Limpiar Cabaña ${reservaData.caba} — ${reservaData.nombre}`,
+        descripcion,
+        tipo:        'limpieza',
+        prioridad:   'alta',
+        estado:      'pendiente',
         fechaInicio: checkOut.toISOString().split('T')[0],
         recurrencia: 0,
-        activa: true,
-        completada: false,
-        reservaId: reservaId,
+        monto:       reservaData.costoLimpiezaBRL || 0,
+        activa:      true,
+        sesiones:    [],
+        reservaId,
         proximaReservaHuesped: proximoHuesped?.nombre || null,
-        proximaReservaCheckIn: proximoHuesped ? firebase.firestore.Timestamp.fromDate(proximoHuesped.checkIn) : null,
-        cabaña: reservaData.caba,
-        montoLimpieza: reservaData.costoLimpiezaBRL,
-        colaboradores: [],               // se completa cuando los colaboradores trabajan
-        fechaHoraInicio: null,
-        fechaHoraFin: null,
-        creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+        proximaReservaCheckIn: proximoHuesped
+            ? firebase.firestore.Timestamp.fromDate(proximoHuesped.checkIn)
+            : null,
+        cabana:    reservaData.caba,
+        creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
         creadoPor: creadoPor || null
     });
 }
 
 
-// ── LÓGICA DE TAREAS — INICIO / FIN ─────────────────────────
+// ── LÓGICA DE TAREAS ─────────────────────────────────────────
+//
+//  tarea.sesiones = [
+//    { uid, nombre, inicio: Timestamp, fin: Timestamp | null },
+//    ...  // un mismo usuario puede tener múltiples sesiones
+//  ]
+//
+//  ESTADOS:
+//  'pendiente'  → nadie trabajando ahora (puede tener sesiones cerradas previas)
+//  'en_curso'   → al menos una sesión con fin: null
+//  'finalizada' → movida a historial, eliminada o reseteada
+//
+//  FLUJO:
+//  ▶️ Iniciar   → agrega sesión abierta, estado → 'en_curso'
+//  ⏸️ Pausar    → cierra sesión activa del usuario;
+//                 si no quedan abiertas → estado → 'pendiente'
+//  ✅ Finalizar → cierra TODAS las sesiones, calcula horas/pagos,
+//                 mueve a historial, elimina o resetea según recurrencia
+
 /**
- * Registra que un colaborador inició una tarea de limpieza.
- * Si nadie había iniciado, cambia estado a 'en_curso'.
- *
- * @param {string} tareaId
- * @param {Object} currentUser   { uid, nombre }
+ * Inicia la tarea para el usuario actual.
+ * Un mismo usuario no puede tener dos sesiones abiertas simultáneas.
  */
 async function iniciarTarea(tareaId, currentUser) {
     const tareaRef = db.collection('tareas').doc(tareaId);
     const tareaDoc = await tareaRef.get();
     if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
 
-    const tarea = tareaDoc.data();
-    if (tarea.completada) throw new Error('La tarea ya fue completada');
+    const tarea    = tareaDoc.data();
+    if (tarea.estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
 
-    const colaboradores = tarea.colaboradores || [];
-    // Verificar si este usuario ya inició
-    const yaInicio = colaboradores.find(c => c.uid === currentUser.uid);
-    if (yaInicio) throw new Error('Ya iniciaste esta tarea');
+    const sesiones = tarea.sesiones || [];
+    if (sesiones.some(s => s.uid === currentUser.uid && s.fin === null))
+        throw new Error('Ya tenés una sesión activa en esta tarea');
 
-    colaboradores.push({
-        uid: currentUser.uid,
+    sesiones.push({
+        uid:    currentUser.uid,
         nombre: currentUser.nombre || currentUser.email,
-        horaInicio: firebase.firestore.Timestamp.now(),
-        horaFin: null,
-        horas: null,
-        montoRecibido: null,
-        pagado: false
+        inicio: firebase.firestore.Timestamp.now(),
+        fin:    null
     });
 
-    await tareaRef.update({
-        colaboradores: colaboradores,
-        estado: 'en_curso',
-        fechaHoraInicio: tarea.fechaHoraInicio || firebase.firestore.Timestamp.now()
-    });
+    await tareaRef.update({ sesiones, estado: 'en_curso' });
 }
 
 /**
- * Registra que un colaborador terminó. Cierra la tarea para todos.
- * Hereda horaFin a colaboradores que no la marcaron.
- * Calcula montos proporcionales a horas trabajadas.
- * Crea pagos_pendientes.
- *
- * @param {string} tareaId
- * @param {Object} currentUser   { uid, nombre }
+ * Pausa la tarea para el usuario actual.
+ * Cierra su sesión activa.
+ * Si no quedan sesiones abiertas → estado vuelve a 'pendiente'.
  */
-async function terminarTarea(tareaId, currentUser) {
+async function pausarTarea(tareaId, currentUser) {
     const tareaRef = db.collection('tareas').doc(tareaId);
     const tareaDoc = await tareaRef.get();
     if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
 
     const tarea = tareaDoc.data();
-    if (tarea.completada) throw new Error('La tarea ya fue completada');
+    if (tarea.estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
 
     const ahora = firebase.firestore.Timestamp.now();
+    let cerro   = false;
+
+    const sesiones = (tarea.sesiones || []).map(s => {
+        if (s.uid === currentUser.uid && s.fin === null) {
+            cerro = true;
+            return { ...s, fin: ahora };
+        }
+        return s;
+    });
+
+    if (!cerro) throw new Error('No tenés una sesión activa en esta tarea');
+
+    const hayAbierta = sesiones.some(s => s.fin === null);
+    await tareaRef.update({ sesiones, estado: hayAbierta ? 'en_curso' : 'pendiente' });
+}
+
+/**
+ * Finaliza la tarea para TODOS.
+ *
+ * - Cierra todas las sesiones abiertas
+ * - Suma horas de TODAS las sesiones de cada usuario
+ * - monto > 0 → crea pagos_pendientes proporcionales a horas
+ * - monto = 0 → solo registra en historial, sin pagos
+ * - recurrencia = 0 → elimina la tarea de Firestore
+ * - recurrencia = N → resetea con fechaInicio = hoy + N días
+ *
+ * @returns {Array} colaboradores con horas y montos (para mostrar resumen en UI)
+ */
+async function finalizarTarea(tareaId, currentUser) {
+    const tareaRef = db.collection('tareas').doc(tareaId);
+    const tareaDoc = await tareaRef.get();
+    if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
+
+    const tarea     = tareaDoc.data();
+    if (tarea.estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
+
+    const ahora     = firebase.firestore.Timestamp.now();
     const ahoraDate = ahora.toDate();
-    let colaboradores = tarea.colaboradores || [];
+    let sesiones    = tarea.sesiones || [];
 
-    // Si quien termina no está en la lista, agregarlo
-    const yaRegistrado = colaboradores.find(c => c.uid === currentUser.uid);
-    if (!yaRegistrado) {
-        colaboradores.push({
-            uid: currentUser.uid,
+    // Si quien finaliza nunca participó, registrar presencia mínima
+    if (!sesiones.some(s => s.uid === currentUser.uid)) {
+        sesiones.push({
+            uid:    currentUser.uid,
             nombre: currentUser.nombre || currentUser.email,
-            horaInicio: tarea.fechaHoraInicio || ahora,
-            horaFin: ahora,
-            horas: null,
-            montoRecibido: null,
-            pagado: false
+            inicio: ahora,
+            fin:    ahora
         });
     }
 
-    // Cerrar horaFin para todos los que no la tienen
-    colaboradores = colaboradores.map(c => ({
-        ...c,
-        horaFin: c.horaFin || ahora
+    // Cerrar TODAS las sesiones abiertas
+    sesiones = sesiones.map(s => ({ ...s, fin: s.fin === null ? ahora : s.fin }));
+
+    // Calcular horas totales por usuario (suma de todas sus sesiones)
+    const horasPor  = {};
+    const nombrePor = {};
+
+    for (const s of sesiones) {
+        const ini = s.inicio?.toDate ? s.inicio.toDate() : new Date(s.inicio);
+        const fin = s.fin?.toDate    ? s.fin.toDate()    : new Date(s.fin);
+        const hrs = Math.max(0, (fin - ini) / 3_600_000);
+        horasPor[s.uid]  = (horasPor[s.uid] || 0) + hrs;
+        nombrePor[s.uid] = s.nombre;
+    }
+
+    const totalHoras = Object.values(horasPor).reduce((a, b) => a + b, 0);
+    const monto      = tarea.monto || 0;
+
+    const colaboradores = Object.entries(horasPor).map(([uid, horas]) => ({
+        uid,
+        nombre:        nombrePor[uid],
+        horas:         parseFloat(horas.toFixed(2)),
+        montoRecibido: monto > 0 && totalHoras > 0
+            ? parseFloat(((horas / totalHoras) * monto).toFixed(2))
+            : 0
     }));
 
-    // Calcular horas de cada uno
-    colaboradores = colaboradores.map(c => {
-        const inicio = c.horaInicio?.toDate ? c.horaInicio.toDate() : new Date(c.horaInicio);
-        const fin = c.horaFin?.toDate ? c.horaFin.toDate() : new Date(c.horaFin);
-        const horas = Math.max(0, (fin - inicio) / 3600000); // ms → horas
-        return { ...c, horas };
-    });
+    // ── Batch ────────────────────────────────────────────────
+    const batch   = db.batch();
+    const histRef = db.collection('historial_tareas').doc();
 
-    // Calcular montos proporcionales
-    const totalHoras = colaboradores.reduce((sum, c) => sum + (c.horas || 0), 0);
-    const montoTotal = tarea.montoLimpieza || 0;
-    colaboradores = colaboradores.map(c => ({
-        ...c,
-        montoRecibido: totalHoras > 0 ? parseFloat(((c.horas / totalHoras) * montoTotal).toFixed(2)) : 0
-    }));
-
-    // Guardar tarea completada
-    await tareaRef.update({
+    // 1. Guardar en historial
+    batch.set(histRef, {
+        tareaId,
+        nombre:        tarea.nombre,
+        descripcion:   tarea.descripcion   || '',
+        tipo:          tarea.tipo          || 'general',
+        prioridad:     tarea.prioridad     || 'media',
+        fechaInicio:   tarea.fechaInicio   || null,
+        fechaFin:      ahoraDate.toISOString().split('T')[0],
+        monto,
+        sesiones,
         colaboradores,
-        completada: true,
-        estado: 'completada',
-        completadaEn: ahora,
-        completadaPor: currentUser.uid,
-        fechaHoraFin: ahora
+        reservaId:     tarea.reservaId     || null,
+        cabana:        tarea.cabana        || null,
+        recurrencia:   tarea.recurrencia   || 0,
+        finalizadoPor: currentUser.uid,
+        finalizadoEn:  ahora,
+        creadoEn:      tarea.creadoEn      || null
     });
 
-    // Crear pagos_pendientes para cada colaborador
-    const batch = db.batch();
-    for (const col of colaboradores) {
-        const pagoRef = db.collection('pagos_pendientes').doc();
-        const fechaStr = ahoraDate.toLocaleDateString('es-AR');
-        batch.set(pagoRef, {
-            colaboradorId: col.uid,
-            colaboradorNombre: col.nombre,
-            tareaId: tareaId,
-            reservaId: tarea.reservaId || null,
-            monto: col.montoRecibido,
-            moneda: 'BRL',
-            concepto: `Limpieza Cabaña ${tarea.cabaña} — ${tarea.reservaId ? tarea.nombre : ''} — ${fechaStr}`,
-            pagado: false,
-            fechaPago: null,
-            creadoEn: ahora
+    // 2. Pagos solo si monto > 0
+    if (monto > 0) {
+        for (const col of colaboradores) {
+            if (col.montoRecibido <= 0) continue;
+            const pagoRef = db.collection('pagos_pendientes').doc();
+            batch.set(pagoRef, {
+                colaboradorId:     col.uid,
+                colaboradorNombre: col.nombre,
+                tareaId,
+                historialId:       histRef.id,
+                reservaId:         tarea.reservaId || null,
+                monto:             col.montoRecibido,
+                moneda:            'BRL',
+                concepto:          `Tarea: ${tarea.nombre} — ${ahoraDate.toLocaleDateString('es-AR')}`,
+                horas:             col.horas,
+                pagado:            false,
+                fechaPago:         null,
+                creadoEn:          ahora
+            });
+        }
+    }
+
+    // 3. Recurrencia: 0 → eliminar, N → resetear
+    const recurrencia = tarea.recurrencia || 0;
+    if (recurrencia === 0) {
+        batch.delete(tareaRef);
+    } else {
+        const nuevaFecha = new Date(ahoraDate);
+        nuevaFecha.setDate(nuevaFecha.getDate() + recurrencia);
+        batch.update(tareaRef, {
+            estado:      'pendiente',
+            sesiones:    [],
+            fechaInicio: nuevaFecha.toISOString().split('T')[0],
+            ultimaVez:   ahora
         });
     }
-    await batch.commit();
 
-    return colaboradores; // para mostrar resumen en UI
+    await batch.commit();
+    return colaboradores;
+}
+
+
+// ── URGENCIA DE TAREA ────────────────────────────────────────
+/**
+ * Calcula el color/urgencia de una tarea.
+ *
+ * ⬜ gris     → fecha futura (no corresponde aún)
+ * 🟢 verde    → es hoy
+ * 🟡 amarillo → atrasada pero ≤ ciclo días Y ≤ 10 días
+ * 🔴 rojo     → muy atrasada (> ciclo días O > 10 días)
+ *
+ * Para recurrencia = 0 se usa umbral de 3 días para amarillo.
+ *
+ * @param {Object} tarea
+ * @returns {{ color: 'gris'|'verde'|'amarillo'|'rojo', label: string }}
+ */
+function urgenciaTarea(tarea) {
+    if (!tarea.fechaInicio) return { color: 'gris', label: 'Sin fecha' };
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const inicio     = new Date(tarea.fechaInicio + 'T00:00:00');
+    const diasAtraso = Math.floor((hoy - inicio) / 86_400_000);
+
+    if (diasAtraso < 0)   return { color: 'gris',     label: 'Próximamente'        };
+    if (diasAtraso === 0) return { color: 'verde',    label: 'Hoy'                 };
+
+    const ciclo       = tarea.recurrencia > 0 ? tarea.recurrencia : 3;
+    const muyAtrasada = diasAtraso > ciclo || diasAtraso > 10;
+
+    return muyAtrasada
+        ? { color: 'rojo',     label: `${diasAtraso}d de atraso` }
+        : { color: 'amarillo', label: `${diasAtraso}d de atraso` };
 }
 
 
 // ── HELPERS GENERALES ────────────────────────────────────────
 
-// Escapa HTML para evitar XSS
 function escapeHtml(str) {
     if (!str) return '';
-    return str.replace(/[&<>"']/g, m => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[m] || m));
+    return String(str).replace(/[&<>"']/g, m =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])
+    );
 }
 
-// Formatea fecha timestamp de Firestore a string legible
 function formatFecha(timestamp) {
     if (!timestamp) return '—';
     const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     return d.toLocaleDateString('es-AR');
 }
 
-// Formatea fecha+hora timestamp de Firestore
 function formatFechaHora(timestamp) {
     if (!timestamp) return '—';
     const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     return d.toLocaleString('es-AR');
 }
 
-// Genera colores distintos para cabañas dinámicamente
+/** Convierte horas decimales → "1h 23m" */
+function formatHoras(horas) {
+    if (!horas || horas <= 0) return '0m';
+    const h = Math.floor(horas);
+    const m = Math.round((horas - h) * 60);
+    if (h === 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}m`;
+}
+
 const COLORES_CABANAS = ['#FF9800', '#3498db', '#2ecc71', '#9b59b6', '#e74c3c', '#1abc9c', '#f39c12'];
 function colorCabana(index) {
     return COLORES_CABANAS[index % COLORES_CABANAS.length];
 }
 
-// Exportar para uso global
+
+// ── HELPERS DE UI ────────────────────────────────────────────
+// Requieren design-system.css cargado en la página.
+
+function showLoading(container, mensaje = 'Cargando...') {
+    const el = typeof container === 'string' ? document.querySelector(container) : container;
+    if (!el) return;
+    el.innerHTML = `
+        <div class="state-loading">
+            <div class="spinner"></div>
+            <span>${escapeHtml(mensaje)}</span>
+        </div>`;
+}
+
+function showEmpty(container, titulo = 'Sin datos', descripcion = '', icono = 'inbox') {
+    const el = typeof container === 'string' ? document.querySelector(container) : container;
+    if (!el) return;
+    el.innerHTML = `
+        <div class="state-empty">
+            <span class="material-icons">${escapeHtml(icono)}</span>
+            <div class="state-empty__title">${escapeHtml(titulo)}</div>
+            ${descripcion ? `<div class="state-empty__desc">${escapeHtml(descripcion)}</div>` : ''}
+        </div>`;
+}
+
+function showError(container, titulo = 'Ocurrió un error', descripcion = '', onRetry = null) {
+    const el = typeof container === 'string' ? document.querySelector(container) : container;
+    if (!el) return;
+    const retryId = onRetry ? `retry-${Date.now()}` : null;
+    el.innerHTML = `
+        <div class="state-error">
+            <span class="material-icons">error_outline</span>
+            <div class="state-error__title">${escapeHtml(titulo)}</div>
+            ${descripcion ? `<div class="state-error__desc">${escapeHtml(descripcion)}</div>` : ''}
+            ${retryId ? `<button class="btn btn-secondary" id="${retryId}">
+                <span class="material-icons">refresh</span> Reintentar
+            </button>` : ''}
+        </div>`;
+    if (retryId) document.getElementById(retryId)?.addEventListener('click', onRetry);
+}
+
+function showToast(mensaje, tipo = 'success') {
+    const iconos = { success: 'check_circle', error: 'error', warning: 'warning', info: 'info' };
+    let wrap = document.getElementById('cvc-toasts');
+    if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.id = 'cvc-toasts';
+        wrap.className = 'toast-container';
+        document.body.appendChild(wrap);
+    }
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${tipo}`;
+    toast.innerHTML = `<span class="material-icons">${iconos[tipo] || 'info'}</span><span>${escapeHtml(mensaje)}</span>`;
+    wrap.appendChild(toast);
+    setTimeout(() => toast.remove(), 3300);
+}
+
+
+// ── EXPORTAR ─────────────────────────────────────────────────
 window.CVC = {
     db, auth,
-    ESTADOS_RESERVA,
-    badgeEstado,
-    verificarAuth,
-    cerrarSesion,
+    ESTADOS_RESERVA, ESTADOS_TAREA, PRIORIDADES, CALENDAR_IDS,
+    badgeEstado, badgePrioridad,
+    verificarAuth, cerrarSesion,
     calcularPrecio,
     crearTareaLimpieza,
-    iniciarTarea,
-    terminarTarea,
-    escapeHtml,
-    formatFecha,
-    formatFechaHora,
-    colorCabana
+    iniciarTarea, pausarTarea, finalizarTarea, urgenciaTarea,
+    escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
+    showLoading, showEmpty, showError, showToast
 };
