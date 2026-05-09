@@ -484,8 +484,8 @@
     function renderTareaCard(t) {
         const estado    = t.estado || 'pendiente';
         const urgencia  = urgenciaTarea(t);
-        const sesiones  = t.sesiones || [];
-        const activos   = sesiones.filter(s => s.fin === null);
+        // sesionesActivas es un array denormalizado en el doc raíz con solo las sesiones abiertas
+        const activos   = t.sesionesActivas || [];
         const yoActivo  = activos.find(s => s.uid === currentUser.uid);
 
         const claseUrgencia = estado === 'en_curso' ? 'urgencia-en_curso' : `urgencia-${urgencia.color}`;
@@ -607,7 +607,14 @@
     window.abrirModal = async function(tarea) {
         tareaModal = tarea;
         const estado   = tarea.estado || 'pendiente';
-        const sesiones = tarea.sesiones || [];
+
+        // Leer sesiones desde subcolección
+        let sesiones = [];
+        try {
+            const sesSnap = await db.collection('tareas').doc(tarea.id).collection('sesiones').get();
+            sesiones = sesSnap.docs.map(d => d.data());
+        } catch(e) { sesiones = []; }
+
         const activos  = sesiones.filter(s => s.fin === null);
         const cerradas = sesiones.filter(s => s.fin !== null);
         const yoActivo = activos.find(s => s.uid === currentUser.uid);
