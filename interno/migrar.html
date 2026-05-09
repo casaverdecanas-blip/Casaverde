@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Migración Firestore — Casa Verde Canas</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; padding: 24px; }
+
+        h1  { font-size: 20px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+        h1 span { color: #f59e0b; }
+        .subtitle { font-size: 13px; color: #64748b; margin-bottom: 28px; }
+
+        .card { background: #1e2130; border: 1px solid #2d3250; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+        .card h2 { font-size: 14px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+        .card h2 .num { background: #334155; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; flex-shrink: 0; }
+
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border-radius: 8px; border: none; font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity .15s; }
+        .btn:disabled { opacity: .4; cursor: not-allowed; }
+        .btn:not(:disabled):hover { opacity: .85; }
+        .btn-primary  { background: #3b82f6; color: #fff; }
+        .btn-success  { background: #10b981; color: #fff; }
+        .btn-warning  { background: #f59e0b; color: #1a1a1a; }
+        .btn-danger   { background: #ef4444; color: #fff; }
+        .btn-ghost    { background: #2d3250; color: #94a3b8; }
+        .btn-sm       { padding: 6px 12px; font-size: 12px; }
+
+        .log-wrap { background: #0d1117; border-radius: 8px; padding: 14px; max-height: 340px; overflow-y: auto; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; line-height: 1.8; }
+        .log-ok    { color: #34d399; }
+        .log-warn  { color: #fbbf24; }
+        .log-error { color: #f87171; }
+        .log-info  { color: #60a5fa; }
+        .log-muted { color: #475569; }
+        .log-title { color: #e2e8f0; font-weight: 700; }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+        .stat-box { background: #0d1117; border-radius: 8px; padding: 14px; text-align: center; }
+        .stat-box .num { font-size: 26px; font-weight: 800; color: #60a5fa; }
+        .stat-box .lbl { font-size: 11px; color: #64748b; margin-top: 4px; text-transform: uppercase; letter-spacing: .06em; }
+        .stat-box.warn .num { color: #fbbf24; }
+        .stat-box.ok   .num { color: #34d399; }
+        .stat-box.err  .num { color: #f87171; }
+
+        .step-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+        .step-pending  { background: #1e2130; color: #64748b; border: 1px solid #2d3250; }
+        .step-running  { background: #1e3a5f; color: #60a5fa; border: 1px solid #3b82f6; }
+        .step-done     { background: #064e3b; color: #34d399; border: 1px solid #10b981; }
+        .step-error    { background: #450a0a; color: #f87171; border: 1px solid #ef4444; }
+
+        .step-row { display: flex; align-items: flex-start; gap: 14px; padding: 14px 0; border-bottom: 1px solid #1e2130; }
+        .step-row:last-child { border-bottom: none; }
+        .step-info { flex: 1; }
+        .step-info .title { font-size: 14px; font-weight: 600; color: #e2e8f0; margin-bottom: 4px; }
+        .step-info .desc  { font-size: 12px; color: #64748b; line-height: 1.6; }
+        .step-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+
+        .alert { border-radius: 8px; padding: 12px 16px; font-size: 13px; line-height: 1.6; margin-bottom: 14px; }
+        .alert-warning { background: #2d1f00; border: 1px solid #92400e; color: #fbbf24; }
+        .alert-info    { background: #0c1f3d; border: 1px solid #1e3a5f; color: #60a5fa; }
+        .alert-success { background: #022c22; border: 1px solid #064e3b; color: #34d399; }
+        .alert-danger  { background: #2d0a0a; border: 1px solid #7f1d1d; color: #f87171; }
+
+        .progress-bar { height: 6px; background: #1e2130; border-radius: 3px; margin: 8px 0; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #10b981); border-radius: 3px; transition: width .4s ease; }
+
+        details { margin-top: 8px; }
+        summary { cursor: pointer; font-size: 12px; color: #60a5fa; user-select: none; }
+        summary:hover { text-decoration: underline; }
+        pre { margin-top: 8px; background: #0d1117; border-radius: 6px; padding: 10px; font-size: 11px; color: #94a3b8; overflow-x: auto; line-height: 1.6; max-height: 200px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+
+<h1>🔧 Migración <span>Firestore</span> — Casa Verde Canas</h1>
+<p class="subtitle">Herramienta de uso único · Ejecutar una sola vez · Solo admin</p>
+
+<!-- ALERTA INICIAL -->
+<div class="alert alert-warning">
+    ⚠️ <strong>Leé esto antes de continuar:</strong> Esta herramienta reorganiza la estructura de datos en Firestore.
+    Los datos NO se eliminan hasta que vos lo confirmés en el Paso 5.
+    Podés detener el proceso en cualquier momento antes de ese paso.
+</div>
+
+<!-- PASO 1: DIAGNÓSTICO -->
+<div class="card">
+    <h2><span class="num">1</span> Diagnóstico — Estado actual</h2>
+    <p style="font-size:13px; color:#64748b; margin-bottom:14px;">
+        Lee todas las colecciones y muestra cuántos documentos hay en cada una, sin modificar nada.
+    </p>
+    <button class="btn btn-primary" id="btnDiagnostico" onclick="ejecutarDiagnostico()">
+        🔍 Leer Firestore
+    </button>
+    <div id="diagnosticoResult" style="margin-top:16px;"></div>
+</div>
+
+<!-- PASO 2: ANÁLISIS -->
+<div class="card">
+    <h2><span class="num">2</span> Análisis — Qué se va a transformar</h2>
+    <div id="analisisResult">
+        <p style="font-size:13px; color:#64748b;">Ejecutá el diagnóstico primero.</p>
+    </div>
+</div>
+
+<!-- PASO 3: MIGRACIÓN -->
+<div class="card">
+    <h2><span class="num">3</span> Migración — Ejecutar transformaciones</h2>
+    <div class="alert alert-info">
+        ℹ️ Este paso <strong>crea</strong> la nueva estructura sin eliminar la vieja.
+        Podés verificar en la consola de Firebase antes de continuar al paso de limpieza.
+    </div>
+
+    <div id="stepsContainer">
+        <p style="font-size:13px; color:#64748b;">Completá el diagnóstico primero.</p>
+    </div>
+</div>
+
+<!-- PASO 4: VERIFICACIÓN -->
+<div class="card">
+    <h2><span class="num">4</span> Verificación — Confirmar integridad</h2>
+    <p style="font-size:13px; color:#64748b; margin-bottom:14px;">
+        Compara los datos migrados contra los originales para confirmar que nada se perdió.
+    </p>
+    <button class="btn btn-ghost" id="btnVerificar" onclick="verificarMigracion()" disabled>
+        ✅ Verificar integridad
+    </button>
+    <div id="verificacionResult" style="margin-top:16px;"></div>
+</div>
+
+<!-- PASO 5: LIMPIEZA -->
+<div class="card">
+    <h2><span class="num">5</span> Limpieza — Eliminar estructura vieja</h2>
+    <div class="alert alert-danger" id="alertaLimpieza" style="display:none;">
+        🗑️ <strong>Acción irreversible.</strong> Esto elimina los campos <code>sesiones[]</code> de los documentos
+        de tareas (ya migradas a subcolección) y renombra <code>pagos_pendientes</code> a <code>honorarios</code>.
+        Solo ejecutar después de verificar el paso 4.
+    </div>
+    <button class="btn btn-danger" id="btnLimpiar" onclick="ejecutarLimpieza()" disabled>
+        🗑️ Eliminar estructura vieja
+    </button>
+    <div id="limpiezaResult" style="margin-top:16px;"></div>
+</div>
+
+<!-- LOG GLOBAL -->
+<div class="card">
+    <h2><span class="num">📋</span> Log de actividad</h2>
+    <div class="log-wrap" id="logGlobal">
+        <span class="log-muted">Esperando acciones...</span>
+    </div>
+    <div style="margin-top:10px; display:flex; gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="exportarLog()">📥 Exportar log</button>
+        <button class="btn btn-ghost btn-sm" onclick="limpiarLog()">🧹 Limpiar</button>
+    </div>
+</div>
+
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+    apiKey:     'AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4',
+    authDomain: 'casaverdecanas-199.firebaseapp.com',
+    projectId:  'casaverdecanas-199'
+};
+
+if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+const db   = firebase.firestore();
+const auth = firebase.auth();
+
+// ── ESTADO GLOBAL ─────────────────────────────────────────────
+const estado = {
+    diagnostico:  null,   // datos leídos
+    migrado:      false,
+    verificado:   false,
+    logLines:     []
+};
+
+// ── LOG ───────────────────────────────────────────────────────
+function log(msg, tipo = 'info') {
+    const ts   = new Date().toLocaleTimeString('es-AR');
+    const line = `[${ts}] ${msg}`;
+    estado.logLines.push({ line, tipo });
+
+    const wrap = document.getElementById('logGlobal');
+    const div  = document.createElement('div');
+    div.className = `log-${tipo}`;
+    div.textContent = line;
+    if (wrap.querySelector('.log-muted')) wrap.innerHTML = '';
+    wrap.appendChild(div);
+    wrap.scrollTop = wrap.scrollHeight;
+}
+
+function limpiarLog() {
+    estado.logLines = [];
+    document.getElementById('logGlobal').innerHTML = '<span class="log-muted">Log limpiado.</span>';
+}
+
+function exportarLog() {
+    const txt  = estado.logLines.map(l => l.line).join('\n');
+    const blob = new Blob([txt], { type: 'text/plain' });
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `migracion-cvc-${new Date().toISOString().split('T')[0]}.log`;
+    a.click();
+}
+
+// ── PASO 1: DIAGNÓSTICO ───────────────────────────────────────
+async function ejecutarDiagnostico() {
+    document.getElementById('btnDiagnostico').disabled = true;
+    log('Iniciando diagnóstico de Firestore...', 'title');
+
+    const colecciones = [
+        'tareas', 'historial_tareas', 'pagos_pendientes',
+        'pagos', 'reservas', 'clientes', 'usuarios', 'presupuestos'
+    ];
+
+    const datos = {};
+
+    for (const col of colecciones) {
+        try {
+            const snap = await db.collection(col).get();
+            datos[col] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            log(`  ✓ ${col}: ${datos[col].length} documentos`, 'ok');
+        } catch (e) {
+            datos[col] = [];
+            log(`  ⚠ ${col}: no accesible o vacía (${e.message})`, 'warn');
+        }
+    }
+
+    // Analizar tareas: cuántas tienen sesiones embebidas
+    const tareasConSesiones  = datos.tareas.filter(t => t.sesiones?.length > 0);
+    const totalSesionesEmbed = tareasConSesiones.reduce((a, t) => a + (t.sesiones?.length || 0), 0);
+
+    datos._analisis = {
+        tareasTotal:        datos.tareas.length,
+        tareasConSesiones:  tareasConSesiones.length,
+        totalSesionesEmbed,
+        pagosPendientes:    datos.pagos_pendientes.length,
+        historialExistente: datos.historial_tareas.length,
+    };
+
+    estado.diagnostico = datos;
+
+    // Render resultado
+    renderDiagnostico(datos);
+    renderAnalisis(datos);
+    renderSteps(datos);
+
+    document.getElementById('btnDiagnostico').disabled = false;
+    log('Diagnóstico completado.', 'ok');
+}
+
+function renderDiagnostico(datos) {
+    const a = datos._analisis;
+    document.getElementById('diagnosticoResult').innerHTML = `
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div class="num">${datos.tareas.length}</div>
+                <div class="lbl">Tareas activas</div>
+            </div>
+            <div class="stat-box warn">
+                <div class="num">${a.tareasConSesiones}</div>
+                <div class="lbl">Con sesiones embebidas</div>
+            </div>
+            <div class="stat-box warn">
+                <div class="num">${a.totalSesionesEmbed}</div>
+                <div class="lbl">Sesiones a migrar</div>
+            </div>
+            <div class="stat-box">
+                <div class="num">${a.pagosPendientes}</div>
+                <div class="lbl">pagos_pendientes → honorarios</div>
+            </div>
+            <div class="stat-box">
+                <div class="num">${datos.historial_tareas.length}</div>
+                <div class="lbl">Historial de tareas</div>
+            </div>
+            <div class="stat-box">
+                <div class="num">${datos.reservas.length}</div>
+                <div class="lbl">Reservas (sin cambios)</div>
+            </div>
+        </div>
+        ${a.totalSesionesEmbed === 0 && a.pagosPendientes === 0
+            ? '<div class="alert alert-success">✅ No hay datos que migrar. La estructura ya está limpia.</div>'
+            : '<div class="alert alert-info">ℹ️ Se encontraron datos para migrar. Revisá el análisis debajo.</div>'
+        }`;
+}
+
+function renderAnalisis(datos) {
+    const a = datos._analisis;
+    const tareas = datos.tareas.filter(t => t.sesiones?.length > 0);
+
+    let html = '<div style="display:flex; flex-direction:column; gap:12px;">';
+
+    // Sesiones embebidas
+    html += `
+        <div>
+            <div style="font-size:13px; font-weight:700; color:#e2e8f0; margin-bottom:8px;">
+                📦 Sesiones embebidas en tareas → subcolección <code style="color:#f59e0b;">tareas/{id}/sesiones</code>
+            </div>`;
+
+    if (tareas.length === 0) {
+        html += '<p style="font-size:12px; color:#34d399;">✓ No hay sesiones embebidas.</p>';
+    } else {
+        for (const t of tareas) {
+            html += `
+                <div style="background:#0d1117; border-radius:6px; padding:10px; margin-bottom:6px;">
+                    <div style="font-size:12px; font-weight:700; color:#e2e8f0;">${esc(t.nombre)}</div>
+                    <div style="font-size:11px; color:#64748b; margin-top:2px;">
+                        ID: ${t.id} · ${t.sesiones.length} sesiones
+                        · estado: ${t.estado || 'pendiente'}
+                    </div>
+                    <details>
+                        <summary>Ver sesiones</summary>
+                        <pre>${JSON.stringify(t.sesiones, null, 2)}</pre>
+                    </details>
+                </div>`;
+        }
+    }
+    html += '</div>';
+
+    // pagos_pendientes
+    html += `
+        <div>
+            <div style="font-size:13px; font-weight:700; color:#e2e8f0; margin-bottom:8px;">
+                💰 Colección <code style="color:#f59e0b;">pagos_pendientes</code> → renombrar a <code style="color:#34d399;">honorarios</code>
+            </div>`;
+
+    if (datos.pagos_pendientes.length === 0) {
+        html += '<p style="font-size:12px; color:#34d399;">✓ No hay registros en pagos_pendientes.</p>';
+    } else {
+        for (const p of datos.pagos_pendientes) {
+            html += `
+                <div style="background:#0d1117; border-radius:6px; padding:10px; margin-bottom:6px;">
+                    <div style="font-size:12px; font-weight:700; color:#e2e8f0;">${esc(p.colaboradorNombre || '—')}</div>
+                    <div style="font-size:11px; color:#64748b; margin-top:2px;">
+                        R$ ${p.monto || 0} · ${esc(p.concepto || '—')} · pagado: ${p.pagado ? 'sí' : 'no'}
+                    </div>
+                </div>`;
+        }
+    }
+    html += '</div>';
+
+    // historial_tareas — ajuste de estructura
+    html += `
+        <div>
+            <div style="font-size:13px; font-weight:700; color:#e2e8f0; margin-bottom:8px;">
+                🗂️ <code style="color:#f59e0b;">historial_tareas</code> — agregar campo <code>totalHoras</code> si falta
+            </div>
+            <p style="font-size:12px; color:#64748b;">${datos.historial_tareas.length} registros a revisar.</p>
+        </div>`;
+
+    html += '</div>';
+    document.getElementById('analisisResult').innerHTML = html;
+}
+
+function renderSteps(datos) {
+    const a = datos._analisis;
+
+    const steps = [
+        {
+            id:    'step-sesiones',
+            title: 'Migrar sesiones embebidas → subcolección',
+            desc:  `Crea ${a.totalSesionesEmbed} documentos en tareas/{id}/sesiones/ conservando todos los campos originales.`,
+            activo: a.tareasConSesiones > 0,
+            fn:    migrarSesiones
+        },
+        {
+            id:    'step-honorarios',
+            title: 'Renombrar pagos_pendientes → honorarios',
+            desc:  `Copia ${a.pagosPendientes} documentos a la colección "honorarios" con un campo extra: estado: "pendiente"|"pagado".`,
+            activo: a.pagosPendientes > 0,
+            fn:    migrarHonorarios
+        },
+        {
+            id:    'step-historial',
+            title: 'Normalizar historial_tareas',
+            desc:  `Agrega campos faltantes (totalHoras, colaboradores[]) a ${a.historialExistente} registros históricos.`,
+            activo: a.historialExistente > 0,
+            fn:    normalizarHistorial
+        }
+    ];
+
+    let html = '';
+    for (const s of steps) {
+        html += `
+            <div class="step-row" id="${s.id}-row">
+                <div class="step-info">
+                    <div class="title">${s.title}</div>
+                    <div class="desc">${s.desc}</div>
+                    <div style="margin-top:8px;" id="${s.id}-progress"></div>
+                </div>
+                <div class="step-actions">
+                    <span class="step-status step-pending" id="${s.id}-status">
+                        ${s.activo ? '⏳ Pendiente' : '✓ Sin datos'}
+                    </span>
+                    <button class="btn btn-${s.activo ? 'warning' : 'ghost'} btn-sm"
+                        id="${s.id}-btn"
+                        ${!s.activo ? 'disabled' : ''}
+                        onclick="ejecutarStep('${s.id}', ${s.fn.name})">
+                        ${s.activo ? 'Ejecutar' : 'Omitir'}
+                    </button>
+                </div>
+            </div>`;
+    }
+
+    html += `
+        <div style="margin-top:16px;">
+            <button class="btn btn-success" id="btnMigrarTodo" onclick="ejecutarTodo()">
+                ▶️ Ejecutar todos los pasos
+            </button>
+        </div>`;
+
+    document.getElementById('stepsContainer').innerHTML = html;
+}
+
+// ── PASO 3: MIGRACIÓN ─────────────────────────────────────────
+
+async function ejecutarStep(stepId, fn) {
+    const btnEl    = document.getElementById(`${stepId}-btn`);
+    const statusEl = document.getElementById(`${stepId}-status`);
+    const progEl   = document.getElementById(`${stepId}-progress`);
+
+    btnEl.disabled = true;
+    statusEl.className = 'step-status step-running';
+    statusEl.textContent = '⚙️ Ejecutando...';
+    progEl.innerHTML = '<div class="progress-bar"><div class="progress-fill" id="pf-'+stepId+'" style="width:0%"></div></div>';
+
+    try {
+        await fn(stepId);
+        statusEl.className = 'step-status step-done';
+        statusEl.textContent = '✅ Completado';
+        progEl.querySelector('.progress-fill').style.width = '100%';
+    } catch (e) {
+        statusEl.className = 'step-status step-error';
+        statusEl.textContent = '❌ Error';
+        log(`Error en ${stepId}: ${e.message}`, 'error');
+        btnEl.disabled = false;
+    }
+
+    verificarSiPuedeContinuar();
+}
+
+async function ejecutarTodo() {
+    document.getElementById('btnMigrarTodo').disabled = true;
+    const a = estado.diagnostico._analisis;
+    if (a.tareasConSesiones > 0)  await ejecutarStep('step-sesiones',  migrarSesiones);
+    if (a.pagosPendientes > 0)    await ejecutarStep('step-honorarios', migrarHonorarios);
+    if (a.historialExistente > 0) await ejecutarStep('step-historial',  normalizarHistorial);
+    log('Todos los pasos ejecutados. Procedé a verificar.', 'ok');
+}
+
+// Migrar sesiones embebidas → subcolección
+async function migrarSesiones(stepId) {
+    const tareas = estado.diagnostico.tareas.filter(t => t.sesiones?.length > 0);
+    log(`Migrando sesiones de ${tareas.length} tareas...`, 'info');
+
+    let total = 0;
+    for (let i = 0; i < tareas.length; i++) {
+        const t = tareas[i];
+        const sesiones = t.sesiones || [];
+
+        // Escribir cada sesión como documento en subcolección
+        for (const s of sesiones) {
+            await db.collection('tareas').doc(t.id)
+                .collection('sesiones').add({
+                    uid:     s.uid     || null,
+                    nombre:  s.nombre  || '',
+                    inicio:  s.inicio  || null,
+                    fin:     s.fin     || null,
+                    tareaId: t.id,   // desnormalizado para queries inversas
+                    migradoEn: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            total++;
+        }
+
+        // Actualizar progreso visual
+        const pct = Math.round(((i + 1) / tareas.length) * 100);
+        const pf  = document.getElementById('pf-' + stepId);
+        if (pf) pf.style.width = pct + '%';
+
+        log(`  ✓ Tarea "${t.nombre}" — ${sesiones.length} sesiones migradas`, 'ok');
+    }
+
+    log(`Sesiones migradas: ${total} documentos creados en subcolecciones.`, 'ok');
+}
+
+// Renombrar pagos_pendientes → honorarios
+async function migrarHonorarios(stepId) {
+    const docs = estado.diagnostico.pagos_pendientes;
+    log(`Migrando ${docs.length} registros pagos_pendientes → honorarios...`, 'info');
+
+    const batch = db.batch();
+    for (const p of docs) {
+        const ref = db.collection('honorarios').doc(p.id); // mismo ID para trazabilidad
+        batch.set(ref, {
+            colaboradorId:     p.colaboradorId     || p.uid || null,
+            colaboradorNombre: p.colaboradorNombre || p.nombre || '',
+            tareaId:           p.tareaId           || null,
+            historialId:       p.historialId       || null,
+            reservaId:         p.reservaId         || null,
+            monto:             p.monto             || 0,
+            moneda:            p.moneda            || 'BRL',
+            horas:             p.horas             || 0,
+            concepto:          p.concepto          || '',
+            // Estado explícito: unifica campo "pagado" booleano
+            estado:            p.pagado ? 'pagado' : 'pendiente',
+            fechaPago:         p.fechaPago         || null,
+            pagadoPor:         p.pagadoPor         || null,
+            creadoEn:          p.creadoEn          || firebase.firestore.FieldValue.serverTimestamp(),
+            migradoDesde:      'pagos_pendientes'
+        });
+    }
+
+    // Batches de Firestore tienen límite de 500 ops
+    if (docs.length <= 500) {
+        await batch.commit();
+    } else {
+        // Chunks de 500
+        for (let i = 0; i < docs.length; i += 499) {
+            const chunk = docs.slice(i, i + 499);
+            const b = db.batch();
+            for (const p of chunk) {
+                b.set(db.collection('honorarios').doc(p.id), { migradoDesde: 'pagos_pendientes' }, { merge: true });
+            }
+            await b.commit();
+        }
+    }
+
+    const pf = document.getElementById('pf-' + stepId);
+    if (pf) pf.style.width = '100%';
+    log(`${docs.length} honorarios migrados.`, 'ok');
+}
+
+// Normalizar historial_tareas
+async function normalizarHistorial(stepId) {
+    const docs = estado.diagnostico.historial_tareas;
+    log(`Normalizando ${docs.length} registros de historial...`, 'info');
+
+    let i = 0;
+    for (const h of docs) {
+        // Calcular totalHoras si no existe
+        let totalHoras = h.totalHoras || 0;
+        if (!h.totalHoras && h.sesiones?.length > 0) {
+            totalHoras = h.sesiones.reduce((acc, s) => {
+                const ini = s.inicio?.toDate ? s.inicio.toDate() : new Date(s.inicio || 0);
+                const fin = s.fin?.toDate    ? s.fin.toDate()    : new Date(s.fin || ini);
+                return acc + Math.max(0, (fin - ini) / 3_600_000);
+            }, 0);
+            totalHoras = parseFloat(totalHoras.toFixed(2));
+        }
+
+        // Asegurar que colaboradores[] exista
+        const colaboradores = h.colaboradores || [];
+
+        await db.collection('historial_tareas').doc(h.id).update({
+            totalHoras,
+            colaboradores,
+            normalizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        i++;
+        const pf = document.getElementById('pf-' + stepId);
+        if (pf) pf.style.width = Math.round((i / docs.length) * 100) + '%';
+    }
+
+    log(`${docs.length} registros de historial normalizados.`, 'ok');
+}
+
+function verificarSiPuedeContinuar() {
+    // Habilitar verificación si al menos un step se ejecutó
+    const hayDone = document.querySelectorAll('.step-done').length > 0;
+    if (hayDone) {
+        document.getElementById('btnVerificar').disabled = false;
+        estado.migrado = true;
+    }
+}
+
+// ── PASO 4: VERIFICACIÓN ──────────────────────────────────────
+async function verificarMigracion() {
+    document.getElementById('btnVerificar').disabled = true;
+    log('Verificando integridad de la migración...', 'title');
+
+    const errores  = [];
+    const ok       = [];
+
+    // Verificar sesiones en subcolecciones
+    for (const t of estado.diagnostico.tareas.filter(t => t.sesiones?.length > 0)) {
+        const subSnap = await db.collection('tareas').doc(t.id).collection('sesiones').get();
+        if (subSnap.size === t.sesiones.length) {
+            ok.push(`✓ Tarea "${t.nombre}": ${subSnap.size}/${t.sesiones.length} sesiones`);
+        } else {
+            errores.push(`✗ Tarea "${t.nombre}": esperadas ${t.sesiones.length}, encontradas ${subSnap.size}`);
+        }
+    }
+
+    // Verificar honorarios
+    const honSnap = await db.collection('honorarios').get();
+    if (honSnap.size >= estado.diagnostico.pagos_pendientes.length) {
+        ok.push(`✓ Honorarios: ${honSnap.size} documentos creados`);
+    } else {
+        errores.push(`✗ Honorarios: esperados ${estado.diagnostico.pagos_pendientes.length}, encontrados ${honSnap.size}`);
+    }
+
+    // Render resultado
+    let html = '';
+    if (errores.length === 0) {
+        html = `
+            <div class="alert alert-success">
+                ✅ Verificación exitosa — ${ok.length} comprobaciones pasadas sin errores.
+                Podés proceder al paso de limpieza.
+            </div>`;
+        document.getElementById('btnLimpiar').disabled = false;
+        document.getElementById('alertaLimpieza').style.display = 'block';
+        estado.verificado = true;
+        log('Verificación exitosa. Podés proceder a la limpieza.', 'ok');
+    } else {
+        html = `
+            <div class="alert alert-danger">
+                ❌ Se encontraron ${errores.length} inconsistencias. No procedas a la limpieza.
+            </div>`;
+        log('Verificación con errores. Revisá los detalles.', 'error');
+    }
+
+    html += '<div style="background:#0d1117; border-radius:8px; padding:12px; font-family:monospace; font-size:12px; line-height:1.9;">';
+    for (const l of ok)      html += `<div style="color:#34d399;">${esc(l)}</div>`;
+    for (const l of errores) html += `<div style="color:#f87171;">${esc(l)}</div>`;
+    html += '</div>';
+
+    document.getElementById('verificacionResult').innerHTML = html;
+    document.getElementById('btnVerificar').disabled = false;
+}
+
+// ── PASO 5: LIMPIEZA ──────────────────────────────────────────
+async function ejecutarLimpieza() {
+    if (!estado.verificado) {
+        alert('Primero completá la verificación del paso 4.');
+        return;
+    }
+
+    const confirmar = confirm(
+        '⚠️ ACCIÓN IRREVERSIBLE\n\n' +
+        'Esto va a:\n' +
+        '1. Eliminar el campo sesiones[] de los documentos de tareas\n' +
+        '2. Eliminar todos los documentos de pagos_pendientes\n\n' +
+        '¿Estás seguro? Esta acción no se puede deshacer.'
+    );
+    if (!confirmar) return;
+
+    document.getElementById('btnLimpiar').disabled = true;
+    log('Iniciando limpieza...', 'title');
+
+    // 1. Eliminar campo sesiones[] de tareas (ya están en subcolección)
+    const tareasConSesiones = estado.diagnostico.tareas.filter(t => t.sesiones?.length > 0);
+    for (const t of tareasConSesiones) {
+        await db.collection('tareas').doc(t.id).update({
+            sesiones: firebase.firestore.FieldValue.delete()
+        });
+        log(`  ✓ Campo sesiones[] eliminado de tarea "${t.nombre}"`, 'ok');
+    }
+
+    // 2. Eliminar pagos_pendientes
+    const batch = db.batch();
+    for (const p of estado.diagnostico.pagos_pendientes) {
+        batch.delete(db.collection('pagos_pendientes').doc(p.id));
+    }
+    if (estado.diagnostico.pagos_pendientes.length > 0) {
+        await batch.commit();
+        log(`  ✓ ${estado.diagnostico.pagos_pendientes.length} documentos eliminados de pagos_pendientes`, 'ok');
+    }
+
+    document.getElementById('limpiezaResult').innerHTML = `
+        <div class="alert alert-success">
+            ✅ Limpieza completada. La estructura de Firestore ahora está actualizada.<br><br>
+            <strong>Próximo paso:</strong> Actualizá <code>utils.js</code> para usar
+            la nueva estructura (subcolección sesiones + colección honorarios).
+        </div>`;
+
+    log('Migración completa. Estructura Firestore actualizada.', 'ok');
+    log('PRÓXIMO PASO: actualizar utils.js con la nueva estructura.', 'warn');
+}
+
+// ── HELPERS ───────────────────────────────────────────────────
+function esc(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, m =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])
+    );
+}
+</script>
+</body>
+</html>
