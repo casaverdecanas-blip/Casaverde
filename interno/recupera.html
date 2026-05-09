@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recuperar fotos · Casa Verde Canas</title>
+
+    <!-- Firebase SDKs — necesita tanto Firestore como Realtime Database -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f0f7f0;
+            color: #1a2e18;
+            padding: 40px 20px;
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+
+        h1 {
+            font-size: 1.4rem;
+            color: #2d5a27;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .aviso {
+            background: #fff8e1;
+            border: 1.5px solid #ffe082;
+            border-radius: 12px;
+            padding: 14px 18px;
+            font-size: 14px;
+            color: #7a6a3a;
+            line-height: 1.7;
+            margin: 20px 0;
+        }
+
+        .aviso strong { color: #5a4020; }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border: 1px solid #e0e6de;
+        }
+
+        .card h2 {
+            font-size: 1rem;
+            color: #2d5a27;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e8f5e9;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 11px 24px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 14px;
+            font-family: inherit;
+            transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.88; }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .btn-primary { background: #2d5a27; color: white; }
+        .btn-success { background: #27ae60; color: white; }
+        .btn-danger  { background: #e74c3c; color: white; }
+
+        /* Log */
+        .log {
+            background: #1a1a2e;
+            color: #a8e6cf;
+            border-radius: 10px;
+            padding: 16px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.8;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .log .ok      { color: #a8e6cf; }
+        .log .warn    { color: #ffd700; }
+        .log .error   { color: #ff6b6b; }
+        .log .info    { color: #88d8ff; }
+        .log .header  { color: #ffffff; font-weight: bold; }
+
+        /* Preview fotos */
+        .fotos-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .foto-thumb {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid #e0e6de;
+        }
+        .foto-thumb.nueva {
+            border-color: #27ae60;
+        }
+
+        .cabana-result {
+            margin-bottom: 20px;
+            padding: 16px;
+            background: #f8faf7;
+            border-radius: 12px;
+            border: 1px solid #e0e6de;
+        }
+        .cabana-result h3 {
+            font-size: 14px;
+            font-weight: 700;
+            color: #2d5a27;
+            margin-bottom: 8px;
+        }
+        .stat { font-size: 13px; color: #5a6e58; margin-bottom: 4px; }
+        .stat strong { color: #1a2e18; }
+
+        .progress-bar-wrap {
+            background: #e0e6de;
+            border-radius: 4px;
+            height: 8px;
+            margin: 12px 0;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            background: #2d5a27;
+            border-radius: 4px;
+            transition: width 0.3s;
+            width: 0%;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <h1>🖼️ Recuperar fotos desde Realtime Database</h1>
+    <p style="color:#5a6e58; font-size:14px; margin-bottom:4px;">Herramienta de migración — uso único</p>
+
+    <div class="aviso">
+        <strong>¿Qué hace esta herramienta?</strong><br>
+        Lee todas las fotos de <strong>todas las categorías</strong> de Realtime Database para cada cabaña,
+        las combina en un único array y las <strong>agrega a Firestore sin borrar las fotos existentes</strong>.<br><br>
+        <strong>⚠️ Antes de ejecutar:</strong> Esta herramienta es de uso único.
+        Una vez migradas las fotos, podés eliminar este archivo del servidor.
+    </div>
+
+    <div class="card">
+        <h2>1. Inspeccionar fotos en Realtime Database</h2>
+        <p style="font-size:13px; color:#5a6e58; margin-bottom:16px;">
+            Primero verificá qué fotos hay en RTDB antes de migrar.
+        </p>
+        <button class="btn btn-primary" id="btnInspeccionar" onclick="inspeccionarRTDB()">
+            🔍 Inspeccionar RTDB
+        </button>
+        <div id="inspeccionResult" style="margin-top:16px;"></div>
+    </div>
+
+    <div class="card">
+        <h2>2. Migrar fotos a Firestore</h2>
+        <p style="font-size:13px; color:#5a6e58; margin-bottom:16px;">
+            Toma todas las fotos encontradas en RTDB y las agrega al array <code>fotos</code>
+            de cada cabaña en Firestore, evitando duplicados.
+        </p>
+        <button class="btn btn-success" id="btnMigrar" onclick="migrarFotos()" disabled>
+            ✅ Migrar fotos a Firestore
+        </button>
+        <div class="progress-bar-wrap" id="progressWrap" style="display:none;">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Log de operaciones</h2>
+        <div class="log" id="log">Esperando operación...</div>
+    </div>
+
+</div>
+
+<script>
+// ── FIREBASE CONFIG ──────────────────────────────────────────
+const FIREBASE_CONFIG = {
+    apiKey:      'AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4',
+    authDomain:  'casaverdecanas-199.firebaseapp.com',
+    projectId:   'casaverdecanas-199',
+    databaseURL: 'https://casaverdecanas-199-default-rtdb.firebaseio.com'
+};
+
+firebase.initializeApp(FIREBASE_CONFIG);
+const db   = firebase.firestore();
+const rtdb = firebase.database();
+
+// Estado
+let datosRTDB     = {};  // { cabanaId: [urls] }
+let datosFirestore = {}; // { cabanaId: [urls existentes] }
+
+// ── LOG ──────────────────────────────────────────────────────
+function log(msg, tipo = 'ok') {
+    const el   = document.getElementById('log');
+    const span = document.createElement('span');
+    span.className = tipo;
+    span.textContent = msg + '\n';
+    el.appendChild(span);
+    el.scrollTop = el.scrollHeight;
+}
+
+function logHeader(msg) { log('\n' + '═'.repeat(50) + '\n' + msg + '\n' + '═'.repeat(50), 'header'); }
+
+// ── INSPECCIONAR RTDB ────────────────────────────────────────
+async function inspeccionarRTDB() {
+    const btn = document.getElementById('btnInspeccionar');
+    btn.disabled = true;
+    btn.textContent = 'Inspeccionando...';
+    document.getElementById('log').textContent = '';
+
+    logHeader('INSPECCIÓN DE REALTIME DATABASE');
+
+    try {
+        // Leer estructura de RTDB — intentar paths comunes
+        // La estructura puede ser: /cabanas/1/categories/exterior/photos o similar
+        const pathsAChequer = [
+            'cabanas',
+            'properties',
+            'alojamientos'
+        ];
+
+        let encontrado = false;
+
+        for (const path of pathsAChequer) {
+            log(`Buscando en /${path}...`, 'info');
+            const snap = await rtdb.ref(path).once('value');
+            if (snap.exists()) {
+                log(`✅ Encontrado datos en /${path}`, 'ok');
+                const data = snap.val();
+                log(`Estructura: ${JSON.stringify(Object.keys(data)).substring(0, 200)}`, 'info');
+                await procesarEstructura(data, path);
+                encontrado = true;
+                break;
+            } else {
+                log(`❌ No hay datos en /${path}`, 'warn');
+            }
+        }
+
+        if (!encontrado) {
+            // Intentar raíz
+            log('Buscando en raíz del RTDB...', 'info');
+            const snap = await rtdb.ref('/').once('value');
+            if (snap.exists()) {
+                const data = snap.val();
+                log(`Claves en raíz: ${JSON.stringify(Object.keys(data))}`, 'info');
+                await procesarEstructura(data, '/');
+                encontrado = true;
+            }
+        }
+
+        if (!encontrado) {
+            log('⚠️ No se encontraron datos en el RTDB. Verificá la databaseURL.', 'error');
+        }
+
+    } catch (e) {
+        log('Error al leer RTDB: ' + e.message, 'error');
+        log('Verificá que la databaseURL sea correcta y que tengas acceso.', 'warn');
+    }
+
+    btn.disabled = false;
+    btn.textContent = '🔍 Inspeccionar RTDB';
+}
+
+async function procesarEstructura(data, basePath) {
+    // Intentar extraer fotos de estructura flexible
+    // Formatos posibles:
+    // 1. data[cabanaId].categories[categoria].photos = [urls]
+    // 2. data[cabanaId].categories[categoria] = [urls]
+    // 3. data[cabanaId].fotos = [urls]
+    // 4. data[cabanaId].images = [urls]
+
+    const resultEl = document.getElementById('inspeccionResult');
+    resultEl.innerHTML = '';
+    datosRTDB = {};
+
+    let cabanasEncontradas = 0;
+
+    for (const [key, valor] of Object.entries(data)) {
+        if (typeof valor !== 'object' || !valor) continue;
+
+        // Intentar identificar si es una cabaña (tiene ID numérico o nombre conocido)
+        const cabanaId = parseInt(key);
+        if (isNaN(cabanaId) && !['1','2','3','loft','depto','frente'].includes(key.toLowerCase())) {
+            // Podría ser una sub-estructura, intentar recursivo un nivel
+            for (const [subKey, subValor] of Object.entries(valor)) {
+                const subId = parseInt(subKey);
+                if (!isNaN(subId) && typeof subValor === 'object') {
+                    extraerFotosDeNodo(subId, subValor);
+                    cabanasEncontradas++;
+                }
+            }
+            continue;
+        }
+
+        const idFinal = isNaN(cabanaId) ? key : cabanaId;
+        extraerFotosDeNodo(idFinal, valor);
+        cabanasEncontradas++;
+    }
+
+    if (cabanasEncontradas === 0) {
+        log('No se identificaron cabañas en la estructura. Revisá el log para ver la estructura raw.', 'warn');
+        log('Estructura raw: ' + JSON.stringify(data).substring(0, 500), 'info');
+        return;
+    }
+
+    // Mostrar resumen
+    logHeader('FOTOS ENCONTRADAS POR CABAÑA');
+
+    for (const [cabanaId, fotos] of Object.entries(datosRTDB)) {
+        log(`Cabaña ${cabanaId}: ${fotos.length} fotos encontradas`, 'ok');
+
+        const div = document.createElement('div');
+        div.className = 'cabana-result';
+        div.innerHTML = `<h3>Cabaña ${cabanaId} — ${fotos.length} fotos en RTDB</h3>`;
+
+        const fotosDiv = document.createElement('div');
+        fotosDiv.className = 'fotos-preview';
+        fotos.slice(0, 10).forEach(url => {
+            const img = document.createElement('img');
+            img.src   = url;
+            img.className = 'foto-thumb';
+            img.onerror   = () => { img.style.display = 'none'; };
+            fotosDiv.appendChild(img);
+        });
+        if (fotos.length > 10) {
+            const more = document.createElement('div');
+            more.style.cssText = 'display:flex;align-items:center;font-size:12px;color:#888;';
+            more.textContent   = `+${fotos.length - 10} más`;
+            fotosDiv.appendChild(more);
+        }
+
+        div.appendChild(fotosDiv);
+        resultEl.appendChild(div);
+    }
+
+    // Cargar estado actual de Firestore para comparar
+    await cargarFotosFirestore();
+
+    document.getElementById('btnMigrar').disabled = Object.keys(datosRTDB).length === 0;
+    log('\n✅ Inspección completa. Revisá el resultado y luego ejecutá la migración.', 'ok');
+}
+
+function extraerFotosDeNodo(cabanaId, nodo) {
+    const fotos = [];
+
+    // Buscar fotos en múltiples estructuras posibles
+    const buscarFotos = (obj, profundidad = 0) => {
+        if (profundidad > 4) return;
+        if (!obj || typeof obj !== 'object') return;
+
+        // Si es un array de strings (URLs)
+        if (Array.isArray(obj)) {
+            obj.forEach(item => {
+                if (typeof item === 'string' && (item.startsWith('http') || item.startsWith('/'))) {
+                    fotos.push(item);
+                }
+            });
+            return;
+        }
+
+        for (const [key, val] of Object.entries(obj)) {
+            if (typeof val === 'string' && (val.startsWith('http') || val.startsWith('gs://'))) {
+                // URL directa como valor
+                fotos.push(val);
+            } else if (typeof val === 'object') {
+                // Claves que típicamente contienen fotos
+                const esContenedorFotos = ['photos','fotos','images','imagenes','gallery',
+                    'categories','categorias','exterior','interior','bano','baño',
+                    'cocina','living','dormitorio','piscina','jardín','jardin',
+                    'salon','comedor','terraza'].includes(key.toLowerCase());
+
+                if (esContenedorFotos || profundidad < 2) {
+                    buscarFotos(val, profundidad + 1);
+                }
+            }
+        }
+    };
+
+    buscarFotos(nodo);
+
+    // Deduplicar
+    const unicas = [...new Set(fotos)].filter(u => u && u.startsWith('http'));
+
+    if (unicas.length > 0) {
+        datosRTDB[cabanaId] = unicas;
+        log(`  → Cabaña ${cabanaId}: ${unicas.length} fotos únicas encontradas`, 'info');
+    }
+}
+
+async function cargarFotosFirestore() {
+    log('\nCargando fotos actuales de Firestore...', 'info');
+    try {
+        const snap = await db.collection('cabanas').get();
+        snap.docs.forEach(doc => {
+            const c = doc.data();
+            datosFirestore[c.id] = c.fotos || [];
+            log(`  Firestore cabaña ${c.id}: ${datosFirestore[c.id].length} fotos actuales`, 'info');
+        });
+    } catch (e) {
+        log('Error al leer Firestore: ' + e.message, 'error');
+    }
+}
+
+// ── MIGRAR FOTOS ─────────────────────────────────────────────
+async function migrarFotos() {
+    const btn = document.getElementById('btnMigrar');
+    btn.disabled = true;
+    btn.textContent = 'Migrando...';
+
+    document.getElementById('progressWrap').style.display = 'block';
+    logHeader('MIGRACIÓN A FIRESTORE');
+
+    const cabanas     = Object.keys(datosRTDB);
+    const total       = cabanas.length;
+    let procesadas    = 0;
+    let totalAgregadas = 0;
+
+    for (const cabanaId of cabanas) {
+        const fotosRTDB  = datosRTDB[cabanaId] || [];
+        const fotosExist = datosFirestore[cabanaId] || [];
+
+        log(`\nProcesando Cabaña ${cabanaId}...`, 'info');
+        log(`  RTDB: ${fotosRTDB.length} fotos`, 'info');
+        log(`  Firestore actual: ${fotosExist.length} fotos`, 'info');
+
+        // Combinar sin duplicados — las de Firestore van primero (prioridad)
+        const existSet  = new Set(fotosExist);
+        const nuevas    = fotosRTDB.filter(url => !existSet.has(url));
+        const combinadas = [...fotosExist, ...nuevas];
+
+        log(`  Nuevas a agregar: ${nuevas.length}`, nuevas.length > 0 ? 'ok' : 'warn');
+        log(`  Total final: ${combinadas.length}`, 'ok');
+
+        if (nuevas.length === 0) {
+            log(`  ✅ Sin cambios — todas las fotos ya estaban en Firestore`, 'ok');
+            procesadas++;
+            actualizarProgress(procesadas, total);
+            continue;
+        }
+
+        // Buscar el documento en Firestore por id numérico
+        try {
+            const snap = await db.collection('cabanas').where('id', '==', parseInt(cabanaId)).limit(1).get();
+
+            if (snap.empty) {
+                log(`  ⚠️ No se encontró cabaña con id=${cabanaId} en Firestore`, 'warn');
+                procesadas++;
+                actualizarProgress(procesadas, total);
+                continue;
+            }
+
+            const docRef = snap.docs[0].ref;
+            await docRef.update({ fotos: combinadas });
+
+            log(`  ✅ Actualizado — ${nuevas.length} fotos agregadas`, 'ok');
+            totalAgregadas += nuevas.length;
+
+            // Actualizar caché local
+            datosFirestore[cabanaId] = combinadas;
+
+        } catch (e) {
+            log(`  ❌ Error al actualizar cabaña ${cabanaId}: ${e.message}`, 'error');
+        }
+
+        procesadas++;
+        actualizarProgress(procesadas, total);
+    }
+
+    logHeader('RESUMEN FINAL');
+    log(`Cabañas procesadas: ${procesadas}/${total}`, 'ok');
+    log(`Fotos agregadas en total: ${totalAgregadas}`, totalAgregadas > 0 ? 'ok' : 'warn');
+    log('\n✅ Migración completa.', 'ok');
+    log('Podés verificar las fotos en cabanas-admin.html y luego eliminar este archivo del servidor.', 'warn');
+
+    btn.disabled = false;
+    btn.textContent = '✅ Migrar fotos a Firestore';
+}
+
+function actualizarProgress(procesadas, total) {
+    const pct = total > 0 ? (procesadas / total) * 100 : 0;
+    document.getElementById('progressBar').style.width = pct + '%';
+}
+</script>
+</body>
+</html>
