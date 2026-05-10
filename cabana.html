@@ -408,17 +408,19 @@ async function iniciarCalendario() {
 
 async function cargarEventosFirestore() {
     try {
-        const snap = await db.collection('reservas')
+        // Lee de 'disponibilidad' — colección pública sin datos personales
+        const snap = await db.collection('disponibilidad')
             .where('caba', '==', CABANA_ID)
-            .where('estado', 'in', ['confirmada', 'pendiente'])
             .get();
-        return snap.docs.map(doc => {
-            const r = doc.data();
-            const start = r.checkIn?.toDate  ? r.checkIn.toDate().toISOString().split('T')[0]  : r.checkIn;
-            const end   = r.checkOut?.toDate ? r.checkOut.toDate().toISOString().split('T')[0] : r.checkOut;
-            return { title: t('reservadoDir'), start, end, allDay:true, color:'#2d5a27', textColor:'white' };
-        });
-    } catch(e) { console.error('Firestore:', e); return []; }
+        return snap.docs
+            .map(d => d.data())
+            .filter(r => r.bloqueante === true)
+            .map(r => {
+                const start = r.checkIn?.toDate  ? r.checkIn.toDate().toISOString().split('T')[0]  : r.checkIn;
+                const end   = r.checkOut?.toDate ? r.checkOut.toDate().toISOString().split('T')[0] : r.checkOut;
+                return { title: t('reservadoDir'), start, end, allDay:true, color:'#2d5a27', textColor:'white' };
+            });
+    } catch(e) { console.error('Disponibilidad:', e); return []; }
 }
 
 async function cargarEventosGoogle() {
