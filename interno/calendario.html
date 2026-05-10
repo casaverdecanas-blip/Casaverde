@@ -312,9 +312,20 @@
 
     // ── Cargar cabañas ────────────────────────────────────────
     async function cargarCabanas() {
-        const snap   = await db.collection('cabanas').where('activa','==',true).orderBy('orden').get();
-        cabanasCache = snap.docs.map((d, i) => ({ docId: d.id, color: colorCabana(i), ...d.data() }));
-        cabanasCache.forEach(c => filtrosActivos.add(c.id));
+        try {
+            const snap = await db.collection('cabanas').get();
+            cabanasCache = snap.docs
+                .map((d, i) => ({ docId: d.id, color: colorCabana(i), ...d.data() }))
+                .filter(c => c.activa === true || c.activa === 'true' || c.activa === undefined)
+                .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+
+            cabanasCache.forEach(c => filtrosActivos.add(c.id));
+
+            // Advertencia si falta google_calendar_id
+            const sinCalId = cabanasCache.filter(c => !c.google_calendar_id);
+            if (sinCalId.length > 0) {
+                console.warn(`Cabañas sin google_calendar_id: ${sinCalId.map(c=>c.id).join(', ')} — ejecutá diagnostico-calendarios.html`);
+            }
 
         // Leyenda
         document.getElementById('leyenda').innerHTML = cabanasCache.map(c =>
@@ -343,6 +354,12 @@
         document.getElementById('cabanaSelect').innerHTML = cabanasCache.map(c =>
             `<option value="${c.id}">${escapeHtml(c.nombre?.es || `Cabaña ${c.id}`)}</option>`
         ).join('');
+
+        } catch(e) {
+            console.error('Error cargando cabañas:', e);
+            document.getElementById('leyenda').innerHTML =
+                `<span style="color:var(--color-danger);font-size:12px;">Error cargando cabañas: ${e.message}</span>`;
+        }
     }
 
     window.toggleFiltro = function(cabaId, color, btn) {
