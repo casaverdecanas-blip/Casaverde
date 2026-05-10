@@ -252,6 +252,16 @@
             <!-- Precio calculado -->
             <div id="precioBox" class="precio-box" style="display:none;"></div>
 
+
+            <!-- Panel de historial — solo visible al editar -->
+            <div id="historialPanel" style="display:none; margin:var(--space-4) 0; background:var(--color-surface-2); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-4);">
+                <div style="font-size:var(--text-xs); font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--color-text-muted); margin-bottom:var(--space-3);">
+                    Historial y saldo
+                </div>
+                <div id="historialContent">
+                    <div class="state-loading"><div class="spinner spinner-sm"></div><span>Cargando...</span></div>
+                </div>
+            </div>
             <div class="alert alert-error" id="errorModal" style="display:none;">
                 <span class="material-icons">error_outline</span>
                 <span id="errorModalText"></span>
@@ -374,7 +384,11 @@
                 <td data-label="Check-in">${formatFecha(r.checkIn)}</td>
                 <td data-label="Check-out">${formatFecha(r.checkOut)}</td>
                 <td data-label="Huéspedes">${r.huespedes || ((r.adultos||0)+(r.ninos||0)) || '—'}</td>
-                <td data-label="Total" class="text-mono">R$ ${(r.totalBRL||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+                <td data-label="Total" class="text-mono">
+                    R$ ${(r.totalBRL||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                    ${r.pagadoBRL > 0 && r.pagadoBRL < r.totalBRL ? `<div style="font-size:10px;color:var(--color-warning);font-weight:700;">Debe R$ ${((r.totalBRL||0)-(r.pagadoBRL||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>` : ''}
+                    ${r.pagadoBRL >= r.totalBRL && r.totalBRL > 0 ? '<div style="font-size:10px;color:var(--color-success);">✅ Saldado</div>' : ''}
+                </td>
                 <td data-label="Estado">${badgeEstado(r.estado)}</td>
                 <td data-label="Acciones">
                     <div style="display:flex; gap:var(--space-1); flex-wrap:wrap;">
@@ -512,6 +526,7 @@
         document.getElementById('notas').value               = '';
         document.getElementById('precioBox').style.display   = 'none';
         document.getElementById('alertaAirbnb').style.display = 'none';
+        document.getElementById('historialPanel').style.display = 'none';
         document.getElementById('errorModal').style.display  = 'none';
         limpiarCliente();
         ultimoPrecio = null;
@@ -540,6 +555,10 @@
         // Airbnb alert
         document.getElementById('alertaAirbnb').style.display =
             (r.origen === 'airbnb' || r.airbnb_id) ? 'flex' : 'none';
+        
+        // Historial y saldo
+        document.getElementById('historialPanel').style.display = 'block';
+        cargarHistorialReserva(id, r);
 
         // Cliente
         limpiarCliente();
@@ -569,6 +588,87 @@
 
         document.getElementById('modalOverlay').style.display = 'flex';
     };
+
+
+    // ── Historial y saldo de reserva ─────────────────────────
+    async function cargarHistorialReserva(reservaId, r) {
+        const panel = document.getElementById('historialContent');
+        panel.innerHTML = '<div class="state-loading"><div class="spinner spinner-sm"></div><span>Cargando historial...</span></div>';
+
+        try {
+            // Leer pagos de esta reserva
+            const pagosSnap = await db.collection('pagos')
+                .where('reservaId', '==', reservaId).get();
+            const pagos = pagosSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+                .sort((a,b) => (a.creadoEn?.toDate?.()?.getTime()||0) - (b.creadoEn?.toDate?.()?.getTime()||0));
+
+            const totalPagado = pagos.filter(p => p.moneda === 'BRL')
+                .reduce((s, p) => s + (p.monto || 0), 0);
+            const saldo = Math.max(0, (r.totalBRL || 0) - totalPagado);
+            const fmt = n => `R$ ${n.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+
+            // Leer presupuesto origen si existe
+            let presupuestoHtml = '';
+            if (r.presupuestoId) {
+                try {
+                    const presSnap = await db.collection('presupuestos').doc(r.presupuestoId).get();
+                    if (presSnap.exists) {
+                        const p = presSnap.data();
+                        presupuestoHtml = `
+                            <div style="margin-bottom:var(--space-3); padding-bottom:var(--space-3); border-bottom:1px solid var(--color-border);">
+                                <div style="font-size:var(--text-xs); color:var(--color-text-muted); margin-bottom:4px;">Origen</div>
+                                <div style="font-size:var(--text-sm); display:flex; align-items:center; gap:8px;">
+                                    <span class="material-icons" style="font-size:15px; color:var(--color-primary);">request_quote</span>
+                                    Presupuesto del ${p.creadoEn?.toDate?.()?.toLocaleDateString('es-AR') || '—'}
+                                    · ${fmt(p.totalBRL || 0)}
+                                    <a href="presupuestos.html" style="font-size:var(--text-xs); color:var(--color-info);">Ver</a>
+                                </div>
+                            </div>`;
+                    }
+                } catch(e) {}
+            }
+
+            // Saldo
+            const saldoColor = saldo <= 0 ? 'var(--color-success)' : 'var(--color-warning)';
+            const saldoHtml = `
+                <div style="display:flex; justify-content:space-between; margin-bottom:var(--space-3); padding-bottom:var(--space-3); border-bottom:1px solid var(--color-border);">
+                    <div>
+                        <div style="font-size:var(--text-xs); color:var(--color-text-muted);">Total reserva</div>
+                        <div style="font-size:var(--text-md); font-weight:700; font-family:var(--font-mono);">${fmt(r.totalBRL||0)}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:var(--text-xs); color:var(--color-text-muted);">Pagado</div>
+                        <div style="font-size:var(--text-md); font-weight:700; font-family:var(--font-mono); color:var(--color-success);">${fmt(totalPagado)}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:var(--text-xs); color:var(--color-text-muted);">Saldo</div>
+                        <div style="font-size:var(--text-md); font-weight:800; font-family:var(--font-mono); color:${saldoColor};">
+                            ${saldo <= 0 ? '✅ Saldado' : fmt(saldo)}
+                        </div>
+                    </div>
+                </div>`;
+
+            // Lista de pagos
+            const pagosHtml = pagos.length === 0
+                ? '<div style="font-size:var(--text-xs); color:var(--color-text-muted); text-align:center; padding:var(--space-3);">Sin pagos registrados</div>'
+                : pagos.map(p => `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:var(--space-2) 0; border-bottom:1px solid var(--color-border-light); font-size:var(--text-xs);">
+                        <div>
+                            <span style="color:var(--color-text-secondary);">${p.creadoEn?.toDate?.()?.toLocaleDateString('es-AR') || '—'}</span>
+                            · ${p.metodo || '—'} · ${p.tipo || '—'}
+                            ${p.observaciones ? `· <em>${escapeHtml(p.observaciones)}</em>` : ''}
+                        </div>
+                        <strong style="font-family:var(--font-mono); color:var(--color-success);">+${fmt(p.monto||0)}</strong>
+                    </div>`).join('');
+
+            panel.innerHTML = presupuestoHtml + saldoHtml +
+                `<div style="font-size:var(--text-xs); font-weight:700; color:var(--color-text-muted); margin-bottom:var(--space-2);">PAGOS RECIBIDOS</div>` +
+                pagosHtml;
+
+        } catch(e) {
+            panel.innerHTML = `<div style="font-size:12px; color:var(--color-danger);">Error al cargar historial: ${e.message}</div>`;
+        }
+    }
 
     window.cerrarModal = function(e) {
         if (e && e.target !== document.getElementById('modalOverlay')) return;
