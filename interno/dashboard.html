@@ -280,23 +280,32 @@
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
-    // Indicar que auth pasó OK
-    document.getElementById('kpiGrid').innerHTML =
-        '<div class="state-loading" style="grid-column:1/-1">'
-        + '<div class="spinner"></div><span>Cargando datos...</span></div>';
+    // Log visible para diagnóstico
+    const logEl = document.getElementById('kpiGrid');
+    const logMsg = (msg, ok) => {
+        logEl.innerHTML = '<div class="state-loading" style="grid-column:1/-1;flex-direction:column;gap:8px">'
+            + '<div class="spinner"></div>'
+            + '<span style="font-size:12px;color:' + (ok===false?'#f87171':'#94a3b8') + '">' + msg + '</span>'
+            + '</div>';
+    };
+
+    logMsg('Auth OK — cargando colecciones...');
 
     let reservas = [], tareas = [], totalCabanas = 0, totalClientes = 0, ingresosMes = 0;
 
     try {
         const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
 
-        const [reservasSnap, tareasSnap, cabanasSnap, clientesSnap, pagosSnap] = await Promise.all([
-            db.collection('reservas').get(),
-            db.collection('tareas').get(),
-            db.collection('cabanas').get(),
-            db.collection('clientes').get(),
-            db.collection('pagos').get()
-        ]);
+        logMsg('Leyendo reservas...');
+        const reservasSnap = await db.collection('reservas').get();
+        logMsg('Leyendo tareas...');
+        const tareasSnap   = await db.collection('tareas').get();
+        logMsg('Leyendo cabanas...');
+        const cabanasSnap  = await db.collection('cabanas').get();
+        logMsg('Leyendo clientes...');
+        const clientesSnap = await db.collection('clientes').get();
+        logMsg('Leyendo pagos...');
+        const pagosSnap    = await db.collection('pagos').get();
 
         reservas       = reservasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
         tareas         = tareasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -311,7 +320,12 @@
 
     } catch (e) {
         console.error('Error cargando datos:', e);
-        showError('#kpiGrid', 'Error al cargar datos', 'Verificá tu conexión e intentá de nuevo.', () => location.reload());
+        logEl.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:30px">'
+            + '<span class="material-icons" style="font-size:32px;color:var(--color-danger);display:block;margin-bottom:8px">error_outline</span>'
+            + '<strong style="color:var(--color-danger)">Error al cargar datos</strong><br>'
+            + '<span style="font-size:12px;color:var(--color-text-muted)">' + e.message + '</span><br><br>'
+            + '<button class="btn btn-primary" onclick="location.reload()">Reintentar</button>'
+            + '</div>';
         return;
     }
 
