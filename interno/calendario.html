@@ -154,6 +154,19 @@
         <!-- Filtros por cabaña -->
         <div class="filtros-cabanas" id="filtrosCabanas"></div>
 
+        <!-- Sincronización Airbnb -->
+        <div style="display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap; margin-bottom:var(--space-4); padding:var(--space-3) var(--space-4); background:var(--color-primary-xlight); border-radius:var(--radius-md); border:1px solid var(--color-primary-light);">
+            <span class="material-icons" style="font-size:18px; color:var(--color-primary);">sync</span>
+            <div style="flex:1; min-width:0;">
+                <div style="font-size:var(--text-sm); font-weight:700; color:var(--color-primary-dark);">Sincronización Airbnb</div>
+                <div style="font-size:var(--text-xs); color:var(--color-text-muted);">Lee Google Calendar y crea borradores de reservas para completar</div>
+            </div>
+            <button class="btn btn-primary btn-sm" id="btnSincronizar" onclick="sincronizarAirbnb()">
+                <span class="material-icons">sync</span>
+                Sincronizar Airbnb
+            </button>
+        </div>
+
         <!-- Leyenda fija -->
         <div style="display:flex; gap:var(--space-5); flex-wrap:wrap; margin-bottom:var(--space-5);">
             <div class="legend-item"><div class="legend-dot" style="background:#95a5a6;"></div> Limpieza pendiente</div>
@@ -299,10 +312,8 @@
 
     // ── Cargar cabañas ────────────────────────────────────────
     async function cargarCabanas() {
-        const snap   = await db.collection('cabanas').get();
-        cabanasCache = snap.docs.map((d, i) => ({ docId: d.id, color: colorCabana(i), ...d.data() }))
-            .filter(c => c.activa === true || c.activa === 'true' || c.activa === undefined)
-            .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+        const snap   = await db.collection('cabanas').where('activa','==',true).orderBy('orden').get();
+        cabanasCache = snap.docs.map((d, i) => ({ docId: d.id, color: colorCabana(i), ...d.data() }));
         cabanasCache.forEach(c => filtrosActivos.add(c.id));
 
         // Leyenda
@@ -345,6 +356,130 @@
         calendar?.refetchEvents();
     };
 
+    // ── Google Calendar API ───────────────────────────────────
+    const GOOGLE_CAL_API_KEY = 'AIzaSyBnfunjUkUXiRjKCPRotpFHE9tGgn6tV8E';
+
+    // Lee eventos de Google Calendar para una cabaña
+    async function leerGoogleCalendar(calId, cabaId) {
+        if (!calId || !calId.includes('@')) return [];
+        const hoy     = new Date();
+        const enUnAno = new Date(hoy);
+        enUnAno.setFullYear(enUnAno.getFullYear() + 1);
+        const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events`
+            + `?key=${GOOGLE_CAL_API_KEY}`
+            + `&timeMin=${hoy.toISOString()}`
+            + `&timeMax=${enUnAno.toISOString()}`
+            + `&singleEvents=true&orderBy=startTime&maxResults=250`;
+        try {
+            const res  = await fetch(url);
+            if (!res.ok) { console.warn(`GCal cabaña ${cabaId}: HTTP ${res.status}`); return []; }
+            const data = await res.json();
+            return (data.items || [])
+                .filter(ev => ev.status !== 'cancelled')
+                .filter(ev => {
+                    const t = (ev.summary || '').toLowerCase();
+                    return !t.includes('not available') && !t.includes('no disponible')
+                        && !t.includes('indisponível')  && !t.includes('unavailable');
+                })
+                .map(ev => ({
+                    googleId:  ev.id,
+                    titulo:    ev.summary || 'Airbnb',
+                    inicio:    ev.start.date || ev.start.dateTime?.split('T')[0],
+                    fin:       ev.end.date   || ev.end.dateTime?.split('T')[0],
+                    cabaId
+                }));
+        } catch(e) {
+            console.warn(`GCal cabaña ${cabaId}:`, e.message);
+            return [];
+        }
+    }
+
+    // Sincroniza eventos de Google Calendar → reservas borrador en Firestore
+    async function sincronizarAirbnb() {
+        const btnSync = document.getElementById('btnSincronizar');
+        if (btnSync) { btnSync.disabled = true; btnSync.textContent = '⏳ Sincronizando...'; }
+        let creadas = 0, omitidas = 0;
+
+        try {
+            // Leer todos los google_calendar_id de las cabañas
+            const promesas = cabanasCache
+                .filter(c => c.google_calendar_id)
+                .map(c => leerGoogleCalendar(c.google_calendar_id, c.id));
+
+            const resultados = await Promise.all(promesas);
+            const todosEventos = resultados.flat();
+
+            if (todosEventos.length === 0) {
+                showToast('Sin eventos nuevos en Google Calendar.', 'info');
+                return;
+            }
+
+            // Leer reservas existentes con origen airbnb para evitar duplicados
+            const existSnap = await db.collection('reservas')
+                .where('origen', '==', 'airbnb').get();
+            const googleIdsExistentes = new Set(
+                existSnap.docs.map(d => d.data().airbnb_google_id).filter(Boolean)
+            );
+
+            // Crear borradores para los eventos nuevos
+            const batch = db.batch();
+            let enBatch  = 0;
+
+            for (const ev of todosEventos) {
+                if (googleIdsExistentes.has(ev.googleId)) { omitidas++; continue; }
+
+                const cabana = cabanasCache.find(c => c.id == ev.cabaId);
+                const ref    = db.collection('reservas').doc();
+
+                batch.set(ref, {
+                    // Identificación
+                    airbnb_google_id: ev.googleId,
+                    origen:           'airbnb',
+                    estado:           'pendiente',
+                    // Fechas
+                    checkIn:  firebase.firestore.Timestamp.fromDate(new Date(ev.inicio + 'T12:00:00')),
+                    checkOut: firebase.firestore.Timestamp.fromDate(new Date(ev.fin    + 'T12:00:00')),
+                    // Cabaña
+                    caba:     ev.cabaId,
+                    // Datos del huésped — a completar por admin
+                    nombre:      'Reserva Airbnb — completar',
+                    email:       '',
+                    telefono:    '',
+                    adultos:     2,
+                    ninos:       0,
+                    huespedes:   2,
+                    // Financiero — a completar por admin
+                    totalBRL:    0,
+                    // Meta
+                    notas:       `Importado automáticamente de Airbnb via Google Calendar.\nTítulo original: ${ev.titulo}`,
+                    creadoEn:    firebase.firestore.FieldValue.serverTimestamp(),
+                    creadoPor:   'sistema'
+                });
+
+                creadas++;
+                enBatch++;
+
+                // Firestore batch tiene límite de 500
+                if (enBatch >= 490) {
+                    await batch.commit();
+                    enBatch = 0;
+                }
+            }
+
+            if (enBatch > 0) await batch.commit();
+
+            const msg = `Sincronización: ${creadas} nuevas reservas importadas${omitidas > 0 ? `, ${omitidas} ya existían` : ''}.`;
+            showToast(msg, creadas > 0 ? 'success' : 'info');
+            if (creadas > 0) calendar?.refetchEvents();
+
+        } catch(e) {
+            showToast('Error en sincronización: ' + e.message, 'error');
+            console.error(e);
+        } finally {
+            if (btnSync) { btnSync.disabled = false; btnSync.textContent = '🔄 Sincronizar Airbnb'; }
+        }
+    }
+
     // ── Obtener eventos ───────────────────────────────────────
     async function obtenerEventos() {
         const [reservasSnap, tareasSnap] = await Promise.all([
@@ -355,7 +490,6 @@
         const eventos = [];
 
         // ── Reservas de Firestore ────────────────────────────
-        // Fix bug #1: las reservas de Airbnb en Firestore ya aparecen acá
         reservasSnap.forEach(doc => {
             const r = doc.data();
             if (!filtrosActivos.has(r.caba)) return;
@@ -442,7 +576,9 @@
         eventoAirbnbActual = null;
 
         if (ep.tipo === 'reserva') {
+            const esAirbnbPendiente = ep.origen === 'airbnb' && ep.estado === 'pendiente';
             document.getElementById('popupDetalle').innerHTML =
+                `${esAirbnbPendiente ? '<div style="background:#fff3e0;border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:11px;color:#e07b00;">⚠️ Reserva Airbnb sin completar — hacé clic en "Completar" para agregar los datos del huésped</div>' : ''}` +
                 `Estado: <strong>${ep.estado}</strong><br>` +
                 `Cabaña: ${ep.caba}<br>` +
                 `Huéspedes: ${ep.huespedes || '—'}<br>` +
@@ -450,6 +586,14 @@
                 `Origen: ${ep.origen || '—'}`;
             linkRes.href = `reservas.html?id=${ep.reservaId}`;
             linkRes.style.display = 'inline-flex';
+            linkRes.textContent   = esAirbnbPendiente ? '✏️ Completar reserva' : '→ Ver reserva';
+
+            if (esAirbnbPendiente) {
+                eventoAirbnbActual = ep;
+                btnImp.style.display = 'inline-flex';
+            } else {
+                btnImp.style.display = 'none';
+            }
 
             // Fix bug #1: mostrar botón importar si es Airbnb sin datos completos
             if (ep.origen === 'airbnb' && ep.estado === 'pendiente') {
