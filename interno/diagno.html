@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico Calendarios — Casa Verde Canas</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f1117;color:#e2e8f0;padding:20px;min-height:100vh}
+        h1{font-size:17px;font-weight:800;color:#fff;margin-bottom:4px}
+        h1 span{color:#f59e0b}
+        .sub{font-size:12px;color:#64748b;margin-bottom:20px}
+        .card{background:#1e2130;border:1px solid #2d3250;border-radius:10px;padding:16px;margin-bottom:14px}
+        .card h2{font-size:12px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px}
+        .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:7px;border:none;font-size:12px;font-weight:700;cursor:pointer;transition:opacity .15s;margin:3px}
+        .btn:disabled{opacity:.35;cursor:not-allowed}
+        .btn:not(:disabled):hover{opacity:.8}
+        .btn-blue{background:#3b82f6;color:#fff}
+        .btn-green{background:#10b981;color:#fff}
+        .btn-yellow{background:#f59e0b;color:#111}
+        .btn-red{background:#ef4444;color:#fff}
+        .btn-gray{background:#2d3250;color:#94a3b8}
+        .log{background:#0d1117;border-radius:7px;padding:12px;max-height:260px;overflow-y:auto;font-family:monospace;font-size:11px;line-height:1.9;margin-top:10px}
+        .ok{color:#34d399}.warn{color:#fbbf24}.err{color:#f87171}.info{color:#60a5fa}.muted{color:#475569}
+        .cabana-box{background:#0d1117;border-radius:8px;padding:14px;margin-bottom:10px}
+        .cabana-nombre{font-size:13px;font-weight:700;color:#e2e8f0;margin-bottom:10px}
+        .campo{margin-bottom:8px}
+        .campo label{font-size:11px;color:#64748b;display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em}
+        .campo input{width:100%;background:#1e2130;border:1px solid #2d3250;border-radius:5px;padding:7px 10px;color:#e2e8f0;font-size:12px;font-family:monospace}
+        .campo input:focus{outline:none;border-color:#3b82f6}
+        .campo input.ok{border-color:#10b981}
+        .campo input.warn{border-color:#f59e0b}
+        .campo input.empty{border-color:#ef4444}
+        .estado-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700;margin-left:8px}
+        .b-ok{background:#064e3b;color:#34d399;border:1px solid #10b981}
+        .b-warn{background:#2d1f00;color:#fbbf24;border:1px solid #92400e}
+        .b-empty{background:#450a0a;color:#f87171;border:1px solid #ef4444}
+        .alert{border-radius:7px;padding:10px 14px;font-size:12px;line-height:1.6;margin:8px 0}
+        .a-info{background:#0c1f3d;border:1px solid #1e3a5f;color:#60a5fa}
+        .a-ok{background:#022c22;border:1px solid #064e3b;color:#34d399}
+        .a-warn{background:#2d1f00;border:1px solid #92400e;color:#fbbf24}
+        code{background:#334155;padding:1px 5px;border-radius:3px;font-size:11px}
+    </style>
+</head>
+<body>
+
+<h1>🗓️ Diagnóstico <span>Calendarios Airbnb</span></h1>
+<p class="sub">Verifica y corrige las URLs de calendarios iCal en cada cabaña</p>
+
+<div class="alert a-info">
+    ℹ️ El código espera los calendarios en <code>cabana.airbnbUrl</code> (URL iCal de Airbnb)
+    y <code>cabana.googleCalendarIframe</code> (embed de Google Calendar).
+    Este diagnóstico muestra qué hay en cada cabaña y te permite corregirlo.
+</div>
+
+<div class="card">
+    <h2>Estado actual en Firestore</h2>
+    <button class="btn btn-blue" id="btnLeer" onclick="leerCabanas()">🔍 Leer cabañas</button>
+    <div id="cabanasResult"><p style="font-size:12px;color:#64748b;margin-top:10px">Esperando...</p></div>
+</div>
+
+<div class="card" id="cardEditar" style="display:none">
+    <h2>Editar calendarios</h2>
+    <div class="alert a-warn">
+        ⚠️ Pegá las URLs exactas. Para Airbnb usá la URL iCal que encontrás en
+        Airbnb → Calendario → Exportar calendario. Para Google Calendar usá
+        la URL del iframe embed (Settings → Integrate calendar).
+    </div>
+    <div id="editarCabanas"></div>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-green" onclick="guardarTodo()">💾 Guardar todos</button>
+        <button class="btn btn-gray" onclick="document.getElementById('cardEditar').style.display='none'">Cancelar</button>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Log</h2>
+    <div class="log" id="logEl"><span class="muted">Esperando...</span></div>
+    <button class="btn btn-gray" style="margin-top:8px;font-size:11px;padding:5px 10px" onclick="exportLog()">📥 Exportar log</button>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script>
+const CFG = {
+    apiKey:      'AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4',
+    authDomain:  'casaverdecanas-199.firebaseapp.com',
+    databaseURL: 'https://casaverdecanas-199-default-rtdb.firebaseio.com',
+    projectId:   'casaverdecanas-199',
+    storageBucket: 'casaverdecanas-199.firebasestorage.app'
+};
+if (!firebase.apps.length) firebase.initializeApp(CFG);
+const db   = firebase.firestore();
+const auth = firebase.auth();
+
+let cabanasData = [];
+let logs = [];
+
+function log(msg, tipo='info') {
+    const ts = new Date().toLocaleTimeString('es-AR');
+    logs.push(`[${ts}] ${msg}`);
+    const el = document.getElementById('logEl');
+    if (el.querySelector('.muted')) el.innerHTML = '';
+    const d = document.createElement('div');
+    d.className = tipo; d.textContent = `[${ts}] ${msg}`;
+    el.appendChild(d); el.scrollTop = el.scrollHeight;
+}
+function exportLog() {
+    const b = new Blob([logs.join('\n')],{type:'text/plain'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(b);
+    a.download = `calendarios-${new Date().toISOString().split('T')[0]}.log`; a.click();
+}
+function esc(s) { return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+// ── Clasificar URL ────────────────────────────────────────────
+function clasificarUrl(url) {
+    if (!url) return { estado: 'empty', label: '❌ Vacío', clase: 'b-empty' };
+    if (url.includes('airbnb.com') && url.includes('.ics'))
+        return { estado: 'ok', label: '✅ iCal Airbnb', clase: 'b-ok' };
+    if (url.includes('airbnb.com'))
+        return { estado: 'warn', label: '⚠ URL Airbnb (no es iCal)', clase: 'b-warn' };
+    if (url.includes('calendar.google.com') && url.includes('ical'))
+        return { estado: 'ok', label: '✅ iCal Google', clase: 'b-ok' };
+    if (url.includes('calendar.google.com'))
+        return { estado: 'warn', label: '⚠ Google Calendar (verificar formato)', clase: 'b-warn' };
+    if (url.endsWith('.ics') || url.includes('.ics?'))
+        return { estado: 'ok', label: '✅ iCal genérico', clase: 'b-ok' };
+    if (url.startsWith('http'))
+        return { estado: 'warn', label: '⚠ URL (verificar si es iCal)', clase: 'b-warn' };
+    return { estado: 'warn', label: '⚠ Formato desconocido', clase: 'b-warn' };
+}
+
+// ── Leer cabañas ──────────────────────────────────────────────
+async function leerCabanas() {
+    document.getElementById('btnLeer').disabled = true;
+    log('Leyendo cabañas desde Firestore...', 'info');
+
+    try {
+        const snap = await db.collection('cabanas').get();
+        cabanasData = snap.docs.map(d => ({ docId: d.id, ...d.data() }))
+            .sort((a,b) => (a.orden||0) - (b.orden||0));
+
+        log(`${cabanasData.length} cabañas encontradas.`, 'ok');
+
+        let html = '';
+        for (const c of cabanasData) {
+            const nombre    = c.nombre?.es || c.nombre?.pt || `Cabaña ${c.id}`;
+            const airbnb    = clasificarUrl(c.airbnbUrl);
+            const gcal      = c.googleCalendarIframe ? '✅ Configurado' : '❌ Vacío';
+
+            // Campos extra que puede usar el calendario
+            const extras = [
+                ['airbnbUrl',              c.airbnbUrl             || ''],
+                ['googleCalendarIframe',   c.googleCalendarIframe  || ''],
+                ['icalUrl',                c.icalUrl               || ''],
+                ['calendarUrl',            c.calendarUrl           || ''],
+            ];
+
+            log(`  Cabaña ${c.id} (${nombre}):`, 'info');
+            log(`    airbnbUrl: ${c.airbnbUrl || '— vacío —'}`, c.airbnbUrl ? 'ok' : 'warn');
+            log(`    googleCalendarIframe: ${c.googleCalendarIframe ? 'configurado' : '— vacío —'}`, c.googleCalendarIframe ? 'ok' : 'warn');
+            if (c.icalUrl) log(`    icalUrl: ${c.icalUrl}`, 'info');
+
+            html += `
+                <div class="cabana-box">
+                    <div class="cabana-nombre">
+                        🏠 ${esc(nombre)}
+                        <span style="color:#64748b;font-weight:400;font-size:11px"> · Firestore ID: ${esc(c.docId)} · Cabaña ${c.id}</span>
+                        <span class="estado-badge ${airbnb.clase}">${airbnb.label}</span>
+                    </div>
+
+                    <div class="campo">
+                        <label>airbnbUrl — URL iCal de Airbnb (.ics)</label>
+                        <input type="text" id="airbnb_${c.docId}"
+                            value="${esc(c.airbnbUrl||'')}"
+                            class="${c.airbnbUrl ? 'ok' : 'empty'}"
+                            placeholder="https://www.airbnb.com/calendar/ical/XXXXXXX.ics?s=XXXXX"
+                            oninput="this.className=this.value?'ok':'empty'">
+                        <div style="font-size:10px;color:#475569;margin-top:3px">
+                            Airbnb → Calendario → Exportar → Copiar link
+                        </div>
+                    </div>
+
+                    <div class="campo">
+                        <label>googleCalendarIframe — Embed de Google Calendar (opcional)</label>
+                        <input type="text" id="gcal_${c.docId}"
+                            value="${esc(c.googleCalendarIframe||'')}"
+                            class="${c.googleCalendarIframe ? 'ok' : ''}"
+                            placeholder="https://calendar.google.com/calendar/embed?src=..."
+                            oninput="this.className=this.value?'ok':''">
+                    </div>
+
+                    <details style="margin-top:8px">
+                        <summary style="cursor:pointer;font-size:11px;color:#60a5fa">Ver todos los campos del documento</summary>
+                        <pre style="margin-top:6px;background:#0d1117;border-radius:5px;padding:8px;font-size:10px;color:#94a3b8;overflow:auto;max-height:160px">${
+                            esc(JSON.stringify({
+                                id: c.id,
+                                activa: c.activa,
+                                orden: c.orden,
+                                airbnbUrl: c.airbnbUrl,
+                                googleCalendarIframe: c.googleCalendarIframe,
+                                icalUrl: c.icalUrl,
+                                fotasMigradas: c.fotasMigradas,
+                                fotosCount: (c.fotos||[]).length
+                            }, null, 2))
+                        }</pre>
+                    </details>
+                </div>`;
+        }
+
+        document.getElementById('cabanasResult').innerHTML = html;
+        document.getElementById('cardEditar').style.display = 'block';
+
+    } catch(e) {
+        log(`Error: ${e.message}`, 'err');
+        document.getElementById('cabanasResult').innerHTML =
+            `<div style="color:#f87171;font-size:12px">Error: ${esc(e.message)}</div>`;
+    }
+
+    document.getElementById('btnLeer').disabled = false;
+}
+
+// ── Guardar todo ──────────────────────────────────────────────
+async function guardarTodo() {
+    log('Guardando calendarios...', 'info');
+    let ok = 0, err = 0;
+
+    for (const c of cabanasData) {
+        try {
+            const airbnbUrl           = document.getElementById(`airbnb_${c.docId}`)?.value?.trim() || '';
+            const googleCalendarIframe = document.getElementById(`gcal_${c.docId}`)?.value?.trim() || '';
+
+            await db.collection('cabanas').doc(c.docId).update({
+                airbnbUrl,
+                googleCalendarIframe
+            });
+
+            log(`  ✓ Cabaña ${c.id}: guardado`, 'ok');
+            ok++;
+        } catch(e) {
+            log(`  ✗ Cabaña ${c.id}: ${e.message}`, 'err');
+            err++;
+        }
+    }
+
+    if (err === 0) {
+        log(`✅ ${ok} cabañas actualizadas correctamente.`, 'ok');
+        document.getElementById('cabanasResult').innerHTML =
+            '<div style="color:#34d399;font-size:13px;padding:10px">✅ Guardado. Recargá la página para verificar.</div>';
+        document.getElementById('cardEditar').style.display = 'none';
+        // Recargar para mostrar estado actualizado
+        setTimeout(leerCabanas, 1000);
+    } else {
+        log(`⚠ ${ok} OK, ${err} errores.`, 'warn');
+    }
+}
+</script>
+</body>
+</html>
