@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Calendar API — Casa Verde Canas</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f1117;color:#e2e8f0;padding:16px;min-height:100vh}
+        h1{font-size:16px;font-weight:800;color:#fff;margin-bottom:4px}
+        h1 span{color:#f59e0b}
+        .sub{font-size:11px;color:#64748b;margin-bottom:16px}
+        .card{background:#1e2130;border:1px solid #2d3250;border-radius:10px;padding:14px;margin-bottom:12px}
+        .card h2{font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px}
+        .btn{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border-radius:7px;border:none;font-size:12px;font-weight:700;cursor:pointer;margin:3px}
+        .btn:disabled{opacity:.35;cursor:not-allowed}
+        .btn-blue{background:#3b82f6;color:#fff}
+        .btn-green{background:#10b981;color:#fff}
+        .btn-yellow{background:#f59e0b;color:#111}
+        .btn-gray{background:#2d3250;color:#94a3b8}
+        .log{background:#0d1117;border-radius:7px;padding:10px;max-height:400px;overflow-y:auto;font-family:monospace;font-size:11px;line-height:1.9}
+        .ok{color:#34d399}.warn{color:#fbbf24}.err{color:#f87171}.info{color:#60a5fa}.muted{color:#475569}.title{color:#e2e8f0;font-weight:700}
+        .evento{background:#0d1117;border-radius:6px;padding:10px;margin:6px 0;font-size:11px;border-left:3px solid #3b82f6}
+        .evento.reservado{border-left-color:#ef4444}
+        .evento.bloqueado{border-left-color:#f59e0b}
+        label{font-size:11px;color:#94a3b8;display:block;margin-bottom:4px}
+        input,select{width:100%;background:#0d1117;border:1px solid #2d3250;border-radius:5px;padding:7px 10px;color:#e2e8f0;font-size:12px;margin-bottom:8px}
+        input:focus,select:focus{outline:none;border-color:#3b82f6}
+        .badge{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700}
+        .b-ok{background:#064e3b;color:#34d399;border:1px solid #10b981}
+        .b-warn{background:#2d1f00;color:#fbbf24;border:1px solid #92400e}
+        .b-err{background:#450a0a;color:#f87171;border:1px solid #ef4444}
+        .stat{background:#0d1117;border-radius:6px;padding:10px;text-align:center;margin:4px}
+        .stat .n{font-size:20px;font-weight:800;color:#60a5fa}
+        .stat .l{font-size:10px;color:#64748b;margin-top:2px}
+        .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+        details{margin-top:6px}
+        summary{cursor:pointer;font-size:10px;color:#60a5fa}
+        pre{margin-top:5px;background:#0d1117;border-radius:4px;padding:8px;font-size:10px;color:#94a3b8;overflow:auto;max-height:150px}
+        .sep{border:none;border-top:1px solid #2d3250;margin:10px 0}
+    </style>
+</head>
+<body>
+
+<h1>🔬 Test <span>Google Calendar API</span></h1>
+<p class="sub">Diagnóstico paso a paso para detectar por qué no se importan las reservas</p>
+
+<!-- PASO 1: Config -->
+<div class="card">
+    <h2>1 — Configuración</h2>
+    <label>API Key de Google Calendar</label>
+    <input type="text" id="apiKey" value="AIzaSyBnfunjUkUXiRjKCPRotpFHE9tGgn6tV8E">
+    <label>Calendar ID a testear (Depto / Cabaña 2)</label>
+    <input type="text" id="calId" placeholder="abc123@import.calendar.google.com">
+    <label>Fecha desde</label>
+    <input type="date" id="fechaDesde">
+    <label>Fecha hasta</label>
+    <input type="date" id="fechaHasta">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn btn-blue" onclick="leerDeFirestore()">📡 Leer ID desde Firestore</button>
+        <button class="btn btn-green" id="btnTest" onclick="ejecutarTest()">🔍 Ejecutar test completo</button>
+    </div>
+</div>
+
+<!-- PASO 2: Resultados -->
+<div class="card" id="resultados" style="display:none">
+    <h2>2 — Resultados</h2>
+    <div class="grid3" id="statsGrid"></div>
+    <hr class="sep">
+    <div id="eventosLista"></div>
+</div>
+
+<!-- PASO 3: Diagnóstico -->
+<div class="card" id="diagnosticoCard" style="display:none">
+    <h2>3 — Diagnóstico y causa probable</h2>
+    <div id="diagnosticoTexto"></div>
+</div>
+
+<!-- LOG -->
+<div class="card">
+    <h2>Log detallado</h2>
+    <div class="log" id="logEl"><span class="muted">Esperando...</span></div>
+    <button class="btn btn-gray" style="margin-top:6px;font-size:10px;padding:4px 8px" onclick="exportLog()">📥 Exportar</button>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script>
+const CFG = {
+    apiKey:    'AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4',
+    authDomain:'casaverdecanas-199.firebaseapp.com',
+    projectId: 'casaverdecanas-199'
+};
+if (!firebase.apps.length) firebase.initializeApp(CFG);
+const db = firebase.firestore();
+
+let logs = [];
+
+// Fechas por defecto: últimos 3 meses + próximos 6 meses
+const hoy    = new Date();
+const desde  = new Date(hoy); desde.setMonth(desde.getMonth() - 3);
+const hasta  = new Date(hoy); hasta.setMonth(hasta.getMonth() + 6);
+document.getElementById('fechaDesde').value = desde.toISOString().split('T')[0];
+document.getElementById('fechaHasta').value = hasta.toISOString().split('T')[0];
+
+function log(msg, tipo='info') {
+    const ts = new Date().toLocaleTimeString('es-AR');
+    logs.push(`[${ts}] [${tipo.toUpperCase()}] ${msg}`);
+    const el = document.getElementById('logEl');
+    if (el.querySelector('.muted')) el.innerHTML = '';
+    const d = document.createElement('div');
+    d.className = tipo; d.textContent = `[${ts}] ${msg}`;
+    el.appendChild(d); el.scrollTop = el.scrollHeight;
+}
+
+function exportLog() {
+    const b = new Blob([logs.join('\n')],{type:'text/plain'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b);
+    a.download = `test-calendar-${new Date().toISOString().split('T')[0]}.log`;
+    a.click();
+}
+
+function esc(s){ return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+// ── Leer calendar ID desde Firestore ─────────────────────────
+async function leerDeFirestore() {
+    log('Leyendo cabañas desde Firestore...', 'info');
+    try {
+        const snap = await db.collection('cabanas').get();
+        const cabanas = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .sort((a,b) => (a.orden||0)-(b.orden||0));
+
+        log(`${cabanas.length} cabañas encontradas:`, 'info');
+
+        const select = document.createElement('select');
+        select.id = 'cabanaSelect';
+        select.style.cssText = 'width:100%;background:#0d1117;border:1px solid #2d3250;border-radius:5px;padding:7px 10px;color:#e2e8f0;font-size:12px;margin-bottom:8px';
+        select.innerHTML = '<option value="">— Seleccionar cabaña —</option>';
+
+        for (const c of cabanas) {
+            const nombre = c.nombre?.es || c.nombre?.pt || `Cabaña ${c.id}`;
+            const calId  = c.google_calendar_id || '';
+            const estado = calId ? '✅' : '❌';
+            log(`  ${estado} ${nombre}: ${calId || 'SIN CALENDAR ID'}`, calId ? 'ok' : 'err');
+
+            const opt = document.createElement('option');
+            opt.value = calId;
+            opt.textContent = `${nombre} — ${calId || 'Sin calendar ID'}`;
+            select.appendChild(opt);
+        }
+
+        // Reemplazar input calId con select
+        const input = document.getElementById('calId');
+        input.parentNode.insertBefore(select, input);
+        input.style.display = 'none';
+
+        select.addEventListener('change', () => {
+            document.getElementById('calId').value = select.value;
+            if (select.value) log(`Calendar ID seleccionado: ${select.value}`, 'info');
+        });
+
+        log('Seleccioná la cabaña con reserva para testear.', 'warn');
+    } catch(e) {
+        log(`Error: ${e.message}`, 'err');
+    }
+}
+
+// ── Test completo ─────────────────────────────────────────────
+async function ejecutarTest() {
+    const apiKey  = document.getElementById('apiKey').value.trim();
+    const calId   = document.getElementById('calId').value.trim();
+    const desde   = document.getElementById('fechaDesde').value;
+    const hasta   = document.getElementById('fechaHasta').value;
+
+    if (!calId) { log('Seleccioná o ingresá un Calendar ID', 'err'); return; }
+    if (!desde || !hasta) { log('Ingresá fechas de búsqueda', 'err'); return; }
+
+    document.getElementById('btnTest').disabled = true;
+    log('=== TEST INICIADO ===', 'title');
+    log(`Calendar ID: ${calId}`, 'info');
+    log(`Rango: ${desde} → ${hasta}`, 'info');
+
+    // ── Test 1: URL base ──────────────────────────────────────
+    log('--- Test 1: Verificar formato del Calendar ID ---', 'title');
+    const esValido = calId.includes('@') && calId.length > 10;
+    if (esValido) {
+        log(`✓ Formato OK: ${calId}`, 'ok');
+    } else {
+        log(`✗ Formato inválido: debe contener @ y ser largo`, 'err');
+    }
+
+    // ── Test 2: Llamada básica a la API ───────────────────────
+    log('--- Test 2: Llamada a Google Calendar API ---', 'title');
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events`
+        + `?key=${apiKey}`
+        + `&timeMin=${new Date(desde).toISOString()}`
+        + `&timeMax=${new Date(hasta + 'T23:59:59').toISOString()}`
+        + `&singleEvents=true&orderBy=startTime&maxResults=250`;
+
+    log(`URL: ${url.replace(apiKey, 'API_KEY_OCULTA')}`, 'muted');
+
+    let data = null;
+    try {
+        const res = await fetch(url);
+        log(`HTTP Status: ${res.status} ${res.statusText}`, res.ok ? 'ok' : 'err');
+
+        if (!res.ok) {
+            const err = await res.json();
+            log(`Error API: ${JSON.stringify(err.error || err)}`, 'err');
+
+            // Diagnóstico de errores comunes
+            if (res.status === 403) {
+                log('⚠ HTTP 403: El calendario no es público O la API key no tiene permisos para Google Calendar API', 'warn');
+                log('→ Verificá en Google Calendar: Configuración → [este calendario] → Permisos de acceso → "Disponible para todos"', 'warn');
+                log('→ Verificá en Google Cloud Console que la API de Calendar esté habilitada para esta API key', 'warn');
+            } else if (res.status === 404) {
+                log('⚠ HTTP 404: El Calendar ID no existe o es incorrecto', 'warn');
+                log('→ Verificá el ID en Google Calendar → Configuración del calendario → "ID del calendario"', 'warn');
+            } else if (res.status === 400) {
+                log('⚠ HTTP 400: Parámetros inválidos en la llamada', 'warn');
+            }
+            mostrarDiagnostico('error_api', res.status, null);
+            document.getElementById('btnTest').disabled = false;
+            return;
+        }
+
+        data = await res.json();
+        log(`✓ Respuesta OK — ${data.items?.length || 0} eventos en el rango`, 'ok');
+
+    } catch(e) {
+        log(`✗ Error de red: ${e.message}`, 'err');
+        log('→ Posible problema de CORS o conectividad', 'warn');
+        document.getElementById('btnTest').disabled = false;
+        return;
+    }
+
+    const items = data.items || [];
+
+    // ── Test 3: Analizar eventos ──────────────────────────────
+    log('--- Test 3: Analizar eventos encontrados ---', 'title');
+
+    let totalEventos = 0, reservados = 0, bloqueados = 0, otros = 0, cancelados = 0;
+    const eventosDetalle = [];
+
+    for (const ev of items) {
+        totalEventos++;
+
+        if (ev.status === 'cancelled') { cancelados++; continue; }
+
+        const titulo   = ev.summary || '(sin título)';
+        const tituloL  = titulo.toLowerCase();
+        const inicio   = ev.start?.date || ev.start?.dateTime?.split('T')[0] || '?';
+        const fin      = ev.end?.date   || ev.end?.dateTime?.split('T')[0]   || '?';
+        const esAllDay = !!ev.start?.date;
+
+        let tipo = 'otro';
+        if (tituloL.includes('reserved') || tituloL.includes('reserva')) tipo = 'reservado';
+        else if (tituloL.includes('not available') || tituloL.includes('blocked') ||
+                 tituloL.includes('no disponible') || tituloL.includes('indisponível')) tipo = 'bloqueado';
+
+        if (tipo === 'reservado') reservados++;
+        else if (tipo === 'bloqueado') bloqueados++;
+        else otros++;
+
+        log(`  [${tipo.toUpperCase()}] "${titulo}" ${inicio} → ${fin} ${esAllDay ? '(todo el día)' : '(con hora)'}`, tipo === 'reservado' ? 'ok' : tipo === 'bloqueado' ? 'warn' : 'info');
+
+        eventosDetalle.push({ ev, titulo, inicio, fin, tipo, esAllDay });
+    }
+
+    log(`Resumen: ${totalEventos} eventos · ${reservados} reservados · ${bloqueados} bloqueados · ${otros} otros · ${cancelados} cancelados`, 'info');
+
+    // ── Test 4: Simular filtro del sistema ────────────────────
+    log('--- Test 4: Simular el filtro actual del sistema ---', 'title');
+
+    const filtrados = eventosDetalle.filter(e => {
+        const t = e.titulo.toLowerCase();
+        return !t.includes('not available') && !t.includes('no disponible') &&
+               !t.includes('indisponível') && !t.includes('unavailable') &&
+               e.ev.status !== 'cancelled';
+    });
+
+    log(`Después del filtro: ${filtrados.length} de ${eventosDetalle.length} eventos pasarían`, filtrados.length > 0 ? 'ok' : 'err');
+
+    if (filtrados.length === 0 && eventosDetalle.length > 0) {
+        log('⚠ PROBLEMA DETECTADO: Todos los eventos están siendo filtrados', 'err');
+        log('→ El título del evento podría contener palabras del filtro de exclusión', 'warn');
+    }
+
+    // ── Test 5: Verificar en Firestore ────────────────────────
+    log('--- Test 5: Verificar eventos ya importados en Firestore ---', 'title');
+    try {
+        const resSnap = await db.collection('reservas')
+            .where('origen', '==', 'airbnb').get();
+        const airbnbReservas = resSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        log(`Reservas con origen=airbnb en Firestore: ${airbnbReservas.length}`, 'info');
+
+        const googleIds = new Set(airbnbReservas.map(r => r.airbnb_google_id).filter(Boolean));
+        log(`Con google_id registrado: ${googleIds.size}`, 'info');
+
+        // Verificar cuáles de los eventos del calendar ya están importados
+        for (const e of filtrados) {
+            const yaImportado = googleIds.has(e.ev.id);
+            log(`  "${e.titulo}" (${e.inicio}→${e.fin}): ${yaImportado ? '✅ Ya en Firestore' : '❌ NO importado'}`, yaImportado ? 'ok' : 'err');
+        }
+    } catch(err) {
+        log(`Error leyendo Firestore: ${err.message}`, 'err');
+    }
+
+    // ── Mostrar resultados visuales ───────────────────────────
+    mostrarResultados(totalEventos, reservados, bloqueados, otros, cancelados, eventosDetalle);
+    mostrarDiagnostico('ok', 200, { items, filtrados, eventosDetalle });
+
+    document.getElementById('btnTest').disabled = false;
+    log('=== TEST COMPLETO ===', 'title');
+}
+
+function mostrarResultados(total, reservados, bloqueados, otros, cancelados, detalle) {
+    const card = document.getElementById('resultados');
+    card.style.display = 'block';
+
+    document.getElementById('statsGrid').innerHTML = `
+        <div class="stat"><div class="n" style="color:${total>0?'#60a5fa':'#f87171'}">${total}</div><div class="l">Eventos totales</div></div>
+        <div class="stat"><div class="n" style="color:${reservados>0?'#34d399':'#f87171'}">${reservados}</div><div class="l">Reservados</div></div>
+        <div class="stat"><div class="n" style="color:#fbbf24">${bloqueados}</div><div class="l">Bloqueados</div></div>`;
+
+    if (!detalle.length) {
+        document.getElementById('eventosLista').innerHTML =
+            '<div style="color:var(--err,#f87171);font-size:12px;padding:10px 0">Sin eventos en el rango de fechas.</div>';
+        return;
+    }
+
+    document.getElementById('eventosLista').innerHTML = detalle.map(e => `
+        <div class="evento ${e.tipo}">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+                <div>
+                    <strong style="color:#e2e8f0">${esc(e.titulo)}</strong>
+                    <span class="badge ${e.tipo==='reservado'?'b-ok':e.tipo==='bloqueado'?'b-warn':'b-err'}" style="margin-left:6px">${e.tipo}</span>
+                </div>
+                <div style="font-size:10px;color:#64748b;white-space:nowrap">${esc(e.inicio)} → ${esc(e.fin)}</div>
+            </div>
+            <div style="font-size:10px;color:#475569;margin-top:4px">
+                ID: ${esc(e.ev.id)} · ${e.esAllDay ? 'Todo el día' : 'Con hora'} · Status: ${esc(e.ev.status||'confirmed')}
+            </div>
+            <details>
+                <summary>Ver JSON completo</summary>
+                <pre>${esc(JSON.stringify(e.ev, null, 2))}</pre>
+            </details>
+        </div>`).join('');
+}
+
+function mostrarDiagnostico(tipo, status, datos) {
+    const card = document.getElementById('diagnosticoCard');
+    const texto = document.getElementById('diagnosticoTexto');
+    card.style.display = 'block';
+
+    if (tipo === 'error_api') {
+        const causas = {
+            403: {
+                titulo: '🔒 Acceso denegado (HTTP 403)',
+                causas: [
+                    'El calendario NO está configurado como público en Google Calendar',
+                    'La API Key no tiene la API de Google Calendar habilitada en Google Cloud Console',
+                    'La API Key tiene restricciones de dominio que bloquean el acceso'
+                ],
+                soluciones: [
+                    'Google Calendar → ⚙️ Configuración → [Nombre del calendario] → "Permisos de acceso" → ✅ "Disponible para todos" → Guardar',
+                    'Google Cloud Console → APIs & Services → Library → buscar "Google Calendar API" → Habilitar',
+                    'Google Cloud Console → APIs & Services → Credentials → tu API Key → quitar restricciones de HTTP referrer temporalmente para testear'
+                ]
+            },
+            404: {
+                titulo: '❓ Calendar ID no encontrado (HTTP 404)',
+                causas: [
+                    'El Calendar ID copiado es incorrecto o tiene caracteres de más',
+                    'El calendario fue eliminado o la cuenta cambió'
+                ],
+                soluciones: [
+                    'Google Calendar → ⚙️ → Configuración del calendario → copiar "ID del calendario" exactamente como aparece'
+                ]
+            }
+        };
+
+        const info = causas[status] || { titulo: `Error HTTP ${status}`, causas: [], soluciones: [] };
+        texto.innerHTML = `
+            <div style="color:#f87171;font-weight:700;margin-bottom:10px">${info.titulo}</div>
+            <div style="font-size:12px;margin-bottom:8px"><strong style="color:#94a3b8">Causas posibles:</strong></div>
+            ${info.causas.map(c => `<div style="font-size:11px;color:#fbbf24;padding:3px 0;">⚠ ${esc(c)}</div>`).join('')}
+            <div style="font-size:12px;margin-top:10px;margin-bottom:8px"><strong style="color:#94a3b8">Soluciones:</strong></div>
+            ${info.soluciones.map(s => `<div style="font-size:11px;color:#34d399;padding:3px 0;">→ ${esc(s)}</div>`).join('')}`;
+        return;
+    }
+
+    // Diagnóstico con datos
+    const { filtrados, eventosDetalle } = datos;
+    const noImportados = eventosDetalle.filter(e => e.tipo === 'reservado' || e.tipo === 'bloqueado');
+
+    if (eventosDetalle.length === 0) {
+        texto.innerHTML = `
+            <div style="color:#fbbf24;font-weight:700;margin-bottom:8px">⚠ El calendario no tiene eventos en el rango de fechas</div>
+            <div style="font-size:11px;color:#64748b;line-height:1.8">
+                → La sincronización de Airbnb → Google Calendar puede tener demora (hasta 24hs)<br>
+                → Verificá en Google Calendar que el evento "Reserved" se vea en este calendario<br>
+                → Ampliá el rango de fechas de búsqueda
+            </div>`;
+        return;
+    }
+
+    if (filtrados.length === 0) {
+        texto.innerHTML = `
+            <div style="color:#f87171;font-weight:700;margin-bottom:8px">❌ Todos los eventos son filtrados</div>
+            <div style="font-size:11px;color:#64748b;line-height:1.8">
+                Los títulos contienen palabras que el sistema usa para excluir eventos de bloqueo de calendario.
+                Revisá los títulos en los detalles arriba.
+            </div>`;
+        return;
+    }
+
+    texto.innerHTML = `
+        <div style="color:#34d399;font-weight:700;margin-bottom:8px">✅ ${filtrados.length} evento(s) deberían importarse</div>
+        <div style="font-size:11px;color:#64748b;line-height:1.8;margin-bottom:10px">
+            La API responde correctamente y los eventos existen. El problema es que no se ejecutó la sincronización
+            o los eventos ya están en Firestore con otro ID.
+        </div>
+        <div style="margin-top:8px">
+            <button class="btn btn-green" onclick="importarAhora()">⚡ Importar estos eventos ahora</button>
+        </div>`;
+}
+
+// ── Importar directamente desde el test ──────────────────────
+window.importarAhora = async function() {
+    const apiKey  = document.getElementById('apiKey').value.trim();
+    const calId   = document.getElementById('calId').value.trim();
+    const desde   = document.getElementById('fechaDesde').value;
+    const hasta   = document.getElementById('fechaHasta').value;
+
+    log('=== IMPORTACIÓN DIRECTA ===', 'title');
+
+    // Buscar cabaña por calId
+    const cabSnap = await db.collection('cabanas').get();
+    const cabana  = cabSnap.docs.map(d=>({id:d.id,...d.data()}))
+        .find(c => c.google_calendar_id === calId);
+
+    if (!cabana) { log('⚠ No se encontró cabaña con este Calendar ID', 'err'); return; }
+    log(`Cabaña encontrada: ${cabana.nombre?.es || cabana.id} (ID: ${cabana.id})`, 'ok');
+
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events`
+        + `?key=${apiKey}`
+        + `&timeMin=${new Date(desde).toISOString()}`
+        + `&timeMax=${new Date(hasta + 'T23:59:59').toISOString()}`
+        + `&singleEvents=true&orderBy=startTime&maxResults=250`;
+
+    const res  = await fetch(url);
+    const data = await res.json();
+    const items = (data.items||[]).filter(ev =>
+        ev.status !== 'cancelled' &&
+        !['not available','no disponible','indisponível','unavailable'].some(w =>
+            (ev.summary||'').toLowerCase().includes(w))
+    );
+
+    // Leer IDs existentes
+    const existSnap = await db.collection('reservas').where('origen','==','airbnb').get();
+    const idsExist  = new Set(existSnap.docs.map(d=>d.data().airbnb_google_id).filter(Boolean));
+
+    let creadas = 0;
+    for (const ev of items) {
+        if (idsExist.has(ev.id)) { log(`  ↷ Ya existe: "${ev.summary||'?'}"`, 'muted'); continue; }
+        const inicio = ev.start?.date || ev.start?.dateTime?.split('T')[0];
+        const fin    = ev.end?.date   || ev.end?.dateTime?.split('T')[0];
+        if (!inicio || !fin) continue;
+
+        await db.collection('reservas').add({
+            airbnb_google_id: ev.id,
+            origen:           'airbnb',
+            estado:           'airbnb_activa',
+            checkIn:  firebase.firestore.Timestamp.fromDate(new Date(inicio + 'T12:00:00')),
+            checkOut: firebase.firestore.Timestamp.fromDate(new Date(fin    + 'T12:00:00')),
+            caba:     cabana.id,
+            nombre:   ev.summary || 'Reserva Airbnb',
+            email:'', telefono:'', adultos:2, ninos:0, huespedes:2, totalBRL:0,
+            notas: `Importado via test diagnóstico. Título original: ${ev.summary||'?'}`,
+            creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
+            creadoPor: 'sistema-test'
+        });
+        log(`  ✓ Importado: "${ev.summary||'?'}" ${inicio} → ${fin}`, 'ok');
+        creadas++;
+    }
+
+    log(`Importación completa: ${creadas} reservas creadas.`, creadas > 0 ? 'ok' : 'warn');
+    if (creadas > 0) {
+        log('→ Ejecutá "Sincronizar disponibilidad" en el Dashboard para que aparezca en el calendario público.', 'warn');
+    }
+};
+</script>
+</body>
+</html>
