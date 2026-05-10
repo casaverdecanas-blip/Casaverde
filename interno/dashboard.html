@@ -1,511 +1,659 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard · Casa Verde Canas</title>
-    <link rel="stylesheet" href="design-system.css">
-</head>
-<body>
-
-<!-- ── HEADER ──────────────────────────────────────────────── -->
-<header class="admin-header">
-    <div class="admin-header__brand">
-        <span class="material-icons">cottage</span>
-        Casa Verde Canas
-    </div>
-    <div class="admin-header__actions">
-        <div class="user-chip">
-            <span class="material-icons">person</span>
-            <span id="userName">—</span>
-        </div>
-        <button class="btn-logout" onclick="CVC.cerrarSesion()">
-            <span class="material-icons">logout</span>
-            Salir
-        </button>
-    </div>
-</header>
-
-<!-- ── NAVEGACIÓN ──────────────────────────────────────────── -->
-<nav class="admin-nav" id="appNav"></nav>
-
-<!-- ── CONTENIDO ───────────────────────────────────────────── -->
-<main class="admin-content">
-
-    <!-- KPIs -->
-    <p class="section-title">Resumen general</p>
-    <div class="kpi-grid" id="kpiGrid">
-        <div class="state-loading" style="grid-column:1/-1;">
-            <div class="spinner"></div>
-            <span>Cargando datos...</span>
-        </div>
-    </div>
-
-    <!-- Accesos rápidos -->
-    <p class="section-title">Accesos rápidos</p>
-    <div class="accesos-grid">
-        <a href="reservas.html?nuevo=1"     class="acceso-card"><span class="material-icons">add_circle</span>Nueva reserva</a>
-        <a href="presupuestos.html?nuevo=1" class="acceso-card"><span class="material-icons">calculate</span>Nuevo presupuesto</a>
-        <a href="pagos.html" class="acceso-card"><span class="material-icons">payments</span>Finanzas</a>
-        <a href="clientes.html?nuevo=1"     class="acceso-card"><span class="material-icons">person_add</span>Nuevo cliente</a>
-        <a href="cabanas-admin.html"        class="acceso-card"><span class="material-icons">cottage</span>Cabañas</a>
-        <a href="calendario.html"           class="acceso-card"><span class="material-icons">calendar_month</span>Calendario</a>
-        <a href="tareas.html"               class="acceso-card"><span class="material-icons">checklist</span>Tareas</a>
-        <a href="usuarios.html"             class="acceso-card"><span class="material-icons">manage_accounts</span>Usuarios</a>
-    </div>
-
-    <!-- Dos columnas -->
-    <div class="grid-2">
-
-        <!-- Próximos check-ins -->
-        <div class="card">
-            <div class="card__header">
-                <h2 class="card__title">
-                    <span class="material-icons">login</span>
-                    Próximos check-ins
-                </h2>
-                <a href="reservas.html" class="action-link">Ver todas <span class="material-icons" style="font-size:14px;">arrow_forward</span></a>
-            </div>
-            <div id="proximosCheckins">
-                <div class="state-loading"><div class="spinner spinner-sm"></div><span>Cargando...</span></div>
-            </div>
-        </div>
-
-        <!-- Tareas pendientes -->
-        <div class="card">
-            <div class="card__header">
-                <h2 class="card__title">
-                    <span class="material-icons">checklist</span>
-                    Tareas pendientes
-                </h2>
-                <a href="tareas.html" class="action-link">Ver todas <span class="material-icons" style="font-size:14px;">arrow_forward</span></a>
-            </div>
-            <div id="tareasPendientes">
-                <div class="state-loading"><div class="spinner spinner-sm"></div><span>Cargando...</span></div>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Reservas pendientes de confirmación -->
-    <div class="card">
-        <div class="card__header">
-            <h2 class="card__title">
-                <span class="material-icons">pending_actions</span>
-                Pendientes de confirmación
-            </h2>
-            <a href="reservas.html?filtro=pendiente" class="action-link">Ver todas <span class="material-icons" style="font-size:14px;">arrow_forward</span></a>
-        </div>
-        <div id="reservasPendientes">
-            <div class="state-loading"><div class="spinner spinner-sm"></div><span>Cargando...</span></div>
-        </div>
-    </div>
+// ============================================================
+//  utils.js — Casa Verde Canas  v2.0
+//  Funciones compartidas para todos los módulos de /interno/
+//
+//  DEPENDENCIAS (cargar antes en cada HTML):
+//    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+//    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+//    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+//    <script src="utils.js"></script>
+//
+//  EXCEPCIÓN: interno/index.html (login) NO incluye utils.js
+// ============================================================
 
 
-    <!-- ── MANTENIMIENTO ─────────────────────────────────────── -->
-    <details id="seccionMantenimiento" style="margin-top:var(--space-6);">
-        <summary style="cursor:pointer; display:flex; align-items:center; gap:var(--space-2);
-            font-size:var(--text-sm); font-weight:700; color:var(--color-text-muted);
-            text-transform:uppercase; letter-spacing:.07em; padding:var(--space-3) 0;
-            border-top:1px solid var(--color-border); user-select:none;">
-            <span class="material-icons" style="font-size:16px;">build</span>
-            Mantenimiento del sistema
-            <span style="margin-left:auto; font-size:var(--text-xs); font-weight:400; color:var(--color-text-muted);">Solo admin</span>
-        </summary>
+// ── FIREBASE ─────────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+    apiKey:     'AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4',
+    authDomain: 'casaverdecanas-199.firebaseapp.com',
+    projectId:  'casaverdecanas-199'
+};
+if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+const db   = firebase.firestore();
+const auth = firebase.auth();
 
-                <div style="margin-top:var(--space-4); display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:var(--space-4);">
 
-            <!-- Sincronizar disponibilidad -->
-            <div class="card" style="border-left:3px solid var(--color-primary);">
-                <div style="display:flex; align-items:flex-start; gap:var(--space-3);">
-                    <span class="material-icons" style="color:var(--color-primary); margin-top:2px;">sync</span>
-                    <div style="flex:1;">
-                        <div style="font-size:var(--text-sm); font-weight:700; margin-bottom:4px;">Sincronizar disponibilidad</div>
-                        <div style="font-size:var(--text-xs); color:var(--color-text-muted); line-height:1.6; margin-bottom:var(--space-3);">
-                            Actualiza la colección pública <code>disponibilidad</code> con todas las reservas activas.
-                            Ejecutar después de importar datos o ante inconsistencias en el calendario público.
-                        </div>
-                        <button class="btn btn-primary btn-sm" onclick="abrirHerramienta('sync-disponibilidad', 'Sincronizar disponibilidad pública')">
-                            <span class="material-icons">play_arrow</span> Ejecutar
-                        </button>
-                    </div>
-                </div>
-            </div>
+// ── CONSTANTES ───────────────────────────────────────────────
+const ESTADOS_RESERVA = {
+    pendiente:        { label: 'Pendiente',          cssClass: 'badge-pendiente'  },
+    confirmada:       { label: 'Confirmada',         cssClass: 'badge-confirmada' },
+    anulada:          { label: 'Anulada',            cssClass: 'badge-anulada'    },
+    finalizada:       { label: 'Finalizada',         cssClass: 'badge-finalizada' },
+    airbnb_activa:    { label: 'Airbnb',             cssClass: 'badge-neutral'    },
+    airbnb_cancelada: { label: '⚠ Cancelada Airbnb', cssClass: 'badge-pendiente'  }
+};
 
-            <!-- Test Google Calendar -->
-            <div class="card" style="border-left:3px solid var(--color-warning);">
-                <div style="display:flex; align-items:flex-start; gap:var(--space-3);">
-                    <span class="material-icons" style="color:var(--color-warning); margin-top:2px;">bug_report</span>
-                    <div style="flex:1;">
-                        <div style="font-size:var(--text-sm); font-weight:700; margin-bottom:4px;">Test calendario Airbnb</div>
-                        <div style="font-size:var(--text-xs); color:var(--color-text-muted); line-height:1.6; margin-bottom:var(--space-3);">
-                            Diagnóstico paso a paso para detectar por qué un calendario de Airbnb
-                            no importa sus reservas. Llama directo a la API y muestra el resultado crudo.
-                        </div>
-                        <button class="btn btn-secondary btn-sm" onclick="abrirHerramienta('test-calendar', 'Test Google Calendar API')">
-                            <span class="material-icons">science</span> Abrir
-                        </button>
-                    </div>
-                </div>
-            </div>
+const ESTADOS_TAREA = {
+    pendiente:  { label: 'Pendiente',  cssClass: 'badge-pendiente' },
+    en_curso:   { label: 'En curso',   cssClass: 'badge-en_curso'  },
+    finalizada: { label: 'Finalizada', cssClass: 'badge-finalizada'}
+};
 
-            <!-- Calendarios Airbnb -->
-            <div class="card" style="border-left:3px solid var(--color-info);">
-                <div style="display:flex; align-items:flex-start; gap:var(--space-3);">
-                    <span class="material-icons" style="color:var(--color-info); margin-top:2px;">calendar_today</span>
-                    <div style="flex:1;">
-                        <div style="font-size:var(--text-sm); font-weight:700; margin-bottom:4px;">Configurar calendarios</div>
-                        <div style="font-size:var(--text-xs); color:var(--color-text-muted); line-height:1.6; margin-bottom:var(--space-3);">
-                            Verifica y corrige las URLs de Google Calendar de cada cabaña.
-                            Extrae el Calendar ID automáticamente del iframe de Google.
-                        </div>
-                        <button class="btn btn-secondary btn-sm" onclick="abrirHerramienta('diagnostico-calendarios', 'Configurar calendarios Airbnb')">
-                            <span class="material-icons">settings</span> Abrir
-                        </button>
-                    </div>
-                </div>
-            </div>
+const PRIORIDADES = {
+    alta:  { label: 'Alta',  cssClass: 'badge-alta'  },
+    media: { label: 'Media', cssClass: 'badge-media' },
+    baja:  { label: 'Baja',  cssClass: 'badge-baja'  }
+};
 
-            <!-- Reglas Firestore -->
-            <div class="card" style="border-left:3px solid var(--color-success);">
-                <div style="display:flex; align-items:flex-start; gap:var(--space-3);">
-                    <span class="material-icons" style="color:var(--color-success); margin-top:2px;">security</span>
-                    <div style="flex:1;">
-                        <div style="font-size:var(--text-sm); font-weight:700; margin-bottom:4px;">Reglas de seguridad</div>
-                        <div style="font-size:var(--text-xs); color:var(--color-text-muted); line-height:1.6; margin-bottom:var(--space-3);">
-                            Verifica que las colecciones públicas
-                            (<code>cabanas</code>, <code>disponibilidad</code>) sean legibles sin autenticación.
-                        </div>
-                        <button class="btn btn-secondary btn-sm" onclick="verificarReglas()">
-                            <span class="material-icons">check_circle</span> Verificar
-                        </button>
-                        <div id="resultado-reglas" style="margin-top:var(--space-2); font-size:var(--text-xs);"></div>
-                    </div>
-                </div>
-            </div>
+// Calendar IDs confirmados por cabaña (solo el ID, no el embed)
+const CALENDAR_IDS = {
+    1: '8i3hl5ppqi6al50kf7casj5n5vl9sp1j@import.calendar.google.com',
+    2: '60n7foetdu2qvsn16mi7is8j6i4ugm66@import.calendar.google.com',
+    3: 'h5a1h0a8dg9rl0oufvq19hn05r4gbubg@import.calendar.google.com'
+};
 
-            <!-- Integridad de datos -->
-            <div class="card" style="border-left:3px solid var(--color-danger);">
-                <div style="display:flex; align-items:flex-start; gap:var(--space-3);">
-                    <span class="material-icons" style="color:var(--color-danger); margin-top:2px;">fact_check</span>
-                    <div style="flex:1;">
-                        <div style="font-size:var(--text-sm); font-weight:700; margin-bottom:4px;">Integridad de datos</div>
-                        <div style="font-size:var(--text-xs); color:var(--color-text-muted); line-height:1.6; margin-bottom:var(--space-3);">
-                            Detecta reservas sin espejo en disponibilidad, presupuestos confirmados
-                            sin reserva asociada y otras inconsistencias.
-                        </div>
-                        <button class="btn btn-secondary btn-sm" onclick="verificarIntegridad()">
-                            <span class="material-icons">search</span> Analizar
-                        </button>
-                        <div id="resultado-integridad" style="font-size:var(--text-xs); margin-top:var(--space-2);"></div>
-                    </div>
-                </div>
-            </div>
 
-        </div>
+// ── BADGES ───────────────────────────────────────────────────
+// Usan clases del design-system.css — sin estilos inline
 
-        <!-- Panel inline para herramientas -->
-        <div id="panelHerramienta" style="display:none; margin-top:var(--space-4);">
-            <div class="card" style="background:var(--color-surface-2); padding:0; overflow:hidden;">
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:var(--space-3) var(--space-4); border-bottom:1px solid var(--color-border);">
-                    <div style="display:flex; align-items:center; gap:var(--space-2);">
-                        <span class="material-icons" style="font-size:16px; color:var(--color-primary);">build</span>
-                        <strong id="panelHerramientaTitulo" style="font-size:var(--text-sm);"></strong>
-                    </div>
-                    <button class="btn btn-ghost btn-sm" onclick="cerrarHerramienta()">
-                        <span class="material-icons">close</span> Cerrar
-                    </button>
-                </div>
-                <iframe id="herramientaFrame"
-                    style="width:100%; border:none; min-height:600px; display:block;"
-                    src="" loading="lazy"></iframe>
-            </div>
-        </div>
+function badgeEstado(estado) {
+    const e = ESTADOS_RESERVA[estado] || ESTADOS_TAREA[estado] || { label: estado, cssClass: 'badge-neutral' };
+    return `<span class="badge ${e.cssClass}">${e.label}</span>`;
+}
 
-    </details>
+function badgePrioridad(prioridad) {
+    const p = PRIORIDADES[prioridad] || { label: prioridad, cssClass: 'badge-neutral' };
+    return `<span class="badge ${p.cssClass}">${p.label}</span>`;
+}
 
-</main>
 
-<!-- Firebase + utils -->
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-<script src="utils.js"></script>
-<script>
-(async () => {
-    // ── Auth ──────────────────────────────────────────────────
-    const { user, userData } = await CVC.verificarAuth('admin');
-    document.getElementById('userName').textContent = userData.nombre || user.email;
-    CVC.renderNav('dashboard.html');
+// ── AUTENTICACIÓN ─────────────────────────────────────────────
+/**
+ * Verifica sesión activa y rol correcto.
+ * Solo bloquea si userData.activo === false (explícito).
+ * Redirige a index.html si no cumple.
+ *
+ * @param {string|string[]} rolesPermitidos  'admin' | 'user' | ['admin','user']
+ * @returns {Promise<{ user, userData }>}
+ */
+function verificarAuth(rolesPermitidos) {
+    const roles = Array.isArray(rolesPermitidos) ? rolesPermitidos : [rolesPermitidos];
+    return new Promise((resolve) => {
+        auth.onAuthStateChanged(async (user) => {
+            if (!user) { window.location.href = 'index.html'; return; }
+            try {
+                const userDoc = await db.collection('usuarios').doc(user.uid).get();
+                if (!userDoc.exists) {
+                    await auth.signOut();
+                    window.location.href = 'index.html';
+                    return;
+                }
+                const userData = userDoc.data();
 
-    const db = CVC.db;
-    const { escapeHtml, badgeEstado, badgePrioridad, formatFecha, urgenciaTarea, showEmpty, showError } = CVC;
+                // Solo bloquea si activo es EXPLÍCITAMENTE false
+                if (userData.activo === false) {
+                    await auth.signOut();
+                    window.location.href = 'index.html';
+                    return;
+                }
 
-    // ── Colores por urgencia → clase CSS ──────────────────────
-    const urgenciaClass = { gris: 'badge-neutral', verde: 'badge-confirmada', amarillo: 'badge-pendiente', rojo: 'badge-alta' };
+                if (!roles.includes(userData.rol)) {
+                    window.location.href = userData.rol === 'user' ? 'tareas.html' : 'index.html';
+                    return;
+                }
 
-    // ── Cargar datos en paralelo ──────────────────────────────
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-
-    let reservas = [], tareas = [], totalCabanas = 0, totalClientes = 0, ingresosMes = 0;
-
-    try {
-        const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-
-        const [reservasSnap, tareasSnap, cabanasSnap, clientesSnap, pagosSnap] = await Promise.all([
-            db.collection('reservas').get(),
-            db.collection('tareas').get(),
-            db.collection('cabanas').get(),
-            db.collection('clientes').get(),
-            db.collection('pagos').get()
-        ]);
-
-        reservas       = reservasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        tareas         = tareasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        totalCabanas   = cabanasSnap.size;
-        totalClientes  = clientesSnap.size;
-
-        pagosSnap.docs.forEach(d => {
-            const p = d.data();
-            const fecha = p.creadoEn?.toDate?.();
-            if (fecha && fecha >= inicioMes && p.moneda === 'BRL') ingresosMes += p.monto || 0;
+                resolve({ user, userData });
+            } catch (e) {
+                console.error('Error verificando auth:', e);
+                window.location.href = 'index.html';
+            }
         });
+    });
+}
 
-    } catch (e) {
-        console.error('Error cargando datos:', e);
-        showError('#kpiGrid', 'Error al cargar datos', 'Verificá tu conexión e intentá de nuevo.', () => location.reload());
-        return;
+async function cerrarSesion() {
+    await auth.signOut();
+    window.location.href = 'index.html';
+}
+
+
+// ── CÁLCULO DE PRECIO ────────────────────────────────────────
+/**
+ * Calcula precio total usando tarifas base e intervalos de temporada.
+ *
+ * @param {Object} cabana    Documento de Firestore (con .tarifas)
+ * @param {string} checkIn   Fecha ISO: '2025-01-15'
+ * @param {string} checkOut  Fecha ISO: '2025-01-20'
+ * @param {number} adultos
+ * @param {number} ninos
+ * @returns {{ noches, subtotal, limpieza, total }}
+ */
+function calcularPrecio(cabana, checkIn, checkOut, adultos, ninos) {
+    const tarifas       = cabana.tarifas || {};
+    const capacidadBase = cabana.capacidad?.base || 2;
+    const personasExtra = Math.max(0, (adultos + ninos) - capacidadBase);
+
+    let subtotal = 0, noches = 0;
+    let fecha = new Date(checkIn  + 'T12:00:00');
+    const fin = new Date(checkOut + 'T12:00:00');
+
+    while (fecha < fin) {
+        const fechaStr  = fecha.toISOString().split('T')[0];
+        const intervalo = (tarifas.intervalos || []).find(i => i.desde <= fechaStr && i.hasta >= fechaStr);
+        subtotal += (intervalo ? intervalo.precioNoche     : (tarifas.precioBase         || 0))
+                  + (intervalo ? intervalo.precioExtra     : (tarifas.precioExtraPersona || 0)) * personasExtra;
+        fecha.setDate(fecha.getDate() + 1);
+        noches++;
     }
 
-    // ── KPIs ──────────────────────────────────────────────────
-    const reservasActivas  = reservas.filter(r => r.estado === 'confirmada' || r.estado === 'pendiente');
-    const reservasPendConf = reservas.filter(r => r.estado === 'pendiente');
-    const tareasPend       = tareas.filter(t => t.estado !== 'finalizada' && t.activa !== false);
-    const tareasUrgentes   = tareasPend.filter(t => {
-        const u = urgenciaTarea(t);
-        return u.color === 'rojo' || u.color === 'amarillo';
+    const limpieza = tarifas.precioLimpieza || 0;
+    return { noches, subtotal, limpieza, total: subtotal + limpieza };
+}
+
+
+// ── CREAR TAREA DE LIMPIEZA ──────────────────────────────────
+/**
+ * Crea una tarea de limpieza al confirmar una reserva.
+ * Busca la próxima reserva en la misma cabaña.
+ */
+// ── SINCRONIZAR DISPONIBILIDAD PÚBLICA ───────────────────────
+/**
+ * Escribe/actualiza un documento en la colección `disponibilidad`
+ * con solo los datos necesarios para mostrar ocupación sin exponer
+ * datos personales del huésped.
+ *
+ * Llamar después de cualquier operación que cambie el estado de una reserva:
+ *   create, update estado, anular, finalizar
+ */
+async function sincronizarDisponibilidad(reservaId, reservaData) {
+    try {
+        const estado = reservaData.estado || 'pendiente';
+
+        // Solo estados que bloquean el calendario público
+        const bloqueante = ['confirmada', 'airbnb_activa'].includes(estado);
+        // Estados que liberan el calendario
+        const libre = ['anulada', 'finalizada', 'airbnb_cancelada'].includes(estado);
+
+        if (libre) {
+            // Eliminar de disponibilidad si existía
+            await db.collection('disponibilidad').doc(reservaId).delete();
+            return;
+        }
+
+        await db.collection('disponibilidad').doc(reservaId).set({
+            caba:       reservaData.caba,
+            checkIn:    reservaData.checkIn,
+            checkOut:   reservaData.checkOut,
+            estado,
+            bloqueante,
+            origen:     reservaData.origen || 'directa',
+            // Sin datos personales
+            actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch(e) {
+        // No bloquear el flujo principal si falla la sincronización
+        console.warn('sincronizarDisponibilidad:', e.message);
+    }
+}
+
+async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
+    const checkOut = reservaData.checkOut?.toDate
+        ? reservaData.checkOut.toDate()
+        : new Date(reservaData.checkOut);
+
+    let proximoHuesped = null;
+    try {
+        // Sin where+orderBy combinados — traer por cabaña y filtrar en cliente
+        const proxSnap = await db.collection('reservas')
+            .where('caba', '==', reservaData.caba)
+            .get();
+
+        const checkOutDate = checkOut instanceof Date ? checkOut : new Date(reservaData.checkOut);
+
+        const proxima = proxSnap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter(r => {
+                if (!['confirmada', 'pendiente'].includes(r.estado)) return false;
+                const ci = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
+                return ci > checkOutDate;
+            })
+            .sort((a, b) => {
+                const ca = a.checkIn?.toDate ? a.checkIn.toDate() : new Date(a.checkIn);
+                const cb = b.checkIn?.toDate ? b.checkIn.toDate() : new Date(b.checkIn);
+                return ca - cb;
+            })[0];
+
+        if (proxima) {
+            const d  = proxima;
+            const ci = d.checkIn?.toDate ? d.checkIn.toDate() : new Date(d.checkIn);
+            proximoHuesped = {
+                nombre:    d.nombre || '—',
+                checkIn:   ci,
+                huespedes: d.huespedes || ((d.adultos || 0) + (d.ninos || 0)),
+                notas:     d.notas || ''
+            };
+        }
+    } catch (e) {
+        console.warn('No se pudo buscar próxima reserva:', e);
+    }
+
+    const descripcion = [
+        `🚪 Check-out: ${checkOut.toLocaleDateString('es-AR')} — ${reservaData.nombre} (${reservaData.huespedes} huéspedes)`,
+        proximoHuesped
+            ? `🛎️ Check-in siguiente: ${proximoHuesped.checkIn.toLocaleDateString('es-AR')} — ${proximoHuesped.nombre} (${proximoHuesped.huespedes} huéspedes)`
+            : `🛎️ Sin reserva siguiente registrada`,
+        reservaData.notas     ? `📝 Notas actuales: ${reservaData.notas}`   : '',
+        proximoHuesped?.notas ? `📝 Notas próxima: ${proximoHuesped.notas}` : '',
+        `💰 Monto limpieza: R$ ${reservaData.costoLimpiezaBRL || 0}`
+    ].filter(Boolean).join('\n');
+
+    await db.collection('tareas').add({
+        nombre:      `🧹 Limpiar Cabaña ${reservaData.caba} — ${reservaData.nombre}`,
+        descripcion,
+        tipo:        'limpieza',
+        prioridad:   'alta',
+        estado:      'pendiente',
+        fechaInicio: checkOut.toISOString().split('T')[0],
+        recurrencia: 0,
+        monto:       reservaData.costoLimpiezaBRL || 0,
+        activa:      true,
+        reservaId,
+        proximaReservaHuesped: proximoHuesped?.nombre || null,
+        proximaReservaCheckIn: proximoHuesped
+            ? firebase.firestore.Timestamp.fromDate(proximoHuesped.checkIn)
+            : null,
+        cabana:    reservaData.caba,
+        creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
+        creadoPor: creadoPor || null
+    });
+}
+
+
+// ── LÓGICA DE TAREAS ─────────────────────────────────────────
+//
+//  tarea.sesiones = [
+//    { uid, nombre, inicio: Timestamp, fin: Timestamp | null },
+//    ...  // un mismo usuario puede tener múltiples sesiones
+//  ]
+//
+//  ESTADOS:
+//  'pendiente'  → nadie trabajando ahora (puede tener sesiones cerradas previas)
+//  'en_curso'   → al menos una sesión con fin: null
+//  'finalizada' → movida a historial, eliminada o reseteada
+//
+//  FLUJO:
+//  ▶️ Iniciar   → agrega sesión abierta, estado → 'en_curso'
+//  ⏸️ Pausar    → cierra sesión activa del usuario;
+//                 si no quedan abiertas → estado → 'pendiente'
+//  ✅ Finalizar → cierra TODAS las sesiones, calcula horas/pagos,
+//                 mueve a historial, elimina o resetea según recurrencia
+
+/**
+ * Inicia la tarea para el usuario actual.
+ * Un mismo usuario no puede tener dos sesiones abiertas simultáneas.
+ */
+async function iniciarTarea(tareaId, currentUser) {
+    const tareaRef    = db.collection('tareas').doc(tareaId);
+    const sesionesRef = tareaRef.collection('sesiones');
+
+    const tareaDoc = await tareaRef.get();
+    if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
+    const tarea = tareaDoc.data();
+    if (tarea.estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
+
+    // Verificar sesión abierta del usuario
+    const abiertaSnap = await sesionesRef
+        .where('uid', '==', currentUser.uid)
+        .where('fin', '==', null)
+        .limit(1).get();
+    if (!abiertaSnap.empty) throw new Error('Ya tenés una sesión activa en esta tarea');
+
+    // Crear sesión en subcolección
+    const ahora = firebase.firestore.Timestamp.now();
+    await sesionesRef.add({
+        uid:    currentUser.uid,
+        nombre: currentUser.nombre || currentUser.email,
+        inicio: ahora,
+        fin:    null,
+        tareaId
     });
 
-    document.getElementById('kpiGrid').innerHTML = `
-        <div class="kpi-card">
-            <span class="material-icons kpi-icon">event</span>
-            <div class="kpi-number">${reservasActivas.length}</div>
-            <div class="kpi-label">Reservas activas</div>
-        </div>
-        <div class="kpi-card warning">
-            <span class="material-icons kpi-icon">pending_actions</span>
-            <div class="kpi-number">${reservasPendConf.length}</div>
-            <div class="kpi-label">Pendientes confirmación</div>
-        </div>
-        <div class="kpi-card info">
-            <span class="material-icons kpi-icon">checklist</span>
-            <div class="kpi-number">${tareasPend.length}</div>
-            <div class="kpi-label">Tareas pendientes</div>
-        </div>
-        <div class="kpi-card danger">
-            <span class="material-icons kpi-icon">warning</span>
-            <div class="kpi-number">${tareasUrgentes.length}</div>
-            <div class="kpi-label">Tareas urgentes</div>
-        </div>
-        <div class="kpi-card">
-            <span class="material-icons kpi-icon">people</span>
-            <div class="kpi-number">${totalClientes}</div>
-            <div class="kpi-label">Clientes</div>
-        </div>
-        <div class="kpi-card success">
-            <span class="material-icons kpi-icon">payments</span>
-            <div class="kpi-number">R$&nbsp;${ingresosMes.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</div>
-            <div class="kpi-label">Ingresos este mes</div>
-        </div>
-    `;
+    // Mantener sesionesActivas en doc raíz para chips en cards
+    const sesActuales = (tarea.sesionesActivas || []);
+    sesActuales.push({ uid: currentUser.uid, nombre: currentUser.nombre || currentUser.email, inicio: ahora });
+    await tareaRef.update({ estado: 'en_curso', sesionesActivas: sesActuales });
+}
 
-    // ── Próximos check-ins ────────────────────────────────────
-    const proximos = reservas
-        .filter(r => {
-            const ci = r.checkIn?.toDate?.();
-            return ci && ci >= hoy && (r.estado === 'confirmada' || r.estado === 'pendiente');
-        })
-        .sort((a, b) => a.checkIn.toDate() - b.checkIn.toDate())
-        .slice(0, 6);
+/**
+ * Pausa la tarea para el usuario actual.
+ * Cierra su sesión activa.
+ * Si no quedan sesiones abiertas → estado vuelve a 'pendiente'.
+ */
+async function pausarTarea(tareaId, currentUser) {
+    const tareaRef    = db.collection('tareas').doc(tareaId);
+    const sesionesRef = tareaRef.collection('sesiones');
 
-    const checkinEl = document.getElementById('proximosCheckins');
-    if (!proximos.length) {
-        showEmpty(checkinEl, 'Sin próximos check-ins', 'No hay reservas próximas confirmadas.', 'event_available');
-    } else {
-        checkinEl.innerHTML = `<div class="item-list">${proximos.map(r => `
-            <div class="item-row">
-                <div class="item-row__main">
-                    <div class="item-row__title">${escapeHtml(r.nombre)}</div>
-                    <div class="item-row__sub">Cabaña ${r.caba} · ${r.huespedes || r.adultos || '?'} huéspedes</div>
-                </div>
-                <div class="item-row__side">
-                    <div class="item-row__date">${formatFecha(r.checkIn)}</div>
-                    ${badgeEstado(r.estado)}
-                </div>
-            </div>
-        `).join('')}</div>`;
+    const tareaDoc = await tareaRef.get();
+    if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
+    if (tareaDoc.data().estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
+
+    // Buscar sesión abierta del usuario
+    const abiertaSnap = await sesionesRef
+        .where('uid', '==', currentUser.uid)
+        .where('fin', '==', null)
+        .limit(1).get();
+    if (abiertaSnap.empty) throw new Error('No tenés una sesión activa en esta tarea');
+
+    const ahora = firebase.firestore.Timestamp.now();
+    await abiertaSnap.docs[0].ref.update({ fin: ahora });
+
+    // Si no quedan sesiones abiertas → pendiente
+    const quedanAbiertas = await sesionesRef.where('fin', '==', null).limit(1).get();
+    const nuevoEstado    = quedanAbiertas.empty ? 'pendiente' : 'en_curso';
+
+    // Actualizar sesionesActivas en doc raíz
+    const sesActuales = (tareaDoc.data().sesionesActivas || []).filter(s => s.uid !== currentUser.uid);
+    await tareaRef.update({ estado: nuevoEstado, sesionesActivas: sesActuales });
+}
+
+/**
+ * Finaliza la tarea para TODOS.
+ *
+ * - Cierra todas las sesiones abiertas
+ * - Suma horas de TODAS las sesiones de cada usuario
+ * - monto > 0 → crea pagos_pendientes proporcionales a horas
+ * - monto = 0 → solo registra en historial, sin pagos
+ * - recurrencia = 0 → elimina la tarea de Firestore
+ * - recurrencia = N → resetea con fechaInicio = hoy + N días
+ *
+ * @returns {Array} colaboradores con horas y montos (para mostrar resumen en UI)
+ */
+async function finalizarTarea(tareaId, currentUser) {
+    const tareaRef = db.collection('tareas').doc(tareaId);
+    const tareaDoc = await tareaRef.get();
+    if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
+
+    const tarea     = tareaDoc.data();
+    if (tarea.estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
+
+    const ahora     = firebase.firestore.Timestamp.now();
+    const ahoraDate = ahora.toDate();
+    let sesiones    = tarea.sesiones || [];
+
+    // Si quien finaliza nunca participó, registrar presencia mínima
+    if (!sesiones.some(s => s.uid === currentUser.uid)) {
+        sesiones.push({
+            uid:    currentUser.uid,
+            nombre: currentUser.nombre || currentUser.email,
+            inicio: ahora,
+            fin:    ahora
+        });
     }
 
-    // ── Tareas pendientes ─────────────────────────────────────
-    const tareasEl  = document.getElementById('tareasPendientes');
-    const tareasVis = tareasPend
-        .sort((a, b) => (a.fechaInicio || '') > (b.fechaInicio || '') ? 1 : -1)
-        .slice(0, 6);
+    // Cerrar TODAS las sesiones abiertas
+    sesiones = sesiones.map(s => ({ ...s, fin: s.fin === null ? ahora : s.fin }));
 
-    if (!tareasVis.length) {
-        showEmpty(tareasEl, '¡Todo al día!', 'No hay tareas pendientes.', 'task_alt');
-    } else {
-        tareasEl.innerHTML = `<div class="item-list">${tareasVis.map(t => {
-            const u = urgenciaTarea(t);
-            return `
-            <div class="item-row">
-                <div class="item-row__main">
-                    <div class="item-row__title">${escapeHtml(t.nombre)}</div>
-                    <div class="item-row__sub">${t.fechaInicio || 'Sin fecha'}</div>
-                </div>
-                <div class="item-row__side">
-                    <span class="badge ${urgenciaClass[u.color] || 'badge-neutral'}">${u.label}</span>
-                    ${badgePrioridad(t.prioridad)}
-                </div>
-            </div>`;
-        }).join('')}</div>`;
+    // Calcular horas totales por usuario (suma de todas sus sesiones)
+    const horasPor  = {};
+    const nombrePor = {};
+
+    for (const s of sesiones) {
+        const ini = s.inicio?.toDate ? s.inicio.toDate() : new Date(s.inicio);
+        const fin = s.fin?.toDate    ? s.fin.toDate()    : new Date(s.fin);
+        const hrs = Math.max(0, (fin - ini) / 3_600_000);
+        horasPor[s.uid]  = (horasPor[s.uid] || 0) + hrs;
+        nombrePor[s.uid] = s.nombre;
     }
 
-    // ── Reservas pendientes de confirmación ───────────────────
-    const pendEl = document.getElementById('reservasPendientes');
-    if (!reservasPendConf.length) {
-        showEmpty(pendEl, 'Todo confirmado', 'No hay reservas pendientes de confirmación.', 'check_circle');
-    } else {
-        const rows = reservasPendConf
-            .sort((a, b) => (a.checkIn?.toDate?.() || 0) - (b.checkIn?.toDate?.() || 0))
-            .map(r => `
-            <tr>
-                <td data-label="Cliente">${escapeHtml(r.nombre)}</td>
-                <td data-label="Cabaña">Cabaña ${r.caba}</td>
-                <td data-label="Check-in">${formatFecha(r.checkIn)}</td>
-                <td data-label="Check-out">${formatFecha(r.checkOut)}</td>
-                <td data-label="Origen">${escapeHtml(r.origen || '—')}</td>
-                <td data-label="">
-                    <a href="reservas.html?id=${r.id}" class="btn btn-secondary btn-sm">
-                        Ver <span class="material-icons">arrow_forward</span>
-                    </a>
-                </td>
-            </tr>`).join('');
+    const totalHoras = Object.values(horasPor).reduce((a, b) => a + b, 0);
+    const monto      = tarea.monto || 0;
 
-        pendEl.innerHTML = `
-            <div class="table-container">
-                <table class="table table-responsive">
-                    <thead>
-                        <tr>
-                            <th>Cliente</th>
-                            <th>Cabaña</th>
-                            <th>Check-in</th>
-                            <th>Check-out</th>
-                            <th>Origen</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            </div>`;
-    }
+    const colaboradores = Object.entries(horasPor).map(([uid, horas]) => ({
+        uid,
+        nombre:        nombrePor[uid],
+        horas:         parseFloat(horas.toFixed(2)),
+        montoRecibido: monto > 0 && totalHoras > 0
+            ? parseFloat(((horas / totalHoras) * monto).toFixed(2))
+            : 0
+    }));
 
-    // ── HERRAMIENTAS DE MANTENIMIENTO ─────────────────────────
-    window.abrirHerramienta = function(nombre, titulo) {
-        const panel = document.getElementById('panelHerramienta');
-        const frame = document.getElementById('herramientaFrame');
-        document.getElementById('panelHerramientaTitulo').textContent = titulo || nombre;
-        // Si ya está abierta la misma herramienta, cerrar
-        if (panel.style.display !== 'none' && frame.src.includes(nombre)) {
-            cerrarHerramienta(); return;
-        }
-        frame.src = `${nombre}.html`;
-        panel.style.display = 'block';
-        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    };
+    // ── Batch ────────────────────────────────────────────────
+    const batch   = db.batch();
+    const histRef = db.collection('historial_tareas').doc();
 
-    window.cerrarHerramienta = function() {
-        document.getElementById('panelHerramienta').style.display = 'none';
-        document.getElementById('herramientaFrame').src = '';
-    };
+    // 1. Guardar en historial
+    batch.set(histRef, {
+        tareaId,
+        nombre:        tarea.nombre,
+        descripcion:   tarea.descripcion   || '',
+        tipo:          tarea.tipo          || 'general',
+        prioridad:     tarea.prioridad     || 'media',
+        fechaInicio:   tarea.fechaInicio   || null,
+        fechaFin:      ahoraDate.toISOString().split('T')[0],
+        monto,
+        sesiones,
+        colaboradores,
+        reservaId:     tarea.reservaId     || null,
+        cabana:        tarea.cabana        || null,
+        recurrencia:   tarea.recurrencia   || 0,
+        finalizadoPor: currentUser.uid,
+        finalizadoEn:  ahora,
+        creadoEn:      tarea.creadoEn      || null
+    });
 
-    window.verificarReglas = async function() {
-        const el = document.getElementById('resultado-reglas');
-        el.textContent = '⏳ Verificando...';
-        try {
-            // Intentar leer cabanas sin auth (usando fetch directo)
-            const res = await fetch(
-                `https://firestore.googleapis.com/v1/projects/casaverdecanas-199/databases/(default)/documents/cabanas?pageSize=1`
-            );
-            if (res.ok) {
-                el.innerHTML = '<span style="color:var(--color-success);">✅ Reglas OK — cabanas es pública</span>';
-            } else if (res.status === 403) {
-                el.innerHTML = '<span style="color:var(--color-danger);">❌ cabanas no es pública — actualizá las reglas de Firestore</span>';
-            } else {
-                el.innerHTML = `<span style="color:var(--color-warning);">⚠ HTTP ${res.status}</span>`;
-            }
-        } catch(e) {
-            el.innerHTML = `<span style="color:var(--color-danger);">Error: ${e.message}</span>`;
-        }
-    };
-
-    window.verificarIntegridad = async function() {
-        const el = document.getElementById('resultado-integridad');
-        el.innerHTML = '⏳ Analizando...';
-        try {
-            const [resSnap, dispSnap, honSnap, tarSnap, presSnap] = await Promise.all([
-                db.collection('reservas').get(),
-                db.collection('disponibilidad').get(),
-                db.collection('honorarios').get(),
-                db.collection('tareas').get(),
-                db.collection('presupuestos').get()
-            ]);
-
-            const reservas    = resSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-            const dispIds     = new Set(dispSnap.docs.map(d => d.id));
-            const problemas   = [];
-
-            // Reservas confirmadas sin espejo
-            const sinEspejo = reservas.filter(r =>
-                ['confirmada','pendiente','airbnb_activa'].includes(r.estado) && !dispIds.has(r.id)
-            );
-            if (sinEspejo.length) problemas.push(
-                `⚠ ${sinEspejo.length} reservas activas sin espejo en disponibilidad`
-            );
-
-            // Honorarios huérfanos (sin reserva)
-            const reservaIds = new Set(reservas.map(r => r.id));
-            const honHuerfanos = honSnap.docs.filter(d => {
-                const h = d.data();
-                return h.tareaId && !h.historialId; // solo los sin historial pueden ser huérfanos
+    // 2. Pagos solo si monto > 0
+    if (monto > 0) {
+        for (const col of colaboradores) {
+            if (col.montoRecibido <= 0) continue;
+            const pagoRef = db.collection('pagos_pendientes').doc();
+            batch.set(pagoRef, {
+                colaboradorId:     col.uid,
+                colaboradorNombre: col.nombre,
+                tareaId,
+                historialId:       histRef.id,
+                reservaId:         tarea.reservaId || null,
+                monto:             col.montoRecibido,
+                moneda:            'BRL',
+                concepto:          `Tarea: ${tarea.nombre} — ${ahoraDate.toLocaleDateString('es-AR')}`,
+                horas:             col.horas,
+                estado:            'pendiente',
+                fechaPago:         null,
+                pagadoPor:         null,
+                creadoEn:          ahora
             });
-
-            // Presupuestos confirmados sin reserva
-            const presSinRes = presSnap.docs.filter(d => {
-                const p = d.data();
-                return p.estado === 'confirmado' && p.reservaId && !reservaIds.has(p.reservaId);
-            });
-            if (presSinRes.length) problemas.push(
-                `⚠ ${presSinRes.length} presupuestos confirmados con reserva no encontrada`
-            );
-
-            if (problemas.length === 0) {
-                el.innerHTML = '<span style="color:var(--color-success);">✅ Sin problemas detectados</span>';
-            } else {
-                el.innerHTML = problemas.map(p =>
-                    `<div style="color:var(--color-warning); padding:2px 0;">${p}</div>`
-                ).join('') +
-                `<div style="margin-top:6px;"><button class="btn btn-primary btn-sm" onclick="abrirHerramienta('sync-disponibilidad')">
-                    Corregir con Sincronizar disponibilidad
-                </button></div>`;
-            }
-        } catch(e) {
-            el.innerHTML = `<span style="color:var(--color-danger);">Error: ${e.message}</span>`;
         }
-    };
+    }
 
-})();
+    // 3. Recurrencia: 0 → eliminar, N → resetear
+    const recurrencia = tarea.recurrencia || 0;
+    if (recurrencia === 0) {
+        batch.delete(tareaRef);
+    } else {
+        const nuevaFecha = new Date(ahoraDate);
+        nuevaFecha.setDate(nuevaFecha.getDate() + recurrencia);
+        batch.update(tareaRef, {
+            estado:          'pendiente',
+            sesionesActivas: [],
+            fechaInicio:     nuevaFecha.toISOString().split('T')[0],
+            ultimaVez:       ahora
+        });
+    }
 
-</body>
-</html>
+    await batch.commit();
+    return colaboradores;
+}
+
+
+// ── URGENCIA DE TAREA ────────────────────────────────────────
+/**
+ * Calcula el color/urgencia de una tarea.
+ *
+ * ⬜ gris     → fecha futura (no corresponde aún)
+ * 🟢 verde    → es hoy
+ * 🟡 amarillo → atrasada pero ≤ ciclo días Y ≤ 10 días
+ * 🔴 rojo     → muy atrasada (> ciclo días O > 10 días)
+ *
+ * Para recurrencia = 0 se usa umbral de 3 días para amarillo.
+ *
+ * @param {Object} tarea
+ * @returns {{ color: 'gris'|'verde'|'amarillo'|'rojo', label: string }}
+ */
+function urgenciaTarea(tarea) {
+    if (!tarea.fechaInicio) return { color: 'gris', label: 'Sin fecha' };
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const inicio     = new Date(tarea.fechaInicio + 'T00:00:00');
+    const diasAtraso = Math.floor((hoy - inicio) / 86_400_000);
+
+    if (diasAtraso < 0)   return { color: 'gris',     label: 'Próximamente'        };
+    if (diasAtraso === 0) return { color: 'verde',    label: 'Hoy'                 };
+
+    const ciclo       = tarea.recurrencia > 0 ? tarea.recurrencia : 3;
+    const muyAtrasada = diasAtraso > ciclo || diasAtraso > 10;
+
+    return muyAtrasada
+        ? { color: 'rojo',     label: `${diasAtraso}d de atraso` }
+        : { color: 'amarillo', label: `${diasAtraso}d de atraso` };
+}
+
+
+// ── HELPERS GENERALES ────────────────────────────────────────
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, m =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])
+    );
+}
+
+function formatFecha(timestamp) {
+    if (!timestamp) return '—';
+    const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return d.toLocaleDateString('es-AR');
+}
+
+function formatFechaHora(timestamp) {
+    if (!timestamp) return '—';
+    const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return d.toLocaleString('es-AR');
+}
+
+/** Convierte horas decimales → "1h 23m" */
+function formatHoras(horas) {
+    if (!horas || horas <= 0) return '0m';
+    const h = Math.floor(horas);
+    const m = Math.round((horas - h) * 60);
+    if (h === 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}m`;
+}
+
+const COLORES_CABANAS = ['#FF9800', '#3498db', '#2ecc71', '#9b59b6', '#e74c3c', '#1abc9c', '#f39c12'];
+function colorCabana(index) {
+    return COLORES_CABANAS[index % COLORES_CABANAS.length];
+}
+
+
+// ── HELPERS DE UI ────────────────────────────────────────────
+// Requieren design-system.css cargado en la página.
+
+function showLoading(container, mensaje = 'Cargando...') {
+    const el = typeof container === 'string' ? document.querySelector(container) : container;
+    if (!el) return;
+    el.innerHTML = `
+        <div class="state-loading">
+            <div class="spinner"></div>
+            <span>${escapeHtml(mensaje)}</span>
+        </div>`;
+}
+
+function showEmpty(container, titulo = 'Sin datos', descripcion = '', icono = 'inbox') {
+    const el = typeof container === 'string' ? document.querySelector(container) : container;
+    if (!el) return;
+    el.innerHTML = `
+        <div class="state-empty">
+            <span class="material-icons">${escapeHtml(icono)}</span>
+            <div class="state-empty__title">${escapeHtml(titulo)}</div>
+            ${descripcion ? `<div class="state-empty__desc">${escapeHtml(descripcion)}</div>` : ''}
+        </div>`;
+}
+
+function showError(container, titulo = 'Ocurrió un error', descripcion = '', onRetry = null) {
+    const el = typeof container === 'string' ? document.querySelector(container) : container;
+    if (!el) return;
+    const retryId = onRetry ? `retry-${Date.now()}` : null;
+    el.innerHTML = `
+        <div class="state-error">
+            <span class="material-icons">error_outline</span>
+            <div class="state-error__title">${escapeHtml(titulo)}</div>
+            ${descripcion ? `<div class="state-error__desc">${escapeHtml(descripcion)}</div>` : ''}
+            ${retryId ? `<button class="btn btn-secondary" id="${retryId}">
+                <span class="material-icons">refresh</span> Reintentar
+            </button>` : ''}
+        </div>`;
+    if (retryId) document.getElementById(retryId)?.addEventListener('click', onRetry);
+}
+
+function showToast(mensaje, tipo = 'success') {
+    const iconos = { success: 'check_circle', error: 'error', warning: 'warning', info: 'info' };
+    let wrap = document.getElementById('cvc-toasts');
+    if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.id = 'cvc-toasts';
+        wrap.className = 'toast-container';
+        document.body.appendChild(wrap);
+    }
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${tipo}`;
+    toast.innerHTML = `<span class="material-icons">${iconos[tipo] || 'info'}</span><span>${escapeHtml(mensaje)}</span>`;
+    wrap.appendChild(toast);
+    setTimeout(() => toast.remove(), 3300);
+}
+
+
+// ── NAV CENTRALIZADA ──────────────────────────────────────────
+const NAV_ADMIN_ITEMS = [
+    { href: 'dashboard.html',     icon: 'dashboard',       label: 'Dashboard'     },
+    { href: 'reservas.html',      icon: 'event',           label: 'Reservas'      },
+    { href: 'presupuestos.html',  icon: 'request_quote',   label: 'Presupuestos'  },
+    { href: 'pagos.html',         icon: 'payments',        label: 'Finanzas'      },
+    { href: 'clientes.html',      icon: 'people',          label: 'Clientes'      },
+    { href: 'cabanas-admin.html', icon: 'cottage',         label: 'Cabañas'       },
+    { href: 'tareas.html',        icon: 'checklist',       label: 'Tareas'        },
+    { href: 'calendario.html',    icon: 'calendar_month',  label: 'Calendario'    },
+    { href: 'usuarios.html',      icon: 'manage_accounts', label: 'Usuarios'      }
+];
+
+const NAV_USER_ITEMS = [
+    { href: 'tareas.html', icon: 'checklist', label: 'Tareas'     },
+    { href: 'pagos.html',  icon: 'payments',  label: 'Mis cobros' }
+];
+
+function renderNav(paginaActiva, rol = 'admin') {
+    const el = document.getElementById('appNav') || document.querySelector('.admin-nav');
+    if (!el) return;
+    const items = rol === 'admin' ? NAV_ADMIN_ITEMS : NAV_USER_ITEMS;
+    el.innerHTML = items.map(item => {
+        const activo = item.href === paginaActiva || item.href.replace('.html','') === paginaActiva;
+        return `<a href="${item.href}" class="nav-item${activo ? ' active' : ''}">
+            <span class="material-icons">${item.icon}</span> ${item.label}
+        </a>`;
+    }).join('');
+}
+
+
+// ── EXPORTAR ─────────────────────────────────────────────────
+window.CVC = {
+    db, auth,
+    ESTADOS_RESERVA, ESTADOS_TAREA, PRIORIDADES, CALENDAR_IDS,
+    NAV_ADMIN_ITEMS, NAV_USER_ITEMS, renderNav,
+    badgeEstado, badgePrioridad,
+    verificarAuth, cerrarSesion,
+    calcularPrecio,
+    crearTareaLimpieza,
+    sincronizarDisponibilidad,
+    iniciarTarea, pausarTarea, finalizarTarea, urgenciaTarea,
+    escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
+    showLoading, showEmpty, showError, showToast
+};
