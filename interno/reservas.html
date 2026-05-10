@@ -282,7 +282,7 @@
     document.getElementById('userName').textContent = userData.nombre || user.email;
 
     const db = CVC.db;
-    const { escapeHtml, badgeEstado, formatFecha, calcularPrecio, crearTareaLimpieza, showEmpty, showError, showToast } = CVC;
+    const { escapeHtml, badgeEstado, formatFecha, calcularPrecio, crearTareaLimpieza, sincronizarDisponibilidad, showEmpty, showError, showToast } = CVC;
 
     let reservasCache = [];
     let cabanasCache  = [];
@@ -295,12 +295,14 @@
     async function inicializar() {
         try {
             const [cabanasSnap, clientesSnap, reservasSnap] = await Promise.all([
-                db.collection('cabanas').where('activa', '==', true).orderBy('orden').get(),
+                db.collection('cabanas').get(),
                 db.collection('clientes').orderBy('nombre').get(),
                 db.collection('reservas').orderBy('checkIn', 'desc').get()
             ]);
 
-            cabanasCache  = cabanasSnap.docs.map(d => ({ docId: d.id, ...d.data() }));
+            cabanasCache  = cabanasSnap.docs.map(d => ({ docId: d.id, ...d.data() }))
+                .filter(c => c.activa === true || c.activa === 'true' || c.activa === undefined)
+                .sort((a, b) => (a.orden || 0) - (b.orden || 0));
             clientesCache = clientesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
             reservasCache = reservasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
@@ -662,11 +664,13 @@
 
             if (id) {
                 await db.collection('reservas').doc(id).update(reservaData);
+                await sincronizarDisponibilidad(id, reservaData);
                 showToast('Reserva actualizada.', 'success');
             } else {
                 reservaData.creadoEn  = firebase.firestore.FieldValue.serverTimestamp();
                 reservaData.creadoPor = user.uid;
                 const ref = await db.collection('reservas').add(reservaData);
+                await sincronizarDisponibilidad(ref.id, reservaData);
                 if (estado === 'confirmada') {
                     await crearTareaLimpieza(ref.id, reservaData, user.uid);
                     showToast('Reserva creada y tarea de limpieza generada.', 'success');
@@ -690,12 +694,12 @@
         if (!confirm('¿Confirmar esta reserva? Se generará una tarea de limpieza.')) return;
         try {
             const docSnap = await db.collection('reservas').doc(id).get();
-            const reservaData = docSnap.data();
+            const reservaData = { ...docSnap.data(), estado: 'confirmada' };
             await db.collection('reservas').doc(id).update({
                 estado: 'confirmada',
                 actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
             });
-            reservaData.estado = 'confirmada';
+            await sincronizarDisponibilidad(id, reservaData);
             await crearTareaLimpieza(id, reservaData, user.uid);
             showToast('Reserva confirmada y tarea de limpieza generada.', 'success');
             await recargarReservas();
@@ -704,22 +708,28 @@
 
     window.finalizarReserva = async function(id) {
         if (!confirm('¿Marcar como finalizada?')) return;
-        await db.collection('reservas').doc(id).update({
-            estado: 'finalizada',
-            actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        showToast('Reserva finalizada.', 'info');
-        await recargarReservas();
+        try {
+            await db.collection('reservas').doc(id).update({
+                estado: 'finalizada',
+                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            await sincronizarDisponibilidad(id, { estado: 'finalizada' });
+            showToast('Reserva finalizada.', 'info');
+            await recargarReservas();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
     };
 
     window.anularReserva = async function(id) {
         if (!confirm('¿Anular esta reserva?')) return;
-        await db.collection('reservas').doc(id).update({
-            estado: 'anulada',
-            actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        showToast('Reserva anulada.', 'warning');
-        await recargarReservas();
+        try {
+            await db.collection('reservas').doc(id).update({
+                estado: 'anulada',
+                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            await sincronizarDisponibilidad(id, { estado: 'anulada' });
+            showToast('Reserva anulada.', 'warning');
+            await recargarReservas();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
     };
 
     // ── Helpers ───────────────────────────────────────────────
