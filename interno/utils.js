@@ -201,16 +201,28 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
 
     let proximoHuesped = null;
     try {
+        // Sin where+orderBy combinados — traer por cabaña y filtrar en cliente
         const proxSnap = await db.collection('reservas')
             .where('caba', '==', reservaData.caba)
-            .where('checkIn', '>', reservaData.checkOut)
-            .where('estado', 'in', ['confirmada', 'pendiente'])
-            .orderBy('checkIn', 'asc')
-            .limit(1)
             .get();
 
-        if (!proxSnap.empty) {
-            const d  = proxSnap.docs[0].data();
+        const checkOutDate = checkOut instanceof Date ? checkOut : new Date(reservaData.checkOut);
+
+        const proxima = proxSnap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter(r => {
+                if (!['confirmada', 'pendiente'].includes(r.estado)) return false;
+                const ci = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
+                return ci > checkOutDate;
+            })
+            .sort((a, b) => {
+                const ca = a.checkIn?.toDate ? a.checkIn.toDate() : new Date(a.checkIn);
+                const cb = b.checkIn?.toDate ? b.checkIn.toDate() : new Date(b.checkIn);
+                return ca - cb;
+            })[0];
+
+        if (proxima) {
+            const d  = proxima;
             const ci = d.checkIn?.toDate ? d.checkIn.toDate() : new Date(d.checkIn);
             proximoHuesped = {
                 nombre:    d.nombre || '—',
