@@ -58,8 +58,14 @@ function badgePrioridad(prioridad) {
 // ── AUTENTICACIÓN ─────────────────────────────────────────────
 function verificarAuth(rolesPermitidos) {
     const roles = Array.isArray(rolesPermitidos) ? rolesPermitidos : [rolesPermitidos];
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+        // Timeout de seguridad: si Firebase no responde en 15s, rechazar
+        const timer = setTimeout(() => {
+            reject(new Error('Firebase no responde (timeout). Verificá tu conexión.'));
+        }, 15000);
+
         auth.onAuthStateChanged(async (user) => {
+            clearTimeout(timer);
             if (!user) { window.location.href = 'index.html'; return; }
             try {
                 const userDoc = await db.collection('usuarios').doc(user.uid).get();
@@ -81,7 +87,7 @@ function verificarAuth(rolesPermitidos) {
                 resolve({ user, userData });
             } catch (e) {
                 console.error('verificarAuth:', e);
-                window.location.href = 'index.html';
+                reject(e);
             }
         });
     });
