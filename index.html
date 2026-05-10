@@ -670,18 +670,21 @@ async function abrirDisponibilidad(cabanaId) {
 
 async function cargarEventosReservas(cabanaId) {
     try {
-        const snap = await db.collection('reservas')
+        // Lee de 'disponibilidad' — colección pública sin datos personales
+        // Filtra por caba solo (sin índice compuesto) y filtra bloqueante en cliente
+        const snap = await db.collection('disponibilidad')
             .where('caba', '==', parseInt(cabanaId))
-            .where('estado', 'in', ['confirmada', 'pendiente'])
             .get();
-        return snap.docs.map(doc => {
-            const r = doc.data();
-            const start = r.checkIn?.toDate  ? r.checkIn.toDate().toISOString().split('T')[0]  : r.checkIn;
-            const end   = r.checkOut?.toDate ? r.checkOut.toDate().toISOString().split('T')[0] : r.checkOut;
-            return { title: t('reservado'), start, end, allDay: true, color: '#e74c3c' };
-        });
+        return snap.docs
+            .map(doc => doc.data())
+            .filter(r => r.bloqueante === true)
+            .map(r => {
+                const start = r.checkIn?.toDate  ? r.checkIn.toDate().toISOString().split('T')[0]  : r.checkIn;
+                const end   = r.checkOut?.toDate ? r.checkOut.toDate().toISOString().split('T')[0] : r.checkOut;
+                return { title: t('reservado'), start, end, allDay: true, color: '#e74c3c' };
+            });
     } catch(e) {
-        console.error('Error cargando reservas:', e);
+        console.error('Error cargando disponibilidad:', e);
         return [];
     }
 }
