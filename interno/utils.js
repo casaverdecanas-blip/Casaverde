@@ -25,10 +25,11 @@ const auth = firebase.auth();
 
 // ── CONSTANTES ───────────────────────────────────────────────
 const ESTADOS_RESERVA = {
-    pendiente:  { label: 'Pendiente',  cssClass: 'badge-pendiente'  },
-    confirmada: { label: 'Confirmada', cssClass: 'badge-confirmada' },
-    anulada:    { label: 'Anulada',    cssClass: 'badge-anulada'    },
-    finalizada: { label: 'Finalizada', cssClass: 'badge-finalizada' }
+    pendiente:         { label: 'Pendiente',         cssClass: 'badge-pendiente'  },
+    confirmada:        { label: 'Confirmada',        cssClass: 'badge-confirmada' },
+    anulada:           { label: 'Anulada',           cssClass: 'badge-anulada'    },
+    finalizada:        { label: 'Finalizada',        cssClass: 'badge-finalizada' },
+    airbnb_cancelada:  { label: '⚠ Cancelada Airbnb', cssClass: 'badge-pendiente' }
 };
 
 const ESTADOS_TAREA = {
@@ -258,15 +259,19 @@ async function iniciarTarea(tareaId, currentUser) {
         throw new Error('Ya tenés una sesión activa en esta tarea');
 
     // Crear sesión en subcolección
-    await sesionesRef.add({
+    const nuevaSesion = {
         uid:    currentUser.uid,
         nombre: currentUser.nombre || currentUser.email,
         inicio: firebase.firestore.Timestamp.now(),
         fin:    null,
         tareaId
-    });
+    };
+    await sesionesRef.add(nuevaSesion);
 
-    await tareaRef.update({ estado: 'en_curso' });
+    // Mantener sesionesActivas denormalizado en el doc raíz (para mostrar chips en cards)
+    const sesActuales = (tareaDoc.data().sesionesActivas || []);
+    sesActuales.push({ uid: nuevaSesion.uid, nombre: nuevaSesion.nombre, inicio: nuevaSesion.inicio });
+    await tareaRef.update({ estado: 'en_curso', sesionesActivas: sesActuales });
 }
 
 /**
@@ -295,7 +300,14 @@ async function pausarTarea(tareaId, currentUser) {
 
     // Si no quedan sesiones abiertas → volver a pendiente
     const quedanAbiertas = await sesionesRef.where('fin', '==', null).limit(1).get();
-    await tareaRef.update({ estado: quedanAbiertas.empty ? 'pendiente' : 'en_curso' });
+    const nuevoEstado = quedanAbiertas.empty ? 'pendiente' : 'en_curso';
+
+    // Actualizar sesionesActivas en doc raíz
+    const sesActuales = (tareaDoc.data().sesionesActivas || []).filter(s => s.uid !== currentUser.uid);
+    await tareaRef.update({
+        estado: nuevoEstado,
+        sesionesActivas: sesActuales
+    });
 }
 
 /**
@@ -429,9 +441,10 @@ async function finalizarTarea(tareaId, currentUser) {
         const nuevaFecha = new Date(ahoraDate);
         nuevaFecha.setDate(nuevaFecha.getDate() + recurrencia);
         batch2.update(tareaRef, {
-            estado:      'pendiente',
-            fechaInicio: nuevaFecha.toISOString().split('T')[0],
-            ultimaVez:   ahora
+            estado:          'pendiente',
+            sesionesActivas: [],
+            fechaInicio:     nuevaFecha.toISOString().split('T')[0],
+            ultimaVez:       ahora
         });
     }
 
