@@ -598,10 +598,42 @@ function showToast(mensaje, tipo = 'success') {
 }
 
 
+// ── NAV CENTRALIZADA ──────────────────────────────────────────
+const NAV_ADMIN_ITEMS = [
+    { href: 'dashboard.html',     icon: 'dashboard',       label: 'Dashboard'     },
+    { href: 'reservas.html',      icon: 'event',           label: 'Reservas'      },
+    { href: 'presupuestos.html',  icon: 'request_quote',   label: 'Presupuestos'  },
+    { href: 'pagos.html',         icon: 'payments',        label: 'Finanzas'      },
+    { href: 'clientes.html',      icon: 'people',          label: 'Clientes'      },
+    { href: 'cabanas-admin.html', icon: 'cottage',         label: 'Cabañas'       },
+    { href: 'tareas.html',        icon: 'checklist',       label: 'Tareas'        },
+    { href: 'calendario.html',    icon: 'calendar_month',  label: 'Calendario'    },
+    { href: 'usuarios.html',      icon: 'manage_accounts', label: 'Usuarios'      }
+];
+
+const NAV_USER_ITEMS = [
+    { href: 'tareas.html', icon: 'checklist', label: 'Tareas'     },
+    { href: 'pagos.html',  icon: 'payments',  label: 'Mis cobros' }
+];
+
+function renderNav(paginaActiva, rol = 'admin') {
+    const el = document.getElementById('appNav') || document.querySelector('.admin-nav');
+    if (!el) return;
+    const items = rol === 'admin' ? NAV_ADMIN_ITEMS : NAV_USER_ITEMS;
+    el.innerHTML = items.map(item => {
+        const activo = item.href === paginaActiva || item.href.replace('.html','') === paginaActiva;
+        return `<a href="${item.href}" class="nav-item${activo ? ' active' : ''}">
+            <span class="material-icons">${item.icon}</span> ${item.label}
+        </a>`;
+    }).join('');
+}
+
+
 // ── EXPORTAR ─────────────────────────────────────────────────
 window.CVC = {
     db, auth,
     ESTADOS_RESERVA, ESTADOS_TAREA, PRIORIDADES, CALENDAR_IDS,
+    NAV_ADMIN_ITEMS, NAV_USER_ITEMS, renderNav,
     badgeEstado, badgePrioridad,
     verificarAuth, cerrarSesion,
     calcularPrecio,
