@@ -250,8 +250,23 @@
 <script src="utils.js"></script>
 <script>
 (async () => {
-    // ── Auth ──────────────────────────────────────────────────
-    const { user, userData } = await CVC.verificarAuth('admin');
+    // ── Auth con timeout de seguridad ─────────────────────────
+    let authResult;
+    try {
+        const timeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Tiempo de espera agotado — recargá la página')), 12000)
+        );
+        authResult = await Promise.race([CVC.verificarAuth('admin'), timeout]);
+    } catch(e) {
+        document.getElementById('kpiGrid').innerHTML =
+            '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--color-danger)">'
+            + '<span class="material-icons" style="font-size:32px;display:block;margin-bottom:8px">error_outline</span>'
+            + '<strong>' + e.message + '</strong><br><br>'
+            + '<button class="btn btn-primary" onclick="location.reload()">Recargar</button>'
+            + '</div>';
+        return;
+    }
+    const { user, userData } = authResult;
     document.getElementById('userName').textContent = userData.nombre || user.email;
     CVC.renderNav('dashboard.html');
 
@@ -264,6 +279,11 @@
     // ── Cargar datos en paralelo ──────────────────────────────
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
+
+    // Indicar que auth pasó OK
+    document.getElementById('kpiGrid').innerHTML =
+        '<div class="state-loading" style="grid-column:1/-1">'
+        + '<div class="spinner"></div><span>Cargando datos...</span></div>';
 
     let reservas = [], tareas = [], totalCabanas = 0, totalClientes = 0, ingresosMes = 0;
 
