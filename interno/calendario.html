@@ -431,12 +431,29 @@
                 return;
             }
 
-            // Leer reservas existentes con origen airbnb para evitar duplicados
+            // Leer reservas existentes con origen airbnb
             const existSnap = await db.collection('reservas')
                 .where('origen', '==', 'airbnb').get();
-            const googleIdsExistentes = new Set(
-                existSnap.docs.map(d => d.data().airbnb_google_id).filter(Boolean)
-            );
+            const reservasAirbnb = existSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+            const googleIdsActivos  = new Set(todosEventos.map(e => e.googleId));
+            const googleIdsExistentes = new Set(reservasAirbnb.map(d => d.airbnb_google_id).filter(Boolean));
+
+            // Detectar cancelaciones: reservas que estaban activas y ya no aparecen en GCal
+            let canceladas = 0;
+            for (const res of reservasAirbnb) {
+                if (!res.airbnb_google_id) continue;
+                if (res.estado === 'airbnb_cancelada' || res.estado === 'anulada' || res.estado === 'finalizada') continue;
+                if (!googleIdsActivos.has(res.airbnb_google_id)) {
+                    // Ya no está en Google Calendar → marcar como cancelada
+                    await db.collection('reservas').doc(res.id).update({
+                        estado: 'airbnb_cancelada',
+                        canceladaEn: firebase.firestore.FieldValue.serverTimestamp(),
+                        notasCancelacion: 'Ya no figura en Google Calendar/Airbnb'
+                    });
+                    canceladas++;
+                }
+            }
 
             // Crear borradores para los eventos nuevos
             const batch = db.batch();
@@ -485,9 +502,13 @@
 
             if (enBatch > 0) await batch.commit();
 
-            const msg = `Sincronización: ${creadas} nuevas reservas importadas${omitidas > 0 ? `, ${omitidas} ya existían` : ''}.`;
-            showToast(msg, creadas > 0 ? 'success' : 'info');
-            if (creadas > 0) calendar?.refetchEvents();
+            const partes = [];
+            if (creadas > 0)    partes.push(`${creadas} nueva${creadas!==1?'s':''} importada${creadas!==1?'s':''}`);
+            if (omitidas > 0)   partes.push(`${omitidas} ya existía${omitidas!==1?'n':''}`);
+            if (canceladas > 0) partes.push(`⚠ ${canceladas} cancelada${canceladas!==1?'s':''} en Airbnb`);
+            const msg = partes.length ? partes.join(' · ') : 'Sin cambios.';
+            showToast(msg, canceladas > 0 ? 'warning' : creadas > 0 ? 'success' : 'info');
+            if (creadas > 0 || canceladas > 0) calendar?.refetchEvents();
 
         } catch(e) {
             showToast('Error en sincronización: ' + e.message, 'error');
@@ -512,12 +533,14 @@
             if (!filtrosActivos.has(r.caba)) return;
 
             const cabana = cabanasCache.find(c => c.id == r.caba);
-            const color  = r.estado === 'anulada'   ? '#e74c3c'
-                         : r.estado === 'pendiente'  ? (cabana?.color || '#95a5a6') + 'aa'
+            const esCancelada = r.estado === 'airbnb_cancelada';
+            const color  = esCancelada            ? '#e07b00'
+                         : r.estado === 'anulada'  ? '#e74c3c'
+                         : r.estado === 'pendiente' ? (cabana?.color || '#95a5a6') + 'aa'
                          : (cabana?.color || '#95a5a6');
 
             eventos.push({
-                title:      `${r.estado === 'pendiente' ? '⏳ ' : r.estado === 'anulada' ? '❌ ' : ''}${r.nombre} (C${r.caba})`,
+                title: `${esCancelada ? '⚠ ' : r.estado === 'pendiente' ? '⏳ ' : r.estado === 'anulada' ? '❌ ' : ''}${r.nombre} (C${r.caba})`,
                 start:      r.checkIn?.toDate?.(),
                 end:        r.checkOut?.toDate?.(),
                 color,
@@ -527,7 +550,8 @@
                     estado: r.estado, caba: r.caba,
                     nombre: r.nombre, huespedes: r.huespedes,
                     totalBRL: r.totalBRL, origen: r.origen,
-                    airbnb_id: r.airbnb_id || null
+                    airbnb_id: r.airbnb_id || null,
+                    esCancelada
                 }
             });
         });
@@ -594,7 +618,9 @@
 
         if (ep.tipo === 'reserva') {
             const esAirbnbPendiente = ep.origen === 'airbnb' && ep.estado === 'pendiente';
+            const esCancelada       = ep.estado === 'airbnb_cancelada';
             document.getElementById('popupDetalle').innerHTML =
+                `${esCancelada ? '<div style="background:#fff3e0;border:1px solid #e07b00;border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:11px;color:#e07b00;"><strong>⚠️ Esta reserva ya no figura en Airbnb.</strong> Verificar si fue cancelada y anularla si corresponde.</div>' : ''}` +
                 `${esAirbnbPendiente ? '<div style="background:#fff3e0;border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:11px;color:#e07b00;">⚠️ Reserva Airbnb sin completar — hacé clic en "Completar" para agregar los datos del huésped</div>' : ''}` +
                 `Estado: <strong>${ep.estado}</strong><br>` +
                 `Cabaña: ${ep.caba}<br>` +
@@ -603,11 +629,12 @@
                 `Origen: ${ep.origen || '—'}`;
             linkRes.href = `reservas.html?id=${ep.reservaId}`;
             linkRes.style.display = 'inline-flex';
-            linkRes.textContent   = esAirbnbPendiente ? '✏️ Completar reserva' : '→ Ver reserva';
+            linkRes.textContent   = esCancelada ? '🗑 Ver y anular' : esAirbnbPendiente ? '✏️ Completar reserva' : '→ Ver reserva';
 
-            if (esAirbnbPendiente) {
+            if (esAirbnbPendiente || esCancelada) {
                 eventoAirbnbActual = ep;
                 btnImp.style.display = 'inline-flex';
+                btnImp.textContent   = esCancelada ? 'Anular reserva' : 'Completar datos';
             } else {
                 btnImp.style.display = 'none';
             }
