@@ -1,16 +1,7 @@
 // ============================================================
-//  utils.js — Casa Verde Canas  v2.0
-//  Funciones compartidas para todos los módulos de /interno/
-//
-//  DEPENDENCIAS (cargar antes en cada HTML):
-//    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-//    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-//    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-//    <script src="utils.js"></script>
-//
-//  EXCEPCIÓN: interno/index.html (login) NO incluye utils.js
+//  utils.js — Casa Verde Canas  v3.0
+//  Funciones compartidas · /interno/
 // ============================================================
-
 
 // ── FIREBASE ─────────────────────────────────────────────────
 const FIREBASE_CONFIG = {
@@ -30,13 +21,13 @@ const ESTADOS_RESERVA = {
     anulada:          { label: 'Anulada',            cssClass: 'badge-anulada'    },
     finalizada:       { label: 'Finalizada',         cssClass: 'badge-finalizada' },
     airbnb_activa:    { label: 'Airbnb',             cssClass: 'badge-neutral'    },
-    airbnb_cancelada: { label: '⚠ Cancelada Airbnb', cssClass: 'badge-pendiente'  }
+    airbnb_cancelada: { label: 'Cancelada Airbnb',   cssClass: 'badge-pendiente'  }
 };
 
 const ESTADOS_TAREA = {
-    pendiente:  { label: 'Pendiente',  cssClass: 'badge-pendiente' },
-    en_curso:   { label: 'En curso',   cssClass: 'badge-en_curso'  },
-    finalizada: { label: 'Finalizada', cssClass: 'badge-finalizada'}
+    pendiente:  { label: 'Pendiente',  cssClass: 'badge-pendiente'  },
+    en_curso:   { label: 'En curso',   cssClass: 'badge-en_curso'   },
+    finalizada: { label: 'Finalizada', cssClass: 'badge-finalizada' }
 };
 
 const PRIORIDADES = {
@@ -45,37 +36,26 @@ const PRIORIDADES = {
     baja:  { label: 'Baja',  cssClass: 'badge-baja'  }
 };
 
-// Calendar IDs confirmados por cabaña (solo el ID, no el embed)
 const CALENDAR_IDS = {
-    1: '8i3hl5ppqi6al50kf7casj5n5vl9sp1j@import.calendar.google.com',
-    2: '60n7foetdu2qvsn16mi7is8j6i4ugm66@import.calendar.google.com',
-    3: 'h5a1h0a8dg9rl0oufvq19hn05r4gbubg@import.calendar.google.com'
+    1: 'h5a1h0a8dg9rl0oufvq19hn05r4gbubg@import.calendar.google.com',
+    2: '8i3hl5ppqi6al50kf7casj5n5vl9sp1j@import.calendar.google.com',
+    3: '60n7foetdu2qvsn16mi7is8j6i4ugm66@import.calendar.google.com'
 };
 
 
 // ── BADGES ───────────────────────────────────────────────────
-// Usan clases del design-system.css — sin estilos inline
-
 function badgeEstado(estado) {
     const e = ESTADOS_RESERVA[estado] || ESTADOS_TAREA[estado] || { label: estado, cssClass: 'badge-neutral' };
-    return `<span class="badge ${e.cssClass}">${e.label}</span>`;
+    return '<span class="badge ' + e.cssClass + '">' + e.label + '</span>';
 }
 
 function badgePrioridad(prioridad) {
     const p = PRIORIDADES[prioridad] || { label: prioridad, cssClass: 'badge-neutral' };
-    return `<span class="badge ${p.cssClass}">${p.label}</span>`;
+    return '<span class="badge ' + p.cssClass + '">' + p.label + '</span>';
 }
 
 
 // ── AUTENTICACIÓN ─────────────────────────────────────────────
-/**
- * Verifica sesión activa y rol correcto.
- * Solo bloquea si userData.activo === false (explícito).
- * Redirige a index.html si no cumple.
- *
- * @param {string|string[]} rolesPermitidos  'admin' | 'user' | ['admin','user']
- * @returns {Promise<{ user, userData }>}
- */
 function verificarAuth(rolesPermitidos) {
     const roles = Array.isArray(rolesPermitidos) ? rolesPermitidos : [rolesPermitidos];
     return new Promise((resolve) => {
@@ -89,22 +69,18 @@ function verificarAuth(rolesPermitidos) {
                     return;
                 }
                 const userData = userDoc.data();
-
-                // Solo bloquea si activo es EXPLÍCITAMENTE false
                 if (userData.activo === false) {
                     await auth.signOut();
                     window.location.href = 'index.html';
                     return;
                 }
-
                 if (!roles.includes(userData.rol)) {
                     window.location.href = userData.rol === 'user' ? 'tareas.html' : 'index.html';
                     return;
                 }
-
                 resolve({ user, userData });
             } catch (e) {
-                console.error('Error verificando auth:', e);
+                console.error('verificarAuth:', e);
                 window.location.href = 'index.html';
             }
         });
@@ -118,16 +94,6 @@ async function cerrarSesion() {
 
 
 // ── CÁLCULO DE PRECIO ────────────────────────────────────────
-/**
- * Calcula precio total usando tarifas base e intervalos de temporada.
- *
- * @param {Object} cabana    Documento de Firestore (con .tarifas)
- * @param {string} checkIn   Fecha ISO: '2025-01-15'
- * @param {string} checkOut  Fecha ISO: '2025-01-20'
- * @param {number} adultos
- * @param {number} ninos
- * @returns {{ noches, subtotal, limpieza, total }}
- */
 function calcularPrecio(cabana, checkIn, checkOut, adultos, ninos) {
     const tarifas       = cabana.tarifas || {};
     const capacidadBase = cabana.capacidad?.base || 2;
@@ -139,7 +105,9 @@ function calcularPrecio(cabana, checkIn, checkOut, adultos, ninos) {
 
     while (fecha < fin) {
         const fechaStr  = fecha.toISOString().split('T')[0];
-        const intervalo = (tarifas.intervalos || []).find(i => i.desde <= fechaStr && i.hasta >= fechaStr);
+        const intervalo = (tarifas.intervalos || []).find(
+            i => i.desde <= fechaStr && i.hasta >= fechaStr
+        );
         subtotal += (intervalo ? intervalo.precioNoche     : (tarifas.precioBase         || 0))
                   + (intervalo ? intervalo.precioExtra     : (tarifas.precioExtraPersona || 0)) * personasExtra;
         fecha.setDate(fecha.getDate() + 1);
@@ -151,51 +119,34 @@ function calcularPrecio(cabana, checkIn, checkOut, adultos, ninos) {
 }
 
 
-// ── CREAR TAREA DE LIMPIEZA ──────────────────────────────────
-/**
- * Crea una tarea de limpieza al confirmar una reserva.
- * Busca la próxima reserva en la misma cabaña.
- */
 // ── SINCRONIZAR DISPONIBILIDAD PÚBLICA ───────────────────────
-/**
- * Escribe/actualiza un documento en la colección `disponibilidad`
- * con solo los datos necesarios para mostrar ocupación sin exponer
- * datos personales del huésped.
- *
- * Llamar después de cualquier operación que cambie el estado de una reserva:
- *   create, update estado, anular, finalizar
- */
 async function sincronizarDisponibilidad(reservaId, reservaData) {
     try {
-        const estado = reservaData.estado || 'pendiente';
-
-        // Solo estados que bloquean el calendario público
-        const bloqueante = ['confirmada', 'airbnb_activa'].includes(estado);
-        // Estados que liberan el calendario
-        const libre = ['anulada', 'finalizada', 'airbnb_cancelada'].includes(estado);
+        const estado    = reservaData.estado || 'pendiente';
+        const bloqueante = ['confirmada', 'airbnb_activa', 'pendiente'].includes(estado);
+        const libre      = ['anulada', 'finalizada', 'airbnb_cancelada'].includes(estado);
 
         if (libre) {
-            // Eliminar de disponibilidad si existía
             await db.collection('disponibilidad').doc(reservaId).delete();
             return;
         }
 
         await db.collection('disponibilidad').doc(reservaId).set({
-            caba:       reservaData.caba,
-            checkIn:    reservaData.checkIn,
-            checkOut:   reservaData.checkOut,
+            caba:         reservaData.caba,
+            checkIn:      reservaData.checkIn,
+            checkOut:     reservaData.checkOut,
             estado,
             bloqueante,
-            origen:     reservaData.origen || 'directa',
-            // Sin datos personales
+            origen:       reservaData.origen || 'directa',
             actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
         });
     } catch(e) {
-        // No bloquear el flujo principal si falla la sincronización
         console.warn('sincronizarDisponibilidad:', e.message);
     }
 }
 
+
+// ── CREAR TAREA DE LIMPIEZA ──────────────────────────────────
 async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
     const checkOut = reservaData.checkOut?.toDate
         ? reservaData.checkOut.toDate()
@@ -203,19 +154,15 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
 
     let proximoHuesped = null;
     try {
-        // Sin where+orderBy combinados — traer por cabaña y filtrar en cliente
         const proxSnap = await db.collection('reservas')
-            .where('caba', '==', reservaData.caba)
-            .get();
-
-        const checkOutDate = checkOut instanceof Date ? checkOut : new Date(reservaData.checkOut);
+            .where('caba', '==', reservaData.caba).get();
 
         const proxima = proxSnap.docs
             .map(d => ({ id: d.id, ...d.data() }))
             .filter(r => {
                 if (!['confirmada', 'pendiente'].includes(r.estado)) return false;
                 const ci = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
-                return ci > checkOutDate;
+                return ci > checkOut;
             })
             .sort((a, b) => {
                 const ca = a.checkIn?.toDate ? a.checkIn.toDate() : new Date(a.checkIn);
@@ -224,31 +171,30 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
             })[0];
 
         if (proxima) {
-            const d  = proxima;
-            const ci = d.checkIn?.toDate ? d.checkIn.toDate() : new Date(d.checkIn);
+            const ci = proxima.checkIn?.toDate ? proxima.checkIn.toDate() : new Date(proxima.checkIn);
             proximoHuesped = {
-                nombre:    d.nombre || '—',
+                nombre:    proxima.nombre || '—',
                 checkIn:   ci,
-                huespedes: d.huespedes || ((d.adultos || 0) + (d.ninos || 0)),
-                notas:     d.notas || ''
+                huespedes: proxima.huespedes || ((proxima.adultos || 0) + (proxima.ninos || 0)),
+                notas:     proxima.notas || ''
             };
         }
-    } catch (e) {
-        console.warn('No se pudo buscar próxima reserva:', e);
+    } catch(e) {
+        console.warn('proxima reserva:', e);
     }
 
     const descripcion = [
-        `🚪 Check-out: ${checkOut.toLocaleDateString('es-AR')} — ${reservaData.nombre} (${reservaData.huespedes} huéspedes)`,
+        'Checkout: ' + checkOut.toLocaleDateString('es-AR') + ' — ' + reservaData.nombre,
         proximoHuesped
-            ? `🛎️ Check-in siguiente: ${proximoHuesped.checkIn.toLocaleDateString('es-AR')} — ${proximoHuesped.nombre} (${proximoHuesped.huespedes} huéspedes)`
-            : `🛎️ Sin reserva siguiente registrada`,
-        reservaData.notas     ? `📝 Notas actuales: ${reservaData.notas}`   : '',
-        proximoHuesped?.notas ? `📝 Notas próxima: ${proximoHuesped.notas}` : '',
-        `💰 Monto limpieza: R$ ${reservaData.costoLimpiezaBRL || 0}`
+            ? 'Checkin siguiente: ' + proximoHuesped.checkIn.toLocaleDateString('es-AR') + ' — ' + proximoHuesped.nombre
+            : 'Sin reserva siguiente registrada',
+        reservaData.notas     ? 'Notas: ' + reservaData.notas        : '',
+        proximoHuesped?.notas ? 'Notas proxima: ' + proximoHuesped.notas : '',
+        'Limpieza: R$ ' + (reservaData.costoLimpiezaBRL || 0)
     ].filter(Boolean).join('\n');
 
     await db.collection('tareas').add({
-        nombre:      `🧹 Limpiar Cabaña ${reservaData.caba} — ${reservaData.nombre}`,
+        nombre:      'Limpiar Cabana ' + reservaData.caba + ' — ' + reservaData.nombre,
         descripcion,
         tipo:        'limpieza',
         prioridad:   'alta',
@@ -258,40 +204,22 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
         monto:       reservaData.costoLimpiezaBRL || 0,
         activa:      true,
         reservaId,
-        proximaReservaHuesped: proximoHuesped?.nombre || null,
-        proximaReservaCheckIn: proximoHuesped
-            ? firebase.firestore.Timestamp.fromDate(proximoHuesped.checkIn)
-            : null,
-        cabana:    reservaData.caba,
-        creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
-        creadoPor: creadoPor || null
+        cabana:      reservaData.caba,
+        creadoEn:    firebase.firestore.FieldValue.serverTimestamp(),
+        creadoPor:   creadoPor || null
     });
 }
 
 
-// ── LÓGICA DE TAREAS ─────────────────────────────────────────
+// ── LÓGICA DE TAREAS — SUBCOLECCIÓN ──────────────────────────
 //
-//  tarea.sesiones = [
-//    { uid, nombre, inicio: Timestamp, fin: Timestamp | null },
-//    ...  // un mismo usuario puede tener múltiples sesiones
-//  ]
+//  Sesiones en: tareas/{tareaId}/sesiones/{sesionId}
+//  { uid, nombre, inicio: Timestamp, fin: Timestamp|null, tareaId }
 //
-//  ESTADOS:
-//  'pendiente'  → nadie trabajando ahora (puede tener sesiones cerradas previas)
-//  'en_curso'   → al menos una sesión con fin: null
-//  'finalizada' → movida a historial, eliminada o reseteada
+//  Doc raíz mantiene sesionesActivas[] (solo abiertas) para cards.
 //
-//  FLUJO:
-//  ▶️ Iniciar   → agrega sesión abierta, estado → 'en_curso'
-//  ⏸️ Pausar    → cierra sesión activa del usuario;
-//                 si no quedan abiertas → estado → 'pendiente'
-//  ✅ Finalizar → cierra TODAS las sesiones, calcula horas/pagos,
-//                 mueve a historial, elimina o resetea según recurrencia
+//  ESTADOS: pendiente | en_curso | finalizada
 
-/**
- * Inicia la tarea para el usuario actual.
- * Un mismo usuario no puede tener dos sesiones abiertas simultáneas.
- */
 async function iniciarTarea(tareaId, currentUser) {
     const tareaRef    = db.collection('tareas').doc(tareaId);
     const sesionesRef = tareaRef.collection('sesiones');
@@ -301,14 +229,12 @@ async function iniciarTarea(tareaId, currentUser) {
     const tarea = tareaDoc.data();
     if (tarea.estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
 
-    // Verificar sesión abierta del usuario
-    const abiertaSnap = await sesionesRef
+    const abierta = await sesionesRef
         .where('uid', '==', currentUser.uid)
         .where('fin', '==', null)
         .limit(1).get();
-    if (!abiertaSnap.empty) throw new Error('Ya tenés una sesión activa en esta tarea');
+    if (!abierta.empty) throw new Error('Ya tenes una sesion activa en esta tarea');
 
-    // Crear sesión en subcolección
     const ahora = firebase.firestore.Timestamp.now();
     await sesionesRef.add({
         uid:    currentUser.uid,
@@ -318,17 +244,11 @@ async function iniciarTarea(tareaId, currentUser) {
         tareaId
     });
 
-    // Mantener sesionesActivas en doc raíz para chips en cards
     const sesActuales = (tarea.sesionesActivas || []);
     sesActuales.push({ uid: currentUser.uid, nombre: currentUser.nombre || currentUser.email, inicio: ahora });
     await tareaRef.update({ estado: 'en_curso', sesionesActivas: sesActuales });
 }
 
-/**
- * Pausa la tarea para el usuario actual.
- * Cierra su sesión activa.
- * Si no quedan sesiones abiertas → estado vuelve a 'pendiente'.
- */
 async function pausarTarea(tareaId, currentUser) {
     const tareaRef    = db.collection('tareas').doc(tareaId);
     const sesionesRef = tareaRef.collection('sesiones');
@@ -337,77 +257,72 @@ async function pausarTarea(tareaId, currentUser) {
     if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
     if (tareaDoc.data().estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
 
-    // Buscar sesión abierta del usuario
-    const abiertaSnap = await sesionesRef
+    const abierta = await sesionesRef
         .where('uid', '==', currentUser.uid)
         .where('fin', '==', null)
         .limit(1).get();
-    if (abiertaSnap.empty) throw new Error('No tenés una sesión activa en esta tarea');
+    if (abierta.empty) throw new Error('No tenes una sesion activa en esta tarea');
 
     const ahora = firebase.firestore.Timestamp.now();
-    await abiertaSnap.docs[0].ref.update({ fin: ahora });
+    await abierta.docs[0].ref.update({ fin: ahora });
 
-    // Si no quedan sesiones abiertas → pendiente
-    const quedanAbiertas = await sesionesRef.where('fin', '==', null).limit(1).get();
-    const nuevoEstado    = quedanAbiertas.empty ? 'pendiente' : 'en_curso';
-
-    // Actualizar sesionesActivas en doc raíz
+    const quedan    = await sesionesRef.where('fin', '==', null).limit(1).get();
     const sesActuales = (tareaDoc.data().sesionesActivas || []).filter(s => s.uid !== currentUser.uid);
-    await tareaRef.update({ estado: nuevoEstado, sesionesActivas: sesActuales });
+    await tareaRef.update({
+        estado:          quedan.empty ? 'pendiente' : 'en_curso',
+        sesionesActivas: sesActuales
+    });
 }
 
-/**
- * Finaliza la tarea para TODOS.
- *
- * - Cierra todas las sesiones abiertas
- * - Suma horas de TODAS las sesiones de cada usuario
- * - monto > 0 → crea pagos_pendientes proporcionales a horas
- * - monto = 0 → solo registra en historial, sin pagos
- * - recurrencia = 0 → elimina la tarea de Firestore
- * - recurrencia = N → resetea con fechaInicio = hoy + N días
- *
- * @returns {Array} colaboradores con horas y montos (para mostrar resumen en UI)
- */
 async function finalizarTarea(tareaId, currentUser) {
-    const tareaRef = db.collection('tareas').doc(tareaId);
+    const tareaRef    = db.collection('tareas').doc(tareaId);
+    const sesionesRef = tareaRef.collection('sesiones');
+
     const tareaDoc = await tareaRef.get();
     if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
-
-    const tarea     = tareaDoc.data();
+    const tarea = tareaDoc.data();
     if (tarea.estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
 
     const ahora     = firebase.firestore.Timestamp.now();
     const ahoraDate = ahora.toDate();
-    let sesiones    = tarea.sesiones || [];
 
-    // Si quien finaliza nunca participó, registrar presencia mínima
+    // Leer sesiones de subcoleccion
+    const sesSnap = await sesionesRef.get();
+    let sesiones  = sesSnap.docs.map(d => ({ _ref: d.ref, ...d.data() }));
+
+    // Si quien finaliza no participo, registrar presencia minima
     if (!sesiones.some(s => s.uid === currentUser.uid)) {
-        sesiones.push({
+        const ref = await sesionesRef.add({
             uid:    currentUser.uid,
             nombre: currentUser.nombre || currentUser.email,
             inicio: ahora,
-            fin:    ahora
+            fin:    ahora,
+            tareaId
         });
+        sesiones.push({ _ref: ref, uid: currentUser.uid,
+            nombre: currentUser.nombre || currentUser.email, inicio: ahora, fin: ahora });
     }
 
-    // Cerrar TODAS las sesiones abiertas
-    sesiones = sesiones.map(s => ({ ...s, fin: s.fin === null ? ahora : s.fin }));
+    // Cerrar todas las sesiones abiertas
+    const b1 = db.batch();
+    for (const s of sesiones) {
+        if (s.fin === null) { b1.update(s._ref, { fin: ahora }); s.fin = ahora; }
+    }
+    await b1.commit();
 
-    // Calcular horas totales por usuario (suma de todas sus sesiones)
+    // Calcular horas por usuario
     const horasPor  = {};
     const nombrePor = {};
-
     for (const s of sesiones) {
         const ini = s.inicio?.toDate ? s.inicio.toDate() : new Date(s.inicio);
         const fin = s.fin?.toDate    ? s.fin.toDate()    : new Date(s.fin);
-        const hrs = Math.max(0, (fin - ini) / 3_600_000);
-        horasPor[s.uid]  = (horasPor[s.uid] || 0) + hrs;
+        const hrs = Math.max(0, (fin - ini) / 3600000);
+        horasPor[s.uid]  = (horasPor[s.uid]  || 0) + hrs;
         nombrePor[s.uid] = s.nombre;
     }
 
-    const totalHoras = Object.values(horasPor).reduce((a, b) => a + b, 0);
-    const monto      = tarea.monto || 0;
-
+    const totalHoras   = Object.values(horasPor).reduce((a, b) => a + b, 0);
+    const monto        = tarea.monto || 0;
     const colaboradores = Object.entries(horasPor).map(([uid, horas]) => ({
         uid,
         nombre:        nombrePor[uid],
@@ -417,12 +332,12 @@ async function finalizarTarea(tareaId, currentUser) {
             : 0
     }));
 
-    // ── Batch ────────────────────────────────────────────────
-    const batch   = db.batch();
+    // Batch final
+    const b2      = db.batch();
     const histRef = db.collection('historial_tareas').doc();
 
-    // 1. Guardar en historial
-    batch.set(histRef, {
+    // 1. Historial
+    b2.set(histRef, {
         tareaId,
         nombre:        tarea.nombre,
         descripcion:   tarea.descripcion   || '',
@@ -431,7 +346,7 @@ async function finalizarTarea(tareaId, currentUser) {
         fechaInicio:   tarea.fechaInicio   || null,
         fechaFin:      ahoraDate.toISOString().split('T')[0],
         monto,
-        sesiones,
+        totalHoras:    parseFloat(totalHoras.toFixed(2)),
         colaboradores,
         reservaId:     tarea.reservaId     || null,
         cabana:        tarea.cabana        || null,
@@ -441,12 +356,12 @@ async function finalizarTarea(tareaId, currentUser) {
         creadoEn:      tarea.creadoEn      || null
     });
 
-    // 2. Pagos solo si monto > 0
+    // 2. Honorarios (no pagos_pendientes)
     if (monto > 0) {
         for (const col of colaboradores) {
             if (col.montoRecibido <= 0) continue;
-            const pagoRef = db.collection('pagos_pendientes').doc();
-            batch.set(pagoRef, {
+            const hRef = db.collection('honorarios').doc();
+            b2.set(hRef, {
                 colaboradorId:     col.uid,
                 colaboradorNombre: col.nombre,
                 tareaId,
@@ -454,7 +369,7 @@ async function finalizarTarea(tareaId, currentUser) {
                 reservaId:         tarea.reservaId || null,
                 monto:             col.montoRecibido,
                 moneda:            'BRL',
-                concepto:          `Tarea: ${tarea.nombre} — ${ahoraDate.toLocaleDateString('es-AR')}`,
+                concepto:          'Tarea: ' + tarea.nombre + ' — ' + ahoraDate.toLocaleDateString('es-AR'),
                 horas:             col.horas,
                 estado:            'pendiente',
                 fechaPago:         null,
@@ -464,14 +379,14 @@ async function finalizarTarea(tareaId, currentUser) {
         }
     }
 
-    // 3. Recurrencia: 0 → eliminar, N → resetear
+    // 3. Recurrencia
     const recurrencia = tarea.recurrencia || 0;
     if (recurrencia === 0) {
-        batch.delete(tareaRef);
+        b2.delete(tareaRef);
     } else {
         const nuevaFecha = new Date(ahoraDate);
         nuevaFecha.setDate(nuevaFecha.getDate() + recurrencia);
-        batch.update(tareaRef, {
+        b2.update(tareaRef, {
             estado:          'pendiente',
             sesionesActivas: [],
             fechaInicio:     nuevaFecha.toISOString().split('T')[0],
@@ -479,52 +394,46 @@ async function finalizarTarea(tareaId, currentUser) {
         });
     }
 
-    await batch.commit();
+    await b2.commit();
+
+    // Limpiar sesiones si hay recurrencia
+    if (recurrencia > 0) {
+        const b3 = db.batch();
+        for (const s of sesiones) b3.delete(s._ref);
+        await b3.commit();
+    }
+
     return colaboradores;
 }
 
 
 // ── URGENCIA DE TAREA ────────────────────────────────────────
-/**
- * Calcula el color/urgencia de una tarea.
- *
- * ⬜ gris     → fecha futura (no corresponde aún)
- * 🟢 verde    → es hoy
- * 🟡 amarillo → atrasada pero ≤ ciclo días Y ≤ 10 días
- * 🔴 rojo     → muy atrasada (> ciclo días O > 10 días)
- *
- * Para recurrencia = 0 se usa umbral de 3 días para amarillo.
- *
- * @param {Object} tarea
- * @returns {{ color: 'gris'|'verde'|'amarillo'|'rojo', label: string }}
- */
 function urgenciaTarea(tarea) {
     if (!tarea.fechaInicio) return { color: 'gris', label: 'Sin fecha' };
 
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
     const inicio     = new Date(tarea.fechaInicio + 'T00:00:00');
-    const diasAtraso = Math.floor((hoy - inicio) / 86_400_000);
+    const diasAtraso = Math.floor((hoy - inicio) / 86400000);
 
-    if (diasAtraso < 0)   return { color: 'gris',     label: 'Próximamente'        };
-    if (diasAtraso === 0) return { color: 'verde',    label: 'Hoy'                 };
+    if (diasAtraso < 0)   return { color: 'gris',     label: 'Proximamente'         };
+    if (diasAtraso === 0) return { color: 'verde',    label: 'Hoy'                  };
 
     const ciclo       = tarea.recurrencia > 0 ? tarea.recurrencia : 3;
     const muyAtrasada = diasAtraso > ciclo || diasAtraso > 10;
 
     return muyAtrasada
-        ? { color: 'rojo',     label: `${diasAtraso}d de atraso` }
-        : { color: 'amarillo', label: `${diasAtraso}d de atraso` };
+        ? { color: 'rojo',     label: diasAtraso + 'd de atraso' }
+        : { color: 'amarillo', label: diasAtraso + 'd de atraso' };
 }
 
 
-// ── HELPERS GENERALES ────────────────────────────────────────
-
+// ── HELPERS ───────────────────────────────────────────────────
 function escapeHtml(str) {
     if (!str) return '';
-    return String(str).replace(/[&<>"']/g, m =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])
-    );
+    return String(str).replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+    });
 }
 
 function formatFecha(timestamp) {
@@ -539,87 +448,81 @@ function formatFechaHora(timestamp) {
     return d.toLocaleString('es-AR');
 }
 
-/** Convierte horas decimales → "1h 23m" */
 function formatHoras(horas) {
     if (!horas || horas <= 0) return '0m';
     const h = Math.floor(horas);
     const m = Math.round((horas - h) * 60);
-    if (h === 0) return `${m}m`;
-    if (m === 0) return `${h}h`;
-    return `${h}h ${m}m`;
+    if (h === 0) return m + 'm';
+    if (m === 0) return h + 'h';
+    return h + 'h ' + m + 'm';
 }
 
-const COLORES_CABANAS = ['#FF9800', '#3498db', '#2ecc71', '#9b59b6', '#e74c3c', '#1abc9c', '#f39c12'];
+const COLORES_CABANAS = ['#FF9800', '#3498db', '#2ecc71', '#9b59b6', '#e74c3c', '#1abc9c'];
 function colorCabana(index) {
     return COLORES_CABANAS[index % COLORES_CABANAS.length];
 }
 
 
 // ── HELPERS DE UI ────────────────────────────────────────────
-// Requieren design-system.css cargado en la página.
-
-function showLoading(container, mensaje = 'Cargando...') {
+function showLoading(container, mensaje) {
+    mensaje = mensaje || 'Cargando...';
     const el = typeof container === 'string' ? document.querySelector(container) : container;
     if (!el) return;
-    el.innerHTML = `
-        <div class="state-loading">
-            <div class="spinner"></div>
-            <span>${escapeHtml(mensaje)}</span>
-        </div>`;
+    el.innerHTML = '<div class="state-loading"><div class="spinner"></div><span>' + escapeHtml(mensaje) + '</span></div>';
 }
 
-function showEmpty(container, titulo = 'Sin datos', descripcion = '', icono = 'inbox') {
+function showEmpty(container, titulo, descripcion, icono) {
+    titulo      = titulo      || 'Sin datos';
+    descripcion = descripcion || '';
+    icono       = icono       || 'inbox';
     const el = typeof container === 'string' ? document.querySelector(container) : container;
     if (!el) return;
-    el.innerHTML = `
-        <div class="state-empty">
-            <span class="material-icons">${escapeHtml(icono)}</span>
-            <div class="state-empty__title">${escapeHtml(titulo)}</div>
-            ${descripcion ? `<div class="state-empty__desc">${escapeHtml(descripcion)}</div>` : ''}
-        </div>`;
+    el.innerHTML = '<div class="state-empty"><span class="material-icons">' + escapeHtml(icono) + '</span>'
+        + '<div class="state-empty__title">' + escapeHtml(titulo) + '</div>'
+        + (descripcion ? '<div class="state-empty__desc">' + escapeHtml(descripcion) + '</div>' : '')
+        + '</div>';
 }
 
-function showError(container, titulo = 'Ocurrió un error', descripcion = '', onRetry = null) {
+function showError(container, titulo, descripcion, onRetry) {
+    titulo      = titulo      || 'Ocurrio un error';
+    descripcion = descripcion || '';
     const el = typeof container === 'string' ? document.querySelector(container) : container;
     if (!el) return;
-    const retryId = onRetry ? `retry-${Date.now()}` : null;
-    el.innerHTML = `
-        <div class="state-error">
-            <span class="material-icons">error_outline</span>
-            <div class="state-error__title">${escapeHtml(titulo)}</div>
-            ${descripcion ? `<div class="state-error__desc">${escapeHtml(descripcion)}</div>` : ''}
-            ${retryId ? `<button class="btn btn-secondary" id="${retryId}">
-                <span class="material-icons">refresh</span> Reintentar
-            </button>` : ''}
-        </div>`;
-    if (retryId) document.getElementById(retryId)?.addEventListener('click', onRetry);
+    const retryId = onRetry ? 'retry-' + Date.now() : null;
+    el.innerHTML = '<div class="state-error"><span class="material-icons">error_outline</span>'
+        + '<div class="state-error__title">' + escapeHtml(titulo) + '</div>'
+        + (descripcion ? '<div class="state-error__desc">' + escapeHtml(descripcion) + '</div>' : '')
+        + (retryId ? '<button class="btn btn-secondary" id="' + retryId + '"><span class="material-icons">refresh</span> Reintentar</button>' : '')
+        + '</div>';
+    if (retryId) document.getElementById(retryId).addEventListener('click', onRetry);
 }
 
-function showToast(mensaje, tipo = 'success') {
-    const iconos = { success: 'check_circle', error: 'error', warning: 'warning', info: 'info' };
-    let wrap = document.getElementById('cvc-toasts');
+function showToast(mensaje, tipo) {
+    tipo = tipo || 'success';
+    var iconos = { success: 'check_circle', error: 'error', warning: 'warning', info: 'info' };
+    var wrap = document.getElementById('cvc-toasts');
     if (!wrap) {
         wrap = document.createElement('div');
         wrap.id = 'cvc-toasts';
         wrap.className = 'toast-container';
         document.body.appendChild(wrap);
     }
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${tipo}`;
-    toast.innerHTML = `<span class="material-icons">${iconos[tipo] || 'info'}</span><span>${escapeHtml(mensaje)}</span>`;
+    var toast = document.createElement('div');
+    toast.className = 'toast toast-' + tipo;
+    toast.innerHTML = '<span class="material-icons">' + (iconos[tipo] || 'info') + '</span><span>' + escapeHtml(mensaje) + '</span>';
     wrap.appendChild(toast);
-    setTimeout(() => toast.remove(), 3300);
+    setTimeout(function() { toast.remove(); }, 3300);
 }
 
 
-// ── NAV CENTRALIZADA ──────────────────────────────────────────
+// ── NAV CENTRALIZADA ─────────────────────────────────────────
 const NAV_ADMIN_ITEMS = [
     { href: 'dashboard.html',     icon: 'dashboard',       label: 'Dashboard'     },
     { href: 'reservas.html',      icon: 'event',           label: 'Reservas'      },
     { href: 'presupuestos.html',  icon: 'request_quote',   label: 'Presupuestos'  },
     { href: 'pagos.html',         icon: 'payments',        label: 'Finanzas'      },
     { href: 'clientes.html',      icon: 'people',          label: 'Clientes'      },
-    { href: 'cabanas-admin.html', icon: 'cottage',         label: 'Cabañas'       },
+    { href: 'cabanas-admin.html', icon: 'cottage',         label: 'Cabanas'       },
     { href: 'tareas.html',        icon: 'checklist',       label: 'Tareas'        },
     { href: 'calendario.html',    icon: 'calendar_month',  label: 'Calendario'    },
     { href: 'usuarios.html',      icon: 'manage_accounts', label: 'Usuarios'      }
@@ -630,15 +533,15 @@ const NAV_USER_ITEMS = [
     { href: 'pagos.html',  icon: 'payments',  label: 'Mis cobros' }
 ];
 
-function renderNav(paginaActiva, rol = 'admin') {
-    const el = document.getElementById('appNav') || document.querySelector('.admin-nav');
+function renderNav(paginaActiva, rol) {
+    rol = rol || 'admin';
+    var el = document.getElementById('appNav') || document.querySelector('.admin-nav');
     if (!el) return;
-    const items = rol === 'admin' ? NAV_ADMIN_ITEMS : NAV_USER_ITEMS;
-    el.innerHTML = items.map(item => {
-        const activo = item.href === paginaActiva || item.href.replace('.html','') === paginaActiva;
-        return `<a href="${item.href}" class="nav-item${activo ? ' active' : ''}">
-            <span class="material-icons">${item.icon}</span> ${item.label}
-        </a>`;
+    var items = rol === 'admin' ? NAV_ADMIN_ITEMS : NAV_USER_ITEMS;
+    el.innerHTML = items.map(function(item) {
+        var activo = item.href === paginaActiva || item.href.replace('.html', '') === paginaActiva;
+        return '<a href="' + item.href + '" class="nav-item' + (activo ? ' active' : '') + '">'
+            + '<span class="material-icons">' + item.icon + '</span> ' + item.label + '</a>';
     }).join('');
 }
 
