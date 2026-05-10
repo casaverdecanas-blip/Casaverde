@@ -389,24 +389,20 @@
     // ── Cargar tareas ────────────────────────────────────────
     async function cargarTareas() {
         try {
-            const snap = await db.collection('tareas')
-                .where('activa', '!=', false)
-                .orderBy('activa')
-                .orderBy('fechaInicio', 'asc')
-                .get();
-
-            tareasCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            // Sin where+orderBy combinados para evitar índice compuesto
+            // Filtramos y ordenamos en cliente
+            const snap = await db.collection('tareas').get();
+            tareasCache = snap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .filter(t => t.activa !== false && t.estado !== 'finalizada')
+                .sort((a, b) => {
+                    const fa = a.fechaInicio || '';
+                    const fb = b.fechaInicio || '';
+                    return fa.localeCompare(fb);
+                });
         } catch (e) {
-            // Fallback sin índice compuesto
-            try {
-                const snap = await db.collection('tareas').orderBy('fechaInicio', 'asc').get();
-                tareasCache = snap.docs
-                    .map(d => ({ id: d.id, ...d.data() }))
-                    .filter(t => t.activa !== false && t.estado !== 'finalizada');
-            } catch (e2) {
-                showError('#tareasContainer', 'Error al cargar tareas', e2.message, cargarTareas);
-                return;
-            }
+            showError('#tareasContainer', 'Error al cargar tareas', e.message, cargarTareas);
+            return;
         }
 
         actualizarKPIs();
@@ -484,8 +480,8 @@
     function renderTareaCard(t) {
         const estado    = t.estado || 'pendiente';
         const urgencia  = urgenciaTarea(t);
-        // sesionesActivas es un array denormalizado en el doc raíz con solo las sesiones abiertas
-        const activos   = t.sesionesActivas || [];
+        const sesiones  = t.sesiones || [];
+        const activos   = sesiones.filter(s => s.fin === null);
         const yoActivo  = activos.find(s => s.uid === currentUser.uid);
 
         const claseUrgencia = estado === 'en_curso' ? 'urgencia-en_curso' : `urgencia-${urgencia.color}`;
@@ -607,14 +603,7 @@
     window.abrirModal = async function(tarea) {
         tareaModal = tarea;
         const estado   = tarea.estado || 'pendiente';
-
-        // Leer sesiones desde subcolección
-        let sesiones = [];
-        try {
-            const sesSnap = await db.collection('tareas').doc(tarea.id).collection('sesiones').get();
-            sesiones = sesSnap.docs.map(d => d.data());
-        } catch(e) { sesiones = []; }
-
+        const sesiones = tarea.sesiones || [];
         const activos  = sesiones.filter(s => s.fin === null);
         const cerradas = sesiones.filter(s => s.fin !== null);
         const yoActivo = activos.find(s => s.uid === currentUser.uid);
