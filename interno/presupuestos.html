@@ -333,11 +333,13 @@
     // ── Init ──────────────────────────────────────────────────
     try {
         const [cabanasSnap, presSnap] = await Promise.all([
-            db.collection('cabanas').where('activa', '==', true).orderBy('orden').get(),
+            db.collection('cabanas').get(),
             db.collection('presupuestos').orderBy('creadoEn', 'desc').get()
         ]);
 
-        cabanasCache = cabanasSnap.docs.map(d => ({ docId: d.id, ...d.data() }));
+        cabanasCache = cabanasSnap.docs.map(d => ({ docId: d.id, ...d.data() }))
+            .filter(c => c.activa === true || c.activa === 'true' || c.activa === undefined)
+            .sort((a, b) => (a.orden || 0) - (b.orden || 0));
         presupuestosCache = presSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
         const select = document.getElementById('cabanaSelect');
