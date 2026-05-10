@@ -295,14 +295,12 @@
     async function inicializar() {
         try {
             const [cabanasSnap, clientesSnap, reservasSnap] = await Promise.all([
-                db.collection('cabanas').get(),
+                db.collection('cabanas').where('activa', '==', true).orderBy('orden').get(),
                 db.collection('clientes').orderBy('nombre').get(),
                 db.collection('reservas').orderBy('checkIn', 'desc').get()
             ]);
 
-            cabanasCache  = cabanasSnap.docs.map(d => ({ docId: d.id, ...d.data() }))
-                .filter(c => c.activa === true || c.activa === 'true' || c.activa === undefined)
-                .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+            cabanasCache  = cabanasSnap.docs.map(d => ({ docId: d.id, ...d.data() }));
             clientesCache = clientesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
             reservasCache = reservasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
@@ -355,12 +353,20 @@
         }
 
         const rows = lista.map(r => {
-            const esAirbnb = r.origen === 'airbnb' || r.airbnb_id;
+            const esAirbnb          = r.origen === 'airbnb' || r.airbnb_id;
+            const esCancelada       = r.estado === 'airbnb_cancelada';
+            const advertenciaBadge  = esCancelada
+                ? `<div style="background:#fff3e0;border:1px solid #e07b00;border-radius:var(--radius-sm);padding:4px 8px;font-size:var(--text-xs);color:#e07b00;margin-top:4px;display:flex;align-items:center;gap:4px;">
+                       <span class="material-icons" style="font-size:13px;">warning</span>
+                       Ya no figura en Airbnb — verificar si fue cancelada
+                   </div>`
+                : '';
             return `
-            <tr>
+            <tr style="${esCancelada ? 'opacity:0.75; background:var(--color-warning-bg);' : ''}">
                 <td data-label="Cliente">
                     <strong>${escapeHtml(r.nombre || '—')}</strong>
                     ${esAirbnb ? '<span class="badge badge-neutral" style="margin-left:4px;">Airbnb</span>' : ''}
+                    ${advertenciaBadge}
                 </td>
                 <td data-label="Cabaña">Cabaña ${r.caba}</td>
                 <td data-label="Check-in">${formatFecha(r.checkIn)}</td>
@@ -377,11 +383,15 @@
                         <button class="btn btn-primary btn-sm" onclick="confirmarReserva('${r.id}')">
                             <span class="material-icons">check_circle</span> Confirmar
                         </button>` : ''}
+                        ${r.estado === 'airbnb_cancelada' ? `
+                        <button class="btn btn-warning btn-sm" onclick="anularReserva('${r.id}')" title="Anular reserva cancelada de Airbnb">
+                            <span class="material-icons">delete_forever</span> Anular
+                        </button>` : ''}
                         ${r.estado === 'confirmada' ? `
                         <button class="btn btn-ghost btn-sm" onclick="finalizarReserva('${r.id}')">
                             <span class="material-icons">flag</span>
                         </button>` : ''}
-                        ${r.estado !== 'anulada' && r.estado !== 'finalizada' ? `
+                        ${r.estado !== 'anulada' && r.estado !== 'finalizada' && r.estado !== 'airbnb_cancelada' ? `
                         <button class="btn btn-danger btn-sm" onclick="anularReserva('${r.id}')">
                             <span class="material-icons">block</span>
                         </button>` : ''}
