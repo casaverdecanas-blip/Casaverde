@@ -25,10 +25,12 @@ const auth = firebase.auth();
 
 // ── CONSTANTES ───────────────────────────────────────────────
 const ESTADOS_RESERVA = {
-    pendiente:  { label: 'Pendiente',  cssClass: 'badge-pendiente'  },
-    confirmada: { label: 'Confirmada', cssClass: 'badge-confirmada' },
-    anulada:    { label: 'Anulada',    cssClass: 'badge-anulada'    },
-    finalizada: { label: 'Finalizada', cssClass: 'badge-finalizada' }
+    pendiente:        { label: 'Pendiente',          cssClass: 'badge-pendiente'  },
+    confirmada:       { label: 'Confirmada',         cssClass: 'badge-confirmada' },
+    anulada:          { label: 'Anulada',            cssClass: 'badge-anulada'    },
+    finalizada:       { label: 'Finalizada',         cssClass: 'badge-finalizada' },
+    airbnb_activa:    { label: 'Airbnb',             cssClass: 'badge-neutral'    },
+    airbnb_cancelada: { label: '⚠ Cancelada Airbnb', cssClass: 'badge-pendiente'  }
 };
 
 const ESTADOS_TAREA = {
@@ -255,7 +257,6 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
         recurrencia: 0,
         monto:       reservaData.costoLimpiezaBRL || 0,
         activa:      true,
-        sesiones:    [],
         reservaId,
         proximaReservaHuesped: proximoHuesped?.nombre || null,
         proximaReservaCheckIn: proximoHuesped
@@ -292,25 +293,35 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
  * Un mismo usuario no puede tener dos sesiones abiertas simultáneas.
  */
 async function iniciarTarea(tareaId, currentUser) {
-    const tareaRef = db.collection('tareas').doc(tareaId);
+    const tareaRef    = db.collection('tareas').doc(tareaId);
+    const sesionesRef = tareaRef.collection('sesiones');
+
     const tareaDoc = await tareaRef.get();
     if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
-
-    const tarea    = tareaDoc.data();
+    const tarea = tareaDoc.data();
     if (tarea.estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
 
-    const sesiones = tarea.sesiones || [];
-    if (sesiones.some(s => s.uid === currentUser.uid && s.fin === null))
-        throw new Error('Ya tenés una sesión activa en esta tarea');
+    // Verificar sesión abierta del usuario
+    const abiertaSnap = await sesionesRef
+        .where('uid', '==', currentUser.uid)
+        .where('fin', '==', null)
+        .limit(1).get();
+    if (!abiertaSnap.empty) throw new Error('Ya tenés una sesión activa en esta tarea');
 
-    sesiones.push({
+    // Crear sesión en subcolección
+    const ahora = firebase.firestore.Timestamp.now();
+    await sesionesRef.add({
         uid:    currentUser.uid,
         nombre: currentUser.nombre || currentUser.email,
-        inicio: firebase.firestore.Timestamp.now(),
-        fin:    null
+        inicio: ahora,
+        fin:    null,
+        tareaId
     });
 
-    await tareaRef.update({ sesiones, estado: 'en_curso' });
+    // Mantener sesionesActivas en doc raíz para chips en cards
+    const sesActuales = (tarea.sesionesActivas || []);
+    sesActuales.push({ uid: currentUser.uid, nombre: currentUser.nombre || currentUser.email, inicio: ahora });
+    await tareaRef.update({ estado: 'en_curso', sesionesActivas: sesActuales });
 }
 
 /**
@@ -319,28 +330,30 @@ async function iniciarTarea(tareaId, currentUser) {
  * Si no quedan sesiones abiertas → estado vuelve a 'pendiente'.
  */
 async function pausarTarea(tareaId, currentUser) {
-    const tareaRef = db.collection('tareas').doc(tareaId);
+    const tareaRef    = db.collection('tareas').doc(tareaId);
+    const sesionesRef = tareaRef.collection('sesiones');
+
     const tareaDoc = await tareaRef.get();
     if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
+    if (tareaDoc.data().estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
 
-    const tarea = tareaDoc.data();
-    if (tarea.estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
+    // Buscar sesión abierta del usuario
+    const abiertaSnap = await sesionesRef
+        .where('uid', '==', currentUser.uid)
+        .where('fin', '==', null)
+        .limit(1).get();
+    if (abiertaSnap.empty) throw new Error('No tenés una sesión activa en esta tarea');
 
     const ahora = firebase.firestore.Timestamp.now();
-    let cerro   = false;
+    await abiertaSnap.docs[0].ref.update({ fin: ahora });
 
-    const sesiones = (tarea.sesiones || []).map(s => {
-        if (s.uid === currentUser.uid && s.fin === null) {
-            cerro = true;
-            return { ...s, fin: ahora };
-        }
-        return s;
-    });
+    // Si no quedan sesiones abiertas → pendiente
+    const quedanAbiertas = await sesionesRef.where('fin', '==', null).limit(1).get();
+    const nuevoEstado    = quedanAbiertas.empty ? 'pendiente' : 'en_curso';
 
-    if (!cerro) throw new Error('No tenés una sesión activa en esta tarea');
-
-    const hayAbierta = sesiones.some(s => s.fin === null);
-    await tareaRef.update({ sesiones, estado: hayAbierta ? 'en_curso' : 'pendiente' });
+    // Actualizar sesionesActivas en doc raíz
+    const sesActuales = (tareaDoc.data().sesionesActivas || []).filter(s => s.uid !== currentUser.uid);
+    await tareaRef.update({ estado: nuevoEstado, sesionesActivas: sesActuales });
 }
 
 /**
@@ -443,8 +456,9 @@ async function finalizarTarea(tareaId, currentUser) {
                 moneda:            'BRL',
                 concepto:          `Tarea: ${tarea.nombre} — ${ahoraDate.toLocaleDateString('es-AR')}`,
                 horas:             col.horas,
-                pagado:            false,
+                estado:            'pendiente',
                 fechaPago:         null,
+                pagadoPor:         null,
                 creadoEn:          ahora
             });
         }
@@ -458,10 +472,10 @@ async function finalizarTarea(tareaId, currentUser) {
         const nuevaFecha = new Date(ahoraDate);
         nuevaFecha.setDate(nuevaFecha.getDate() + recurrencia);
         batch.update(tareaRef, {
-            estado:      'pendiente',
-            sesiones:    [],
-            fechaInicio: nuevaFecha.toISOString().split('T')[0],
-            ultimaVez:   ahora
+            estado:          'pendiente',
+            sesionesActivas: [],
+            fechaInicio:     nuevaFecha.toISOString().split('T')[0],
+            ultimaVez:       ahora
         });
     }
 
