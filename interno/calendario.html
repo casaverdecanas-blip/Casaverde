@@ -302,7 +302,7 @@
     document.getElementById('userName').textContent = userData.nombre || user.email;
 
     const db = CVC.db;
-    const { escapeHtml, calcularPrecio, crearTareaLimpieza, colorCabana, formatFecha, showToast } = CVC;
+    const { escapeHtml, calcularPrecio, crearTareaLimpieza, sincronizarDisponibilidad, colorCabana, formatFecha, showToast } = CVC;
 
     let cabanasCache   = [];
     let calendar       = null;
@@ -415,7 +415,7 @@
     async function sincronizarAirbnb() {
         const btnSync = document.getElementById('btnSincronizar');
         if (btnSync) { btnSync.disabled = true; btnSync.textContent = '⏳ Sincronizando...'; }
-        let creadas = 0, omitidas = 0;
+        let creadas = 0, omitidas = 0, nuevasReservas = [];
 
         try {
             // Leer todos los google_calendar_id de las cabañas
@@ -451,6 +451,7 @@
                         canceladaEn: firebase.firestore.FieldValue.serverTimestamp(),
                         notasCancelacion: 'Ya no figura en Google Calendar/Airbnb'
                     });
+                    await sincronizarDisponibilidad(res.id, { estado: 'airbnb_cancelada' });
                     canceladas++;
                 }
             }
@@ -464,36 +465,26 @@
 
                 const cabana = cabanasCache.find(c => c.id == ev.cabaId);
                 const ref    = db.collection('reservas').doc();
-
-                batch.set(ref, {
-                    // Identificación
+                const reservaData = {
                     airbnb_google_id: ev.googleId,
                     origen:           'airbnb',
-                    estado:           'pendiente',
-                    // Fechas
+                    estado:           'airbnb_activa',
                     checkIn:  firebase.firestore.Timestamp.fromDate(new Date(ev.inicio + 'T12:00:00')),
                     checkOut: firebase.firestore.Timestamp.fromDate(new Date(ev.fin    + 'T12:00:00')),
-                    // Cabaña
                     caba:     ev.cabaId,
-                    // Datos del huésped — a completar por admin
-                    nombre:      'Reserva Airbnb — completar',
-                    email:       '',
-                    telefono:    '',
-                    adultos:     2,
-                    ninos:       0,
-                    huespedes:   2,
-                    // Financiero — a completar por admin
-                    totalBRL:    0,
-                    // Meta
-                    notas:       `Importado automáticamente de Airbnb via Google Calendar.\nTítulo original: ${ev.titulo}`,
-                    creadoEn:    firebase.firestore.FieldValue.serverTimestamp(),
-                    creadoPor:   'sistema'
-                });
+                    nombre:   'Reserva Airbnb — completar',
+                    email: '', telefono: '', adultos: 2, ninos: 0, huespedes: 2,
+                    totalBRL: 0,
+                    notas:    `Importado automáticamente de Airbnb via Google Calendar.\nTítulo original: ${ev.titulo}`,
+                    creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
+                    creadoPor: 'sistema'
+                };
 
+                batch.set(ref, reservaData);
+                nuevasReservas.push({ id: ref.id, data: reservaData });
                 creadas++;
                 enBatch++;
 
-                // Firestore batch tiene límite de 500
                 if (enBatch >= 490) {
                     await batch.commit();
                     enBatch = 0;
@@ -501,6 +492,11 @@
             }
 
             if (enBatch > 0) await batch.commit();
+
+            // Sincronizar disponibilidad pública para reservas nuevas
+            for (const r of nuevasReservas) {
+                await sincronizarDisponibilidad(r.id, r.data);
+            }
 
             const partes = [];
             if (creadas > 0)    partes.push(`${creadas} nueva${creadas!==1?'s':''} importada${creadas!==1?'s':''}`);
