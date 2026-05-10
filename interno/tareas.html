@@ -593,8 +593,15 @@
 
     window.abrirModal = async function(tarea) {
         tareaModal = tarea;
-        const estado   = tarea.estado || 'pendiente';
-        const sesiones = tarea.sesiones || [];
+        const estado = tarea.estado || 'pendiente';
+
+        // Leer sesiones desde subcolección
+        let sesiones = [];
+        try {
+            const sesSnap = await db.collection('tareas').doc(tarea.id).collection('sesiones').get();
+            sesiones = sesSnap.docs.map(d => d.data());
+        } catch(e) { sesiones = []; }
+
         const activos  = sesiones.filter(s => s.fin === null);
         const cerradas = sesiones.filter(s => s.fin !== null);
         const yoActivo = activos.find(s => s.uid === currentUser.uid);
