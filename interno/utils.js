@@ -25,11 +25,10 @@ const auth = firebase.auth();
 
 // ── CONSTANTES ───────────────────────────────────────────────
 const ESTADOS_RESERVA = {
-    pendiente:         { label: 'Pendiente',         cssClass: 'badge-pendiente'  },
-    confirmada:        { label: 'Confirmada',        cssClass: 'badge-confirmada' },
-    anulada:           { label: 'Anulada',           cssClass: 'badge-anulada'    },
-    finalizada:        { label: 'Finalizada',        cssClass: 'badge-finalizada' },
-    airbnb_cancelada:  { label: '⚠ Cancelada Airbnb', cssClass: 'badge-pendiente' }
+    pendiente:  { label: 'Pendiente',  cssClass: 'badge-pendiente'  },
+    confirmada: { label: 'Confirmada', cssClass: 'badge-confirmada' },
+    anulada:    { label: 'Anulada',    cssClass: 'badge-anulada'    },
+    finalizada: { label: 'Finalizada', cssClass: 'badge-finalizada' }
 };
 
 const ESTADOS_TAREA = {
@@ -155,6 +154,46 @@ function calcularPrecio(cabana, checkIn, checkOut, adultos, ninos) {
  * Crea una tarea de limpieza al confirmar una reserva.
  * Busca la próxima reserva en la misma cabaña.
  */
+// ── SINCRONIZAR DISPONIBILIDAD PÚBLICA ───────────────────────
+/**
+ * Escribe/actualiza un documento en la colección `disponibilidad`
+ * con solo los datos necesarios para mostrar ocupación sin exponer
+ * datos personales del huésped.
+ *
+ * Llamar después de cualquier operación que cambie el estado de una reserva:
+ *   create, update estado, anular, finalizar
+ */
+async function sincronizarDisponibilidad(reservaId, reservaData) {
+    try {
+        const estado = reservaData.estado || 'pendiente';
+
+        // Solo estados que bloquean el calendario público
+        const bloqueante = ['confirmada', 'airbnb_activa'].includes(estado);
+        // Estados que liberan el calendario
+        const libre = ['anulada', 'finalizada', 'airbnb_cancelada'].includes(estado);
+
+        if (libre) {
+            // Eliminar de disponibilidad si existía
+            await db.collection('disponibilidad').doc(reservaId).delete();
+            return;
+        }
+
+        await db.collection('disponibilidad').doc(reservaId).set({
+            caba:       reservaData.caba,
+            checkIn:    reservaData.checkIn,
+            checkOut:   reservaData.checkOut,
+            estado,
+            bloqueante,
+            origen:     reservaData.origen || 'directa',
+            // Sin datos personales
+            actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch(e) {
+        // No bloquear el flujo principal si falla la sincronización
+        console.warn('sincronizarDisponibilidad:', e.message);
+    }
+}
+
 async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
     const checkOut = reservaData.checkOut?.toDate
         ? reservaData.checkOut.toDate()
@@ -204,6 +243,7 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
         recurrencia: 0,
         monto:       reservaData.costoLimpiezaBRL || 0,
         activa:      true,
+        sesiones:    [],
         reservaId,
         proximaReservaHuesped: proximoHuesped?.nombre || null,
         proximaReservaCheckIn: proximoHuesped
@@ -218,22 +258,22 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
 
 // ── LÓGICA DE TAREAS ─────────────────────────────────────────
 //
-//  Las sesiones de trabajo se guardan en SUBCOLECCIÓN:
-//  tareas/{tareaId}/sesiones/{sesionId}
-//    { uid, nombre, inicio: Timestamp, fin: Timestamp | null, tareaId }
+//  tarea.sesiones = [
+//    { uid, nombre, inicio: Timestamp, fin: Timestamp | null },
+//    ...  // un mismo usuario puede tener múltiples sesiones
+//  ]
 //
-//  ESTADOS del documento raíz:
-//  'pendiente'  → nadie trabajando ahora (puede tener sesiones cerradas)
-//  'en_curso'   → al menos una sesión con fin: null en subcolección
-//  'finalizada' → movida a historial_tareas, eliminada o reseteada
+//  ESTADOS:
+//  'pendiente'  → nadie trabajando ahora (puede tener sesiones cerradas previas)
+//  'en_curso'   → al menos una sesión con fin: null
+//  'finalizada' → movida a historial, eliminada o reseteada
 //
 //  FLUJO:
-//  ▶️ Iniciar   → crea doc en subcolección, estado → 'en_curso'
-//  ⏸️ Pausar    → actualiza fin en el doc de sesión;
+//  ▶️ Iniciar   → agrega sesión abierta, estado → 'en_curso'
+//  ⏸️ Pausar    → cierra sesión activa del usuario;
 //                 si no quedan abiertas → estado → 'pendiente'
-//  ✅ Finalizar → cierra todas las sesiones, calcula horas/pagos,
-//                 escribe en historial_tareas y honorarios,
-//                 elimina o resetea según recurrencia
+//  ✅ Finalizar → cierra TODAS las sesiones, calcula horas/pagos,
+//                 mueve a historial, elimina o resetea según recurrencia
 
 /**
  * Inicia la tarea para el usuario actual.
@@ -241,37 +281,24 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
  */
 async function iniciarTarea(tareaId, currentUser) {
     const tareaRef = db.collection('tareas').doc(tareaId);
-    const sesionesRef = tareaRef.collection('sesiones');
-
     const tareaDoc = await tareaRef.get();
     if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
 
-    const tarea = tareaDoc.data();
+    const tarea    = tareaDoc.data();
     if (tarea.estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
 
-    // Verificar que el usuario no tenga sesión abierta
-    const sesionAbierta = await sesionesRef
-        .where('uid', '==', currentUser.uid)
-        .where('fin', '==', null)
-        .limit(1).get();
-
-    if (!sesionAbierta.empty)
+    const sesiones = tarea.sesiones || [];
+    if (sesiones.some(s => s.uid === currentUser.uid && s.fin === null))
         throw new Error('Ya tenés una sesión activa en esta tarea');
 
-    // Crear sesión en subcolección
-    const nuevaSesion = {
+    sesiones.push({
         uid:    currentUser.uid,
         nombre: currentUser.nombre || currentUser.email,
         inicio: firebase.firestore.Timestamp.now(),
-        fin:    null,
-        tareaId
-    };
-    await sesionesRef.add(nuevaSesion);
+        fin:    null
+    });
 
-    // Mantener sesionesActivas denormalizado en el doc raíz (para mostrar chips en cards)
-    const sesActuales = (tareaDoc.data().sesionesActivas || []);
-    sesActuales.push({ uid: nuevaSesion.uid, nombre: nuevaSesion.nombre, inicio: nuevaSesion.inicio });
-    await tareaRef.update({ estado: 'en_curso', sesionesActivas: sesActuales });
+    await tareaRef.update({ sesiones, estado: 'en_curso' });
 }
 
 /**
@@ -280,34 +307,28 @@ async function iniciarTarea(tareaId, currentUser) {
  * Si no quedan sesiones abiertas → estado vuelve a 'pendiente'.
  */
 async function pausarTarea(tareaId, currentUser) {
-    const tareaRef    = db.collection('tareas').doc(tareaId);
-    const sesionesRef = tareaRef.collection('sesiones');
-
+    const tareaRef = db.collection('tareas').doc(tareaId);
     const tareaDoc = await tareaRef.get();
     if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
-    if (tareaDoc.data().estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
 
-    // Buscar sesión abierta del usuario
-    const abiertaSnap = await sesionesRef
-        .where('uid', '==', currentUser.uid)
-        .where('fin', '==', null)
-        .limit(1).get();
-
-    if (abiertaSnap.empty) throw new Error('No tenés una sesión activa en esta tarea');
+    const tarea = tareaDoc.data();
+    if (tarea.estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
 
     const ahora = firebase.firestore.Timestamp.now();
-    await abiertaSnap.docs[0].ref.update({ fin: ahora });
+    let cerro   = false;
 
-    // Si no quedan sesiones abiertas → volver a pendiente
-    const quedanAbiertas = await sesionesRef.where('fin', '==', null).limit(1).get();
-    const nuevoEstado = quedanAbiertas.empty ? 'pendiente' : 'en_curso';
-
-    // Actualizar sesionesActivas en doc raíz
-    const sesActuales = (tareaDoc.data().sesionesActivas || []).filter(s => s.uid !== currentUser.uid);
-    await tareaRef.update({
-        estado: nuevoEstado,
-        sesionesActivas: sesActuales
+    const sesiones = (tarea.sesiones || []).map(s => {
+        if (s.uid === currentUser.uid && s.fin === null) {
+            cerro = true;
+            return { ...s, fin: ahora };
+        }
+        return s;
     });
+
+    if (!cerro) throw new Error('No tenés una sesión activa en esta tarea');
+
+    const hayAbierta = sesiones.some(s => s.fin === null);
+    await tareaRef.update({ sesiones, estado: hayAbierta ? 'en_curso' : 'pendiente' });
 }
 
 /**
@@ -315,7 +336,7 @@ async function pausarTarea(tareaId, currentUser) {
  *
  * - Cierra todas las sesiones abiertas
  * - Suma horas de TODAS las sesiones de cada usuario
- * - monto > 0 → crea honorarios proporcionales a horas
+ * - monto > 0 → crea pagos_pendientes proporcionales a horas
  * - monto = 0 → solo registra en historial, sin pagos
  * - recurrencia = 0 → elimina la tarea de Firestore
  * - recurrencia = N → resetea con fechaInicio = hoy + N días
@@ -323,49 +344,34 @@ async function pausarTarea(tareaId, currentUser) {
  * @returns {Array} colaboradores con horas y montos (para mostrar resumen en UI)
  */
 async function finalizarTarea(tareaId, currentUser) {
-    const tareaRef    = db.collection('tareas').doc(tareaId);
-    const sesionesRef = tareaRef.collection('sesiones');
-
+    const tareaRef = db.collection('tareas').doc(tareaId);
     const tareaDoc = await tareaRef.get();
     if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
 
-    const tarea = tareaDoc.data();
+    const tarea     = tareaDoc.data();
     if (tarea.estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
 
     const ahora     = firebase.firestore.Timestamp.now();
     const ahoraDate = ahora.toDate();
+    let sesiones    = tarea.sesiones || [];
 
-    // Leer TODAS las sesiones de la subcolección
-    const sesionesSnap = await sesionesRef.get();
-    let sesiones = sesionesSnap.docs.map(d => ({ _id: d.id, ref: d.ref, ...d.data() }));
-
-    // Si quien finaliza nunca participó → registrar presencia mínima
+    // Si quien finaliza nunca participó, registrar presencia mínima
     if (!sesiones.some(s => s.uid === currentUser.uid)) {
-        const nuevaRef = await sesionesRef.add({
+        sesiones.push({
             uid:    currentUser.uid,
             nombre: currentUser.nombre || currentUser.email,
             inicio: ahora,
-            fin:    ahora,
-            tareaId
+            fin:    ahora
         });
-        sesiones.push({ _id: nuevaRef.id, uid: currentUser.uid,
-            nombre: currentUser.nombre || currentUser.email,
-            inicio: ahora, fin: ahora });
     }
 
-    // Cerrar todas las sesiones abiertas
-    const batch1 = db.batch();
-    for (const s of sesiones) {
-        if (s.fin === null) {
-            batch1.update(s.ref, { fin: ahora });
-            s.fin = ahora;
-        }
-    }
-    await batch1.commit();
+    // Cerrar TODAS las sesiones abiertas
+    sesiones = sesiones.map(s => ({ ...s, fin: s.fin === null ? ahora : s.fin }));
 
-    // Calcular horas por usuario
+    // Calcular horas totales por usuario (suma de todas sus sesiones)
     const horasPor  = {};
     const nombrePor = {};
+
     for (const s of sesiones) {
         const ini = s.inicio?.toDate ? s.inicio.toDate() : new Date(s.inicio);
         const fin = s.fin?.toDate    ? s.fin.toDate()    : new Date(s.fin);
@@ -386,12 +392,12 @@ async function finalizarTarea(tareaId, currentUser) {
             : 0
     }));
 
-    // ── Batch final ──────────────────────────────────────────
-    const batch2  = db.batch();
+    // ── Batch ────────────────────────────────────────────────
+    const batch   = db.batch();
     const histRef = db.collection('historial_tareas').doc();
 
-    // 1. Historial — resumen sin sesiones embebidas
-    batch2.set(histRef, {
+    // 1. Guardar en historial
+    batch.set(histRef, {
         tareaId,
         nombre:        tarea.nombre,
         descripcion:   tarea.descripcion   || '',
@@ -400,7 +406,7 @@ async function finalizarTarea(tareaId, currentUser) {
         fechaInicio:   tarea.fechaInicio   || null,
         fechaFin:      ahoraDate.toISOString().split('T')[0],
         monto,
-        totalHoras:    parseFloat(totalHoras.toFixed(2)),
+        sesiones,
         colaboradores,
         reservaId:     tarea.reservaId     || null,
         cabana:        tarea.cabana        || null,
@@ -410,12 +416,12 @@ async function finalizarTarea(tareaId, currentUser) {
         creadoEn:      tarea.creadoEn      || null
     });
 
-    // 2. Honorarios (antes pagos_pendientes) — solo si monto > 0
+    // 2. Pagos solo si monto > 0
     if (monto > 0) {
         for (const col of colaboradores) {
             if (col.montoRecibido <= 0) continue;
-            const honRef = db.collection('honorarios').doc();
-            batch2.set(honRef, {
+            const pagoRef = db.collection('pagos_pendientes').doc();
+            batch.set(pagoRef, {
                 colaboradorId:     col.uid,
                 colaboradorNombre: col.nombre,
                 tareaId,
@@ -425,40 +431,29 @@ async function finalizarTarea(tareaId, currentUser) {
                 moneda:            'BRL',
                 concepto:          `Tarea: ${tarea.nombre} — ${ahoraDate.toLocaleDateString('es-AR')}`,
                 horas:             col.horas,
-                estado:            'pendiente',
+                pagado:            false,
                 fechaPago:         null,
-                pagadoPor:         null,
                 creadoEn:          ahora
             });
         }
     }
 
-    // 3. Recurrencia: 0 → eliminar tarea, N → resetear sin sesiones embebidas
+    // 3. Recurrencia: 0 → eliminar, N → resetear
     const recurrencia = tarea.recurrencia || 0;
     if (recurrencia === 0) {
-        batch2.delete(tareaRef);
+        batch.delete(tareaRef);
     } else {
         const nuevaFecha = new Date(ahoraDate);
         nuevaFecha.setDate(nuevaFecha.getDate() + recurrencia);
-        batch2.update(tareaRef, {
-            estado:          'pendiente',
-            sesionesActivas: [],
-            fechaInicio:     nuevaFecha.toISOString().split('T')[0],
-            ultimaVez:       ahora
+        batch.update(tareaRef, {
+            estado:      'pendiente',
+            sesiones:    [],
+            fechaInicio: nuevaFecha.toISOString().split('T')[0],
+            ultimaVez:   ahora
         });
     }
 
-    await batch2.commit();
-
-    // Si la tarea se reseteó (recurrencia > 0), borrar las sesiones viejas
-    if (recurrencia > 0) {
-        const batchSes = db.batch();
-        for (const s of sesiones) {
-            batchSes.delete(s.ref);
-        }
-        await batchSes.commit();
-    }
-
+    await batch.commit();
     return colaboradores;
 }
 
@@ -599,6 +594,7 @@ window.CVC = {
     verificarAuth, cerrarSesion,
     calcularPrecio,
     crearTareaLimpieza,
+    sincronizarDisponibilidad,
     iniciarTarea, pausarTarea, finalizarTarea, urgenciaTarea,
     escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
     showLoading, showEmpty, showError, showToast
