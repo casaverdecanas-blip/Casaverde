@@ -384,9 +384,11 @@
                 .map(d => ({ id: d.id, ...d.data() }))
                 .filter(t => t.activa !== false && t.estado !== 'finalizada')
                 .sort((a, b) => {
-                    const fa = a.fechaInicio || '';
-                    const fb = b.fechaInicio || '';
-                    return fa.localeCompare(fb);
+                    // Limpieza siempre primero, luego por fecha
+                    const aLimp = a.tipo === 'limpieza' ? 0 : 1;
+                    const bLimp = b.tipo === 'limpieza' ? 0 : 1;
+                    if (aLimp !== bLimp) return aLimp - bLimp;
+                    return (a.fechaInicio || '').localeCompare(b.fechaInicio || '');
                 });
         } catch (e) {
             showError('#tareasContainer', 'Error al cargar tareas', e.message, cargarTareas);
@@ -498,7 +500,6 @@
                         <span class="material-icons">check_circle</span> Finalizar
                     </button>`;
             } else {
-                // Puede unirse o finalizar
                 acciones = `
                     <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); accionIniciar('${t.id}')">
                         <span class="material-icons">play_arrow</span> Unirse
@@ -508,6 +509,11 @@
                     </button>`;
             }
         }
+        // Botón editar solo para admin
+        const btnEditar = userData.rol === 'admin' ? `
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); abrirModalEditar('${t.id}')" title="Editar tarea">
+                <span class="material-icons">edit</span>
+            </button>` : '';
 
         return `
         <div class="task-card ${claseUrgencia}" data-id="${t.id}">
@@ -532,6 +538,7 @@
 
             <div class="task-card__actions" onclick="event.stopPropagation()">
                 ${acciones}
+                ${btnEditar}
                 <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); abrirModal(tareasCache.find(x=>x.id==='${t.id}'))">
                     <span class="material-icons">info</span> Detalle
                 </button>
@@ -752,7 +759,134 @@
     // Refrescar cada 30s para ver cambios de otros colaboradores
     setInterval(cargarTareas, 30_000);
 
+    // ── EDITAR TAREA (admin) ──────────────────────────────────
+    window.abrirModalEditar = async function(tareaId) {
+        const t = tareasCache.find(x => x.id === tareaId);
+        if (!t) return;
+
+        document.getElementById('editTareaId').value      = tareaId;
+        document.getElementById('editNombre').value       = t.nombre || '';
+        document.getElementById('editFecha').value        = t.fechaInicio || '';
+        document.getElementById('editPrioridad').value    = t.prioridad || 'media';
+        document.getElementById('editMonto').value        = t.monto || 0;
+        document.getElementById('editRecurrencia').value  = t.recurrencia || 0;
+        document.getElementById('editDescripcion').value  = t.descripcion || '';
+        document.getElementById('editError').style.display = 'none';
+        document.getElementById('modalEditarOverlay').style.display = 'flex';
+    };
+
+    window.cerrarModalEditar = function(e) {
+        if (e && e.target !== document.getElementById('modalEditarOverlay')) return;
+        document.getElementById('modalEditarOverlay').style.display = 'none';
+    };
+
+    window.guardarEdicionTarea = async function() {
+        const id  = document.getElementById('editTareaId').value;
+        const btn = document.getElementById('btnGuardarTarea');
+        const txt = document.getElementById('btnGuardarTareaText');
+        btn.disabled = true; txt.textContent = 'Guardando...';
+
+        try {
+            await db.collection('tareas').doc(id).update({
+                nombre:      document.getElementById('editNombre').value.trim(),
+                fechaInicio: document.getElementById('editFecha').value,
+                prioridad:   document.getElementById('editPrioridad').value,
+                monto:       parseFloat(document.getElementById('editMonto').value) || 0,
+                recurrencia: parseInt(document.getElementById('editRecurrencia').value) || 0,
+                descripcion: document.getElementById('editDescripcion').value.trim(),
+                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            showToast('Tarea actualizada.', 'success');
+            document.getElementById('modalEditarOverlay').style.display = 'none';
+            await cargarTareas();
+        } catch(e) {
+            document.getElementById('editErrorText').textContent = 'Error: ' + e.message;
+            document.getElementById('editError').style.display = 'flex';
+        } finally {
+            btn.disabled = false; txt.textContent = 'Guardar';
+        }
+    };
+
+    window.eliminarTarea = async function() {
+        const id = document.getElementById('editTareaId').value;
+        const t  = tareasCache.find(x => x.id === id);
+        if (!confirm('¿Eliminar la tarea "' + (t?.nombre || id) + '"?\nEsta acción no se puede deshacer.')) return;
+        try {
+            await db.collection('tareas').doc(id).delete();
+            showToast('Tarea eliminada.', 'warning');
+            document.getElementById('modalEditarOverlay').style.display = 'none';
+            await cargarTareas();
+        } catch(e) {
+            showToast('Error: ' + e.message, 'error');
+        }
+    };
+
+
 })();
 </script>
+
+<!-- ── MODAL EDITAR TAREA (admin) ──────────────────────────── -->
+<div class="modal-overlay" id="modalEditarOverlay" style="display:none;" onclick="cerrarModalEditar(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <div class="modal__title">
+                <span class="material-icons">edit</span>
+                Editar tarea
+            </div>
+            <button class="modal__close" onclick="cerrarModalEditar()">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+            <input type="hidden" id="editTareaId">
+            <div class="form-group">
+                <label class="form-label">Nombre</label>
+                <input type="text" id="editNombre" class="form-control">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Fecha</label>
+                    <input type="date" id="editFecha" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Prioridad</label>
+                    <select id="editPrioridad" class="form-control">
+                        <option value="alta">Alta</option>
+                        <option value="media">Media</option>
+                        <option value="baja">Baja</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Monto limpieza (R$)</label>
+                    <input type="number" id="editMonto" class="form-control" step="10" min="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Recurrencia (días, 0=única)</label>
+                    <input type="number" id="editRecurrencia" class="form-control" min="0">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Descripción / notas</label>
+                <textarea id="editDescripcion" class="form-control" rows="4"></textarea>
+            </div>
+            <div class="alert alert-error" id="editError" style="display:none;">
+                <span class="material-icons">error_outline</span>
+                <span id="editErrorText"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModalEditar()">Cancelar</button>
+            <button class="btn btn-danger btn-sm" id="btnEliminarTarea" onclick="eliminarTarea()">
+                <span class="material-icons">delete</span>
+            </button>
+            <button class="btn btn-primary" id="btnGuardarTarea" onclick="guardarEdicionTarea()">
+                <span class="material-icons">save</span>
+                <span id="btnGuardarTareaText">Guardar</span>
+            </button>
+        </div>
+    </div>
+</div>
 </body>
 </html>
