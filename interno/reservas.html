@@ -838,8 +838,17 @@
                 actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
             });
             await sincronizarDisponibilidad(id, reservaData);
-            await crearTareaLimpieza(id, reservaData, user.uid);
-            showToast('Reserva confirmada y tarea de limpieza generada.', 'success');
+
+            // CORRECCIÓN: verificar si ya existe tarea de limpieza para esta reserva
+            // antes de crear una nueva, para evitar duplicados si se confirma dos veces.
+            const tarExist = await db.collection('tareas').where('reservaId', '==', id).get();
+            if (tarExist.empty) {
+                await crearTareaLimpieza(id, reservaData, user.uid);
+                showToast('Reserva confirmada y tarea de limpieza generada.', 'success');
+            } else {
+                showToast('Reserva confirmada.', 'success');
+            }
+
             await recargarReservas();
         } catch (e) { showToast('Error: ' + e.message, 'error'); }
     };
