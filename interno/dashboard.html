@@ -338,38 +338,25 @@
         return u.color === 'rojo' || u.color === 'amarillo';
     });
 
-    document.getElementById('kpiGrid').innerHTML = `
-        <div class="kpi-card">
-            <span class="material-icons kpi-icon">event</span>
-            <div class="kpi-number">${reservasActivas.length}</div>
-            <div class="kpi-label">Reservas activas</div>
-        </div>
-        <div class="kpi-card warning">
-            <span class="material-icons kpi-icon">pending_actions</span>
-            <div class="kpi-number">${reservasPendConf.length}</div>
-            <div class="kpi-label">Pendientes confirmación</div>
-        </div>
-        <div class="kpi-card info">
-            <span class="material-icons kpi-icon">checklist</span>
-            <div class="kpi-number">${tareasPend.length}</div>
-            <div class="kpi-label">Tareas pendientes</div>
-        </div>
-        <div class="kpi-card danger">
-            <span class="material-icons kpi-icon">warning</span>
-            <div class="kpi-number">${tareasUrgentes.length}</div>
-            <div class="kpi-label">Tareas urgentes</div>
-        </div>
-        <div class="kpi-card">
-            <span class="material-icons kpi-icon">people</span>
-            <div class="kpi-number">${totalClientes}</div>
-            <div class="kpi-label">Clientes</div>
-        </div>
-        <div class="kpi-card success">
-            <span class="material-icons kpi-icon">payments</span>
-            <div class="kpi-number">R$&nbsp;${ingresosMes.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</div>
-            <div class="kpi-label">Ingresos este mes</div>
-        </div>
-    `;
+    document.getElementById('kpiGrid').innerHTML =
+        '<div class="kpi-card"><span class="material-icons kpi-icon">event</span>'
+        + '<div class="kpi-number">' + reservasActivas.length + '</div>'
+        + '<div class="kpi-label">Reservas activas</div></div>'
+        + '<div class="kpi-card warning"><span class="material-icons kpi-icon">pending_actions</span>'
+        + '<div class="kpi-number">' + reservasPendConf.length + '</div>'
+        + '<div class="kpi-label">Pendientes confirmacion</div></div>'
+        + '<div class="kpi-card info"><span class="material-icons kpi-icon">checklist</span>'
+        + '<div class="kpi-number">' + tareasPend.length + '</div>'
+        + '<div class="kpi-label">Tareas pendientes</div></div>'
+        + '<div class="kpi-card danger"><span class="material-icons kpi-icon">warning</span>'
+        + '<div class="kpi-number">' + tareasUrgentes.length + '</div>'
+        + '<div class="kpi-label">Tareas urgentes</div></div>'
+        + '<div class="kpi-card"><span class="material-icons kpi-icon">people</span>'
+        + '<div class="kpi-number">' + totalClientes + '</div>'
+        + '<div class="kpi-label">Clientes</div></div>'
+        + '<div class="kpi-card success"><span class="material-icons kpi-icon">payments</span>'
+        + '<div class="kpi-number">R$ ' + ingresosMes.toLocaleString('pt-BR', { minimumFractionDigits: 0 }) + '</div>'
+        + '<div class="kpi-label">Ingresos este mes</div></div>';
 
     // ── Próximos check-ins ────────────────────────────────────
     const proximos = reservas
@@ -384,43 +371,44 @@
     if (!proximos.length) {
         showEmpty(checkinEl, 'Sin próximos check-ins', 'No hay reservas próximas confirmadas.', 'event_available');
     } else {
-        checkinEl.innerHTML = `<div class="item-list">${proximos.map(r => `
-            <div class="item-row">
-                <div class="item-row__main">
-                    <div class="item-row__title">${escapeHtml(r.nombre)}</div>
-                    <div class="item-row__sub">Cabaña ${r.caba} · ${r.huespedes || r.adultos || '?'} huéspedes</div>
-                </div>
-                <div class="item-row__side">
-                    <div class="item-row__date">${formatFecha(r.checkIn)}</div>
-                    ${badgeEstado(r.estado)}
-                </div>
-            </div>
-        `).join('')}</div>`;
+        checkinEl.innerHTML = '<div class="item-list">' + proximos.map(function(r) {
+            return '<div class="item-row">'
+                + '<div class="item-row__main">'
+                + '<div class="item-row__title">' + escapeHtml(r.nombre) + '</div>'
+                + '<div class="item-row__sub">Cabana ' + r.caba + ' - ' + (r.huespedes || r.adultos || '?') + ' huespedes</div>'
+                + '</div>'
+                + '<div class="item-row__side">'
+                + '<div class="item-row__date">' + formatFecha(r.checkIn) + '</div>'
+                + badgeEstado(r.estado)
+                + '</div></div>';
+        }).join('') + '</div>';
     }
 
     // ── Tareas pendientes ─────────────────────────────────────
     const tareasEl  = document.getElementById('tareasPendientes');
-    const tareasVis = tareasPend
-        .sort((a, b) => (a.fechaInicio || '') > (b.fechaInicio || '') ? 1 : -1)
-        .slice(0, 6);
+    try {
+        const tareasVis = tareasPend
+            .sort((a, b) => (a.fechaInicio || '') > (b.fechaInicio || '') ? 1 : -1)
+            .slice(0, 6);
 
-    if (!tareasVis.length) {
-        showEmpty(tareasEl, '¡Todo al día!', 'No hay tareas pendientes.', 'task_alt');
-    } else {
-        tareasEl.innerHTML = `<div class="item-list">${tareasVis.map(t => {
-            const u = urgenciaTarea(t);
-            return `
-            <div class="item-row">
-                <div class="item-row__main">
-                    <div class="item-row__title">${escapeHtml(t.nombre)}</div>
-                    <div class="item-row__sub">${t.fechaInicio || 'Sin fecha'}</div>
-                </div>
-                <div class="item-row__side">
-                    <span class="badge ${urgenciaClass[u.color] || 'badge-neutral'}">${u.label}</span>
-                    ${badgePrioridad(t.prioridad)}
-                </div>
-            </div>`;
-        }).join('')}</div>`;
+        if (!tareasVis.length) {
+            showEmpty(tareasEl, 'Todo al dia!', 'No hay tareas pendientes.', 'task_alt');
+        } else {
+            tareasEl.innerHTML = '<div class="item-list">' + tareasVis.map(function(t) {
+                const u = urgenciaTarea(t);
+                return '<div class="item-row">'
+                    + '<div class="item-row__main">'
+                    + '<div class="item-row__title">' + escapeHtml(t.nombre) + '</div>'
+                    + '<div class="item-row__sub">' + (t.fechaInicio || 'Sin fecha') + '</div>'
+                    + '</div>'
+                    + '<div class="item-row__side">'
+                    + '<span class="badge ' + (urgenciaClass[u.color] || 'badge-neutral') + '">' + u.label + '</span>'
+                    + badgePrioridad(t.prioridad)
+                    + '</div></div>';
+            }).join('') + '</div>';
+        }
+    } catch(errTareas) {
+        tareasEl.innerHTML = '<div style="padding:16px;color:var(--color-danger);font-size:12px">Error: ' + errTareas.message + '</div>';
     }
 
     // ── Reservas pendientes de confirmación ───────────────────
