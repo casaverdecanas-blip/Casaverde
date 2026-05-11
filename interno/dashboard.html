@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard · Casa Verde Canas</title>
     <link rel="stylesheet" href="design-system.css">
+<style>
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .acceso-card { cursor: pointer; border: none; font-family: inherit; width: 100%; text-align: center; }
+</style>
 </head>
 <body>
 
@@ -50,8 +54,11 @@
         <a href="cabanas-admin.html"        class="acceso-card"><span class="material-icons">cottage</span>Cabañas</a>
         <a href="calendario.html"           class="acceso-card"><span class="material-icons">calendar_month</span>Calendario</a>
         <a href="tareas.html"               class="acceso-card"><span class="material-icons">checklist</span>Tareas</a>
-        <a href="usuarios.html"             class="acceso-card"><span class="material-icons">manage_accounts</span>Usuarios</a>
+        <button class="acceso-card" id="btnSyncAirbnb" onclick="sincronizarAirbnb()">
+            <span class="material-icons">sync</span>Sincronizar Airbnb
+        </button>
     </div>
+    <div id="syncResultado" style="display:none; margin-top:var(--space-2); padding:var(--space-3) var(--space-4); border-radius:var(--radius-md); font-size:var(--text-sm);"></div>
 
     <!-- Dos columnas -->
     <div class="grid-2">
@@ -327,6 +334,137 @@
                 </table>
             </div>`;
     }
+
+    // ── Sincronizar Airbnb ────────────────────────────────────
+    window.sincronizarAirbnb = async function() {
+        const btn = document.getElementById('btnSyncAirbnb');
+        const res = document.getElementById('syncResultado');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite">sync</span>Sincronizando...';
+        res.style.display = 'none';
+
+        const GOOGLE_API_KEY = 'AIzaSyBnfunjUkUXiRjKCPRotpFHE9tGgn6tV8E';
+
+        try {
+            // Leer cabañas con Calendar ID
+            const cabanasSnap = await db.collection('cabanas').get();
+            const cabanas = cabanasSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+                .filter(c => c.google_calendar_id && c.google_calendar_id.includes('@'));
+
+            if (!cabanas.length) {
+                mostrarSyncResult('warning', '⚠ Ninguna cabaña tiene Calendar ID configurado. Usá "Corregir Calendar IDs" en Mantenimiento.');
+                return;
+            }
+
+            const hoy    = new Date();
+            const enUnAno = new Date(hoy); enUnAno.setFullYear(enUnAno.getFullYear() + 1);
+
+            // Leer todos los calendars en paralelo
+            const eventosPromesas = cabanas.map(async cab => {
+                const url = 'https://www.googleapis.com/calendar/v3/calendars/'
+                    + encodeURIComponent(cab.google_calendar_id)
+                    + '/events?key=' + GOOGLE_API_KEY
+                    + '&timeMin=' + hoy.toISOString()
+                    + '&timeMax=' + enUnAno.toISOString()
+                    + '&singleEvents=true&orderBy=startTime&maxResults=250';
+                try {
+                    const r = await fetch(url);
+                    if (!r.ok) return [];
+                    const data = await r.json();
+                    return (data.items || [])
+                        .filter(ev => ev.status !== 'cancelled')
+                        .filter(ev => {
+                            const t = (ev.summary || '').toLowerCase();
+                            return !t.includes('not available') && !t.includes('no disponible')
+                                && !t.includes('indisponível') && !t.includes('unavailable');
+                        })
+                        .map(ev => ({
+                            googleId: ev.id,
+                            titulo:   ev.summary || 'Airbnb',
+                            inicio:   ev.start.date || ev.start.dateTime?.split('T')[0],
+                            fin:      ev.end.date   || ev.end.dateTime?.split('T')[0],
+                            cabaId:   cab.id
+                        }));
+                } catch(e) { return []; }
+            });
+
+            const todosEventos = (await Promise.all(eventosPromesas)).flat();
+
+            // Leer reservas Airbnb existentes
+            const existSnap = await db.collection('reservas').where('origen', '==', 'airbnb').get();
+            const reservasAirbnb = existSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            const googleIdsActivos   = new Set(todosEventos.map(e => e.googleId));
+            const googleIdsExistentes = new Set(reservasAirbnb.map(d => d.airbnb_google_id).filter(Boolean));
+
+            // Detectar cancelaciones
+            let canceladas = 0;
+            for (const res of reservasAirbnb) {
+                if (!res.airbnb_google_id) continue;
+                if (['airbnb_cancelada','anulada','finalizada'].includes(res.estado)) continue;
+                if (!googleIdsActivos.has(res.airbnb_google_id)) {
+                    await db.collection('reservas').doc(res.id).update({
+                        estado: 'airbnb_cancelada',
+                        canceladaEn: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    await CVC.sincronizarDisponibilidad(res.id, { estado: 'airbnb_cancelada' });
+                    canceladas++;
+                }
+            }
+
+            // Crear nuevas reservas
+            let creadas = 0;
+            for (const ev of todosEventos) {
+                if (googleIdsExistentes.has(ev.googleId)) continue;
+                const reservaData = {
+                    airbnb_google_id: ev.googleId,
+                    origen: 'airbnb', estado: 'airbnb_activa',
+                    checkIn:  firebase.firestore.Timestamp.fromDate(new Date(ev.inicio + 'T12:00:00')),
+                    checkOut: firebase.firestore.Timestamp.fromDate(new Date(ev.fin    + 'T12:00:00')),
+                    caba: ev.cabaId, nombre: 'Reserva Airbnb — completar',
+                    email: '', telefono: '', adultos: 2, ninos: 0, huespedes: 2, totalBRL: 0,
+                    notas: 'Importado desde Dashboard. Título: ' + ev.titulo,
+                    creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                    creadoPor: user.uid
+                };
+                const ref = await db.collection('reservas').add(reservaData);
+                await CVC.sincronizarDisponibilidad(ref.id, reservaData);
+                creadas++;
+            }
+
+            const partes = [];
+            if (creadas > 0)    partes.push(creadas + ' nueva' + (creadas !== 1 ? 's' : '') + ' importada' + (creadas !== 1 ? 's' : ''));
+            if (canceladas > 0) partes.push('⚠ ' + canceladas + ' cancelada' + (canceladas !== 1 ? 's' : '') + ' en Airbnb');
+            if (!partes.length) partes.push('Sin cambios — todo actualizado');
+
+            mostrarSyncResult(canceladas > 0 ? 'warning' : creadas > 0 ? 'success' : 'info', partes.join(' · '));
+
+        } catch(e) {
+            mostrarSyncResult('error', 'Error: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-icons">sync</span>Sincronizar Airbnb';
+        }
+    };
+
+    function mostrarSyncResult(tipo, msg) {
+        const el = document.getElementById('syncResultado');
+        const colores = {
+            success: { bg: 'var(--color-success-bg)', color: 'var(--color-success)',  icon: 'check_circle' },
+            warning: { bg: '#fff3e0',                  color: '#e07b00',               icon: 'warning'      },
+            error:   { bg: 'var(--color-danger-bg)',   color: 'var(--color-danger)',   icon: 'error'        },
+            info:    { bg: 'var(--color-surface-2)',   color: 'var(--color-text-muted)', icon: 'info'       }
+        };
+        const s = colores[tipo] || colores.info;
+        el.style.background = s.bg;
+        el.style.color = s.color;
+        el.style.border = '1px solid ' + s.color + '33';
+        el.innerHTML = '<span class="material-icons" style="font-size:16px;vertical-align:middle;margin-right:6px">' + s.icon + '</span>' + msg;
+        el.style.display = 'block';
+    }
+
+    // Sincronizar Airbnb automáticamente al abrir el dashboard
+    // Sin await para no bloquear la carga de KPIs
+    sincronizarAirbnb();
 
 })();
 </script>
