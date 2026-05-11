@@ -457,6 +457,16 @@ async function finalizarTarea(tareaId, currentUser) {
 
 
 // ── URGENCIA DE TAREA ────────────────────────────────────────
+//
+//  Semáforo según especificación:
+//  🔵 Gris    → fecha futura (aún no llegó)
+//  🟢 Verde   → hoy, o dentro del ciclo de recurrencia (sin atraso real)
+//  🟡 Amarillo → superó 1 ciclo de atraso
+//  🔴 Rojo    → superó 2 ciclos de atraso, O más de 10 días (lo que ocurra primero)
+//
+//  Para tareas sin recurrencia (recurrencia == 0) se usa un ciclo de 3 días
+//  como referencia mínima, para que el semáforo tenga sentido.
+//
 function urgenciaTarea(tarea) {
     if (!tarea.fechaInicio) return { color: 'gris', label: 'Sin fecha' };
 
@@ -465,15 +475,16 @@ function urgenciaTarea(tarea) {
     const inicio     = new Date(tarea.fechaInicio + 'T00:00:00');
     const diasAtraso = Math.floor((hoy - inicio) / 86400000);
 
-    if (diasAtraso < 0)   return { color: 'gris',     label: 'Proximamente'         };
-    if (diasAtraso === 0) return { color: 'verde',    label: 'Hoy'                  };
+    if (diasAtraso < 0)   return { color: 'gris',  label: 'Próximamente' };
+    if (diasAtraso === 0) return { color: 'verde',  label: 'Hoy'         };
 
-    const ciclo       = tarea.recurrencia > 0 ? tarea.recurrencia : 3;
-    const muyAtrasada = diasAtraso > ciclo || diasAtraso > 10;
+    const ciclo   = tarea.recurrencia > 0 ? tarea.recurrencia : 3;
+    const esRojo  = diasAtraso > ciclo * 2 || diasAtraso > 10;
+    const esAmari = diasAtraso > ciclo;
 
-    return muyAtrasada
-        ? { color: 'rojo',     label: diasAtraso + 'd de atraso' }
-        : { color: 'amarillo', label: diasAtraso + 'd de atraso' };
+    if (esRojo)  return { color: 'rojo',     label: diasAtraso + 'd de atraso' };
+    if (esAmari) return { color: 'amarillo', label: diasAtraso + 'd de atraso' };
+    return              { color: 'verde',    label: diasAtraso + 'd de atraso' };
 }
 
 
