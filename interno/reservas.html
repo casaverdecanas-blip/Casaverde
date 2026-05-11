@@ -325,15 +325,15 @@
         try {
             const [cabanasSnap, clientesSnap, reservasSnap] = await Promise.all([
                 db.collection('cabanas').get(),
-                db.collection('clientes').orderBy('nombre').get(),
-                db.collection('reservas').orderBy('checkIn', 'desc').get()
+                db.collection('clientes').get(),
+                db.collection('reservas').get()
             ]);
 
             cabanasCache  = cabanasSnap.docs.map(d => ({ docId: d.id, ...d.data() }))
                 .filter(c => c.activa === true || c.activa === 'true' || c.activa === undefined)
                 .sort((a, b) => (a.orden || 0) - (b.orden || 0));
-            clientesCache = clientesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-            reservasCache = reservasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            clientesCache = clientesSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+            reservasCache = reservasSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => { const ta=b.checkIn?.toDate?.()?.getTime()||0; const tb=a.checkIn?.toDate?.()?.getTime()||0; return ta-tb; });
 
             // Poblar select de cabañas
             const select = document.getElementById('cabanaSelect');
@@ -872,8 +872,8 @@
 
     // ── Helpers ───────────────────────────────────────────────
     async function recargarReservas() {
-        const snap    = await db.collection('reservas').orderBy('checkIn', 'desc').get();
-        reservasCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const snap    = await db.collection('reservas').get();
+        reservasCache = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.checkIn?.toDate?.()?.getTime()||0)-(a.checkIn?.toDate?.()?.getTime()||0));
         renderReservas();
     }
 
@@ -914,20 +914,23 @@
             if (reservaData.mascotas === 'si')       alertas.push('🐾 MASCOTAS');
             if (reservaData.niniosPequenos === 'si') alertas.push('👶 NIÑOS PEQUEÑOS');
 
+            // Nota: la descripción completa con ENTRADA se regenera desde utils.js
+            // Aquí actualizamos solo los campos editables directamente
             const updates = {
                 nombre:      'Limpiar ' + nombreCab + ' — ' + reservaData.nombre,
                 fechaInicio: checkOut.toISOString().split('T')[0],
                 cabana:      reservaData.caba,
                 monto:       reservaData.costoLimpiezaBRL || 0,
                 descripcion: [
-                    '🚪 SALIDA',
-                    '   Cabaña: ' + nombreCab,
+                    '🔑 SALIDA — ' + nombreCab,
                     '   Huésped: ' + reservaData.nombre,
-                    '   Personas: ' + (reservaData.huespedes || (reservaData.adultos||0) + (reservaData.ninos||0)) + ' (' + (reservaData.adultos||0) + ' adultos, ' + (reservaData.ninos||0) + ' niños)',
-                    '   Fecha salida: ' + checkOut.toLocaleDateString('es-AR') + (reservaData.horaSalida ? ' a las ' + reservaData.horaSalida + 'hs' : ''),
+                    '   Personas: ' + (reservaData.huespedes || ((reservaData.adultos||0)+(reservaData.ninos||0))) + ' (' + (reservaData.adultos||0) + ' adultos, ' + (reservaData.ninos||0) + ' niños)',
+                    '   Sale: ' + checkOut.toLocaleDateString('es-AR') + (reservaData.horaSalida ? ' a las ' + reservaData.horaSalida + 'hs' : ''),
                     reservaData.notas ? '   Notas: ' + reservaData.notas : '',
-                    alertas.length ? '\n⚠️ ATENCIÓN: ' + alertas.join(', ') : ''
-                ].filter(Boolean).join('\n'),
+                    alertas.length ? '\n⚠️ ATENCIÓN: ' + alertas.join(' · ') : '',
+                    '',
+                    '💰 Monto limpieza: R$ ' + (reservaData.costoLimpiezaBRL || 0)
+                ].filter(s => s !== null && s !== undefined).join('\n'),
                 actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
             };
 
