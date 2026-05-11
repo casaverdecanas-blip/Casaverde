@@ -756,6 +756,8 @@
             if (id) {
                 await db.collection('reservas').doc(id).update(reservaData);
                 await sincronizarDisponibilidad(id, reservaData);
+                // Actualizar tarea de limpieza asociada si existe
+                await actualizarTareaLimpieza(id, reservaData);
                 showToast('Reserva actualizada.', 'success');
             } else {
                 reservaData.creadoEn  = firebase.firestore.FieldValue.serverTimestamp();
@@ -844,6 +846,39 @@
 
     // ── Init ──────────────────────────────────────────────────
     await inicializar();
+
+    // ── Actualizar tarea de limpieza al editar reserva ────────
+    async function actualizarTareaLimpieza(reservaId, reservaData) {
+        try {
+            const tareasSnap = await db.collection('tareas')
+                .where('reservaId', '==', reservaId).get();
+            if (tareasSnap.empty) return;
+
+            const checkOut = reservaData.checkOut?.toDate
+                ? reservaData.checkOut.toDate()
+                : new Date(reservaData.checkOut);
+
+            const updates = {
+                nombre:      'Limpiar Cabana ' + reservaData.caba + ' — ' + reservaData.nombre,
+                fechaInicio: checkOut.toISOString().split('T')[0],
+                cabana:      reservaData.caba,
+                monto:       reservaData.costoLimpiezaBRL || 0,
+                descripcion: [
+                    'Checkout: ' + checkOut.toLocaleDateString('es-AR') + ' — ' + reservaData.nombre,
+                    'Huespedes: ' + (reservaData.huespedes || reservaData.adultos || '?'),
+                    reservaData.notas ? 'Notas: ' + reservaData.notas : ''
+                ].filter(Boolean).join('\n'),
+                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            // Actualizar todas las tareas de limpieza de esta reserva
+            const batch = db.batch();
+            tareasSnap.docs.forEach(doc => batch.update(doc.ref, updates));
+            await batch.commit();
+        } catch(e) {
+            console.warn('actualizarTareaLimpieza:', e.message);
+        }
+    }
 
 })();
 </script>
