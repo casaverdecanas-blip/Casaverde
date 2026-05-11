@@ -207,9 +207,6 @@
     const reservasPendConf = reservas.filter(r => r.estado === 'pendiente');
     const tareasPend       = tareas.filter(t => t.estado !== 'finalizada' && t.activa !== false);
     const tareasUrgentes   = tareasPend.filter(t => {
-        // CORRECCIÓN: excluir tareas en_curso — ya hay alguien trabajando en ellas,
-        // no tiene sentido contarlas como urgentes en el KPI del dashboard.
-        if (t.estado === 'en_curso') return false;
         const u = urgenciaTarea(t);
         return u.color === 'rojo' || u.color === 'amarillo';
     });
@@ -414,6 +411,16 @@
                 }
             }
 
+            // CORRECCIÓN #3: detectar reservas Airbnb activas sin airbnb_google_id.
+            // Estas reservas fueron importadas antes de que se implementara el campo
+            // y nunca serán detectadas como canceladas automáticamente — pueden bloquear
+            // fechas en el calendario público indefinidamente.
+            // No se auto-cancelan (podría ser un error), pero se avisa al admin.
+            const sinId = reservasAirbnb.filter(r =>
+                !r.airbnb_google_id &&
+                !['airbnb_cancelada', 'anulada', 'finalizada'].includes(r.estado)
+            );
+
             // Crear nuevas reservas
             let creadas = 0;
             for (const ev of todosEventos) {
@@ -439,7 +446,18 @@
             if (canceladas > 0) partes.push('⚠ ' + canceladas + ' cancelada' + (canceladas !== 1 ? 's' : '') + ' en Airbnb');
             if (!partes.length) partes.push('Sin cambios — todo actualizado');
 
-            mostrarSyncResult(canceladas > 0 ? 'warning' : creadas > 0 ? 'success' : 'info', partes.join(' · '));
+            // Advertencia visible si hay reservas sin google_id (van al final del mensaje)
+            let tipoResult = canceladas > 0 ? 'warning' : creadas > 0 ? 'success' : 'info';
+            let msgExtra = '';
+            if (sinId.length) {
+                tipoResult = 'warning';
+                msgExtra = '<br><small>⚠ ' + sinId.length + ' reserva' + (sinId.length !== 1 ? 's' : '')
+                    + ' Airbnb sin ID de Google — no se pueden verificar cancelaciones. '
+                    + 'Revisalas en <a href="reservas.html" style="color:inherit;font-weight:700;">Reservas</a>'
+                    + ' y anulalas si ya no están activas.</small>';
+            }
+
+            mostrarSyncResult(tipoResult, partes.join(' · ') + msgExtra);
 
         } catch(e) {
             mostrarSyncResult('error', 'Error: ' + e.message);
