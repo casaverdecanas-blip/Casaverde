@@ -158,6 +158,16 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
         ? reservaData.checkOut.toDate()
         : new Date(reservaData.checkOut);
 
+    // Leer nombre de la cabaña para evitar confusiones con solo el número
+    let nombreCabana = 'Cabana ' + reservaData.caba;
+    try {
+        const cabSnap = await db.collection('cabanas').doc(String(reservaData.caba)).get();
+        if (cabSnap.exists) {
+            const cab = cabSnap.data();
+            nombreCabana = cab.nombre?.es || cab.nombre?.pt || ('Cabana ' + reservaData.caba);
+        }
+    } catch(e) { /* usar fallback */ }
+
     let proximoHuesped = null;
     try {
         const proxSnap = await db.collection('reservas')
@@ -179,28 +189,61 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
         if (proxima) {
             const ci = proxima.checkIn?.toDate ? proxima.checkIn.toDate() : new Date(proxima.checkIn);
             proximoHuesped = {
-                nombre:    proxima.nombre || '—',
-                checkIn:   ci,
-                huespedes: proxima.huespedes || ((proxima.adultos || 0) + (proxima.ninos || 0)),
-                notas:     proxima.notas || ''
+                nombre:          proxima.nombre || '—',
+                checkIn:         ci,
+                horaLlegada:     proxima.horaLlegada    || '',
+                huespedes:       proxima.huespedes || ((proxima.adultos || 0) + (proxima.ninos || 0)),
+                mascotas:        proxima.mascotas        || 'no',
+                niniosPequenos:  proxima.niniosPequenos  || 'no',
+                notas:           proxima.notas           || ''
             };
         }
     } catch(e) {
         console.warn('proxima reserva:', e);
     }
 
-    const descripcion = [
-        'Checkout: ' + checkOut.toLocaleDateString('es-AR') + ' — ' + reservaData.nombre,
-        proximoHuesped
-            ? 'Checkin siguiente: ' + proximoHuesped.checkIn.toLocaleDateString('es-AR') + ' — ' + proximoHuesped.nombre
-            : 'Sin reserva siguiente registrada',
-        reservaData.notas     ? 'Notas: ' + reservaData.notas        : '',
-        proximoHuesped?.notas ? 'Notas proxima: ' + proximoHuesped.notas : '',
-        'Limpieza: R$ ' + (reservaData.costoLimpiezaBRL || 0)
-    ].filter(Boolean).join('\n');
+    // Armar descripción — foco en el huésped que ENTRA, salida como referencia de tiempo
+    const alertasEntrada = [];
+    if (proximoHuesped?.mascotas === 'si')       alertasEntrada.push('🐾 MASCOTAS');
+    if (proximoHuesped?.niniosPequenos === 'si') alertasEntrada.push('👶 NIÑOS PEQUEÑOS');
+
+    const lineas = [];
+
+    // 1. QUIÉN ENTRA — todo el detalle
+    if (proximoHuesped) {
+        lineas.push('🚪 ENTRADA');
+        lineas.push('   Cabaña: ' + nombreCabana);
+        lineas.push('   Huésped: ' + proximoHuesped.nombre);
+        lineas.push('   Personas: ' + proximoHuesped.huespedes);
+        lineas.push('   Llega: ' + proximoHuesped.checkIn.toLocaleDateString('es-AR') + (proximoHuesped.horaLlegada ? ' a las ' + proximoHuesped.horaLlegada + 'hs' : ' — hora no confirmada'));
+        if (proximoHuesped.notas) lineas.push('   Notas: ' + proximoHuesped.notas);
+        if (alertasEntrada.length) {
+            lineas.push('');
+            lineas.push('⚠️ ATENCIÓN: ' + alertasEntrada.join(' · '));
+        }
+    } else {
+        lineas.push('🚪 ENTRADA');
+        lineas.push('   Cabaña: ' + nombreCabana);
+        lineas.push('   Sin reserva siguiente registrada');
+    }
+
+    lineas.push('');
+
+    // 2. SALIDA — solo referencia de tiempo
+    lineas.push('🔑 SALIDA (huésped anterior)');
+    lineas.push('   ' + reservaData.nombre + ' · ' + (reservaData.huespedes || ((reservaData.adultos||0)+(reservaData.ninos||0))) + ' personas');
+    lineas.push('   Sale: ' + checkOut.toLocaleDateString('es-AR') + (reservaData.horaSalida ? ' a las ' + reservaData.horaSalida + 'hs' : ''));
+    if (reservaData.notas) lineas.push('   Notas salida: ' + reservaData.notas);
+
+    lineas.push('');
+
+    // 3. Financiero
+    lineas.push('💰 Monto limpieza: R$ ' + (reservaData.costoLimpiezaBRL || 0));
+
+    const descripcion = lineas.join('\n');
 
     await db.collection('tareas').add({
-        nombre:      'Limpiar Cabana ' + reservaData.caba + ' — ' + reservaData.nombre,
+        nombre:      'Limpiar ' + nombreCabana + ' — ' + reservaData.nombre,
         descripcion,
         tipo:        'limpieza',
         prioridad:   'alta',
