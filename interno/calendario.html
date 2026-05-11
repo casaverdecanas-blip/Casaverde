@@ -81,6 +81,19 @@
         }
 
         /* FullCalendar overrides */
+        /* Calendario compacto en móvil */
+        .fc { font-size: 13px; }
+        .fc .fc-toolbar { flex-wrap: wrap; gap: 8px; }
+        .fc .fc-toolbar-title { font-size: 1.1em; }
+        @media (max-width: 600px) {
+            .fc { font-size: 11px; }
+            .fc .fc-daygrid-day-number { font-size: 11px; padding: 2px 4px; }
+            .fc .fc-col-header-cell-cushion { font-size: 11px; padding: 4px 2px; }
+            .fc .fc-event-title { font-size: 10px; }
+            .fc .fc-toolbar { gap: 4px; }
+            .fc .fc-toolbar-title { font-size: 1em; }
+            .fc .fc-button { padding: 3px 8px; font-size: 11px; }
+        }
         .fc .fc-button-primary {
             background: var(--color-primary) !important;
             border-color: var(--color-primary) !important;
@@ -144,17 +157,13 @@
         <!-- Filtros por cabaña -->
         <div class="filtros-cabanas" id="filtrosCabanas"></div>
 
-        <!-- Sincronización Airbnb -->
-        <div style="display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap; margin-bottom:var(--space-4); padding:var(--space-3) var(--space-4); background:var(--color-primary-xlight); border-radius:var(--radius-md); border:1px solid var(--color-primary-light);">
-            <span class="material-icons" style="font-size:18px; color:var(--color-primary);">sync</span>
-            <div style="flex:1; min-width:0;">
-                <div style="font-size:var(--text-sm); font-weight:700; color:var(--color-primary-dark);">Sincronización Airbnb</div>
-                <div style="font-size:var(--text-xs); color:var(--color-text-muted);">Lee Google Calendar y crea borradores de reservas para completar</div>
-            </div>
-            <button class="btn btn-primary btn-sm" id="btnSincronizar" onclick="sincronizarAirbnb()">
+        <!-- Sincronización Airbnb — compacta -->
+        <div style="display:flex; align-items:center; gap:var(--space-2); margin-bottom:var(--space-3); flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" id="btnSincronizar" onclick="sincronizarAirbnb()" title="Lee Google Calendar y crea borradores de reservas Airbnb">
                 <span class="material-icons">sync</span>
                 Sincronizar Airbnb
             </button>
+            <span id="syncStatus" style="font-size:var(--text-xs); color:var(--color-text-muted);"></span>
         </div>
 
         <!-- Leyenda fija -->
@@ -495,6 +504,8 @@
             if (canceladas > 0) partes.push(`⚠ ${canceladas} cancelada${canceladas!==1?'s':''} en Airbnb`);
             const msg = partes.length ? partes.join(' · ') : 'Sin cambios.';
             showToast(msg, canceladas > 0 ? 'warning' : creadas > 0 ? 'success' : 'info');
+            const statusEl = document.getElementById('syncStatus');
+            if (statusEl) statusEl.textContent = 'Última sync: ' + new Date().toLocaleTimeString('es-AR');
             if (creadas > 0 || canceladas > 0) calendar?.refetchEvents();
 
         } catch(e) {
@@ -573,10 +584,13 @@
             initialView:  'dayGridMonth',
             locale:       'es',
             height:       'auto',
+            contentHeight: 'auto',
+            handleWindowResize: true,
+            stickyHeaderDates: true,
             headerToolbar: {
                 left:   'prev,next today',
                 center: 'title',
-                right:  'dayGridMonth,timeGridWeek,listWeek'
+                right:  'dayGridMonth,listWeek'
             },
             selectable:   true,
             selectMirror: true,
