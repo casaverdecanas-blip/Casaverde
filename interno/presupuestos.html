@@ -12,7 +12,7 @@
             gap: var(--space-6);
             align-items: start;
         }
-        @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+        @media (max-width: 900px) { .layout { grid-template-columns: 1fr; gap: var(--space-6); } }
 
         .precio-box {
             background: var(--color-primary-light);
@@ -123,7 +123,7 @@
     <div class="layout">
 
         <!-- Formulario nuevo presupuesto -->
-        <div class="card" style="position:sticky; top:112px;">
+        <div class="card">
             <div class="card__header">
                 <h2 class="card__title">
                     <span class="material-icons">calculate</span>
@@ -313,6 +313,13 @@
     document.getElementById('userName').textContent = userData.nombre || user.email;
     CVC.renderNav('presupuestos.html');
 
+    // Si viene desde acceso rápido con ?nuevo=1, hacer scroll al formulario
+    if (new URLSearchParams(window.location.search).get('nuevo')) {
+        setTimeout(() => {
+            document.querySelector('.layout')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 300);
+    }
+
     const db = CVC.db;
     const { escapeHtml, calcularPrecio, crearTareaLimpieza, sincronizarDisponibilidad, formatFecha, showEmpty, showError, showToast } = CVC;
 
@@ -325,13 +332,14 @@
     try {
         const [cabanasSnap, presSnap] = await Promise.all([
             db.collection('cabanas').get(),
-            db.collection('presupuestos').orderBy('creadoEn', 'desc').get()
+            db.collection('presupuestos').get()
         ]);
 
         cabanasCache = cabanasSnap.docs.map(d => ({ docId: d.id, ...d.data() }))
             .filter(c => c.activa === true || c.activa === 'true' || c.activa === undefined)
             .sort((a, b) => (a.orden || 0) - (b.orden || 0));
-        presupuestosCache = presSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        presupuestosCache = presSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .sort((a,b) => (b.creadoEn?.toDate?.()?.getTime()||0) - (a.creadoEn?.toDate?.()?.getTime()||0));
 
         const select = document.getElementById('cabanaSelect');
         select.innerHTML = cabanasCache.length
@@ -644,7 +652,7 @@
 
     // ── Helpers ───────────────────────────────────────────────
     async function recargarPresupuestos() {
-        const snap        = await db.collection('presupuestos').orderBy('creadoEn', 'desc').get();
+        const snap        = await db.collection('presupuestos').get();
         presupuestosCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         renderPresupuestos();
     }
