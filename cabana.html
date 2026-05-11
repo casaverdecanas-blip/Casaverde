@@ -4,7 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title id="page-title">Cabaña | Casa Verde Canas</title>
-    <meta name="description" content="Apartamento rústico en Canasvieiras, Florianópolis. Naturaleza, piscina y playa.">
+    <meta name="description" content="Apartamento rústico en Canasvieiras, Florianópolis. Naturaleza, piscina y playa." id="meta-desc">
+    <!-- SEO dinámico — se actualiza con JS al cargar los datos de la cabaña -->
+    <meta name="robots" content="index, follow">
+    <meta name="author" content="Casa Verde Canas">
+
+    <!-- Open Graph — se actualiza dinámicamente -->
+    <meta property="og:type"        content="website" id="og-type">
+    <meta property="og:url"         content="https://casaverdecanas.com.br/cabana.html" id="og-url">
+    <meta property="og:title"       content="Cabaña en Canasvieiras | Casa Verde Canas" id="og-title">
+    <meta property="og:description" content="Cabaña en Canasvieiras, Florianópolis. Piscina, WiFi y estacionamiento incluidos." id="og-desc">
+    <meta property="og:image"       content="https://casaverdecanas.com.br/img/og-preview.jpg" id="og-image">
+    <meta property="og:site_name"   content="Casa Verde Canas">
+    <meta name="geo.region"         content="BR-SC">
+    <meta name="geo.placename"      content="Canasvieiras, Florianópolis, Santa Catarina, Brasil">
 
     <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,700;1,400&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -227,12 +240,73 @@ function escHtml(s) { if(!s) return ''; return String(s).replace(/[&<>"']/g,m=>(
 function locale() { return currentLang==='pt'?'pt-BR':currentLang==='en'?'en-US':'es-AR'; }
 
 // ── CARGAR CABAÑA ────────────────────────────────────────────
+// ── SEO DINÁMICO ─────────────────────────────────────────────
+function actualizarSEO(cabana) {
+    const nombre = getText(cabana.nombre) || 'Cabaña';
+    const desc   = getText(cabana.descripcion) || '';
+    const precio = cabana.tarifas?.precioBase || 0;
+    const cap    = cabana.capacidad?.max || 4;
+    const fotos  = (cabana.fotos||[]).map(f=>typeof f==='string'?f:f?.url).filter(Boolean);
+    const imagen = fotos[0] || 'https://casaverdecanas.com.br/img/og-preview.jpg';
+    const url    = 'https://casaverdecanas.com.br/cabana.html?id=' + CABANA_ID;
+    const metaDesc = nombre + ' en Canasvieiras · Desde R$ ' + precio + '/noche · '
+        + cap + ' personas · Piscina, WiFi y estacionamiento incluidos.';
+
+    document.title = nombre + ' | Canasvieiras, Florianópolis | Casa Verde Canas';
+    document.getElementById('meta-desc')?.setAttribute('content', metaDesc);
+    document.getElementById('og-title')?.setAttribute('content',  nombre + ' | Casa Verde Canas');
+    document.getElementById('og-desc')?.setAttribute('content',   metaDesc);
+    document.getElementById('og-image')?.setAttribute('content',  imagen);
+    document.getElementById('og-url')?.setAttribute('content',    url);
+
+    // Schema.org por cabaña
+    const schema = {
+        "@context": "https://schema.org",
+        "@type": "Accommodation",
+        "name": nombre,
+        "description": metaDesc,
+        "url": url,
+        "image": fotos.slice(0, 5),
+        "occupancy": { "@type": "QuantitativeValue", "maxValue": cap },
+        "amenityFeature": (cabana.comodidades||[]).map(a => ({
+            "@type": "LocationFeatureSpecification", "name": a, "value": true
+        })),
+        "containedInPlace": {
+            "@type": "LodgingBusiness",
+            "name": "Casa Verde Canas",
+            "url": "https://casaverdecanas.com.br",
+            "telephone": "+5548991181246",
+            "address": {
+                "@type": "PostalAddress",
+                "addressLocality": "Florianópolis",
+                "addressRegion": "Santa Catarina",
+                "addressCountry": "BR"
+            }
+        },
+        "offers": {
+            "@type": "Offer",
+            "priceCurrency": "BRL",
+            "price": precio,
+            "availability": "https://schema.org/InStock"
+        }
+    };
+    let el = document.getElementById('schema-cabana');
+    if (!el) {
+        el = document.createElement('script');
+        el.type = 'application/ld+json';
+        el.id   = 'schema-cabana';
+        document.head.appendChild(el);
+    }
+    el.textContent = JSON.stringify(schema, null, 2);
+}
+
 async function cargarCabana() {
     if (!CABANA_ID) { mostrarError('No se especificó qué cabaña ver.'); return; }
     try {
         const doc = await db.collection('cabanas').doc(CABANA_ID.toString()).get();
         if (!doc.exists) { mostrarError('Cabaña no encontrada.'); return; }
         cabanaData = { id: doc.id, ...doc.data() };
+        actualizarSEO(cabanaData);
         renderCabana();
     } catch(e) {
         console.error(e);
