@@ -108,6 +108,9 @@
         <div class="card">
             <div class="card__header">
                 <h2 class="card__title"><span class="material-icons">engineering</span> Honorarios a colaboradores</h2>
+                <button class="btn btn-primary" id="btnNuevoHonorario" onclick="abrirModalHonorario()" style="display:none;">
+                    <span class="material-icons">add</span> Nuevo honorario
+                </button>
             </div>
             <div id="honorariosContainer"><div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div></div>
         </div>
@@ -204,6 +207,14 @@
     const { escapeHtml, formatFecha, formatHoras, sincronizarDisponibilidad, showEmpty, showError, showToast } = CVC;
 
     CVC.renderNav('pagos.html', userData.rol);
+    if (esAdmin) {
+        // Mostrar botón nuevo honorario solo para admin
+        document.addEventListener('DOMContentLoaded', () => {});
+        setTimeout(() => {
+            const btn = document.getElementById('btnNuevoHonorario');
+            if (btn) btn.style.display = 'inline-flex';
+        }, 500);
+    }
 
     // UI por rol
     if (!esAdmin) {
@@ -450,6 +461,7 @@
                         <div style="display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;">
                             <strong class="text-mono">${fmt(h.monto||0)}</strong>
                             <span class="badge ${h.estado==='pagado'?'badge-confirmada':'badge-pendiente'}">${h.estado==='pagado'?'✅ Pagado':'⏳ Pendiente'}</span>
+                            ${h.manual ? '<span class="badge badge-neutral" style="font-size:10px;">manual</span>' : ''}
                             ${h.estado!=='pagado'?`<button class="btn btn-primary btn-sm" onclick="marcarPagado('${h.id}')"><span class="material-icons">check</span> Marcar pagado</button>`:''}
                         </div>
                     </div>`).join('')}
@@ -620,7 +632,170 @@
     function errE(msg){document.getElementById('eErrorText').textContent=msg;document.getElementById('eError').style.display='flex';}
 
     await cargarTodo();
+    // ── HONORARIO MANUAL ──────────────────────────────────────
+    window.abrirModalHonorario = async function() {
+        document.getElementById('hError').style.display = 'none';
+        document.getElementById('hMonto').value    = '';
+        document.getElementById('hHoras').value    = '';
+        document.getElementById('hConcepto').value = '';
+        document.getElementById('hObs').value      = '';
+        document.getElementById('hEstado').value   = 'pendiente';
+
+        // Poblar colaboradores desde usuarios
+        const colSelect = document.getElementById('hColaborador');
+        colSelect.innerHTML = '<option value="">— Seleccionar colaborador —</option>';
+        try {
+            const usSnap = await db.collection('usuarios').get();
+            usSnap.docs.forEach(d => {
+                const u = d.data();
+                if (u.activo !== false) {
+                    const opt = document.createElement('option');
+                    opt.value = d.id;
+                    opt.textContent = u.nombre || u.email || d.id;
+                    opt.dataset.nombre = u.nombre || u.email || d.id;
+                    colSelect.appendChild(opt);
+                }
+            });
+        } catch(e) { console.warn('No se pudieron cargar usuarios:', e); }
+
+        // Poblar reservas activas
+        const resSelect = document.getElementById('hReserva');
+        resSelect.innerHTML = '<option value="">— Sin reserva asociada —</option>';
+        reservasCache
+            .filter(r => ['confirmada','pendiente'].includes(r.estado))
+            .sort((a,b) => (b.checkIn?.toDate?.()?.getTime()||0)-(a.checkIn?.toDate?.()?.getTime()||0))
+            .slice(0, 30)
+            .forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r.id;
+                opt.textContent = r.nombre + ' — Cabaña ' + r.caba + ' (' + formatFecha(r.checkIn) + ')';
+                resSelect.appendChild(opt);
+            });
+
+        document.getElementById('modalHonorario').style.display = 'flex';
+    };
+
+    window.cerrarModalHonorario = function(e) {
+        if (e && e.target !== document.getElementById('modalHonorario')) return;
+        document.getElementById('modalHonorario').style.display = 'none';
+    };
+
+    window.guardarHonorario = async function() {
+        const colSelect = document.getElementById('hColaborador');
+        const colId     = colSelect.value;
+        const colNombre = colSelect.options[colSelect.selectedIndex]?.dataset.nombre || '—';
+        const monto     = parseFloat(document.getElementById('hMonto').value);
+        const horas     = parseFloat(document.getElementById('hHoras').value) || 0;
+        const concepto  = document.getElementById('hConcepto').value.trim();
+        const reservaId = document.getElementById('hReserva').value || null;
+        const estado    = document.getElementById('hEstado').value;
+        const obs       = document.getElementById('hObs').value.trim();
+
+        document.getElementById('hError').style.display = 'none';
+
+        if (!colId)              { errH('Seleccioná un colaborador.'); return; }
+        if (!monto || monto<=0) { errH('Ingresá un monto válido.'); return; }
+        if (!concepto)           { errH('El concepto es requerido.'); return; }
+
+        const btn = document.getElementById('hBtnGuardar');
+        const txt = document.getElementById('hBtnText');
+        btn.disabled = true; txt.textContent = 'Guardando...';
+
+        try {
+            await db.collection('honorarios').add({
+                colaboradorId:     colId,
+                colaboradorNombre: colNombre,
+                monto,
+                moneda:    'BRL',
+                concepto,
+                horas:     horas || 0,
+                reservaId: reservaId || null,
+                estado,
+                observaciones: obs,
+                manual:    true,   // marca que fue cargado manualmente
+                fechaPago:  estado === 'pagado' ? firebase.firestore.FieldValue.serverTimestamp() : null,
+                pagadoPor:  estado === 'pagado' ? user.uid : null,
+                creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
+                creadoPor: user.uid
+            });
+            showToast('Honorario registrado.', 'success');
+            document.getElementById('modalHonorario').style.display = 'none';
+            await cargarTodo();
+        } catch(e) {
+            errH('Error: ' + e.message);
+        } finally {
+            btn.disabled = false; txt.textContent = 'Guardar honorario';
+        }
+    };
+
+    function errH(msg) {
+        document.getElementById('hErrorText').textContent = msg;
+        document.getElementById('hError').style.display = 'flex';
+    }
+
+
 })();
 </script>
+
+<!-- MODAL HONORARIO MANUAL -->
+<div class="modal-overlay" id="modalHonorario" style="display:none;" onclick="cerrarModalHonorario(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <div class="modal__title"><span class="material-icons">engineering</span> Registrar honorario</div>
+            <button class="modal__close" onclick="cerrarModalHonorario()"><span class="material-icons">close</span></button>
+        </div>
+        <div class="modal__body">
+            <div class="form-group">
+                <label class="form-label">Colaborador <span class="required">*</span></label>
+                <select id="hColaborador" class="form-control">
+                    <option value="">— Seleccionar colaborador —</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Monto (R$) <span class="required">*</span></label>
+                    <input type="number" id="hMonto" class="form-control" step="0.01" min="0.01" placeholder="0,00">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Horas trabajadas</label>
+                    <input type="number" id="hHoras" class="form-control" step="0.5" min="0" placeholder="0">
+                    <p class="form-hint">Opcional — solo para registro</p>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Concepto <span class="required">*</span></label>
+                <input type="text" id="hConcepto" class="form-control" placeholder="Ej: Limpieza extraordinaria, Mantenimiento jardín...">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Reserva asociada (opcional)</label>
+                <select id="hReserva" class="form-control">
+                    <option value="">— Sin reserva asociada —</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Estado</label>
+                <select id="hEstado" class="form-control">
+                    <option value="pendiente">Pendiente de pago</option>
+                    <option value="pagado">Ya pagado</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Observaciones</label>
+                <input type="text" id="hObs" class="form-control" placeholder="Opcional">
+            </div>
+            <div class="alert alert-error" id="hError" style="display:none;">
+                <span class="material-icons">error_outline</span>
+                <span id="hErrorText"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModalHonorario()">Cancelar</button>
+            <button class="btn btn-primary" id="hBtnGuardar" onclick="guardarHonorario()">
+                <span class="material-icons">save</span>
+                <span id="hBtnText">Guardar honorario</span>
+            </button>
+        </div>
+    </div>
+</div>
 </body>
 </html>
