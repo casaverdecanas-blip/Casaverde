@@ -245,20 +245,10 @@
 
             <div class="resumen-pago" id="resumenPago"></div>
 
-            <!-- Selector de estado de reserva resultante -->
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3); margin-bottom:var(--space-4);">
-                <label id="optPendiente" style="cursor:pointer; border:2px solid var(--color-warning); border-radius:var(--radius-md); padding:var(--space-3); text-align:center; background:var(--color-warning-bg);" onclick="setTipoReserva('pendiente')">
-                    <span class="material-icons" style="font-size:20px; color:var(--color-warning); display:block; margin-bottom:4px;">hourglass_empty</span>
-                    <strong style="font-size:var(--text-sm); color:var(--color-warning);">Seña / parcial</strong>
-                    <div style="font-size:var(--text-xs); color:var(--color-text-muted); margin-top:2px;">Reserva pendiente — no bloquea calendario</div>
-                </label>
-                <label id="optConfirmada" style="cursor:pointer; border:2px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-3); text-align:center;" onclick="setTipoReserva('confirmada')">
-                    <span class="material-icons" style="font-size:20px; color:var(--color-success); display:block; margin-bottom:4px;">check_circle</span>
-                    <strong style="font-size:var(--text-sm); color:var(--color-success);">Pago total</strong>
-                    <div style="font-size:var(--text-xs); color:var(--color-text-muted); margin-top:2px;">Reserva confirmada — bloquea calendario</div>
-                </label>
+            <div class="alert alert-success" style="margin-bottom:var(--space-4);">
+                <span class="material-icons">check_circle</span>
+                El pago confirma la reserva automáticamente y bloquea el calendario.
             </div>
-            <input type="hidden" id="tipoReserva" value="pendiente">
 
             <div class="form-row">
                 <div class="form-group">
@@ -517,30 +507,12 @@
     };
 
     // ── Confirmar con pago ────────────────────────────────────
-    // ── Selector tipo de reserva ──────────────────────────────
-    window.setTipoReserva = function(tipo) {
-        document.getElementById('tipoReserva').value = tipo;
-        const optP = document.getElementById('optPendiente');
-        const optC = document.getElementById('optConfirmada');
-        if (tipo === 'pendiente') {
-            optP.style.border = '2px solid var(--color-warning)';
-            optP.style.background = 'var(--color-warning-bg)';
-            optC.style.border = '2px solid var(--color-border)';
-            optC.style.background = '';
-        } else {
-            optC.style.border = '2px solid var(--color-success)';
-            optC.style.background = 'var(--color-success-bg)';
-            optP.style.border = '2px solid var(--color-border)';
-            optP.style.background = '';
-        }
-    };
-
     window.confirmarConPago = async function() {
         const presupuestoId = document.getElementById('presupuestoId').value;
         const monto         = parseFloat(document.getElementById('montoPago').value);
         const metodo        = document.getElementById('metodoPago').value;
         const obs           = document.getElementById('obsPago').value.trim();
-        const estadoReserva = document.getElementById('tipoReserva').value;
+        const estadoReserva = 'confirmada'; // Pago siempre confirma
 
         document.getElementById('errorModal').style.display = 'none';
 
@@ -617,11 +589,7 @@
                 actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            const msgEstado = estadoReserva === 'confirmada'
-                ? 'Reserva confirmada · Calendario bloqueado · Tarea de limpieza generada.'
-                : 'Reserva pendiente creada · Calendario NO bloqueado aún · Completá los datos.';
-
-            showToast(msgEstado, 'success');
+            showToast('Reserva confirmada · Calendario bloqueado · Tarea de limpieza generada.', 'success');
             document.getElementById('modalOverlay').style.display = 'none';
 
             // Redirigir a reservas para completar datos del huésped
