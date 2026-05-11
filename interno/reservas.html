@@ -189,8 +189,20 @@
                     <input type="date" id="checkIn" class="form-control">
                 </div>
                 <div class="form-group">
+                    <label class="form-label">Hora de llegada</label>
+                    <input type="time" id="horaLlegada" class="form-control" placeholder="14:00">
+                    <p class="form-hint">Hora estimada que informó el huésped</p>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
                     <label class="form-label">Check-out <span class="required">*</span></label>
                     <input type="date" id="checkOut" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Hora de salida</label>
+                    <input type="time" id="horaSalida" class="form-control" placeholder="10:00">
+                    <p class="form-hint">Hora de salida acordada</p>
                 </div>
             </div>
 
@@ -233,10 +245,26 @@
                 </div>
             </div>
 
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Mascotas</label>
+                    <select id="mascotas" class="form-control">
+                        <option value="no">Sin mascotas</option>
+                        <option value="si">Con mascotas 🐾</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Niños pequeños (&lt;5 años)</label>
+                    <select id="niniosPequenos" class="form-control">
+                        <option value="no">No</option>
+                        <option value="si">Sí 👶</option>
+                    </select>
+                </div>
+            </div>
             <div class="form-group">
-                <label class="form-label">Notas</label>
-                <textarea id="notas" class="form-control" rows="2"
-                    placeholder="Requerimientos especiales, observaciones..."></textarea>
+                <label class="form-label">Notas y requerimientos especiales</label>
+                <textarea id="notas" class="form-control" rows="3"
+                    placeholder="Requerimientos especiales, alergias, movilidad reducida, ocasión especial..."></textarea>
             </div>
 
             <!-- Precio calculado -->
@@ -513,6 +541,10 @@
         document.getElementById('checkOut').value            = '';
         document.getElementById('adultos').value             = '2';
         document.getElementById('ninos').value               = '0';
+        document.getElementById('horaLlegada').value         = '';
+        document.getElementById('horaSalida').value          = '';
+        document.getElementById('mascotas').value            = 'no';
+        document.getElementById('niniosPequenos').value      = 'no';
         document.getElementById('origen').value              = 'directa';
         document.getElementById('notas').value               = '';
         document.getElementById('precioBox').style.display   = 'none';
@@ -537,10 +569,14 @@
         document.getElementById('estadoSelect').value       = r.estado || 'confirmada';
         document.getElementById('checkIn').value  = r.checkIn?.toDate?.()?.toISOString().split('T')[0] || '';
         document.getElementById('checkOut').value = r.checkOut?.toDate?.()?.toISOString().split('T')[0] || '';
-        document.getElementById('adultos').value  = r.adultos || 2;
-        document.getElementById('ninos').value    = r.ninos   || 0;
-        document.getElementById('origen').value   = r.origen  || 'directa';
-        document.getElementById('notas').value    = r.notas   || '';
+        document.getElementById('adultos').value         = r.adultos          || 2;
+        document.getElementById('ninos').value            = r.ninos            || 0;
+        document.getElementById('origen').value           = r.origen           || 'directa';
+        document.getElementById('notas').value            = r.notas            || '';
+        document.getElementById('horaLlegada').value      = r.horaLlegada      || '';
+        document.getElementById('horaSalida').value       = r.horaSalida       || '';
+        document.getElementById('mascotas').value         = r.mascotas         || 'no';
+        document.getElementById('niniosPequenos').value   = r.niniosPequenos   || 'no';
         document.getElementById('errorModal').style.display  = 'none';
 
         // Airbnb alert
@@ -737,14 +773,23 @@
                 clientesCache.push({ id: clienteId, nombre: clienteSeleccionado.nombre });
             }
 
+            const horaLlegada     = document.getElementById('horaLlegada').value;
+            const horaSalida      = document.getElementById('horaSalida').value;
+            const mascotas        = document.getElementById('mascotas').value;
+            const niniosPequenos  = document.getElementById('niniosPequenos').value;
+
             const reservaData = {
                 caba:             cabaId,
                 nombre:           clienteSeleccionado.nombre,
                 clienteId:        clienteId,
                 checkIn:  firebase.firestore.Timestamp.fromDate(new Date(checkIn  + 'T12:00:00')),
                 checkOut: firebase.firestore.Timestamp.fromDate(new Date(checkOut + 'T12:00:00')),
+                horaLlegada:      horaLlegada || '',
+                horaSalida:       horaSalida  || '',
                 adultos, ninos,
                 huespedes:        adultos + ninos,
+                mascotas,
+                niniosPequenos,
                 origen, notas, estado,
                 totalBRL:         ultimoPrecio?.total    || 0,
                 subtotalBRL:      ultimoPrecio?.subtotal || 0,
@@ -858,15 +903,30 @@
                 ? reservaData.checkOut.toDate()
                 : new Date(reservaData.checkOut);
 
+            // Obtener nombre de cabaña para la actualización
+            let nombreCab = 'Cabana ' + reservaData.caba;
+            try {
+                const cs = await db.collection('cabanas').doc(String(reservaData.caba)).get();
+                if (cs.exists) nombreCab = cs.data().nombre?.es || nombreCab;
+            } catch(e) {}
+
+            const alertas = [];
+            if (reservaData.mascotas === 'si')       alertas.push('🐾 MASCOTAS');
+            if (reservaData.niniosPequenos === 'si') alertas.push('👶 NIÑOS PEQUEÑOS');
+
             const updates = {
-                nombre:      'Limpiar Cabana ' + reservaData.caba + ' — ' + reservaData.nombre,
+                nombre:      'Limpiar ' + nombreCab + ' — ' + reservaData.nombre,
                 fechaInicio: checkOut.toISOString().split('T')[0],
                 cabana:      reservaData.caba,
                 monto:       reservaData.costoLimpiezaBRL || 0,
                 descripcion: [
-                    'Checkout: ' + checkOut.toLocaleDateString('es-AR') + ' — ' + reservaData.nombre,
-                    'Huespedes: ' + (reservaData.huespedes || reservaData.adultos || '?'),
-                    reservaData.notas ? 'Notas: ' + reservaData.notas : ''
+                    '🚪 SALIDA',
+                    '   Cabaña: ' + nombreCab,
+                    '   Huésped: ' + reservaData.nombre,
+                    '   Personas: ' + (reservaData.huespedes || (reservaData.adultos||0) + (reservaData.ninos||0)) + ' (' + (reservaData.adultos||0) + ' adultos, ' + (reservaData.ninos||0) + ' niños)',
+                    '   Fecha salida: ' + checkOut.toLocaleDateString('es-AR') + (reservaData.horaSalida ? ' a las ' + reservaData.horaSalida + 'hs' : ''),
+                    reservaData.notas ? '   Notas: ' + reservaData.notas : '',
+                    alertas.length ? '\n⚠️ ATENCIÓN: ' + alertas.join(', ') : ''
                 ].filter(Boolean).join('\n'),
                 actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
             };
