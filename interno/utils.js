@@ -235,11 +235,10 @@ async function iniciarTarea(tareaId, currentUser) {
     const tarea = tareaDoc.data();
     if (tarea.estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
 
-    const abierta = await sesionesRef
-        .where('uid', '==', currentUser.uid)
-        .where('fin', '==', null)
-        .limit(1).get();
-    if (!abierta.empty) throw new Error('Ya tenes una sesion activa en esta tarea');
+    // Filtrar en cliente para evitar índice compuesto en subcolección
+    const todasSnap = await sesionesRef.where('uid', '==', currentUser.uid).get();
+    const yaAbierta = todasSnap.docs.find(d => d.data().fin === null);
+    if (yaAbierta) throw new Error('Ya tenes una sesion activa en esta tarea');
 
     const ahora = firebase.firestore.Timestamp.now();
     await sesionesRef.add({
@@ -263,19 +262,20 @@ async function pausarTarea(tareaId, currentUser) {
     if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
     if (tareaDoc.data().estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
 
-    const abierta = await sesionesRef
-        .where('uid', '==', currentUser.uid)
-        .where('fin', '==', null)
-        .limit(1).get();
-    if (abierta.empty) throw new Error('No tenes una sesion activa en esta tarea');
+    // Filtrar en cliente para evitar índice compuesto en subcolección
+    const todasSnap2 = await sesionesRef.where('uid', '==', currentUser.uid).get();
+    const sesAbierta = todasSnap2.docs.find(d => d.data().fin === null);
+    if (!sesAbierta) throw new Error('No tenes una sesion activa en esta tarea');
 
     const ahora = firebase.firestore.Timestamp.now();
-    await abierta.docs[0].ref.update({ fin: ahora });
+    await sesAbierta.ref.update({ fin: ahora });
 
-    const quedan    = await sesionesRef.where('fin', '==', null).limit(1).get();
+    // Verificar si quedan sesiones abiertas (sin índice compuesto)
+    const todasSnap3 = await sesionesRef.get();
+    const quedanAbiertas = todasSnap3.docs.some(d => d.data().fin === null);
     const sesActuales = (tareaDoc.data().sesionesActivas || []).filter(s => s.uid !== currentUser.uid);
     await tareaRef.update({
-        estado:          quedan.empty ? 'pendiente' : 'en_curso',
+        estado:          quedanAbiertas ? 'en_curso' : 'pendiente',
         sesionesActivas: sesActuales
     });
 }
