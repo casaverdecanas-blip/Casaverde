@@ -893,51 +893,28 @@
     await inicializar();
 
     // ── Actualizar tarea de limpieza al editar reserva ────────
+    //
+    //  CORRECCIÓN: en lugar de hacer una actualización parcial (que perdía el
+    //  bloque 🚪 ENTRADA con los datos del próximo huésped), ahora eliminamos
+    //  la tarea vieja y la regeneramos completamente desde CVC.crearTareaLimpieza,
+    //  que contiene toda la lógica centralizada incluyendo la búsqueda de la
+    //  próxima reserva en la misma cabaña.
+    //
     async function actualizarTareaLimpieza(reservaId, reservaData) {
         try {
             const tareasSnap = await db.collection('tareas')
                 .where('reservaId', '==', reservaId).get();
             if (tareasSnap.empty) return;
 
-            const checkOut = reservaData.checkOut?.toDate
-                ? reservaData.checkOut.toDate()
-                : new Date(reservaData.checkOut);
-
-            // Obtener nombre de cabaña para la actualización
-            let nombreCab = 'Cabana ' + reservaData.caba;
-            try {
-                const cs = await db.collection('cabanas').doc(String(reservaData.caba)).get();
-                if (cs.exists) nombreCab = cs.data().nombre?.es || nombreCab;
-            } catch(e) {}
-
-            const alertas = [];
-            if (reservaData.mascotas === 'si')       alertas.push('🐾 MASCOTAS');
-            if (reservaData.niniosPequenos === 'si') alertas.push('👶 NIÑOS PEQUEÑOS');
-
-            // Nota: la descripción completa con ENTRADA se regenera desde utils.js
-            // Aquí actualizamos solo los campos editables directamente
-            const updates = {
-                nombre:      'Limpiar ' + nombreCab + ' — ' + reservaData.nombre,
-                fechaInicio: checkOut.toISOString().split('T')[0],
-                cabana:      reservaData.caba,
-                monto:       reservaData.costoLimpiezaBRL || 0,
-                descripcion: [
-                    '🔑 SALIDA — ' + nombreCab,
-                    '   Huésped: ' + reservaData.nombre,
-                    '   Personas: ' + (reservaData.huespedes || ((reservaData.adultos||0)+(reservaData.ninos||0))) + ' (' + (reservaData.adultos||0) + ' adultos, ' + (reservaData.ninos||0) + ' niños)',
-                    '   Sale: ' + checkOut.toLocaleDateString('es-AR') + (reservaData.horaSalida ? ' a las ' + reservaData.horaSalida + 'hs' : ''),
-                    reservaData.notas ? '   Notas: ' + reservaData.notas : '',
-                    alertas.length ? '\n⚠️ ATENCIÓN: ' + alertas.join(' · ') : '',
-                    '',
-                    '💰 Monto limpieza: R$ ' + (reservaData.costoLimpiezaBRL || 0)
-                ].filter(s => s !== null && s !== undefined).join('\n'),
-                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
-            };
-
-            // Actualizar todas las tareas de limpieza de esta reserva
+            // Eliminar tarea(s) anterior(es) de esta reserva
             const batch = db.batch();
-            tareasSnap.docs.forEach(doc => batch.update(doc.ref, updates));
+            tareasSnap.docs.forEach(doc => batch.delete(doc.ref));
             await batch.commit();
+
+            // Regenerar con toda la lógica de utils.js
+            // Esto incluye búsqueda de próximo huésped y bloque ENTRADA completo
+            await CVC.crearTareaLimpieza(reservaId, reservaData, user.uid);
+
         } catch(e) {
             console.warn('actualizarTareaLimpieza:', e.message);
         }
