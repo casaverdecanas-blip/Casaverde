@@ -1,0 +1,642 @@
+# Casa Verde Canas — Documentación del Sistema
+**Versión:** Mayo 2026  
+**Stack:** Firebase (Firestore + Auth) · GitHub Pages · HTML/JS/CSS  
+**Repositorio:** casaverdecanas-blip/Casaverde · Rama: main  
+**URL producción:** casaverdecanas.com.br
+
+---
+
+## Arquitectura general
+
+```
+PÚBLICO (sin login)          ADMIN (con login)             HERRAMIENTAS
+─────────────────────        ──────────────────────        ─────────────────────
+index.html                   dashboard.html                sync-disponibilidad.html
+cabana.html                  reservas.html                 test-calendar.html
+                             presupuestos.html             corregir-calendar-ids.html
+                             pagos.html (Finanzas)         diagnostico-calendarios.html
+                             tareas.html
+                             calendario.html
+                             cabanas-admin.html
+                             clientes.html
+                             usuarios.html
+
+COMPARTIDO
+──────────
+utils.js          → funciones, auth, nav, Firebase
+design-system.css → tokens visuales, componentes
+```
+
+---
+
+## Colecciones Firestore
+
+| Colección | Acceso | Descripción |
+|---|---|---|
+| `cabanas` | Público lectura | Datos de cada cabaña |
+| `disponibilidad` | Público lectura | Espejo de fechas ocupadas sin datos personales |
+| `reservas` | Solo auth | Reservas con todos los datos del huésped |
+| `presupuestos` | Solo auth | Presupuestos generados |
+| `pagos` | Solo auth | Ingresos registrados |
+| `gastos` | Solo auth | Egresos operativos |
+| `honorarios` | Solo auth | Pagos a colaboradores |
+| `tareas` | Solo auth | Tareas activas |
+| `tareas/{id}/sesiones` | Solo auth | Subcolección de sesiones de trabajo |
+| `historial_tareas` | Solo auth | Tareas finalizadas |
+| `clientes` | Solo auth | Datos de clientes |
+| `usuarios` | Solo auth | Roles y acceso |
+
+---
+
+## Reglas de Firestore requeridas
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /cabanas/{doc}       { allow read: if true; allow write: if request.auth != null; }
+    match /disponibilidad/{doc} { allow read: if true; allow write: if request.auth != null; }
+    match /{document=**}       { allow read, write: if request.auth != null; }
+  }
+}
+```
+
+---
+
+## Roles de usuario
+
+| Rol | Acceso |
+|---|---|
+| `admin` | Todos los módulos |
+| `user` | Solo `tareas.html` y `pagos.html` (tab honorarios propios) |
+
+---
+
+---
+
+# SITIO PÚBLICO
+
+---
+
+## index.html
+**Acceso:** Sin login · Multilenguaje (ES / PT / EN)
+
+### Propósito
+Página principal del complejo. Muestra las tres cabañas con fotos, descripción, capacidad y precio desde. Permite al visitante consultar disponibilidad y generar un presupuesto estimado que se envía por WhatsApp.
+
+### Flujo esperado
+1. Visitante ve las tres cabañas con foto principal, nombre, capacidad y precio base.
+2. Hace clic en "Ver disponibilidad" de una cabaña → se abre un modal con el calendario del mes actual.
+3. El calendario muestra en rojo las fechas ocupadas, leídas de la colección `disponibilidad` (solo fechas, sin datos del huésped).
+4. Visitante selecciona un rango de fechas → se calcula el precio estimado automáticamente usando las tarifas de la cabaña.
+5. Puede enviar la consulta por WhatsApp con todos los datos precargados (cabaña, fechas, personas, precio estimado).
+
+### Integración Firestore
+- Lee `cabanas` (pública) para mostrar nombre, fotos, tarifas, capacidad.
+- Lee `disponibilidad` (pública) para marcar fechas ocupadas. No lee `reservas`.
+
+### Idioma
+Botones ES / PT / EN en el header. Todo el contenido (descripciones, textos del calendario, mensajes de WhatsApp) cambia dinámicamente.
+
+---
+
+## cabana.html
+**Acceso:** Sin login · Multilenguaje · URL: `cabana.html?id=1`
+
+### Propósito
+Página de detalle de una cabaña individual. Galería de fotos, descripción completa, comodidades, calendario de disponibilidad propio y formulario de presupuesto detallado.
+
+### Flujo esperado
+1. Carga los datos de la cabaña desde `cabanas` usando el parámetro `?id=N`.
+2. Muestra galería de fotos con navegación por swipe/arrows.
+3. Muestra comodidades como lista de chips.
+4. Calendario propio de la cabaña con fechas ocupadas (lee `disponibilidad` donde `caba == ID`).
+5. Visitante selecciona fechas → formulario precalcula precio desglosado (alojamiento + limpieza + extra por persona).
+6. Botón WhatsApp genera mensaje con todos los datos.
+
+### Integración Firestore
+- Lee `cabanas/{id}` para todos los datos.
+- Lee `disponibilidad` filtrado por `caba` para el calendario.
+- Además lee Google Calendar API directamente con el `google_calendar_id` de la cabaña para mostrar eventos de Airbnb.
+
+---
+
+---
+
+# PANEL ADMINISTRATIVO
+
+---
+
+## utils.js
+**Tipo:** Módulo compartido · Sin UI propia
+
+### Propósito
+Archivo central que todas las páginas admin cargan antes de su propio script. Contiene la configuración de Firebase, constantes, funciones de autenticación, navegación centralizada y todas las funciones de negocio compartidas.
+
+### Funciones principales
+
+**Autenticación**
+- `verificarAuth(rol)` — verifica sesión activa y rol. Si no cumple, redirige a `index.html`. Tiene timeout de 15 segundos para evitar loops infinitos. Acepta string o array de roles.
+- `cerrarSesion()` — cierra sesión y redirige a login.
+
+**Navegación**
+- `renderNav(paginaActiva, rol)` — genera la barra de navegación correcta según el rol. Admin ve todos los módulos. User ve solo Tareas y Mis cobros. Se llama en cada página después de `verificarAuth`.
+
+**Negocio**
+- `calcularPrecio(cabana, checkIn, checkOut, adultos, ninos)` — calcula precio total considerando tarifas base e intervalos de temporada. Devuelve `{ noches, subtotal, limpieza, total }`.
+- `crearTareaLimpieza(reservaId, reservaData, creadoPor)` — crea tarea de limpieza al confirmar reserva. Busca la próxima reserva en la misma cabaña para informar al personal.
+- `sincronizarDisponibilidad(reservaId, reservaData)` — escribe/actualiza/elimina el espejo en `disponibilidad`. Se llama automáticamente en cada operación que cambia el estado de una reserva.
+- `iniciarTarea(tareaId, currentUser)` — crea sesión en subcolección `sesiones`, actualiza `sesionesActivas` en doc raíz.
+- `pausarTarea(tareaId, currentUser)` — cierra sesión activa del usuario.
+- `finalizarTarea(tareaId, currentUser)` — cierra todas las sesiones, calcula horas proporcionales, genera honorarios, mueve a historial, elimina o resetea según recurrencia.
+- `urgenciaTarea(tarea)` — calcula color de urgencia: gris (futura), verde (hoy), amarillo (atrasada ≤ ciclo), rojo (muy atrasada).
+
+**UI helpers**
+- `showToast(msg, tipo)` — notificación flotante (success / error / warning / info).
+- `showLoading / showEmpty / showError` — estados de carga, vacío y error para contenedores.
+- `escapeHtml / formatFecha / formatFechaHora / formatHoras / colorCabana / badgeEstado / badgePrioridad` — utilidades de formato.
+
+---
+
+## dashboard.html
+**Acceso:** Admin · Login requerido
+
+### Propósito
+Pantalla de inicio del panel administrativo. Muestra el estado general del negocio de un vistazo y centraliza los accesos rápidos más frecuentes.
+
+### Secciones
+
+**KPIs en tiempo real**
+- Reservas activas (confirmadas + pendientes)
+- Pendientes de confirmación
+- Tareas pendientes
+- Tareas urgentes (rojas)
+- Total de clientes
+- Ingresos del mes actual (suma de pagos en BRL del mes)
+
+**Accesos rápidos**
+- Nuevo presupuesto
+- Finanzas
+- Nuevo cliente
+- Cabañas
+- Calendario
+- Tareas
+- **Sincronizar Airbnb** — botón que corre la sincronización automáticamente
+
+**Próximos check-ins** (próximas 6 reservas confirmadas/pendientes)
+
+**Pendientes de confirmación** (reservas en estado `pendiente` con link directo a cada una)
+
+**Sincronización automática de Airbnb**
+Cada vez que se abre el dashboard, corre automáticamente `sincronizarAirbnb()` en segundo plano:
+1. Lee los `google_calendar_id` de cada cabaña.
+2. Consulta la API de Google Calendar buscando eventos "Reserved".
+3. Crea reservas nuevas en Firestore con estado `airbnb_activa`.
+4. Detecta cancelaciones (eventos que ya no aparecen) y las marca `airbnb_cancelada`.
+5. Sincroniza `disponibilidad` para cada cambio.
+6. Muestra resultado debajo del botón.
+
+**Panel de mantenimiento** (colapsable, solo visible para admins)
+- Sincronizar disponibilidad
+- Test calendario Airbnb
+- Corregir Calendar IDs
+- Configurar calendarios
+
+---
+
+## reservas.html
+**Acceso:** Admin · Login requerido
+
+### Propósito
+Gestión completa de reservas. Lista todas las reservas con filtros y permite crear, editar, confirmar, finalizar y anular.
+
+### Estados de reserva
+
+| Estado | Bloquea calendario | Descripción |
+|---|---|---|
+| `pendiente` | No | Reserva creada sin pago confirmado |
+| `confirmada` | Sí | Pago registrado, reserva activa |
+| `airbnb_activa` | Sí | Importada de Airbnb, visible en Google Calendar |
+| `airbnb_cancelada` | No | Importada de Airbnb pero ya no aparece en Google Calendar |
+| `finalizada` | No | Huésped se fue, tarea completada |
+| `anulada` | No | Cancelada manualmente |
+
+### Flujo esperado
+
+**Crear reserva directamente** (para reservas sin presupuesto previo):
+1. Admin completa cliente, fechas, cabaña, personas.
+2. El sistema calcula el precio usando las tarifas de la cabaña.
+3. Al guardar con estado `confirmada` → se genera tarea de limpieza automáticamente.
+
+**Editar reserva:**
+- Al modificar una reserva existente, el sistema actualiza automáticamente la tarea de limpieza asociada (nombre, fecha, monto, descripción con datos del huésped).
+- También sincroniza `disponibilidad`.
+
+**Reservas de Airbnb:**
+- Se importan con nombre "Reserva Airbnb — completar".
+- Muestra badge naranja ⚠ si está en estado `airbnb_cancelada`.
+- Botón "Confirmar" convierte `pendiente` → `confirmada` y genera tarea de limpieza.
+
+**Panel de historial y saldo** (visible al editar):
+- Muestra de qué presupuesto viene la reserva (con link).
+- Lista todos los pagos registrados con fecha, método y monto.
+- Saldo pendiente en tiempo real = total − pagado.
+
+### Integración Firestore
+- Lee/escribe `reservas`.
+- Lee `cabanas` y `clientes` para los selectores.
+- Lee `pagos` para calcular saldo en el panel de historial.
+- Escribe en `disponibilidad` automáticamente en cada cambio de estado.
+- Escribe/actualiza en `tareas` al confirmar o editar.
+
+---
+
+## presupuestos.html
+**Acceso:** Admin · Login requerido
+
+### Propósito
+Punto de entrada del flujo comercial. El admin crea presupuestos personalizados para clientes interesados. Cuando el cliente paga, el presupuesto se convierte en reserva confirmada automáticamente.
+
+### Flujo esperado
+
+**Crear presupuesto:**
+1. Admin selecciona cabaña, fechas, cantidad de adultos y niños.
+2. Sistema calcula precio automáticamente (base + extra por personas + limpieza, considerando intervalos de temporada).
+3. Admin agrega nombre del cliente, email, WhatsApp y notas opcionales.
+4. Guarda el presupuesto con estado `pendiente`.
+
+**Registrar pago (confirmar):**
+1. Admin hace clic en "Registrar pago" sobre un presupuesto pendiente.
+2. Ingresa el monto recibido y el método de pago.
+3. Al confirmar:
+   - Se crea la reserva en estado `confirmada`.
+   - Se registra el pago en `pagos`.
+   - Se genera la tarea de limpieza.
+   - Se sincroniza `disponibilidad`.
+   - Se marca el presupuesto como `confirmado` con link a la reserva.
+   - Se redirige a `reservas.html?id=X` para completar datos del huésped.
+
+**Importante:** El pago siempre confirma directamente. No hay opción de "seña sin confirmar" — si hay pago, hay reserva confirmada.
+
+### Lista de presupuestos
+- Filtros: Todos / Pendientes / Confirmados
+- Cada card muestra estado, precio, fechas y acciones disponibles.
+- Los confirmados muestran badge verde y link a la reserva generada.
+
+---
+
+## pagos.html (Finanzas)
+**Acceso:** Admin y User · Login requerido
+
+### Propósito
+Módulo financiero completo con tres secciones: Ingresos, Egresos y Honorarios.
+
+### Tab Ingresos
+Registra cobros a huéspedes vinculados a reservas o presupuestos.
+
+**Registrar ingreso:**
+- Selector muestra dos grupos: "Reservas activas" y "Presupuestos pendientes".
+- Al seleccionar, muestra automáticamente el saldo pendiente (total − ya pagado).
+- Precarga el monto del saldo para facilitar el registro.
+- Si se selecciona un presupuesto, crea la reserva automáticamente antes de registrar el pago.
+- Campos: monto, moneda, método (PIX / transferencia / efectivo / tarjeta), tipo (seña / parcial / total), observaciones.
+
+**Vista:**
+- Lista de ingresos con fecha, cliente, cabaña, monto, método.
+- Indicador de saldo: "Debe R$ X" o "✅ Saldado" en cada registro.
+- Filtro por mes.
+
+### Tab Egresos
+Registra gastos operativos (materiales, reparaciones, servicios).
+
+**Registrar gasto:**
+- Descripción, monto, categoría, método de pago, fecha, observaciones.
+- Posibilidad de adjuntar foto de comprobante (Firebase Storage).
+
+### Tab Honorarios
+Vista de pagos a colaboradores generados al finalizar tareas.
+
+**Para admin:** ve todos los honorarios con estado (pendiente / pagado), puede marcar como pagado.
+**Para user (colaborador):** ve solo sus propios honorarios, con total acumulado pendiente de cobro.
+
+---
+
+## tareas.html
+**Acceso:** Admin y User · Login requerido
+
+### Propósito
+Gestión de tareas operativas. Coordinación del personal de limpieza y mantenimiento. Diseñado para uso móvil en campo.
+
+### Tipos de tarea
+
+| Tipo | Origen | Prioridad |
+|---|---|---|
+| `limpieza` | Automática al confirmar reserva | Siempre primero |
+| `general` | Creada manualmente | Según urgencia |
+
+### Orden de la lista
+1. Tareas de limpieza (tipo `limpieza`) — siempre al tope
+2. Resto ordenado por urgencia según semáforo
+
+### Semáforo de urgencia
+- ⬜ **Gris** — fecha futura, no corresponde aún
+- 🟢 **Verde** — es hoy
+- 🟡 **Amarillo** — atrasada ≤ ciclo de recurrencia Y ≤ 10 días
+- 🔴 **Rojo** — muy atrasada (> ciclo O > 10 días)
+
+### Estados de tarea
+- `pendiente` — nadie trabajando en este momento
+- `en_curso` — al menos un colaborador con sesión abierta
+
+### Flujo de trabajo
+
+**Iniciar tarea:**
+- Colaborador presiona "Iniciar" en la card.
+- Se crea una sesión en la subcolección `tareas/{id}/sesiones` con `{ uid, nombre, inicio, fin: null }`.
+- El doc raíz actualiza `sesionesActivas[]` para mostrar chips de "quién está trabajando".
+- La tarea pasa a estado `en_curso`.
+
+**Pausar:**
+- Cierra la sesión activa del colaborador (escribe `fin`).
+- Si no quedan sesiones abiertas → estado vuelve a `pendiente`.
+- Otros colaboradores pueden seguir trabajando.
+
+**Finalizar:**
+- Solo admin o quien tenga permiso.
+- Cierra TODAS las sesiones abiertas.
+- Lee todas las sesiones de la subcolección y calcula horas totales por usuario.
+- Si la tarea tiene monto > 0, genera honorarios proporcionales al tiempo trabajado.
+- Guarda resumen en `historial_tareas`.
+- Si `recurrencia = 0` → elimina la tarea.
+- Si `recurrencia = N días` → resetea la tarea con nueva fecha = hoy + N días.
+
+### Para admin: edición directa
+- Botón ✏️ en cada card abre modal de edición con: nombre, fecha, prioridad, monto, recurrencia, descripción.
+- Botón eliminar dentro del modal.
+
+### Tarea de limpieza (tipo específico)
+Al abrirla muestra primero:
+- Cabaña y número
+- Nombre del huésped saliente con fecha de checkout
+- Cantidad de huéspedes
+- Notas especiales de la reserva
+- Próximo huésped (nombre + fecha de checkin)
+- Monto de la limpieza
+
+---
+
+## calendario.html
+**Acceso:** Admin · Login requerido
+
+### Propósito
+Vista mensual de toda la ocupación del complejo. Muestra reservas propias, reservas de Airbnb y tareas de limpieza. Permite crear reservas rápidas haciendo clic en fechas.
+
+### Filtros
+- Botones por cabaña (Cabaña 1, Loft, Cabaña 3) — activan/desactivan capas de color.
+- Botón de Tareas — muestra/oculta eventos de limpieza.
+
+### Colores de eventos
+- Color de cabaña (naranja / azul / verde) = reserva confirmada
+- Color semitransparente = reserva pendiente
+- Naranja ⚠ = reserva Airbnb cancelada
+- Gris = tarea de limpieza pendiente
+
+### Sincronización Airbnb (botón "Sincronizar Airbnb")
+1. Lee `google_calendar_id` de cada cabaña en Firestore.
+2. Consulta Google Calendar API para cada cabaña.
+3. Filtra solo eventos "Reserved" (excluye "Not available", "Indisponível").
+4. Compara con `airbnb_google_id` en `reservas` para evitar duplicados.
+5. Crea nuevas reservas con estado `airbnb_activa` y nombre "Reserva Airbnb — completar".
+6. Detecta cancelaciones: si una reserva `airbnb_activa` ya no aparece en Google Calendar → la marca `airbnb_cancelada`.
+7. Sincroniza `disponibilidad` para todos los cambios.
+8. Muestra resultado: "X nuevas importadas · Y canceladas en Airbnb".
+
+### Popup de evento
+Al hacer clic en un evento muestra: nombre, estado, cabaña, huéspedes, total y link a la reserva.
+- Si es `airbnb_activa` → muestra "Completar reserva".
+- Si es `airbnb_cancelada` → muestra advertencia roja permanente.
+
+---
+
+## cabanas-admin.html
+**Acceso:** Admin · Login requerido
+
+### Propósito
+Configuración de las cabañas. Todo lo que aparece en el sitio público se administra desde aquí.
+
+### Tab Cabañas
+
+**Lista:** Muestra cada cabaña con foto principal, badges de estado (✅ Activa / ⚠ Sin Calendar / ⚠ Sin fotos).
+
+**Formulario de edición:**
+- **Identificación:** ID numérico (= ID del documento en Firestore), orden de visualización, estado activa/inactiva.
+- **Nombre multilenguaje:** Tabs ES / PT / EN.
+- **Descripción multilenguaje:** Tabs ES / PT / EN.
+- **Nota especial:** Texto destacado en el sitio público (ej: "A 3 cuadras de la playa").
+- **Capacidad y camas:** base, máxima, dobles, individuales.
+- **Comodidades:** Una por línea. Se muestran como chips en el sitio público.
+- **Fotos:** URLs una por línea. Preview en tiempo real con número de orden y botón de eliminar. Se guardan como `{ url, orden, categoria }` en Firestore.
+- **Tarifas base:** precio/noche, extra por persona adicional, cargo de limpieza. Vista previa de precio calculado automáticamente.
+- **Integraciones:** URL del anuncio en Airbnb (link público, no iCal), Google Calendar ID (con validación visual de formato y extracción automática si está guardado como iframe completo).
+
+### Tab Tarifas por temporada
+- Selector de cabaña.
+- Lista de períodos especiales: desde, hasta, precio/noche, extra/persona, descripción.
+- Botón "Agregar período".
+- Los períodos sobreescriben el precio base durante esas fechas. El resto usa el precio base.
+
+---
+
+## clientes.html
+**Acceso:** Admin · Login requerido
+
+### Propósito
+Directorio de clientes. Registro centralizado de contactos con historial de reservas.
+
+### Funcionalidad esperada
+- Lista de clientes con nombre, email, WhatsApp y cantidad de reservas.
+- Búsqueda por nombre.
+- Crear / editar / eliminar cliente.
+- Ver historial de reservas del cliente.
+- Los clientes se crean automáticamente al guardar una reserva si se tipea un nombre nuevo.
+
+---
+
+## usuarios.html
+**Acceso:** Admin · Login requerido
+
+### Propósito
+Gestión de accesos al panel administrativo.
+
+### Funcionalidad esperada
+- Lista de usuarios con nombre, email, rol y estado (activo/inactivo).
+- Crear usuario nuevo (admin envía invitación por email vía Firebase Auth).
+- Cambiar rol: admin ↔ user.
+- Desactivar usuario (bloquea el acceso sin eliminar el historial).
+- El campo `activo: false` bloquea el login aunque la cuenta exista en Firebase Auth.
+
+---
+
+---
+
+# HERRAMIENTAS DE MANTENIMIENTO
+
+Accesibles desde Dashboard → Mantenimiento. Abren en pestaña nueva.
+
+---
+
+## sync-disponibilidad.html
+**Uso:** Cuando hay inconsistencias en el calendario público
+
+### Qué hace
+Lee todas las reservas en Firestore y crea/actualiza la colección `disponibilidad` con un espejo de cada reserva activa, sin datos personales.
+
+### Cuándo usarlo
+- Primera vez después de importar datos al sistema.
+- Si el calendario público muestra fechas incorrectas.
+- Después de operaciones masivas de importación.
+
+### En operación normal
+No es necesario. `sincronizarDisponibilidad()` en `utils.js` mantiene todo sincronizado automáticamente en cada operación.
+
+---
+
+## test-calendar.html
+**Uso:** Diagnóstico cuando Airbnb no importa reservas
+
+### Qué hace
+1. Lee los Calendar IDs de las cabañas desde Firestore.
+2. Llama directamente a la API de Google Calendar.
+3. Analiza los eventos encontrados (tipo, fechas, estado).
+4. Simula el filtro del sistema.
+5. Verifica cuáles ya están en Firestore y cuáles faltan.
+6. Si hay eventos por importar → botón "Importar estos eventos ahora".
+
+### Errores comunes que detecta
+- HTTP 404: Calendar ID incorrecto → usar `corregir-calendar-ids.html`.
+- HTTP 403: Calendario no es público en Google Calendar → configurar permisos.
+- 0 eventos importados: los eventos son "Not available" (bloqueos, no reservas con huéspedes) → es correcto, no hay nada que importar.
+
+---
+
+## corregir-calendar-ids.html
+**Uso:** Cuando el Google Calendar ID está guardado como iframe completo
+
+### Qué hace
+Detecta cabañas que tienen guardado el código `<iframe src="...">` completo en lugar del ID limpio (`abc123@import.calendar.google.com`). Extrae el ID automáticamente del iframe y lo guarda correcto en Firestore.
+
+### Señal de que es necesario
+En `test-calendar.html`, al leer cabañas desde Firestore aparece `✅ Cabaña X: <iframe src=` en lugar del ID limpio.
+
+---
+
+## diagnostico-calendarios.html
+**Uso:** Configuración inicial o reconfiguration de Google Calendar
+
+### Qué hace
+Permite ver y editar el `google_calendar_id` de cada cabaña directamente. Útil para la configuración inicial o cuando cambia el calendario de Airbnb.
+
+---
+
+---
+
+# FLUJOS COMPLETOS
+
+---
+
+## Flujo: Reserva propia (presupuesto → pago → reserva)
+
+```
+1. Admin recibe consulta de cliente
+2. presupuestos.html → Nuevo presupuesto
+   → selecciona cabaña, fechas, personas
+   → el sistema calcula precio automáticamente
+   → guarda presupuesto (estado: pendiente)
+
+3. Cliente acepta y paga
+4. presupuestos.html → Registrar pago
+   → admin ingresa monto y método
+   → sistema crea reserva (estado: confirmada)
+   → registra pago en colección pagos
+   → genera tarea de limpieza automáticamente
+   → sincroniza disponibilidad (fecha queda bloqueada en calendario público)
+   → redirige a reservas.html para completar datos del huésped
+
+5. Admin completa datos en reservas.html
+   → nombre completo, email, WhatsApp, notas especiales
+   → al guardar: actualiza la tarea de limpieza con los datos del huésped
+```
+
+---
+
+## Flujo: Reserva de Airbnb (automático)
+
+```
+1. Huésped reserva en Airbnb
+2. Airbnb sincroniza con Google Calendar (~1 hora de demora)
+3. Admin abre el Dashboard
+   → sincronizarAirbnb() corre automáticamente
+   → detecta evento "Reserved" nuevo en Google Calendar
+   → crea reserva en Firestore (estado: airbnb_activa)
+   → sincroniza disponibilidad
+
+4. Reserva aparece en reservas.html con nombre "Reserva Airbnb — completar"
+5. Admin completa los datos del huésped (nombre, contacto, etc.)
+
+Si el huésped cancela en Airbnb:
+   → el evento desaparece de Google Calendar
+   → en la próxima sync: reserva se marca airbnb_cancelada
+   → aparece badge ⚠ naranja en reservas.html y calendario
+   → disponibilidad se libera automáticamente
+```
+
+---
+
+## Flujo: Tarea de limpieza
+
+```
+Al confirmar reserva:
+  → utils.js/crearTareaLimpieza() genera tarea automáticamente
+  → incluye: nombre huésped, checkout, huéspedes, notas, monto, próxima reserva
+
+El día del checkout:
+  1. Colaborador abre tareas.html en el celular
+  2. La tarea de limpieza aparece primera (tipo limpieza = prioridad absoluta)
+  3. Lee los datos del huésped y la próxima reserva antes de empezar
+  4. Presiona "Iniciar" → se registra su sesión con hora de inicio
+  5. Puede pausar y reanudar — el tiempo se acumula en la subcolección
+  6. Al terminar, admin presiona "Finalizar"
+     → se calcula el tiempo total de cada colaborador
+     → se generan honorarios proporcionales al tiempo trabajado
+     → la tarea se mueve a historial_tareas
+     → si hay próxima reserva, el admin puede ver en el historial cuánto tiempo tomó
+
+Si se edita la reserva después:
+  → la tarea de limpieza se actualiza automáticamente (nombre, fecha, monto, notas)
+```
+
+---
+
+---
+
+# INTEGRACIÓN TÉCNICA
+
+## Google Calendar API
+- **API Key:** `AIzaSyBnfunjUkUXiRjKCPRotpFHE9tGgn6tV8E`
+- Los calendarios deben estar configurados como **públicos** en Google Calendar para ser leídos.
+- Calendar IDs confirmados:
+  - Cabaña 1 (Vista al Bosque): `h5a1h0a8dg9rl0oufvq19hn05r4gbubg@import.calendar.google.com`
+  - Cabaña 2 (Loft): `8i3hl5ppqi6al50kf7casj5n5vl9sp1j@import.calendar.google.com`
+  - Cabaña 3 (Familiar Premium): `60n7foetdu2qvsn16mi7is8j6i4ugm66@import.calendar.google.com`
+
+## Firebase proyecto
+- **Project ID:** `casaverdecanas-199`
+- **Auth domain:** `casaverdecanas-199.firebaseapp.com`
+- **RTDB:** `casaverdecanas-199-default-rtdb.firebaseio.com`
+
+## Queries Firestore — regla crítica
+Ninguna query usa `where()` + `orderBy()` en campos distintos (requeriría índice compuesto). Toda ordenación se hace en el cliente con `.sort()` después del `.get()`.
+
+---
+
+*Documento generado: Mayo 2026*
