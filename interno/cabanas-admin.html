@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cabañas · Casa Verde Canas</title>
+    <title>Contenidos · Casa Verde Canas</title>
     <link rel="stylesheet" href="design-system.css">
     <style>
         /* ── Foto grid ──────────────────────────────────────────── */
@@ -112,8 +112,8 @@
 <!-- ── HEADER ──────────────────────────────────────────────── -->
 <header class="admin-header">
     <div class="admin-header__brand">
-        <span class="material-icons">cottage</span>
-        Casa Verde Canas
+        <span class="material-icons">photo_library</span>
+        Casa Verde Canas — Contenidos
     </div>
     <div class="admin-header__actions">
         <div class="user-chip">
@@ -139,6 +139,12 @@
         </button>
         <button class="tab-btn" data-tab="tarifas">
             <span class="material-icons" style="font-size:15px;">date_range</span> Tarifas por temporada
+        </button>
+        <button class="tab-btn" data-tab="comunes">
+            <span class="material-icons" style="font-size:15px;">park</span> Espacios comunes
+        </button>
+        <button class="tab-btn" data-tab="config">
+            <span class="material-icons" style="font-size:15px;">settings</span> Configuración
         </button>
     </div>
 
@@ -258,18 +264,16 @@
                 <label class="form-label">Una por línea</label>
                 <textarea id="comodidades" class="form-control" rows="5"
                     placeholder="WiFi&#10;Aire acondicionado&#10;Cocina equipada&#10;TV&#10;Heladera&#10;Parrilla"></textarea>
-                <p class="form-hint">Se muestran como íconos en el sitio público.</p>
+                <p class="form-hint">No incluir capacidad ni camas — esos datos se muestran por separado en el sitio para evitar duplicados.</p>
             </div>
 
-            <!-- Fotos -->
+            <!-- Fotos con uploader -->
             <div class="sec-label"><span class="material-icons">photo_library</span> Fotos</div>
-            <div class="form-group">
-                <label class="form-label">URLs de fotos — una por línea</label>
-                <textarea id="fotosUrls" class="form-control" rows="5"
-                    placeholder="https://raw.githubusercontent.com/casaverdecanas-blip/Casaverde/main/img/..."></textarea>
-                <p class="form-hint">Las fotos se muestran en el orden ingresado. Usá URLs del repositorio GitHub del proyecto.</p>
-            </div>
-            <div id="fotosPreview" class="fotos-grid"></div>
+            <div id="fotosPreview" class="fotos-grid" style="margin-bottom:var(--space-3);"></div>
+            <button class="btn btn-secondary" onclick="agregarFotoCabana()" style="margin-bottom:var(--space-3);">
+                <span class="material-icons">add_photo_alternate</span> Agregar foto
+            </button>
+            <p class="form-hint" style="margin-top:0;">Podés subir archivos (máx 500 KB) o pegar una URL. Cada foto lleva título y descripción opcional.</p>
 
             <!-- Tarifas -->
             <div class="sec-label"><span class="material-icons">payments</span> Tarifas base</div>
@@ -389,6 +393,70 @@
         </div>
     </div>
 
+    <!-- ═══ TAB ESPACIOS COMUNES ══════════════════════════════ -->
+    <div id="comunesPanel" style="display:none;">
+        <div class="card" id="comunesListCard">
+            <div class="card__header">
+                <h2 class="card__title"><span class="material-icons">park</span> Espacios comunes</h2>
+                <button class="btn btn-primary" onclick="nuevaCatComun()"><span class="material-icons">add</span> Nueva categoría</button>
+            </div>
+            <div class="alert alert-info" style="margin-bottom:var(--space-4);">
+                <span class="material-icons">info</span>
+                Las fotos de espacios comunes se muestran en el sitio público entre las cabañas y el contacto.
+            </div>
+            <div id="comunesList"><div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div></div>
+        </div>
+        <div class="card" id="comunesCatForm" style="display:none;">
+            <div class="card__header">
+                <h2 class="card__title" id="comunesCatFormTitle"><span class="material-icons">edit</span> Categoría</h2>
+                <button class="btn btn-ghost" onclick="cancelarCatComun()"><span class="material-icons">close</span> Cancelar</button>
+            </div>
+            <input type="hidden" id="comunesCatId">
+            <div class="sec-label"><span class="material-icons">folder</span> Identificación</div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Carpeta en GitHub <span class="required">*</span></label>
+                    <input id="catSlug" class="form-control" placeholder="Ej: piscina">
+                    <p class="form-hint">Solo minúsculas, sin espacios. Define: <code>img/common/{carpeta}/</code>. No cambiar una vez creada.</p>
+                </div>
+                <div class="form-group"><label class="form-label">Orden</label><input id="catOrden" type="number" class="form-control" value="0" min="0"></div>
+            </div>
+            <div class="sec-label"><span class="material-icons">translate</span> Nombre</div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">🇪🇸 Español <span class="required">*</span></label><input id="catNombreEs" class="form-control" placeholder="Piscina"></div>
+                <div class="form-group"><label class="form-label">🇧🇷 Português</label><input id="catNombrePt" class="form-control" placeholder="Piscina"></div>
+                <div class="form-group"><label class="form-label">🇺🇸 English</label><input id="catNombreEn" class="form-control" placeholder="Pool"></div>
+            </div>
+            <div class="sec-label"><span class="material-icons">photo_library</span> Fotos</div>
+            <div id="comunesCatFotos" class="fotos-grid" style="margin-bottom:var(--space-3);"></div>
+            <button class="btn btn-secondary" onclick="agregarFotoComun()" style="margin-bottom:var(--space-4);"><span class="material-icons">add_photo_alternate</span> Agregar foto</button>
+            <div style="display:flex;gap:var(--space-3);flex-wrap:wrap;margin-top:var(--space-4);padding-top:var(--space-4);border-top:1px solid var(--color-border);">
+                <button class="btn btn-primary" onclick="guardarCatComun()"><span class="material-icons">save</span> Guardar categoría</button>
+                <button class="btn btn-ghost" onclick="cancelarCatComun()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ TAB CONFIGURACIÓN ══════════════════════════════════ -->
+    <div id="configPanel" style="display:none;">
+        <div class="card">
+            <div class="card__header"><h2 class="card__title"><span class="material-icons">settings</span> Configuración</h2></div>
+            <div class="sec-label"><span class="material-icons">key</span> Token de GitHub</div>
+            <div style="background:var(--color-surface-2);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-4);margin-bottom:var(--space-4);">
+                <div class="form-group" style="margin-bottom:var(--space-2);">
+                    <label class="form-label">Personal Access Token (PAT)</label>
+                    <div style="display:flex;gap:var(--space-2);">
+                        <input type="password" id="githubToken" class="form-control" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="font-family:monospace;">
+                        <button class="btn btn-ghost btn-sm" onclick="toggleTokenVisibility()" title="Mostrar/ocultar"><span class="material-icons" id="tokenEyeIcon">visibility</span></button>
+                    </div>
+                </div>
+                <p class="form-hint">El token se guarda en Firestore (<code>config/github</code>) — nunca en el código. Requiere permiso <code>repo</code>. Generalo en GitHub → Settings → Developer Settings → Personal Access Tokens (classic).</p>
+                <div id="tokenStatus" style="display:none;margin-top:var(--space-3);font-size:var(--text-sm);"></div>
+                <button class="btn btn-primary btn-sm" onclick="guardarToken()" style="margin-top:var(--space-3);"><span class="material-icons">save</span> Guardar token</button>
+            </div>
+        </div>
+    </div>
+
 </main>
 
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -402,7 +470,9 @@
     CVC.renderNav('cabanas-admin.html');
 
     const db = CVC.db;
-    const { escapeHtml, showToast } = CVC;
+    const { escapeHtml, showToast, abrirUploaderFoto } = CVC;
+    let fotosActuales = [];  // fotos de la cabaña en edición
+    let comunesCatFotos = []; // fotos de categoría espacios comunes en edición
 
     let cabanasCache      = [];
     let intervalosActuales = [];
@@ -414,7 +484,11 @@
             btn.classList.add('active');
             document.getElementById('cabanasPanel').style.display = btn.dataset.tab === 'cabanas' ? 'block' : 'none';
             document.getElementById('tarifasPanel').style.display = btn.dataset.tab === 'tarifas' ? 'block' : 'none';
+            document.getElementById('comunesPanel').style.display = btn.dataset.tab === 'comunes' ? 'block' : 'none';
+            document.getElementById('configPanel').style.display  = btn.dataset.tab === 'config'  ? 'block' : 'none';
             if (btn.dataset.tab === 'tarifas') cargarSelectTarifas();
+            if (btn.dataset.tab === 'comunes') cargarEspaciosComunes();
+            if (btn.dataset.tab === 'config')  cargarConfigGithub();
         });
     });
 
@@ -540,11 +614,13 @@
         // Comodidades
         document.getElementById('comodidades').value = (c.comodidades || []).join('\n');
 
-        // Fotos — normalizar objetos a URLs
-        const fotosUrls = (c.fotos || [])
-            .map(f => typeof f === 'string' ? f : f?.url)
-            .filter(Boolean);
-        document.getElementById('fotosUrls').value = fotosUrls.join('\n');
+        // Fotos — cargar en array en memoria (normalizar formato antiguo y nuevo)
+        fotosActuales = (c.fotos || []).map(f =>
+            typeof f === 'string'
+                ? { url: f, titulo: '', descripcion: '' }
+                : { url: f?.url||'', titulo: f?.titulo||'', descripcion: f?.descripcion||'' }
+        ).filter(f => f.url);
+        renderFotosCabana();
 
         // Tarifas
         document.getElementById('precioBase').value     = c.tarifas?.precioBase         ?? 250;
@@ -583,10 +659,8 @@
         btn.disabled = true; text.textContent = 'Guardando...';
 
         try {
-            // Fotos como objetos
-            const fotosInput = document.getElementById('fotosUrls').value
-                .split('\n').map(u => u.trim()).filter(Boolean);
-            const fotos = fotosInput.map((url, i) => ({ url, orden: i, categoria: '' }));
+            // Fotos desde el array en memoria — formato nuevo con título y descripción
+            const fotos = fotosActuales.map((f, i) => ({ url: f.url, titulo: f.titulo||'', descripcion: f.descripcion||'', orden: i }));
             const comodidades = document.getElementById('comodidades').value
                 .split('\n').map(l => l.trim()).filter(Boolean);
 
@@ -667,30 +741,34 @@
         }
     };
 
-    // ── Fotos preview ─────────────────────────────────────────
-    function actualizarPreviewFotos() {
-        const urls = document.getElementById('fotosUrls').value
-            .split('\n').map(u => u.trim()).filter(Boolean);
-        document.getElementById('fotosPreview').innerHTML = urls.length
-            ? urls.map((url, i) => `
+    // ── Fotos de cabañas ──────────────────────────────────────
+    function renderFotosCabana() {
+        document.getElementById('fotosPreview').innerHTML = fotosActuales.length
+            ? fotosActuales.map((f, i) => `
                 <div class="foto-thumb">
-                    <img src="${escapeHtml(url)}" loading="lazy"
-                        onerror="this.parentElement.style.borderColor='var(--color-danger)'">
-                    <span class="foto-thumb__orden">${i + 1}</span>
-                    <button class="foto-thumb__del" onclick="eliminarFoto(${i})" title="Eliminar">✕</button>
+                    <img src="${escapeHtml(f.url)}" loading="lazy" onerror="this.parentElement.style.borderColor='var(--color-danger)'">
+                    <span class="foto-thumb__orden">${i+1}</span>
+                    <span style="position:absolute;bottom:4px;left:24px;right:26px;background:rgba(0,0,0,.55);color:#fff;font-size:9px;padding:1px 4px;border-radius:4px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">${escapeHtml(f.titulo||'')}</span>
+                    <button class="foto-thumb__del" onclick="eliminarFotoCabana(${i})" title="Eliminar">✕</button>
                 </div>`).join('')
-            : '';
+            : '<p style="color:var(--color-text-muted);font-size:var(--text-sm);">Sin fotos aún.</p>';
     }
 
-    window.eliminarFoto = function(idx) {
-        const urls = document.getElementById('fotosUrls').value
-            .split('\n').map(u => u.trim()).filter(Boolean);
-        urls.splice(idx, 1);
-        document.getElementById('fotosUrls').value = urls.join('\n');
-        actualizarPreviewFotos();
+    window.agregarFotoCabana = function() {
+        const idNum = document.getElementById('idNum').value || '1';
+        abrirUploaderFoto({
+            contexto: `cabin-${idNum}`, categoria: 'fotos',
+            onConfirm: ({ url, titulo, descripcion }) => {
+                fotosActuales.push({ url, titulo, descripcion });
+                renderFotosCabana();
+                showToast('Foto agregada. Guardá la cabaña para confirmar.', 'success');
+            }
+        });
     };
 
-    document.getElementById('fotosUrls').addEventListener('input', actualizarPreviewFotos);
+    window.eliminarFotoCabana = function(idx) {
+        fotosActuales.splice(idx, 1); renderFotosCabana();
+    };
 
     // ── Preview precio ────────────────────────────────────────
     function actualizarPrecioPreview() {
@@ -738,7 +816,7 @@
     function limpiarForm() {
         ['idNum','orden','nombreEs','nombrePt','nombreEn',
          'descEs','descPt','descEn','notaEs','notaPt','notaEn',
-         'comodidades','fotosUrls','airbnbUrl','googleCalendarId'].forEach(id => {
+         'comodidades','airbnbUrl','googleCalendarId'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
@@ -750,7 +828,8 @@
         document.getElementById('precioBase').value      = '250';
         document.getElementById('precioExtra').value     = '50';
         document.getElementById('precioLimpieza').value  = '150';
-        document.getElementById('fotosPreview').innerHTML = '';
+        fotosActuales = [];
+        renderFotosCabana();
         document.getElementById('precioPreview').style.display = 'none';
         document.getElementById('formError').style.display    = 'none';
     }
@@ -876,6 +955,158 @@
     };
 
     document.getElementById('tarifaCabanaSelect').addEventListener('change', e => cargarIntervalos(e.target.value));
+
+
+    // ══════════════════════════════════════════════════════════
+    //  ESPACIOS COMUNES
+    // ══════════════════════════════════════════════════════════
+
+    async function cargarEspaciosComunes() {
+        const lista = document.getElementById('comunesList');
+        lista.innerHTML = '<div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>';
+        try {
+            const snap = await db.collection('espacios_comunes').orderBy('orden').get();
+            if (snap.empty) {
+                lista.innerHTML = '<div class="state-empty" style="text-align:center;padding:var(--space-6);color:var(--color-text-muted);"><span class="material-icons" style="font-size:40px;display:block;margin-bottom:8px;">park</span>No hay categorías aún.</div>';
+                return;
+            }
+            lista.innerHTML = snap.docs.map(doc => {
+                const d = doc.data();
+                const nombre = escapeHtml(d.nombre?.es || doc.id);
+                const nFotos = (d.fotos||[]).length;
+                const thumb  = d.fotos?.[0]?.url || '';
+                return `<div class="cabana-list-card">
+                    ${thumb ? `<img class="cabana-list-card__foto" src="${escapeHtml(thumb)}" onerror="this.style.display='none'">` : `<div class="cabana-list-card__foto" style="display:flex;align-items:center;justify-content:center;"><span class="material-icons" style="color:var(--color-text-muted);font-size:28px;">image</span></div>`}
+                    <div class="cabana-list-card__body">
+                        <div class="cabana-list-card__nombre">${nombre}</div>
+                        <div class="cabana-list-card__meta">img/common/${escapeHtml(d.slug||doc.id)}/ · ${nFotos} foto${nFotos!==1?'s':''} · Orden ${d.orden??'—'}</div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:var(--space-2);flex-shrink:0;">
+                        <button class="btn btn-secondary btn-sm" onclick="editarCatComun('${doc.id}')"><span class="material-icons">edit</span> Editar</button>
+                        <button class="btn btn-danger btn-sm" onclick="eliminarCatComun('${doc.id}','${nombre}')"><span class="material-icons">delete</span></button>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch(e) {
+            lista.innerHTML = `<div class="alert alert-error"><span class="material-icons">error</span> Error: ${e.message}</div>`;
+        }
+    }
+
+    window.nuevaCatComun = function() {
+        document.getElementById('comunesCatFormTitle').innerHTML = '<span class="material-icons">add_circle</span> Nueva categoría';
+        ['comunesCatId','catSlug','catNombreEs','catNombrePt','catNombreEn'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('catOrden').value = '0';
+        comunesCatFotos = []; renderFotosCatComun();
+        document.getElementById('comunesCatForm').style.display = 'block';
+        document.getElementById('comunesCatForm').scrollIntoView({ behavior:'smooth' });
+    };
+
+    window.editarCatComun = async function(docId) {
+        const snap = await db.collection('espacios_comunes').doc(docId).get();
+        if (!snap.exists) return;
+        const d = snap.data();
+        document.getElementById('comunesCatFormTitle').innerHTML = '<span class="material-icons">edit</span> Editar categoría';
+        document.getElementById('comunesCatId').value  = docId;
+        document.getElementById('catSlug').value       = d.slug || docId;
+        document.getElementById('catOrden').value      = d.orden ?? 0;
+        document.getElementById('catNombreEs').value   = d.nombre?.es || '';
+        document.getElementById('catNombrePt').value   = d.nombre?.pt || '';
+        document.getElementById('catNombreEn').value   = d.nombre?.en || '';
+        comunesCatFotos = d.fotos || []; renderFotosCatComun();
+        document.getElementById('comunesCatForm').style.display = 'block';
+        document.getElementById('comunesCatForm').scrollIntoView({ behavior:'smooth' });
+    };
+
+    window.cancelarCatComun = function() {
+        document.getElementById('comunesCatForm').style.display = 'none';
+        document.getElementById('comunesListCard').scrollIntoView({ behavior:'smooth' });
+    };
+
+    function renderFotosCatComun() {
+        document.getElementById('comunesCatFotos').innerHTML = comunesCatFotos.length
+            ? comunesCatFotos.map((f,i) => `<div class="foto-thumb"><img src="${escapeHtml(f.url)}" loading="lazy" onerror="this.parentElement.style.borderColor='var(--color-danger)'"><span class="foto-thumb__orden">${i+1}</span><button class="foto-thumb__del" onclick="eliminarFotoComun(${i})">✕</button></div>`).join('')
+            : '<p style="color:var(--color-text-muted);font-size:var(--text-sm);">Sin fotos aún.</p>';
+    }
+
+    window.agregarFotoComun = function() {
+        const slug = document.getElementById('catSlug').value.trim() || 'common';
+        abrirUploaderFoto({
+            contexto: 'common', categoria: slug,
+            onConfirm: ({ url, titulo, descripcion }) => {
+                comunesCatFotos.push({ url, titulo, descripcion });
+                renderFotosCatComun();
+                showToast('Foto agregada. Guardá la categoría para confirmar.', 'success');
+            }
+        });
+    };
+
+    window.eliminarFotoComun = function(idx) {
+        if (!confirm('¿Eliminar esta foto?')) return;
+        comunesCatFotos.splice(idx, 1); renderFotosCatComun();
+    };
+
+    window.guardarCatComun = async function() {
+        const docId    = document.getElementById('comunesCatId').value.trim();
+        const slug     = document.getElementById('catSlug').value.trim().toLowerCase().replace(/\s+/g,'-');
+        const nombreEs = document.getElementById('catNombreEs').value.trim();
+        if (!slug)     { showToast('La carpeta es requerida.', 'error'); return; }
+        if (!nombreEs) { showToast('El nombre en español es requerido.', 'error'); return; }
+        const data = {
+            slug, nombre: { es: nombreEs, pt: document.getElementById('catNombrePt').value.trim()||nombreEs, en: document.getElementById('catNombreEn').value.trim()||nombreEs },
+            orden: parseInt(document.getElementById('catOrden').value)||0, fotos: comunesCatFotos,
+            actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        try {
+            if (docId) { await db.collection('espacios_comunes').doc(docId).update(data); }
+            else { data.creadoEn = firebase.firestore.FieldValue.serverTimestamp(); await db.collection('espacios_comunes').doc(slug).set(data); }
+            showToast(`Categoría "${nombreEs}" guardada.`, 'success');
+            cancelarCatComun(); await cargarEspaciosComunes();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    window.eliminarCatComun = async function(docId, nombre) {
+        if (!confirm(`¿Eliminar la categoría "${nombre}" y todas sus fotos?`)) return;
+        try { await db.collection('espacios_comunes').doc(docId).delete(); showToast(`"${nombre}" eliminada.`, 'warning'); await cargarEspaciosComunes(); }
+        catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    // ══════════════════════════════════════════════════════════
+    //  CONFIGURACIÓN — Token GitHub (100% Firestore)
+    // ══════════════════════════════════════════════════════════
+
+    async function cargarConfigGithub() {
+        const status = document.getElementById('tokenStatus');
+        try {
+            const snap = await db.collection('config').doc('github').get();
+            if (snap.exists && snap.data().token) {
+                const tok = snap.data().token;
+                document.getElementById('githubToken').value = tok;
+                status.innerHTML = `<span style="color:var(--color-success);">✅ Token configurado (${tok.substring(0,10)}...)</span>`;
+            } else {
+                status.innerHTML = '<span style="color:var(--color-warning);">⚠ Token no configurado aún.</span>';
+            }
+            status.style.display = 'block';
+        } catch(e) {
+            status.innerHTML = `<span style="color:var(--color-danger);">❌ ${e.message}</span>`;
+            status.style.display = 'block';
+        }
+    }
+
+    window.guardarToken = async function() {
+        const token = document.getElementById('githubToken').value.trim();
+        if (!token) { showToast('Ingresá el token.', 'error'); return; }
+        try {
+            await db.collection('config').doc('github').set({ token, actualizadoEn: firebase.firestore.FieldValue.serverTimestamp(), actualizadoPor: user.uid });
+            showToast('Token guardado.', 'success'); cargarConfigGithub();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    window.toggleTokenVisibility = function() {
+        const input = document.getElementById('githubToken');
+        const icon  = document.getElementById('tokenEyeIcon');
+        if (input.type==='password') { input.type='text'; icon.textContent='visibility_off'; }
+        else { input.type='password'; icon.textContent='visibility'; }
+    };
 
     // ── Init ──────────────────────────────────────────────────
     await cargarCabanas();
