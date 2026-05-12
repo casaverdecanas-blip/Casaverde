@@ -538,6 +538,16 @@
 
 </main>
 
+<!-- ── ESPACIOS COMUNES ───────────────────────────────────── -->
+<section id="comunes-section" style="display:none; background:#f7fbf7; padding:64px 24px;">
+    <div style="max-width:1200px; margin:0 auto;">
+        <div class="section-heading">
+            <h2 id="comunes-title">Espacios comunes</h2>
+        </div>
+        <div id="comunes-grid" class="cabins-grid"></div>
+    </div>
+</section>
+
 <!-- ── CONTACTO ───────────────────────────────────────────── -->
 <section class="contacto-section">
     <h2 id="contacto-title">¿Preguntas? Escribinos</h2>
@@ -624,6 +634,7 @@ const i18n = {
     rangoSel:      { es: 'Fechas seleccionadas:', pt: 'Datas selecionadas:', en: 'Selected dates:' },
     consultarWA:   { es: 'Consultar por WhatsApp', pt: 'Consultar pelo WhatsApp', en: 'Ask on WhatsApp' },
     noche:         { es: '/noche', pt: '/noite', en: '/night' },
+    comunesTitle:  { es: 'Espacios comunes', pt: 'Espaços comuns', en: 'Common areas' },
     personas:      { es: 'personas', pt: 'pessoas', en: 'people' },
     camas:         { es: 'camas', pt: 'camas', en: 'beds' },
 };
@@ -646,6 +657,7 @@ function aplicarTextos() {
     document.getElementById('contacto-title').textContent = t('contactoTitle');
     document.getElementById('contacto-body').textContent  = t('contactoBody');
     document.getElementById('btnWATexto').textContent    = t('consultarWA');
+    const _ct = document.getElementById('comunes-title'); if (_ct) _ct.textContent = t('comunesTitle');
 
     document.querySelectorAll('.lang-btn').forEach(btn =>
         btn.classList.toggle('active', btn.dataset.lang === currentLang)
@@ -658,6 +670,7 @@ function changeLanguage(lang) {
     localStorage.setItem('cvLang', lang);
     aplicarTextos();
     renderCabanas();
+    cargarEspaciosComunes();
 }
 
 // ── CARGAR CABAÑAS DESDE FIRESTORE ────────────────────────
@@ -683,11 +696,9 @@ function renderCabanas() {
     }
 
     container.innerHTML = cabanas.map(cab => {
-        const nombre     = escHtml(getText(cab.nombre));
-        const descripcion = getText(cab.descripcion);
-        const descCorta  = descripcion ? escHtml(descripcion.substring(0, 110) + (descripcion.length > 110 ? '…' : '')) : '';
+        const nombre      = escHtml(getText(cab.nombre));
+        const descripcion = getText(cab.descripcion) || '';
 
-        // Fotos pueden ser array de strings o array de objetos {url, ...}
         const fotosRaw = cab.fotos || [];
         const fotos    = fotosRaw.map(f => typeof f === 'string' ? f : f?.url).filter(Boolean);
 
@@ -700,24 +711,40 @@ function renderCabanas() {
             ? `<div class="slider-dots">${fotos.map((_,i)=>`<div class="slider-dot ${i===0?'active':''}"></div>`).join('')}</div>`
             : '';
 
-        // Detalles
         const capBase = cab.capacidad?.base || 2;
-        const capMax  = cab.capacidad?.max || 4;
+        const capMax  = cab.capacidad?.max  || 4;
         const camas   = (cab.camas?.dobles||0) + (cab.camas?.individuales||0);
         const precio  = cab.tarifas?.precioBase;
 
-        // Comodidades (máx 4)
-        const comos = (cab.comodidades || []).slice(0, 4);
+        // CORRECCIÓN: filtrar comodidades que ya aparecen como datos estructurados (personas/camas)
+        // evita mostrar "6-7 huéspedes" y "👥 6-8 personas" al mismo tiempo
+        const DATOS_ESTRUCTURADOS = /hu[eé]spedes?|h[oó]spedes?|guests?|pessoas?|personas?|camas?|beds?|dormit|quartos?|ba[ñn]os?|banheiros?|bathrooms?/i;
+        const comos = (cab.comodidades || []).filter(c => !DATOS_ESTRUCTURADOS.test(c)).slice(0, 5);
+
+        // Descripción expandible para textos largos
+        const LIMITE = 110;
+        const esLarga    = descripcion.length > LIMITE;
+        const descCorta  = esLarga ? escHtml(descripcion.substring(0, LIMITE)) + '…' : escHtml(descripcion);
+        const descFull   = escHtml(descripcion);
+        const cabId      = cab.id;
 
         return `
-            <div class="cabin-card" data-id="${cab.id}">
-                <div class="cabin-slider" id="slider-${cab.id}">
+            <div class="cabin-card" data-id="${cabId}">
+                <div class="cabin-slider" id="slider-${cabId}">
                     ${slides}
                     ${dots}
                 </div>
                 <div class="cabin-body">
                     <h3>${nombre}</h3>
-                    <p>${descCorta}</p>
+                    <p id="desc-text-${cabId}">${descCorta}</p>
+                    ${esLarga ? `
+                        <button onclick="toggleDesc(${cabId})" id="desc-btn-${cabId}"
+                            style="background:none;border:none;color:var(--verde);font-size:12px;
+                                   font-weight:700;cursor:pointer;padding:0;margin-top:-6px;text-align:left;">
+                            Ver más ▾
+                        </button>
+                        <span id="desc-full-${cabId}" style="display:none">${descFull}</span>
+                    ` : ''}
                     <div class="cabin-details">
                         <span class="cabin-detail">👥 ${capBase}–${capMax} ${t('personas')}</span>
                         ${camas ? `<span class="cabin-detail">🛏️ ${camas} ${t('camas')}</span>` : ''}
@@ -733,7 +760,7 @@ function renderCabanas() {
                         </div>
                     ` : ''}
                     <div style="margin-top:4px;">
-                        <button class="btn" onclick="abrirDisponibilidad(${cab.id})">
+                        <button class="btn" onclick="abrirDisponibilidad(${cabId})">
                             📅 ${t('verDisp')}
                         </button>
                     </div>
@@ -742,7 +769,6 @@ function renderCabanas() {
         `;
     }).join('');
 
-    // Iniciar sliders
     cabanas.forEach(cab => {
         if (cab.fotos && cab.fotos.length > 1) iniciarSlider(cab.id, cab.fotos.length);
     });
@@ -760,6 +786,64 @@ function iniciarSlider(id, total) {
         slides[current].classList.add('active');
         if (dots.length) dots[current].classList.add('active');
     }, 4500);
+}
+
+// ── DESCRIPCIÓN EXPANDIBLE ────────────────────────────────
+function toggleDesc(cabId) {
+    const textoEl = document.getElementById(`desc-text-${cabId}`);
+    const fullEl  = document.getElementById(`desc-full-${cabId}`);
+    const btn     = document.getElementById(`desc-btn-${cabId}`);
+    if (btn.textContent.includes('más')) {
+        textoEl.textContent = fullEl.textContent;
+        btn.textContent = 'Ver menos ▴';
+    } else {
+        const full = fullEl.textContent;
+        textoEl.textContent = full.length > 110 ? full.substring(0,110) + '…' : full;
+        btn.textContent = 'Ver más ▾';
+    }
+}
+
+// ── ESPACIOS COMUNES ──────────────────────────────────────
+async function cargarEspaciosComunes() {
+    const section = document.getElementById('comunes-section');
+    if (!section) return;
+    try {
+        const snap = await db.collection('espacios_comunes').orderBy('orden').get();
+        if (snap.empty) { section.style.display = 'none'; return; }
+
+        const categorias = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const lang = currentLang;
+
+        document.getElementById('comunes-grid').innerHTML = categorias.map(cat => {
+            const nombre = escHtml(cat.nombre?.[lang] || cat.nombre?.es || cat.id);
+            const fotos  = (cat.fotos || []).filter(f => f.url);
+            if (!fotos.length) return '';
+
+            const slides = fotos.map((f, i) => `<div class="cabin-slide ${i===0?'active':''}" style="background-image:url('${escHtml(f.url)}')" title="${escHtml(f.titulo||'')}"></div>`).join('');
+            const dots   = fotos.length > 1
+                ? `<div class="slider-dots">${fotos.map((_,i)=>`<div class="slider-dot ${i===0?'active':''}"></div>`).join('')}</div>`
+                : '';
+
+            return `
+            <div class="cabin-card">
+                <div class="cabin-slider" id="slider-comun-${escHtml(cat.id)}" style="height:220px;">
+                    ${slides}${dots}
+                </div>
+                <div class="cabin-body" style="padding:18px 20px;">
+                    <h3 style="font-size:1.2rem;">${nombre}</h3>
+                </div>
+            </div>`;
+        }).filter(Boolean).join('');
+
+        section.style.display = 'block';
+        categorias.forEach(cat => {
+            const fotos = (cat.fotos||[]).filter(f=>f.url);
+            if (fotos.length > 1) iniciarSlider(`comun-${cat.id}`, fotos.length);
+        });
+    } catch(e) {
+        console.warn('cargarEspaciosComunes:', e.message);
+        section.style.display = 'none';
+    }
 }
 
 // ── DISPONIBILIDAD ────────────────────────────────────────
@@ -863,6 +947,7 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
 // ── INIT ──────────────────────────────────────────────────
 aplicarTextos();
 cargarCabanas();
+cargarEspaciosComunes();
 </script>
 </body>
 </html>
