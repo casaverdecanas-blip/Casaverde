@@ -146,6 +146,22 @@
         <div class="log" id="log4" style="display:none;"></div>
     </div>
 
+    <!-- Paso 5 -->
+    <div class="card step-card" id="step5card">
+        <div class="step-header">
+            <h3>📝 Paso 5 — Crear config/site (textos del index)</h3>
+            <span class="badge badge-pend" id="step5badge">Pendiente</span>
+        </div>
+        <p style="font-size:13px;color:#555;margin:10px 0;">
+            Crea el documento <code>config/site</code> en Firestore con los textos por defecto
+            del título y descripción del index público. Permite editarlos desde
+            Contenidos → Configuración sin tocar el código.
+            Si ya existe, lo omite.
+        </p>
+        <button onclick="ejecutarPaso5()">▶ Ejecutar paso 5</button>
+        <div class="log" id="log5" style="display:none;"></div>
+    </div>
+
     <!-- Ejecutar todo -->
     <div class="card" style="background:#f0fff4;border:1.5px solid #27ae60;">
         <h3>🚀 Ejecutar todo en secuencia</h3>
@@ -234,16 +250,18 @@ window.cargarEstado = async function() {
     const el = document.getElementById('estadoPrevio');
     el.innerHTML = '<span style="color:#888;font-size:13px;">Verificando...</span>';
     try {
-        const [cabanasSnap, comunesSnap, configSnap, reservasSnap] = await Promise.all([
+        const [cabanasSnap, comunesSnap, configSnap, siteSnap, reservasSnap] = await Promise.all([
             db.collection('cabanas').get(),
             db.collection('espacios_comunes').get(),
             db.collection('config').doc('github').get(),
+            db.collection('config').doc('site').get(),
             db.collection('reservas').where('origen','==','airbnb').get()
         ]);
 
         const cabanas      = cabanasSnap.docs.map(d => d.data());
         const sinFotoObj   = cabanas.filter(c => (c.fotos||[]).some(f => typeof f === 'string')).length;
         const tokenOk      = configSnap.exists && configSnap.data().token;
+        const siteOk       = siteSnap.exists && siteSnap.data().descTitle;
         const comunesCount = comunesSnap.size;
         const airbnbSinId  = reservasSnap.docs.filter(d => !d.data().airbnb_google_id && !['airbnb_cancelada','anulada','finalizada'].includes(d.data().estado)).length;
 
@@ -265,6 +283,11 @@ window.cargarEstado = async function() {
                     <td>Colección <code>espacios_comunes</code></td>
                     <td>${comunesCount > 0 ? `<span class="badge badge-done">${comunesCount} categoría${comunesCount!==1?'s':''}</span>` : '<span class="badge badge-pend">Vacía</span>'}</td>
                     <td>${comunesCount > 0 ? 'Paso 3 omitirá existentes' : 'Paso 3 creará las 6 categorías'}</td>
+                </tr>
+                <tr>
+                    <td>Documento <code>config/site</code></td>
+        <td>${siteOk ? '<span class="badge badge-done">✅ Configurado</span>' : '<span class="badge badge-pend">Pendiente</span>'}</td>
+                    <td>Textos editables del index</td>
                 </tr>
                 <tr>
                     <td>Reservas Airbnb sin <code>google_id</code></td>
@@ -542,7 +565,8 @@ window.ejecutarTodo = async function() {
         { fn: window.ejecutarPaso1, label: 'Paso 1: Token GitHub' },
         { fn: window.ejecutarPaso2, label: 'Paso 2: Fotos cabañas' },
         { fn: window.ejecutarPaso3, label: 'Paso 3: Espacios comunes' },
-        { fn: window.ejecutarPaso4, label: 'Paso 4: Reservas Airbnb' }
+        { fn: window.ejecutarPaso4, label: 'Paso 4: Reservas Airbnb' },
+        { fn: window.ejecutarPaso5, label: 'Paso 5: config/site' }
     ];
 
     for (const paso of pasos) {
