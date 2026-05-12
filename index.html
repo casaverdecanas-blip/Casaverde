@@ -478,6 +478,79 @@
         #calendar .fc { font-size: 11px; }
         .modal-content { border-radius: 16px; }
     }
+
+        /* ── SLIDER ESPACIOS COMUNES ──────────────────────── */
+        .comunes-section {
+            padding: 0 0 72px;
+            background: var(--fondo);
+        }
+        .comunes-slider-wrap {
+            position: relative;
+            max-width: 860px;
+            margin: 0 auto;
+            border-radius: 28px;
+            overflow: hidden;
+            box-shadow: 0 16px 56px rgba(46,90,49,0.14);
+            background: #111a11;
+        }
+        .comunes-slide {
+            display: none;
+            width: 100%;
+            aspect-ratio: 16/9;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+        .comunes-slide.active { display: block; }
+        .comunes-slide-caption {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            background: linear-gradient(0deg, rgba(0,0,0,.78) 0%, rgba(0,0,0,0) 100%);
+            padding: 48px 28px 22px;
+            color: #fff;
+        }
+        .comunes-slide-caption .cat-label {
+            font-size: 11px; font-weight: 700; letter-spacing: .1em;
+            text-transform: uppercase; color: var(--amarillo);
+            margin-bottom: 5px;
+        }
+        .comunes-slide-caption .foto-titulo {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(1rem, 2.5vw, 1.35rem);
+            font-weight: 700; line-height: 1.25;
+            margin-bottom: 4px;
+        }
+        .comunes-slide-caption .foto-desc {
+            font-size: 13px; opacity: .85; line-height: 1.5;
+            max-width: 520px;
+        }
+        /* Navegación */
+        .comunes-nav {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            background: rgba(255,255,255,.18); border: none; color: #fff;
+            width: 44px; height: 44px; border-radius: 50%; font-size: 20px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: background .2s; backdrop-filter: blur(4px); z-index: 2;
+        }
+        .comunes-nav:hover { background: rgba(255,255,255,.35); }
+        .comunes-nav.prev { left: 14px; }
+        .comunes-nav.next { right: 14px; }
+        .comunes-dots {
+            display: flex; justify-content: center; gap: 7px;
+            padding: 16px 0 4px;
+        }
+        .comunes-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--verde-claro); opacity: .4;
+            cursor: pointer; border: none;
+            transition: opacity .2s, transform .2s;
+        }
+        .comunes-dot.active { opacity: 1; transform: scale(1.3); background: var(--verde); }
+        @media (max-width: 768px) {
+            .comunes-slider-wrap { border-radius: 18px; }
+            .comunes-slide { aspect-ratio: 4/3; }
+            .comunes-nav { width: 36px; height: 36px; font-size: 16px; }
+        }
     </style>
 </head>
 <body>
@@ -539,12 +612,28 @@
 </main>
 
 <!-- ── ESPACIOS COMUNES ───────────────────────────────────── -->
-<section id="comunes-section" style="display:none; background:#f7fbf7; padding:64px 24px;">
-    <div style="max-width:1200px; margin:0 auto;">
-        <div class="section-heading">
+<section id="comunes-section" class="comunes-section" style="display:none;">
+    <div style="max-width:1200px; margin:0 auto; padding:0 24px;">
+
+        <div class="section-heading" style="padding-top:72px;">
             <h2 id="comunes-title">Espacios comunes</h2>
         </div>
-        <div id="comunes-grid" class="cabins-grid"></div>
+
+        <!-- Slider único con todas las fotos de todos los espacios -->
+        <div class="comunes-slider-wrap">
+
+            <!-- Slides — generados por JS -->
+            <div id="comunesSlides"></div>
+
+            <!-- Flechas de navegación -->
+            <button class="comunes-nav prev" onclick="comunesNav(-1)" aria-label="Anterior">&#8249;</button>
+            <button class="comunes-nav next" onclick="comunesNav(+1)" aria-label="Siguiente">&#8250;</button>
+
+        </div>
+
+        <!-- Dots de navegación -->
+        <div class="comunes-dots" id="comunesDots"></div>
+
     </div>
 </section>
 
@@ -644,15 +733,34 @@ function getText(obj) { if (!obj) return ''; return obj[currentLang] || obj.es |
 function escHtml(s) { if (!s) return ''; return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]||m)); }
 function locale() { return currentLang === 'pt' ? 'pt-BR' : currentLang === 'en' ? 'en-US' : 'es-AR'; }
 
-// ── APLICAR TEXTOS ESTÁTICOS ──────────────────────────────
+// ── TEXTOS EDITABLES DESDE FIRESTORE (config/site) ───────
+//  Formato en Firestore:
+//  config/site → { descTitle: {es,pt,en}, descBody: {es,pt,en} }
+//  Si no existe el doc, se usan los textos del i18n como fallback.
+let _siteTexts = null;
+
+function getSiteText(campo) {
+    const val = _siteTexts?.[campo]?.[currentLang] || _siteTexts?.[campo]?.es;
+    return val || t(campo);
+}
+
+async function cargarTextosSitio() {
+    try {
+        const snap = await db.collection('config').doc('site').get();
+        if (snap.exists) _siteTexts = snap.data();
+    } catch(e) { console.warn('cargarTextosSitio:', e.message); }
+    aplicarTextos();
+}
+
+// ── APLICAR TEXTOS ────────────────────────────────────────
 function aplicarTextos() {
     document.getElementById('site-tagline').textContent  = t('tagline');
     document.getElementById('badge-beach').textContent   = t('badgeBeach');
     document.getElementById('badge-pool').textContent    = t('badgePool');
     document.getElementById('badge-park').textContent    = t('badgePark');
     document.getElementById('badge-nat').textContent     = t('badgeNat');
-    document.getElementById('desc-title').textContent    = t('descTitle');
-    document.getElementById('desc-body').textContent     = t('descBody');
+    document.getElementById('desc-title').textContent    = getSiteText('descTitle');
+    document.getElementById('desc-body').textContent     = getSiteText('descBody');
     document.getElementById('cabins-title').textContent  = t('cabinsTitle');
     document.getElementById('contacto-title').textContent = t('contactoTitle');
     document.getElementById('contacto-body').textContent  = t('contactoBody');
@@ -668,9 +776,9 @@ function aplicarTextos() {
 function changeLanguage(lang) {
     currentLang = lang;
     localStorage.setItem('cvLang', lang);
-    aplicarTextos();
+    aplicarTextos();  // textos ya en _siteTexts, solo re-aplica idioma
     renderCabanas();
-    cargarEspaciosComunes();
+    cargarEspaciosComunes();  // re-renderiza con nuevo idioma
 }
 
 // ── CARGAR CABAÑAS DESDE FIRESTORE ────────────────────────
@@ -803,7 +911,11 @@ function toggleDesc(cabId) {
     }
 }
 
-// ── ESPACIOS COMUNES ──────────────────────────────────────
+// ── ESPACIOS COMUNES — slider único ──────────────────────
+let _comunesSlides = [];   // array plano de todas las fotos con metadata
+let _comunesIdx    = 0;
+let _comunesTimer  = null;
+
 async function cargarEspaciosComunes() {
     const section = document.getElementById('comunes-section');
     if (!section) return;
@@ -811,38 +923,69 @@ async function cargarEspaciosComunes() {
         const snap = await db.collection('espacios_comunes').orderBy('orden').get();
         if (snap.empty) { section.style.display = 'none'; return; }
 
-        const categorias = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         const lang = currentLang;
 
-        document.getElementById('comunes-grid').innerHTML = categorias.map(cat => {
-            const nombre = escHtml(cat.nombre?.[lang] || cat.nombre?.es || cat.id);
-            const fotos  = (cat.fotos || []).filter(f => f.url);
-            if (!fotos.length) return '';
-
-            const slides = fotos.map((f, i) => `<div class="cabin-slide ${i===0?'active':''}" style="background-image:url('${escHtml(f.url)}')" title="${escHtml(f.titulo||'')}"></div>`).join('');
-            const dots   = fotos.length > 1
-                ? `<div class="slider-dots">${fotos.map((_,i)=>`<div class="slider-dot ${i===0?'active':''}"></div>`).join('')}</div>`
-                : '';
-
-            return `
-            <div class="cabin-card">
-                <div class="cabin-slider" id="slider-comun-${escHtml(cat.id)}" style="height:220px;">
-                    ${slides}${dots}
-                </div>
-                <div class="cabin-body" style="padding:18px 20px;">
-                    <h3 style="font-size:1.2rem;">${nombre}</h3>
-                </div>
-            </div>`;
-        }).filter(Boolean).join('');
-
-        section.style.display = 'block';
-        categorias.forEach(cat => {
-            const fotos = (cat.fotos||[]).filter(f=>f.url);
-            if (fotos.length > 1) iniciarSlider(`comun-${cat.id}`, fotos.length);
+        // Armar array plano con todas las fotos de todas las categorías
+        _comunesSlides = [];
+        snap.docs.forEach(doc => {
+            const cat   = doc.data();
+            const nombre = cat.nombre?.[lang] || cat.nombre?.es || doc.id;
+            (cat.fotos || []).filter(f => f.url).forEach(f => {
+                _comunesSlides.push({
+                    url:       f.url,
+                    titulo:    f.titulo    || nombre,
+                    desc:      f.descripcion || '',
+                    catNombre: nombre
+                });
+            });
         });
+
+        if (!_comunesSlides.length) { section.style.display = 'none'; return; }
+
+        renderComunesSlider(0);
+        section.style.display = 'block';
+        _iniciarAutoComunesSlider();
+
     } catch(e) {
         console.warn('cargarEspaciosComunes:', e.message);
         section.style.display = 'none';
+    }
+}
+
+function renderComunesSlider(idx) {
+    _comunesIdx = ((idx % _comunesSlides.length) + _comunesSlides.length) % _comunesSlides.length;
+    const total = _comunesSlides.length;
+
+    // Slides
+    document.getElementById('comunesSlides').innerHTML = _comunesSlides.map((s, i) => `
+        <div class="comunes-slide ${i === _comunesIdx ? 'active' : ''}"
+             style="background-image:url('${escHtml(s.url)}')">
+            <div class="comunes-slide-caption">
+                <div class="cat-label">${escHtml(s.catNombre)}</div>
+                ${s.titulo ? `<div class="foto-titulo">${escHtml(s.titulo)}</div>` : ''}
+                ${s.desc   ? `<div class="foto-desc">${escHtml(s.desc)}</div>`    : ''}
+            </div>
+        </div>`).join('');
+
+    // Dots — máx 12 visibles para no saturar
+    const maxDots = Math.min(total, 12);
+    document.getElementById('comunesDots').innerHTML = Array.from({length: maxDots}, (_, i) => {
+        const dotIdx = Math.round(i * (total - 1) / Math.max(maxDots - 1, 1));
+        return `<button class="comunes-dot ${i === Math.round(_comunesIdx * (maxDots-1) / Math.max(total-1,1)) ? 'active' : ''}"
+                    onclick="comunesNav(${dotIdx - _comunesIdx})" aria-label="Foto ${dotIdx+1}"></button>`;
+    }).join('');
+}
+
+window.comunesNav = function(delta) {
+    clearInterval(_comunesTimer);
+    renderComunesSlider(_comunesIdx + delta);
+    _iniciarAutoComunesSlider();
+};
+
+function _iniciarAutoComunesSlider() {
+    clearInterval(_comunesTimer);
+    if (_comunesSlides.length > 1) {
+        _comunesTimer = setInterval(() => renderComunesSlider(_comunesIdx + 1), 5000);
     }
 }
 
@@ -945,7 +1088,7 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
 });
 
 // ── INIT ──────────────────────────────────────────────────
-aplicarTextos();
+cargarTextosSitio();  // carga desc editable desde Firestore, luego llama aplicarTextos()
 cargarCabanas();
 cargarEspaciosComunes();
 </script>
