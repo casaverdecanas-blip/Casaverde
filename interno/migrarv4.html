@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Migración v4 · Casa Verde Canas</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f4; color: #222; padding: 24px; }
+        h1   { color: #2E5A31; margin-bottom: 4px; font-size: 1.4rem; }
+        .sub { color: #666; font-size: 13px; margin-bottom: 28px; }
+        .card { background: #fff; border-radius: 14px; padding: 22px; margin-bottom: 18px; box-shadow: 0 2px 8px rgba(0,0,0,.07); }
+        .card h3 { color: #2E5A31; margin-bottom: 14px; font-size: .95rem; display: flex; align-items: center; gap: 8px; }
+        label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 5px; color: #333; }
+        input { width: 100%; padding: 9px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; margin-bottom: 10px; }
+        button { padding: 11px 24px; background: #2E5A31; color: #fff; border: none; border-radius: 10px; font-weight: 700; font-size: 14px; cursor: pointer; }
+        button:hover { background: #1a3a1c; }
+        button:disabled { background: #aaa; cursor: not-allowed; }
+        .btn-danger { background: #c0392b; }
+        .btn-danger:hover { background: #922b21; }
+        .btn-sec { background: #eee; color: #333; }
+        .btn-sec:hover { background: #ddd; }
+        .log  { background: #1a2a1a; color: #74E3AE; font-family: monospace; font-size: 12px; border-radius: 10px; padding: 16px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; margin-top: 14px; line-height: 1.6; }
+        .ok   { color: #74E3AE; }
+        .warn { color: #f39c12; }
+        .err  { color: #e74c3c; }
+        .skip { color: #888; }
+        .title{ color: #fff; font-weight: 700; }
+        .alert { padding: 12px 16px; border-radius: 10px; margin-bottom: 14px; font-size: 13px; line-height: 1.5; }
+        .alert-warn { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+        .alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .alert-ok   { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .step-card { border-left: 4px solid #2E5A31; }
+        .step-card.done { border-color: #27ae60; background: #f0fff4; }
+        .step-card.error { border-color: #c0392b; background: #fff5f5; }
+        .step-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+        .badge-pend { background: #fff3cd; color: #856404; }
+        .badge-done { background: #d4edda; color: #155724; }
+        .badge-skip { background: #e2e3e5; color: #555; }
+        .badge-err  { background: #f8d7da; color: #721c24; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+        th { background: #f0f9f0; text-align: left; padding: 7px 10px; color: #2E5A31; }
+        td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; }
+        code { background: #f0f0f0; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+        @media (max-width: 600px) { body { padding: 14px; } }
+    </style>
+</head>
+<body>
+
+<h1>🌿 Migración v4 — Casa Verde Canas</h1>
+<p class="sub">Ejecutar una sola vez después de subir los archivos nuevos · <span id="fecha"></span></p>
+
+<div class="alert alert-warn">
+    ⚠️ <strong>Leer antes de ejecutar.</strong> Este script realiza cambios en Firestore.
+    Cada paso es idempotente — si se corre dos veces no genera duplicados — pero igual se recomienda ejecutarlo una sola vez.
+</div>
+
+<!-- LOGIN -->
+<div class="card" id="loginCard">
+    <h3>🔐 Autenticación</h3>
+    <label>Email admin</label>
+    <input type="email" id="loginEmail" placeholder="admin@casaverdecanas.com.br">
+    <label>Contraseña</label>
+    <input type="password" id="loginPass" placeholder="••••••••">
+    <button onclick="doLogin()">Ingresar</button>
+    <div id="loginErr" style="color:#c0392b;font-size:13px;margin-top:8px;"></div>
+</div>
+
+<!-- PANEL PRINCIPAL (oculto hasta login) -->
+<div id="mainPanel" style="display:none;">
+
+    <div class="alert alert-info">
+        ℹ️ La migración tiene <strong>4 pasos independientes</strong>. Podés ejecutarlos todos juntos
+        con "Ejecutar todo" o uno por uno si preferís verificar entre pasos.
+    </div>
+
+    <!-- Resumen previo -->
+    <div class="card">
+        <h3>📊 Estado actual de Firestore</h3>
+        <div id="estadoPrevio">
+            <button class="btn-sec" onclick="cargarEstado()" style="padding:8px 16px;font-size:13px;">🔍 Verificar estado</button>
+        </div>
+    </div>
+
+    <!-- Paso 1 -->
+    <div class="card step-card" id="step1card">
+        <div class="step-header">
+            <h3>📁 Paso 1 — Token de GitHub en Firestore</h3>
+            <span class="badge badge-pend" id="step1badge">Pendiente</span>
+        </div>
+        <p style="font-size:13px;color:#555;margin:10px 0;">
+            Crea el documento <code>config/github</code> en Firestore con el token que ya guardaste
+            desde Contenidos → Configuración. Si ya existe, lo verifica y muestra el estado.
+        </p>
+        <button onclick="ejecutarPaso1()">▶ Ejecutar paso 1</button>
+        <div class="log" id="log1" style="display:none;"></div>
+    </div>
+
+    <!-- Paso 2 -->
+    <div class="card step-card" id="step2card">
+        <div class="step-header">
+            <h3>🏠 Paso 2 — Normalizar fotos de cabañas</h3>
+            <span class="badge badge-pend" id="step2badge">Pendiente</span>
+        </div>
+        <p style="font-size:13px;color:#555;margin:10px 0;">
+            Convierte fotos guardadas como strings simples (<code>"https://..."</code>) al formato
+            nuevo (<code>{ url, titulo, descripcion, orden }</code>). No toca fotos que ya están
+            en el formato nuevo. Elimina también el campo obsoleto <code>categoria</code> de cada foto.
+        </p>
+        <button onclick="ejecutarPaso2()">▶ Ejecutar paso 2</button>
+        <div class="log" id="log2" style="display:none;"></div>
+    </div>
+
+    <!-- Paso 3 -->
+    <div class="card step-card" id="step3card">
+        <div class="step-header">
+            <h3>🌿 Paso 3 — Crear colección espacios_comunes</h3>
+            <span class="badge badge-pend" id="step3badge">Pendiente</span>
+        </div>
+        <p style="font-size:13px;color:#555;margin:10px 0;">
+            Crea los documentos de espacios comunes en Firestore basándose en las fotos
+            que ya existen en GitHub. Si una categoría ya existe, la omite sin tocarla.
+            Podés editar los nombres y agregar fotos después desde Contenidos → Espacios comunes.
+        </p>
+        <div id="step3preview" style="display:none; margin:10px 0;"></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button onclick="ejecutarPaso3()">▶ Ejecutar paso 3</button>
+            <button class="btn-sec" onclick="previewPaso3()" style="padding:11px 18px;font-size:13px;">🔍 Ver previsualización</button>
+        </div>
+        <div class="log" id="log3" style="display:none;"></div>
+    </div>
+
+    <!-- Paso 4 -->
+    <div class="card step-card" id="step4card">
+        <div class="step-header">
+            <h3>🧹 Paso 4 — Verificar integridad de reservas Airbnb</h3>
+            <span class="badge badge-pend" id="step4badge">Pendiente</span>
+        </div>
+        <p style="font-size:13px;color:#555;margin:10px 0;">
+            Lista las reservas Airbnb activas que no tienen <code>airbnb_google_id</code>.
+            No las modifica — solo las lista para que puedas revisarlas manualmente en Reservas
+            y anular las que ya no estén activas en Airbnb.
+        </p>
+        <button onclick="ejecutarPaso4()">▶ Ejecutar paso 4</button>
+        <div class="log" id="log4" style="display:none;"></div>
+    </div>
+
+    <!-- Ejecutar todo -->
+    <div class="card" style="background:#f0fff4;border:1.5px solid #27ae60;">
+        <h3>🚀 Ejecutar todo en secuencia</h3>
+        <p style="font-size:13px;color:#555;margin:10px 0 14px;">Ejecuta los 4 pasos en orden. Podés ver el progreso en cada log.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button onclick="ejecutarTodo()" id="btnTodo">🚀 Ejecutar todo</button>
+            <a href="cabanas-admin.html" style="padding:11px 18px;background:#eee;color:#333;border-radius:10px;font-weight:600;font-size:14px;text-decoration:none;">
+                → Ir a Contenidos
+            </a>
+        </div>
+        <div id="logTodo" style="margin-top:12px;font-size:13px;color:#2E5A31;font-weight:600;"></div>
+    </div>
+
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script>
+document.getElementById('fecha').textContent = new Date().toLocaleDateString('es-AR', { day:'2-digit', month:'long', year:'numeric' });
+
+const firebaseConfig = {
+    apiKey:     'AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4',
+    authDomain: 'casaverdecanas-199.firebaseapp.com',
+    projectId:  'casaverdecanas-199'
+};
+firebase.initializeApp(firebaseConfig);
+const db   = firebase.firestore();
+const auth = firebase.auth();
+let currentUser = null;
+
+// ── Utilidades de log ──────────────────────────────────────
+function log(logId, msg, cls='') {
+    const el = document.getElementById(logId);
+    el.style.display = 'block';
+    el.innerHTML += `<span class="${cls}">${msg}</span>\n`;
+    el.scrollTop = el.scrollHeight;
+}
+function logClear(logId) {
+    const el = document.getElementById(logId);
+    el.innerHTML = '';
+    el.style.display = 'none';
+}
+function setBadge(stepN, estado) {
+    const el   = document.getElementById(`step${stepN}badge`);
+    const card = document.getElementById(`step${stepN}card`);
+    const map  = {
+        pendiente: ['badge-pend','Pendiente',    ''],
+        ok:        ['badge-done','✅ Completado', 'done'],
+        skip:      ['badge-skip','⏭ Omitido',    ''],
+        error:     ['badge-err', '❌ Error',      'error'],
+        corriendo: ['badge-pend','⏳ Ejecutando...','']
+    };
+    const [cls, txt, cardCls] = map[estado] || map.pendiente;
+    el.className = `badge ${cls}`;
+    el.textContent = txt;
+    card.className = 'card step-card' + (cardCls ? ' ' + cardCls : '');
+}
+
+// ── Login ──────────────────────────────────────────────────
+window.doLogin = async function() {
+    const email = document.getElementById('loginEmail').value;
+    const pass  = document.getElementById('loginPass').value;
+    const errDiv = document.getElementById('loginErr');
+    errDiv.textContent = '';
+    try {
+        const cred    = await auth.signInWithEmailAndPassword(email, pass);
+        const userDoc = await db.collection('usuarios').doc(cred.user.uid).get();
+        if (!userDoc.exists || userDoc.data().rol !== 'admin') {
+            await auth.signOut();
+            errDiv.textContent = '❌ No tenés permisos de administrador.';
+            return;
+        }
+        currentUser = cred.user;
+        document.getElementById('loginCard').style.display  = 'none';
+        document.getElementById('mainPanel').style.display = 'block';
+        cargarEstado();
+    } catch(e) {
+        errDiv.textContent = '❌ ' + (e.message || 'Error de autenticación');
+    }
+};
+document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key==='Enter') window.doLogin(); });
+
+// ── Estado previo ──────────────────────────────────────────
+window.cargarEstado = async function() {
+    const el = document.getElementById('estadoPrevio');
+    el.innerHTML = '<span style="color:#888;font-size:13px;">Verificando...</span>';
+    try {
+        const [cabanasSnap, comunesSnap, configSnap, reservasSnap] = await Promise.all([
+            db.collection('cabanas').get(),
+            db.collection('espacios_comunes').get(),
+            db.collection('config').doc('github').get(),
+            db.collection('reservas').where('origen','==','airbnb').get()
+        ]);
+
+        const cabanas      = cabanasSnap.docs.map(d => d.data());
+        const sinFotoObj   = cabanas.filter(c => (c.fotos||[]).some(f => typeof f === 'string')).length;
+        const tokenOk      = configSnap.exists && configSnap.data().token;
+        const comunesCount = comunesSnap.size;
+        const airbnbSinId  = reservasSnap.docs.filter(d => !d.data().airbnb_google_id && !['airbnb_cancelada','anulada','finalizada'].includes(d.data().estado)).length;
+
+        el.innerHTML = `
+        <table>
+            <thead><tr><th>Verificación</th><th>Estado</th><th>Acción</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td>Token GitHub en <code>config/github</code></td>
+                    <td>${tokenOk ? '<span class="badge badge-done">✅ Configurado</span>' : '<span class="badge badge-err">❌ Falta</span>'}</td>
+                    <td>${tokenOk ? 'Paso 1 se omitirá' : 'Configurar en Contenidos → Config primero'}</td>
+                </tr>
+                <tr>
+                    <td>Fotos de cabañas en formato nuevo</td>
+                    <td>${sinFotoObj === 0 ? '<span class="badge badge-done">✅ OK</span>' : `<span class="badge badge-pend">${sinFotoObj} cabaña${sinFotoObj!==1?'s':''} con formato viejo</span>`}</td>
+                    <td>${sinFotoObj === 0 ? 'Paso 2 verificará sin cambios' : 'Paso 2 normalizará'}</td>
+                </tr>
+                <tr>
+                    <td>Colección <code>espacios_comunes</code></td>
+                    <td>${comunesCount > 0 ? `<span class="badge badge-done">${comunesCount} categoría${comunesCount!==1?'s':''}</span>` : '<span class="badge badge-pend">Vacía</span>'}</td>
+                    <td>${comunesCount > 0 ? 'Paso 3 omitirá existentes' : 'Paso 3 creará las 6 categorías'}</td>
+                </tr>
+                <tr>
+                    <td>Reservas Airbnb sin <code>google_id</code></td>
+                    <td>${airbnbSinId === 0 ? '<span class="badge badge-done">✅ Ninguna</span>' : `<span class="badge badge-err">${airbnbSinId} reserva${airbnbSinId!==1?'s':''}</span>`}</td>
+                    <td>${airbnbSinId === 0 ? 'Paso 4 confirmará' : 'Paso 4 listará para revisión manual'}</td>
+                </tr>
+            </tbody>
+        </table>`;
+    } catch(e) {
+        el.innerHTML = `<span style="color:#c0392b;font-size:13px;">❌ Error verificando: ${e.message}</span>`;
+    }
+};
+
+// ══════════════════════════════════════════════════════════
+//  PASO 1 — Token GitHub en Firestore
+// ══════════════════════════════════════════════════════════
+window.ejecutarPaso1 = async function() {
+    logClear('log1'); setBadge(1,'corriendo');
+    log('log1', '── Paso 1: Token GitHub ──────────────────', 'title');
+    try {
+        const snap = await db.collection('config').doc('github').get();
+        if (snap.exists && snap.data().token) {
+            const tok = snap.data().token;
+            log('log1', `✅ Token ya configurado: ${tok.substring(0,10)}...`, 'ok');
+            log('log1', '   El token fue guardado desde Contenidos → Configuración.', 'skip');
+            setBadge(1,'ok');
+        } else {
+            log('log1', '❌ No se encontró token en config/github.', 'err');
+            log('log1', '   Primero guardalo desde Contenidos → pestaña Configuración.', 'warn');
+            setBadge(1,'error');
+        }
+    } catch(e) {
+        log('log1', '❌ Error: ' + e.message, 'err');
+        setBadge(1,'error');
+    }
+};
+
+// ══════════════════════════════════════════════════════════
+//  PASO 2 — Normalizar fotos de cabañas
+// ══════════════════════════════════════════════════════════
+window.ejecutarPaso2 = async function() {
+    logClear('log2'); setBadge(2,'corriendo');
+    log('log2', '── Paso 2: Normalizar fotos de cabañas ──', 'title');
+
+    try {
+        const snap   = await db.collection('cabanas').get();
+        let actualizadas = 0, yaOk = 0, sinFotos = 0;
+
+        for (const doc of snap.docs) {
+            const c      = doc.data();
+            const nombre = c.nombre?.es || doc.id;
+            const fotos  = c.fotos || [];
+
+            if (!fotos.length) {
+                log('log2', `   ↩ ${nombre} — sin fotos, omitida.`, 'skip');
+                sinFotos++;
+                continue;
+            }
+
+            // Verificar si ya están en formato nuevo
+            const yaFormato = fotos.every(f => typeof f === 'object' && f.url && !f.hasOwnProperty('categoria'));
+            if (yaFormato) {
+                log('log2', `   ✓ ${nombre} — fotos ya en formato nuevo (${fotos.length}).`, 'skip');
+                yaOk++;
+                continue;
+            }
+
+            // Normalizar: strings → objeto, limpiar campo 'categoria' obsoleto
+            const fotasNormalizadas = fotos.map((f, i) => {
+                if (typeof f === 'string') {
+                    return { url: f, titulo: '', descripcion: '', orden: i };
+                }
+                // Ya es objeto — asegurar campos y eliminar 'categoria'
+                const { categoria: _drop, ...resto } = f;
+                return {
+                    url:         resto.url         || '',
+                    titulo:      resto.titulo      || '',
+                    descripcion: resto.descripcion || '',
+                    orden:       resto.orden       ?? i
+                };
+            }).filter(f => f.url);
+
+            await db.collection('cabanas').doc(doc.id).update({ fotos: fotasNormalizadas });
+            log('log2', `   ✅ ${nombre} — ${fotos.length} fotos normalizadas.`, 'ok');
+            actualizadas++;
+        }
+
+        log('log2', '');
+        log('log2', `────────────────────────────────────────`);
+        log('log2', `✅ Actualizadas: ${actualizadas}`, 'ok');
+        log('log2', `⏭  Ya en formato nuevo: ${yaOk}`, 'skip');
+        log('log2', `   Sin fotos: ${sinFotos}`, 'skip');
+        setBadge(2, 'ok');
+    } catch(e) {
+        log('log2', '❌ Error: ' + e.message, 'err');
+        setBadge(2, 'error');
+    }
+};
+
+// ══════════════════════════════════════════════════════════
+//  PASO 3 — Crear espacios_comunes
+// ══════════════════════════════════════════════════════════
+
+const BASE_URL = 'https://casaverdecanas.com.br/img/common';
+
+const CATEGORIAS_INICIALES = [
+    {
+        slug:   'piscina',
+        orden:  1,
+        nombre: { es: 'Piscina', pt: 'Piscina', en: 'Pool' },
+        fotos: [
+            { url: `${BASE_URL}/piscina/common_piscina_1.jpg`, titulo: 'Piscina', descripcion: '' },
+            { url: `${BASE_URL}/piscina/common_piscina_2.jpg`, titulo: 'Piscina', descripcion: '' },
+            { url: `${BASE_URL}/piscina/common_piscina_3.jpg`, titulo: 'Piscina', descripcion: '' }
+        ]
+    },
+    {
+        slug:   'entrada',
+        orden:  2,
+        nombre: { es: 'Entrada', pt: 'Entrada', en: 'Entrance' },
+        fotos: [
+            { url: `${BASE_URL}/entrada/common_entrada_1.jpg`, titulo: 'Entrada', descripcion: '' },
+            { url: `${BASE_URL}/entrada/common_entrada_2.jpg`, titulo: 'Entrada', descripcion: '' },
+            { url: `${BASE_URL}/entrada/common_entrada_3.jpg`, titulo: 'Entrada', descripcion: '' },
+            { url: `${BASE_URL}/entrada/common_entrada_4.jpg`, titulo: 'Entrada', descripcion: '' }
+        ]
+    },
+    {
+        slug:   'barbacoa',
+        orden:  3,
+        nombre: { es: 'Parrilla / Barbacoa', pt: 'Churrasqueira', en: 'BBQ / Grill' },
+        fotos: [
+            { url: `${BASE_URL}/barbacoa/common_barbacoa_1.jpg`, titulo: 'Parrilla', descripcion: '' },
+            { url: `${BASE_URL}/barbacoa/common_barbacoa_2.jpg`, titulo: 'Parrilla', descripcion: '' }
+        ]
+    },
+    {
+        slug:   'living',
+        orden:  4,
+        nombre: { es: 'Salón común', pt: 'Sala comum', en: 'Common room' },
+        fotos: [
+            { url: `${BASE_URL}/living/common_living_1.jpg`, titulo: 'Salón común', descripcion: '' }
+        ]
+    },
+    {
+        slug:   'hamacas',
+        orden:  5,
+        nombre: { es: 'Rincón de hamacas', pt: 'Área de redes', en: 'Hammock area' },
+        fotos: [
+            { url: `${BASE_URL}/hamacas/common_hamacas_1.jpg`, titulo: 'Hamacas', descripcion: '' }
+        ]
+    },
+    {
+        slug:   'juegos',
+        orden:  6,
+        nombre: { es: 'Área de juegos', pt: 'Área de jogos', en: 'Play area' },
+        fotos: [
+            { url: `${BASE_URL}/juegos/common_juegos_1.jpg`, titulo: 'Juegos', descripcion: '' },
+            { url: `${BASE_URL}/juegos/common_juegos_2.jpg`, titulo: 'Juegos', descripcion: '' }
+        ]
+    }
+];
+
+window.previewPaso3 = function() {
+    const prev = document.getElementById('step3preview');
+    prev.style.display = 'block';
+    prev.innerHTML = `
+    <table>
+        <thead><tr><th>Slug / Carpeta</th><th>Nombre ES</th><th>Fotos</th></tr></thead>
+        <tbody>
+            ${CATEGORIAS_INICIALES.map(c => `
+                <tr>
+                    <td><code>img/common/${c.slug}/</code></td>
+                    <td>${c.nombre.es}</td>
+                    <td>${c.fotos.length}</td>
+                </tr>`).join('')}
+        </tbody>
+    </table>
+    <p style="font-size:12px;color:#666;margin-top:8px;">Podés editar nombres y agregar fotos desde Contenidos → Espacios comunes después de la migración.</p>`;
+};
+
+window.ejecutarPaso3 = async function() {
+    logClear('log3'); setBadge(3,'corriendo');
+    log('log3', '── Paso 3: Espacios comunes ──────────────', 'title');
+
+    let creadas = 0, omitidas = 0, errores = 0;
+
+    for (const cat of CATEGORIAS_INICIALES) {
+        log('log3', `📁 ${cat.slug} — ${cat.nombre.es}`);
+        try {
+            const docRef  = db.collection('espacios_comunes').doc(cat.slug);
+            const docSnap = await docRef.get();
+            if (docSnap.exists) {
+                log('log3', `   ⏭ Ya existe. Omitido.`, 'skip');
+                omitidas++;
+                continue;
+            }
+            await docRef.set({
+                slug:      cat.slug,
+                nombre:    cat.nombre,
+                orden:     cat.orden,
+                fotos:     cat.fotos,
+                creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
+                migrado:   true
+            });
+            log('log3', `   ✅ Creado con ${cat.fotos.length} fotos.`, 'ok');
+            creadas++;
+        } catch(e) {
+            log('log3', `   ❌ Error: ${e.message}`, 'err');
+            errores++;
+        }
+    }
+
+    log('log3', '');
+    log('log3', `────────────────────────────────────────`);
+    log('log3', `✅ Creadas:  ${creadas}`, creadas > 0 ? 'ok' : 'skip');
+    log('log3', `⏭  Omitidas: ${omitidas}`, 'skip');
+    log('log3', `❌ Errores:  ${errores}`, errores > 0 ? 'err' : 'skip');
+
+    setBadge(3, errores > 0 ? 'error' : 'ok');
+};
+
+// ══════════════════════════════════════════════════════════
+//  PASO 4 — Reservas Airbnb sin google_id
+// ══════════════════════════════════════════════════════════
+window.ejecutarPaso4 = async function() {
+    logClear('log4'); setBadge(4,'corriendo');
+    log('log4', '── Paso 4: Reservas Airbnb sin google_id ─', 'title');
+
+    try {
+        const snap = await db.collection('reservas').where('origen','==','airbnb').get();
+        const todas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const sinId = todas.filter(r =>
+            !r.airbnb_google_id &&
+            !['airbnb_cancelada','anulada','finalizada'].includes(r.estado)
+        );
+
+        log('log4', `   Total reservas Airbnb: ${todas.length}`);
+        log('log4', `   Con google_id: ${todas.length - sinId.length}`, 'ok');
+        log('log4', `   Sin google_id (activas): ${sinId.length}`, sinId.length > 0 ? 'warn' : 'ok');
+
+        if (sinId.length === 0) {
+            log('log4', '');
+            log('log4', '✅ Todas las reservas Airbnb activas tienen google_id. Todo OK.', 'ok');
+            setBadge(4, 'ok');
+            return;
+        }
+
+        log('log4', '');
+        log('log4', '⚠ Reservas a revisar manualmente:', 'warn');
+        sinId.forEach(r => {
+            const ci = r.checkIn?.toDate?.()?.toLocaleDateString('es-AR') || r.checkIn || '?';
+            const co = r.checkOut?.toDate?.()?.toLocaleDateString('es-AR') || r.checkOut || '?';
+            log('log4', `   • ${r.nombre || 'Sin nombre'} · Cabaña ${r.caba} · ${ci} → ${co} · Estado: ${r.estado}`, 'warn');
+        });
+        log('log4', '');
+        log('log4', '   → Revisalas en Reservas y anulalas si ya no están activas en Airbnb.', 'warn');
+        log('log4', '   → El sync automático no puede verificar cancelaciones sin google_id.', 'warn');
+        setBadge(4, sinId.length > 0 ? 'skip' : 'ok');
+    } catch(e) {
+        log('log4', '❌ Error: ' + e.message, 'err');
+        setBadge(4, 'error');
+    }
+};
+
+// ══════════════════════════════════════════════════════════
+//  EJECUTAR TODO
+// ══════════════════════════════════════════════════════════
+window.ejecutarTodo = async function() {
+    const btn    = document.getElementById('btnTodo');
+    const status = document.getElementById('logTodo');
+    btn.disabled = true;
+
+    const pasos = [
+        { fn: window.ejecutarPaso1, label: 'Paso 1: Token GitHub' },
+        { fn: window.ejecutarPaso2, label: 'Paso 2: Fotos cabañas' },
+        { fn: window.ejecutarPaso3, label: 'Paso 3: Espacios comunes' },
+        { fn: window.ejecutarPaso4, label: 'Paso 4: Reservas Airbnb' }
+    ];
+
+    for (const paso of pasos) {
+        status.textContent = `⏳ Ejecutando ${paso.label}...`;
+        await paso.fn();
+        await new Promise(r => setTimeout(r, 300));
+    }
+
+    status.textContent = '✅ Todos los pasos completados. Revisá los logs individuales.';
+    btn.disabled = false;
+    await cargarEstado();
+};
+</script>
+</body>
+</html>
