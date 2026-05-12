@@ -427,6 +427,13 @@
                 <div class="form-group"><label class="form-label">🇧🇷 Português</label><input id="catNombrePt" class="form-control" placeholder="Piscina"></div>
                 <div class="form-group"><label class="form-label">🇺🇸 English</label><input id="catNombreEn" class="form-control" placeholder="Pool"></div>
             </div>
+
+            <div class="sec-label"><span class="material-icons">notes</span> Descripción del área <span style="font-weight:400;text-transform:none;font-size:11px;">(aparece bajo cada foto en el sitio)</span></div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">🇪🇸 Español</label><textarea id="catDescEs" class="form-control" rows="2" placeholder="Nuestra piscina está disponible todos los días..."></textarea></div>
+                <div class="form-group"><label class="form-label">🇧🇷 Português</label><textarea id="catDescPt" class="form-control" rows="2" placeholder="Nossa piscina está disponível todos os dias..."></textarea></div>
+                <div class="form-group"><label class="form-label">🇺🇸 English</label><textarea id="catDescEn" class="form-control" rows="2" placeholder="Our pool is available every day..."></textarea></div>
+            </div>
             <div class="sec-label"><span class="material-icons">photo_library</span> Fotos</div>
             <div id="comunesCatFotos" class="fotos-grid" style="margin-bottom:var(--space-3);"></div>
             <button class="btn btn-secondary" onclick="agregarFotoComun()" style="margin-bottom:var(--space-4);"><span class="material-icons">add_photo_alternate</span> Agregar foto</button>
@@ -441,6 +448,43 @@
     <div id="configPanel" style="display:none;">
         <div class="card">
             <div class="card__header"><h2 class="card__title"><span class="material-icons">settings</span> Configuración</h2></div>
+
+            <!-- Textos editables del sitio público -->
+            <div class="sec-label"><span class="material-icons">text_fields</span> Presentación del sitio público</div>
+            <p class="form-hint" style="margin-bottom:var(--space-4);">El título y texto principal que aparecen en la página de inicio debajo del hero.</p>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">🇪🇸 Título</label>
+                    <input id="siteTituloEs" class="form-control" placeholder="Un lugar para descansar y conectar">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">🇧🇷 Título</label>
+                    <input id="siteTituloPt" class="form-control" placeholder="Um lugar para descansar e conectar">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">🇺🇸 Title</label>
+                    <input id="siteTituloEn" class="form-control" placeholder="A place to rest and connect">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">🇪🇸 Descripción</label>
+                    <textarea id="siteDescEs" class="form-control" rows="3" placeholder="Casa Verde Canas te ofrece..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">🇧🇷 Descrição</label>
+                    <textarea id="siteDescPt" class="form-control" rows="3" placeholder="Casa Verde Canas oferece..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">🇺🇸 Description</label>
+                    <textarea id="siteDescEn" class="form-control" rows="3" placeholder="Casa Verde Canas offers..."></textarea>
+                </div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="guardarTextosSitio()" style="margin-bottom:var(--space-6);">
+                <span class="material-icons">save</span> Guardar presentación
+            </button>
+
             <div class="sec-label"><span class="material-icons">key</span> Token de GitHub</div>
             <div style="background:var(--color-surface-2);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-4);margin-bottom:var(--space-4);">
                 <div class="form-group" style="margin-bottom:var(--space-2);">
@@ -488,7 +532,7 @@
             document.getElementById('configPanel').style.display  = btn.dataset.tab === 'config'  ? 'block' : 'none';
             if (btn.dataset.tab === 'tarifas') cargarSelectTarifas();
             if (btn.dataset.tab === 'comunes') cargarEspaciosComunes();
-            if (btn.dataset.tab === 'config')  cargarConfigGithub();
+            if (btn.dataset.tab === 'config')  { cargarConfigGithub(); cargarTextosSitio(); }
         });
     });
 
@@ -994,7 +1038,7 @@
 
     window.nuevaCatComun = function() {
         document.getElementById('comunesCatFormTitle').innerHTML = '<span class="material-icons">add_circle</span> Nueva categoría';
-        ['comunesCatId','catSlug','catNombreEs','catNombrePt','catNombreEn'].forEach(id => document.getElementById(id).value = '');
+        ['comunesCatId','catSlug','catNombreEs','catNombrePt','catNombreEn','catDescEs','catDescPt','catDescEn'].forEach(id => document.getElementById(id).value = '');
         document.getElementById('catOrden').value = '0';
         comunesCatFotos = []; renderFotosCatComun();
         document.getElementById('comunesCatForm').style.display = 'block';
@@ -1052,8 +1096,19 @@
         if (!slug)     { showToast('La carpeta es requerida.', 'error'); return; }
         if (!nombreEs) { showToast('El nombre en español es requerido.', 'error'); return; }
         const data = {
-            slug, nombre: { es: nombreEs, pt: document.getElementById('catNombrePt').value.trim()||nombreEs, en: document.getElementById('catNombreEn').value.trim()||nombreEs },
-            orden: parseInt(document.getElementById('catOrden').value)||0, fotos: comunesCatFotos,
+            slug,
+            nombre: {
+                es: nombreEs,
+                pt: document.getElementById('catNombrePt').value.trim() || nombreEs,
+                en: document.getElementById('catNombreEn').value.trim() || nombreEs
+            },
+            descripcion: {
+                es: document.getElementById('catDescEs').value.trim(),
+                pt: document.getElementById('catDescPt').value.trim(),
+                en: document.getElementById('catDescEn').value.trim()
+            },
+            orden: parseInt(document.getElementById('catOrden').value)||0,
+            fotos: comunesCatFotos,
             actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
         };
         try {
@@ -1073,6 +1128,42 @@
     // ══════════════════════════════════════════════════════════
     //  CONFIGURACIÓN — Token GitHub (100% Firestore)
     // ══════════════════════════════════════════════════════════
+
+    // ── Textos del sitio ──────────────────────────────────────
+    async function cargarTextosSitio() {
+        try {
+            const snap = await db.collection('config').doc('site').get();
+            if (snap.exists) {
+                const d = snap.data();
+                document.getElementById('siteTituloEs').value = d.descTitle?.es || '';
+                document.getElementById('siteTituloPt').value = d.descTitle?.pt || '';
+                document.getElementById('siteTituloEn').value = d.descTitle?.en || '';
+                document.getElementById('siteDescEs').value   = d.descBody?.es  || '';
+                document.getElementById('siteDescPt').value   = d.descBody?.pt  || '';
+                document.getElementById('siteDescEn').value   = d.descBody?.en  || '';
+            }
+        } catch(e) { console.warn('cargarTextosSitio:', e.message); }
+    }
+
+    window.guardarTextosSitio = async function() {
+        const data = {
+            descTitle: {
+                es: document.getElementById('siteTituloEs').value.trim(),
+                pt: document.getElementById('siteTituloPt').value.trim(),
+                en: document.getElementById('siteTituloEn').value.trim()
+            },
+            descBody: {
+                es: document.getElementById('siteDescEs').value.trim(),
+                pt: document.getElementById('siteDescPt').value.trim(),
+                en: document.getElementById('siteDescEn').value.trim()
+            },
+            actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        try {
+            await db.collection('config').doc('site').set(data, { merge: true });
+            showToast('Presentación del sitio guardada.', 'success');
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
 
     async function cargarConfigGithub() {
         const status = document.getElementById('tokenStatus');
