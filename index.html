@@ -920,15 +920,20 @@ async function cargarEspaciosComunes() {
     const section = document.getElementById('comunes-section');
     if (!section) return;
     try {
-        const snap = await db.collection('espacios_comunes').orderBy('orden').get();
+        const snap = await db.collection('espacios_comunes').get();
         if (snap.empty) { section.style.display = 'none'; return; }
 
         const lang = currentLang;
 
+        // Ordenar por campo 'orden' en el cliente (evita índice compuesto en Firestore)
+        const docsOrdenados = snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+
         // Armar array plano con todas las fotos de todas las categorías
         _comunesSlides = [];
-        snap.docs.forEach(doc => {
-            const cat   = doc.data();
+        docsOrdenados.forEach(doc => {
+            const cat    = doc;
             const nombre = cat.nombre?.[lang] || cat.nombre?.es || doc.id;
             (cat.fotos || []).filter(f => f.url).forEach(f => {
                 _comunesSlides.push({
