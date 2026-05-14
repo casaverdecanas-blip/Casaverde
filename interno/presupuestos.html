@@ -6,14 +6,24 @@
     <title>Presupuestos · Casa Verde Canas</title>
     <link rel="stylesheet" href="design-system.css">
     <style>
+        /* ── FIX: Restaurar spinner nativo para inputs tipo number ── */
+        input[type="number"].form-control {
+            appearance: auto;
+            -webkit-appearance: auto;
+        }
+
+        /* ── Layout ───────────────────────────────────────────── */
         .layout {
             display: grid;
             grid-template-columns: 1fr 1.4fr;
             gap: var(--space-6);
             align-items: start;
         }
-        @media (max-width: 900px) { .layout { grid-template-columns: 1fr; gap: var(--space-6); } }
+        @media (max-width: 900px) {
+            .layout { grid-template-columns: 1fr; gap: var(--space-6); }
+        }
 
+        /* ── Precio calculado ─────────────────────────────────── */
         .precio-box {
             background: var(--color-primary-light);
             border-radius: var(--radius-md);
@@ -39,6 +49,7 @@
             padding-top: var(--space-2);
         }
 
+        /* ── Cards de presupuesto ─────────────────────────────── */
         .pres-card {
             border: 1.5px solid var(--color-border);
             border-radius: var(--radius-lg);
@@ -47,7 +58,7 @@
             transition: border-color var(--transition-fast);
             border-left: 4px solid var(--color-border);
         }
-        .pres-card:hover { border-color: var(--color-primary-mid); }
+        .pres-card:hover  { border-color: var(--color-primary-mid); }
         .pres-card.confirmado { border-left-color: var(--color-success); opacity: 0.8; }
         .pres-card.pendiente  { border-left-color: var(--color-warning); }
 
@@ -58,10 +69,11 @@
             gap: var(--space-3);
             margin-bottom: var(--space-2);
         }
-        .pres-nombre { font-size: var(--text-md); font-weight: 700; }
+        .pres-nombre  { font-size: var(--text-md); font-weight: 700; }
         .pres-detalle { font-size: var(--text-xs); color: var(--color-text-muted); line-height: 1.8; }
-        .pres-total { font-size: var(--text-lg); font-weight: 800; color: var(--color-primary); white-space: nowrap; }
+        .pres-total   { font-size: var(--text-lg); font-weight: 800; color: var(--color-primary); white-space: nowrap; }
 
+        /* ── Modal: resumen de pago ───────────────────────────── */
         .resumen-pago {
             background: var(--color-surface-2);
             border-radius: var(--radius-md);
@@ -71,6 +83,7 @@
             margin-bottom: var(--space-4);
         }
 
+        /* ── Filtro tabs ──────────────────────────────────────── */
         .filtro-tabs {
             display: flex;
             gap: var(--space-2);
@@ -92,6 +105,38 @@
             background: var(--color-primary);
             color: #fff;
             border-color: var(--color-primary);
+        }
+
+        /* ── Alerta de disponibilidad en formulario ───────────── */
+        .alerta-disponibilidad {
+            background: var(--color-danger-bg);
+            border: 1.5px solid var(--color-danger);
+            border-radius: var(--radius-md);
+            padding: var(--space-3) var(--space-4);
+            font-size: var(--text-sm);
+            color: var(--color-danger);
+            display: none;
+            align-items: flex-start;
+            gap: var(--space-2);
+            margin-top: var(--space-3);
+        }
+        .alerta-disponibilidad .material-icons {
+            flex-shrink: 0; font-size: 18px; margin-top: 1px;
+        }
+
+        /* ── Badge de conflicto en cards de presupuesto ───────── */
+        .badge-conflicto {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: var(--color-danger-bg);
+            border: 1px solid var(--color-danger);
+            border-radius: var(--radius-sm);
+            padding: 2px 8px;
+            font-size: var(--text-xs);
+            color: var(--color-danger);
+            font-weight: 600;
+            margin-top: 4px;
         }
     </style>
 </head>
@@ -122,7 +167,7 @@
 <main class="admin-content">
     <div class="layout">
 
-        <!-- Formulario nuevo presupuesto -->
+        <!-- ── Panel: Nuevo presupuesto ───────────────────────── -->
         <div class="card">
             <div class="card__header">
                 <h2 class="card__title">
@@ -147,14 +192,20 @@
                 </div>
             </div>
 
+            <!-- Alerta de disponibilidad en tiempo real -->
+            <div class="alerta-disponibilidad" id="alertaDisponibilidad">
+                <span class="material-icons">event_busy</span>
+                <span id="alertaDisponibilidadText"></span>
+            </div>
+
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Adultos</label>
-                    <input type="number" id="adultos" class="form-control" value="2" min="1">
+                    <input type="number" id="adultos" class="form-control" value="2" min="1" max="20">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Niños</label>
-                    <input type="number" id="ninos" class="form-control" value="0" min="0">
+                    <input type="number" id="ninos" class="form-control" value="0" min="0" max="20">
                 </div>
             </div>
 
@@ -176,15 +227,16 @@
 
             <div class="form-group">
                 <label class="form-label">Notas</label>
-                <textarea id="notas" class="form-control" rows="2" placeholder="Requerimientos especiales..."></textarea>
+                <textarea id="notas" class="form-control" rows="2"
+                    placeholder="Requerimientos especiales..."></textarea>
             </div>
 
             <!-- Resultado del cálculo -->
             <div class="precio-box" id="precioBox">
-                <div class="precio-linea"><span>🌙 Noches</span><span id="pNoches">—</span></div>
+                <div class="precio-linea"><span>🌙 Noches</span>     <span id="pNoches">—</span></div>
                 <div class="precio-linea"><span>🏠 Alojamiento</span><span id="pSubtotal">—</span></div>
-                <div class="precio-linea"><span>🧹 Limpieza</span><span id="pLimpieza">—</span></div>
-                <div class="precio-total"><span>💰 Total</span><span id="pTotal">—</span></div>
+                <div class="precio-linea"><span>🧹 Limpieza</span>   <span id="pLimpieza">—</span></div>
+                <div class="precio-total"><span>💰 Total</span>      <span id="pTotal">—</span></div>
             </div>
 
             <div class="alert alert-error" id="errorForm" style="display:none;">
@@ -192,7 +244,7 @@
                 <span id="errorFormText"></span>
             </div>
 
-            <div style="display:flex; gap:var(--space-3); flex-wrap:wrap; margin-top:var(--space-2);">
+            <div style="display:flex;gap:var(--space-3);flex-wrap:wrap;margin-top:var(--space-2);">
                 <button class="btn btn-secondary" onclick="calcular()">
                     <span class="material-icons">calculate</span> Calcular
                 </button>
@@ -203,7 +255,7 @@
             </div>
         </div>
 
-        <!-- Listado -->
+        <!-- ── Panel: Listado de presupuestos ─────────────────── -->
         <div class="card">
             <div class="card__header">
                 <h2 class="card__title">
@@ -219,14 +271,17 @@
             </div>
 
             <div id="presupuestosList">
-                <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+                <div class="state-loading">
+                    <div class="spinner"></div>
+                    <span>Cargando...</span>
+                </div>
             </div>
         </div>
 
     </div>
 </main>
 
-<!-- ── MODAL: Registrar pago ─────────────────────────────────── -->
+<!-- ── MODAL: Registrar pago y confirmar ─────────────────────── -->
 <div class="modal-overlay" id="modalOverlay" style="display:none;" onclick="cerrarModalPago(event)">
     <div class="modal" onclick="event.stopPropagation()">
 
@@ -243,11 +298,18 @@
         <div class="modal__body">
             <input type="hidden" id="presupuestoId">
 
+            <!-- Resumen del presupuesto -->
             <div class="resumen-pago" id="resumenPago"></div>
 
             <div class="alert alert-success" style="margin-bottom:var(--space-4);">
                 <span class="material-icons">check_circle</span>
                 El pago confirma la reserva automáticamente y bloquea el calendario.
+            </div>
+
+            <!-- ⚠️ Alerta de conflicto (se muestra si hay solapamiento) -->
+            <div class="alert alert-error" id="alertaConflictoModal" style="display:none; margin-bottom:var(--space-4);">
+                <span class="material-icons">event_busy</span>
+                <span id="alertaConflictoModalText"></span>
             </div>
 
             <div class="form-row">
@@ -267,13 +329,23 @@
             </div>
 
             <div class="form-group">
+                <label class="form-label">Tipo de pago</label>
+                <select id="tipoPago" class="form-control">
+                    <option value="total">Total</option>
+                    <option value="seña">Seña / señal</option>
+                    <option value="saldo">Saldo pendiente</option>
+                </select>
+            </div>
+
+            <div class="form-group">
                 <label class="form-label">Observaciones</label>
                 <input type="text" id="obsPago" class="form-control" placeholder="Opcional">
             </div>
 
             <div class="alert alert-info" style="font-size:var(--text-xs);">
                 <span class="material-icons" style="font-size:14px;">info</span>
-                La reserva se creará con los datos del presupuesto. Serás redirigido para completar la información del huésped.
+                La reserva se creará con los datos del presupuesto.
+                Serás redirigido para completar la información del huésped.
             </div>
 
             <div class="alert alert-error" id="errorModal" style="display:none;">
@@ -293,6 +365,7 @@
     </div>
 </div>
 
+<!-- Firebase + utils -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -311,7 +384,12 @@
     }
 
     const db = CVC.db;
-    const { escapeHtml, calcularPrecio, crearTareaLimpieza, sincronizarDisponibilidad, formatFecha, showEmpty, showError, showToast } = CVC;
+    const {
+        escapeHtml, calcularPrecio,
+        verificarDisponibilidadCabana, mensajeConflicto,
+        crearTareaLimpieza, sincronizarDisponibilidad,
+        showEmpty, showError, showToast
+    } = CVC;
 
     let cabanasCache      = [];
     let presupuestosCache = [];
@@ -325,23 +403,70 @@
             db.collection('presupuestos').get()
         ]);
 
-        cabanasCache = cabanasSnap.docs.map(d => ({ docId: d.id, ...d.data() }))
+        cabanasCache = cabanasSnap.docs
+            .map(d => ({ docId: d.id, ...d.data() }))
             .filter(c => c.activa === true || c.activa === 'true' || c.activa === undefined)
             .sort((a, b) => (a.orden || 0) - (b.orden || 0));
-        presupuestosCache = presSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-            .sort((a,b) => (b.creadoEn?.toDate?.()?.getTime()||0) - (a.creadoEn?.toDate?.()?.getTime()||0));
+
+        presupuestosCache = presSnap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => (b.creadoEn?.toDate?.()?.getTime() || 0) - (a.creadoEn?.toDate?.()?.getTime() || 0));
 
         const select = document.getElementById('cabanaSelect');
         select.innerHTML = cabanasCache.length
-            ? cabanasCache.map(c => `<option value="${c.id}">${escapeHtml(c.nombre?.es || `Cabaña ${c.id}`)}</option>`).join('')
+            ? cabanasCache.map(c =>
+                `<option value="${c.id}">${escapeHtml(c.nombre?.es || `Cabaña ${c.id}`)}</option>`
+              ).join('')
             : '<option value="">Sin cabañas activas</option>';
 
         renderPresupuestos();
+
     } catch (e) {
         showError('#presupuestosList', 'Error al cargar datos', e.message, () => location.reload());
     }
 
-    // ── Calcular ──────────────────────────────────────────────
+    // ── Verificación de disponibilidad en tiempo real ─────────
+    //
+    //  Al cambiar cabaña, check-in o check-out en el formulario,
+    //  consultamos si ya hay una reserva confirmada en ese rango.
+    //  Solo es advertencia visual — el bloqueo real es al guardar.
+    //
+    let dispTimer = null;
+    function verificarDisponibilidadLive() {
+        clearTimeout(dispTimer);
+        dispTimer = setTimeout(async () => {
+            const cabaId   = parseInt(document.getElementById('cabanaSelect').value);
+            const checkIn  = document.getElementById('checkIn').value;
+            const checkOut = document.getElementById('checkOut').value;
+            const alerta   = document.getElementById('alertaDisponibilidad');
+
+            if (!cabaId || !checkIn || !checkOut || checkOut <= checkIn) {
+                alerta.style.display = 'none';
+                return;
+            }
+
+            try {
+                const { disponible, conflicto } = await verificarDisponibilidadCabana(
+                    cabaId, checkIn, checkOut
+                );
+                if (!disponible) {
+                    document.getElementById('alertaDisponibilidadText').textContent =
+                        mensajeConflicto(conflicto);
+                    alerta.style.display = 'flex';
+                } else {
+                    alerta.style.display = 'none';
+                }
+            } catch(e) {
+                alerta.style.display = 'none';
+            }
+        }, 600); // debounce 600ms
+    }
+
+    ['cabanaSelect', 'checkIn', 'checkOut'].forEach(id =>
+        document.getElementById(id).addEventListener('change', verificarDisponibilidadLive)
+    );
+
+    // ── Calcular precio ───────────────────────────────────────
     window.calcular = function() {
         const cabaId   = parseInt(document.getElementById('cabanaSelect').value);
         const checkIn  = document.getElementById('checkIn').value;
@@ -351,13 +476,16 @@
 
         document.getElementById('errorForm').style.display = 'none';
 
-        if (!checkIn || !checkOut)  { mostrarErrorForm('Ingresá las fechas primero.'); return; }
-        if (checkOut <= checkIn)    { mostrarErrorForm('El check-out debe ser posterior al check-in.'); return; }
+        if (!checkIn || !checkOut) { mostrarErrorForm('Ingresá las fechas primero.'); return; }
+        if (checkOut <= checkIn)   { mostrarErrorForm('El check-out debe ser posterior al check-in.'); return; }
 
         const cabana = cabanasCache.find(c => c.id == cabaId);
         if (!cabana) { mostrarErrorForm('Seleccioná una cabaña válida.'); return; }
 
-        ultimoCalculo = { ...calcularPrecio(cabana, checkIn, checkOut, adultos, ninos), cabaId, checkIn, checkOut, adultos, ninos };
+        ultimoCalculo = {
+            ...calcularPrecio(cabana, checkIn, checkOut, adultos, ninos),
+            cabaId, checkIn, checkOut, adultos, ninos
+        };
 
         document.getElementById('pNoches').textContent   = ultimoCalculo.noches;
         document.getElementById('pSubtotal').textContent = `R$ ${ultimoCalculo.subtotal.toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
@@ -396,16 +524,20 @@
                 creadoPor:        user.uid
             });
 
-            presupuestosCache.unshift({ id: doc.id, estado: 'pendiente',
+            presupuestosCache.unshift({
+                id:          doc.id,
+                estado:      'pendiente',
                 clienteNombre: document.getElementById('clienteNombre').value.trim() || 'Sin nombre',
-                ...ultimoCalculo });
+                ...ultimoCalculo
+            });
 
             showToast('Presupuesto guardado.', 'success');
 
             // Limpiar formulario
             ['clienteNombre','clienteEmail','clienteTel','notas','checkIn','checkOut'].forEach(id =>
                 document.getElementById(id).value = '');
-            document.getElementById('precioBox').style.display = 'none';
+            document.getElementById('precioBox').style.display    = 'none';
+            document.getElementById('alertaDisponibilidad').style.display = 'none';
             ultimoCalculo = null;
 
             await recargarPresupuestos();
@@ -432,8 +564,18 @@
 
         container.innerHTML = lista.map(p => {
             const cabana       = cabanasCache.find(c => c.id == p.caba);
-            const nombreCabana = cabana ? escapeHtml(cabana.nombre?.es || `Cabaña ${p.caba}`) : `Cabaña ${p.caba}`;
-            const esConf       = p.estado === 'confirmado';
+            const nombreCabana = cabana
+                ? escapeHtml(cabana.nombre?.es || `Cabaña ${p.caba}`)
+                : `Cabaña ${p.caba}`;
+            const esConf = p.estado === 'confirmado';
+
+            // Badge de conflicto: se muestra si la cabaña ya tiene reserva en esas fechas
+            const conflictoBadge = p._tieneConflicto
+                ? `<div class="badge-conflicto">
+                    <span class="material-icons" style="font-size:11px;">event_busy</span>
+                    Fechas ocupadas
+                   </div>`
+                : '';
 
             return `
             <div class="pres-card ${p.estado}">
@@ -441,22 +583,30 @@
                     <div>
                         <div class="pres-nombre">${escapeHtml(p.clienteNombre || 'Sin nombre')}</div>
                         <div class="pres-detalle">
-                            ${nombreCabana} · ${p.checkIn} → ${p.checkOut} · ${p.noches || '?'} noches<br>
+                            ${nombreCabana}
+                            · ${p.checkIn} → ${p.checkOut}
+                            · ${p.noches || '?'} noches<br>
                             ${p.adultos} adulto(s)${p.ninos ? `, ${p.ninos} niño(s)` : ''}
                             ${p.email    ? `· ✉️ ${escapeHtml(p.email)}`    : ''}
                             ${p.telefono ? `· 📱 ${escapeHtml(p.telefono)}` : ''}
                             ${p.notas    ? `<br>📝 ${escapeHtml(p.notas)}`  : ''}
-                            ${esConf     ? '<br><span style="color:var(--color-success);font-weight:600;">✅ Reserva generada</span>' : ''}
+                            ${esConf
+                                ? '<br><span style="color:var(--color-success);font-weight:600;">✅ Reserva generada</span>'
+                                : ''}
                         </div>
+                        ${conflictoBadge}
                     </div>
                     <div style="text-align:right;">
-                        <div class="pres-total">R$ ${(p.totalBRL||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
-                        <span class="badge ${esConf ? 'badge-confirmada' : 'badge-pendiente'}" style="margin-top:4px; display:inline-block;">
+                        <div class="pres-total">
+                            R$ ${(p.totalBRL||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                        </div>
+                        <span class="badge ${esConf ? 'badge-confirmada' : 'badge-pendiente'}"
+                            style="margin-top:4px;display:inline-block;">
                             ${esConf ? 'Confirmado' : 'Pendiente'}
                         </span>
                     </div>
                 </div>
-                <div style="display:flex; gap:var(--space-2); flex-wrap:wrap; margin-top:var(--space-3);">
+                <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-3);">
                     ${!esConf ? `
                     <button class="btn btn-primary btn-sm" onclick="abrirModalPago('${p.id}')">
                         <span class="material-icons">payments</span> Registrar pago y confirmar
@@ -467,6 +617,25 @@
                 </div>
             </div>`;
         }).join('');
+
+        // Verificar conflictos en segundo plano para los pendientes
+        verificarConflictosMasivos();
+    }
+
+    // Verificar disponibilidad de todos los presupuestos pendientes en segundo plano
+    // y actualizar sus badges sin bloquear el render inicial
+    async function verificarConflictosMasivos() {
+        const pendientes = presupuestosCache.filter(p => p.estado === 'pendiente');
+        for (const p of pendientes) {
+            if (!p.checkIn || !p.checkOut || !p.caba) continue;
+            try {
+                const { disponible } = await verificarDisponibilidadCabana(p.caba, p.checkIn, p.checkOut);
+                const anterior = p._tieneConflicto;
+                p._tieneConflicto = !disponible;
+                // Re-renderizar solo si cambió el estado de conflicto
+                if (anterior !== p._tieneConflicto) renderPresupuestos();
+            } catch(e) { /* ignorar errores de red */ }
+        }
     }
 
     // ── Filtro tabs ───────────────────────────────────────────
@@ -479,16 +648,18 @@
         });
     });
 
-    // ── Modal pago ────────────────────────────────────────────
-    window.abrirModalPago = function(id) {
+    // ── Abrir modal de pago ───────────────────────────────────
+    window.abrirModalPago = async function(id) {
         const p = presupuestosCache.find(x => x.id === id);
         if (!p) return;
+
         document.getElementById('presupuestoId').value = id;
         document.getElementById('montoPago').value     = (p.totalBRL || 0).toFixed(2);
         document.getElementById('metodoPago').value    = 'pix';
         document.getElementById('tipoPago').value      = 'total';
         document.getElementById('obsPago').value       = '';
-        document.getElementById('errorModal').style.display = 'none';
+        document.getElementById('errorModal').style.display          = 'none';
+        document.getElementById('alertaConflictoModal').style.display = 'none';
 
         const cabana = cabanasCache.find(c => c.id == p.caba);
         document.getElementById('resumenPago').innerHTML = `
@@ -499,6 +670,20 @@
             <strong>Total:</strong> R$ ${(p.totalBRL||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
 
         document.getElementById('modalOverlay').style.display = 'flex';
+
+        // Verificar disponibilidad al abrir el modal (consulta fresca)
+        if (p.checkIn && p.checkOut && p.caba) {
+            try {
+                const { disponible, conflicto } = await verificarDisponibilidadCabana(
+                    p.caba, p.checkIn, p.checkOut
+                );
+                if (!disponible) {
+                    document.getElementById('alertaConflictoModalText').textContent =
+                        mensajeConflicto(conflicto);
+                    document.getElementById('alertaConflictoModal').style.display = 'flex';
+                }
+            } catch(e) { /* ignorar */ }
+        }
     };
 
     window.cerrarModalPago = function(e) {
@@ -511,14 +696,13 @@
         const presupuestoId = document.getElementById('presupuestoId').value;
         const monto         = parseFloat(document.getElementById('montoPago').value);
         const metodo        = document.getElementById('metodoPago').value;
+        const tipo          = document.getElementById('tipoPago').value;
         const obs           = document.getElementById('obsPago').value.trim();
-        const estadoReserva = 'confirmada'; // Pago siempre confirma
 
         document.getElementById('errorModal').style.display = 'none';
 
         if (!monto || monto <= 0) {
-            document.getElementById('errorModalText').textContent = 'Ingresá un monto válido.';
-            document.getElementById('errorModal').style.display   = 'flex';
+            mostrarErrorModal('Ingresá un monto válido.');
             return;
         }
 
@@ -527,27 +711,43 @@
 
         const btn  = document.getElementById('btnConfirmar');
         const text = document.getElementById('btnConfirmarText');
-        btn.disabled = true; text.textContent = 'Creando reserva...';
+        btn.disabled = true; text.textContent = 'Verificando disponibilidad...';
 
         try {
+            // ── Verificación de solapamiento ANTES de crear la reserva ──
+            //    Esta es la validación real que previene el double-booking.
+            //    La verificación live del modal es solo informativa.
+            if (p.checkIn && p.checkOut && p.caba) {
+                const { disponible, conflicto } = await verificarDisponibilidadCabana(
+                    p.caba, p.checkIn, p.checkOut
+                );
+                if (!disponible) {
+                    mostrarErrorModal(mensajeConflicto(conflicto));
+                    btn.disabled = false; text.textContent = 'Registrar pago y crear reserva';
+                    return;
+                }
+            }
+
+            text.textContent = 'Creando reserva...';
+
             const reservaData = {
                 caba:             p.caba,
                 nombre:           p.clienteNombre || 'Sin nombre',
-                email:            p.clienteEmail  || '',
-                telefono:         p.clienteTelefono || '',
-                clienteId:        p.clienteId     || null,
+                email:            p.email         || '',
+                telefono:         p.telefono       || '',
+                clienteId:        p.clienteId      || null,
                 checkIn:  firebase.firestore.Timestamp.fromDate(new Date(p.checkIn  + 'T12:00:00')),
                 checkOut: firebase.firestore.Timestamp.fromDate(new Date(p.checkOut + 'T12:00:00')),
                 adultos:          p.adultos,
                 ninos:            p.ninos   || 0,
                 huespedes:        p.huespedes || (p.adultos + (p.ninos || 0)),
                 origen:           'presupuesto',
-                estado:           estadoReserva,   // 'pendiente' o 'confirmada'
+                estado:           'confirmada',
                 totalBRL:         p.totalBRL,
                 subtotalBRL:      p.subtotalBRL,
                 costoLimpiezaBRL: p.costoLimpiezaBRL,
                 noches:           p.noches,
-                notas:            p.notas || '',
+                notas:            p.notas   || '',
                 presupuestoId,
                 creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
                 creadoPor: user.uid
@@ -563,29 +763,25 @@
                 monto,
                 moneda:        'BRL',
                 metodo,
-                tipo:          estadoReserva === 'confirmada' ? 'total' : 'seña',
+                tipo,
                 observaciones: obs,
-                creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
-                creadoPor: user.uid
+                creadoEn:      firebase.firestore.FieldValue.serverTimestamp(),
+                creadoPor:     user.uid
             });
 
-            // Actualizar pagadoBRL en la reserva para mostrar saldo en tiempo real
+            // Actualizar pagadoBRL en la reserva para mostrar saldo
             await db.collection('reservas').doc(reservaRef.id).update({
                 pagadoBRL: monto
             });
 
-            // Sincronizar disponibilidad pública
+            // Sincronizar disponibilidad pública y crear tarea de limpieza
             await sincronizarDisponibilidad(reservaRef.id, reservaData);
-
-            // Tarea de limpieza solo si está confirmada
-            if (estadoReserva === 'confirmada') {
-                await crearTareaLimpieza(reservaRef.id, reservaData, user.uid);
-            }
+            await crearTareaLimpieza(reservaRef.id, reservaData, user.uid);
 
             // Marcar presupuesto como confirmado
             await db.collection('presupuestos').doc(presupuestoId).update({
-                estado:    'confirmado',
-                reservaId: reservaRef.id,
+                estado:        'confirmado',
+                reservaId:     reservaRef.id,
                 actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
             });
 
@@ -598,9 +794,7 @@
             }, 1200);
 
         } catch (e) {
-            document.getElementById('errorModalText').textContent = 'Error: ' + e.message;
-            document.getElementById('errorModal').style.display   = 'flex';
-        } finally {
+            mostrarErrorModal('Error: ' + e.message);
             btn.disabled = false; text.textContent = 'Registrar pago y crear reserva';
         }
     };
@@ -608,26 +802,37 @@
     // ── Eliminar presupuesto ──────────────────────────────────
     window.eliminarPresupuesto = async function(id, esConfirmado) {
         const msg = esConfirmado
-            ? '⚠️ Este presupuesto ya fue confirmado. ¿Eliminar solo el presupuesto?'
+            ? '⚠️ Este presupuesto tiene una reserva asociada. ¿Eliminar igual?'
             : '¿Eliminar este presupuesto?';
         if (!confirm(msg)) return;
+
         try {
             await db.collection('presupuestos').doc(id).delete();
+            presupuestosCache = presupuestosCache.filter(p => p.id !== id);
+            renderPresupuestos();
             showToast('Presupuesto eliminado.', 'warning');
-            await recargarPresupuestos();
-        } catch (e) { showToast('Error: ' + e.message, 'error'); }
+        } catch(e) {
+            showToast('Error al eliminar: ' + e.message, 'error');
+        }
     };
 
     // ── Helpers ───────────────────────────────────────────────
     async function recargarPresupuestos() {
         const snap        = await db.collection('presupuestos').get();
-        presupuestosCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        presupuestosCache = snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => (b.creadoEn?.toDate?.()?.getTime() || 0) - (a.creadoEn?.toDate?.()?.getTime() || 0));
         renderPresupuestos();
     }
 
     function mostrarErrorForm(msg) {
         document.getElementById('errorFormText').textContent = msg;
         document.getElementById('errorForm').style.display  = 'flex';
+    }
+
+    function mostrarErrorModal(msg) {
+        document.getElementById('errorModalText').textContent = msg;
+        document.getElementById('errorModal').style.display   = 'flex';
     }
 
 })();
