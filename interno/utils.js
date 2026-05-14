@@ -674,12 +674,14 @@ const NAV_ADMIN_ITEMS = [
     { href: 'cabanas-admin.html', icon: 'cottage',         label: 'Cabañas'       },
     { href: 'tareas.html',        icon: 'checklist',       label: 'Tareas'        },
     { href: 'calendario.html',    icon: 'calendar_month',  label: 'Calendario'    },
-    { href: 'usuarios.html',      icon: 'manage_accounts', label: 'Usuarios'      }
+    { href: 'usuarios.html',      icon: 'manage_accounts', label: 'Usuarios'      },
+    { href: 'manual-sistema.html',icon: 'menu_book',       label: 'Manual'        }
 ];
 
 const NAV_USER_ITEMS = [
-    { href: 'tareas.html', icon: 'checklist', label: 'Tareas'     },
-    { href: 'pagos.html',  icon: 'payments',  label: 'Mis cobros' }
+    { href: 'tareas.html',        icon: 'checklist',  label: 'Tareas'     },
+    { href: 'pagos.html',         icon: 'payments',   label: 'Mis cobros' },
+    { href: 'manual-sistema.html',icon: 'menu_book',  label: 'Manual'     }
 ];
 
 function renderNav(paginaActiva, rol) {
