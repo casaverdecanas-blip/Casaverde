@@ -6,6 +6,16 @@
     <title>Reservas · Casa Verde Canas</title>
     <link rel="stylesheet" href="design-system.css">
     <style>
+        /* ── FIX: Restaurar spinner nativo para inputs tipo number ──
+           design-system.css aplica appearance:none globalmente en .form-control
+           para poder customizar el select. Los number inputs necesitan su
+           spinner para ser usables en móvil (especialmente iOS/Safari).   */
+        input[type="number"].form-control {
+            appearance: auto;
+            -webkit-appearance: auto;
+        }
+
+        /* ── Precio calculado ─────────────────────────────────── */
         .precio-box {
             background: var(--color-primary-light);
             border-radius: var(--radius-md);
@@ -21,7 +31,7 @@
             margin-top: var(--space-2);
         }
 
-        /* Cliente search */
+        /* ── Cliente: búsqueda typeahead ──────────────────────── */
         .cliente-search-wrap { position: relative; }
         .cliente-suggestions {
             position: absolute;
@@ -45,7 +55,10 @@
         }
         .cliente-suggestion-item:last-child { border-bottom: none; }
         .cliente-suggestion-item:hover { background: var(--color-primary-xlight); }
-        .cliente-suggestion-item .sub { font-size: var(--text-xs); color: var(--color-text-muted); }
+        .cliente-suggestion-item .sub {
+            font-size: var(--text-xs);
+            color: var(--color-text-muted);
+        }
         .cliente-suggestion-item.nuevo {
             color: var(--color-primary);
             font-weight: 700;
@@ -54,6 +67,7 @@
             gap: var(--space-2);
         }
 
+        /* ── Cliente chip ─────────────────────────────────────── */
         .cliente-chip {
             display: flex;
             align-items: center;
@@ -75,6 +89,21 @@
         }
         .cliente-chip button:hover { color: var(--color-danger); }
         .cliente-chip .material-icons { font-size: 16px; }
+
+        /* ── Alerta de solapamiento ───────────────────────────── */
+        .alerta-solapamiento {
+            background: var(--color-danger-bg);
+            border: 1.5px solid var(--color-danger);
+            border-radius: var(--radius-md);
+            padding: var(--space-3) var(--space-4);
+            font-size: var(--text-sm);
+            color: var(--color-danger);
+            display: none;
+            align-items: flex-start;
+            gap: var(--space-2);
+            margin-bottom: var(--space-4);
+        }
+        .alerta-solapamiento .material-icons { flex-shrink: 0; font-size: 18px; margin-top: 1px; }
     </style>
 </head>
 <body>
@@ -136,7 +165,10 @@
         </div>
 
         <div id="reservasContainer">
-            <div class="state-loading"><div class="spinner"></div><span>Cargando reservas...</span></div>
+            <div class="state-loading">
+                <div class="spinner"></div>
+                <span>Cargando reservas...</span>
+            </div>
         </div>
     </div>
 </main>
@@ -159,10 +191,16 @@
             <input type="hidden" id="reservaId">
             <input type="hidden" id="clienteId">
 
-            <!-- Alerta para Airbnb -->
+            <!-- Alerta para reservas Airbnb -->
             <div class="alert alert-warning" id="alertaAirbnb" style="display:none;">
                 <span class="material-icons">info</span>
                 Reserva importada de Airbnb. Completá los datos faltantes y confirmá.
+            </div>
+
+            <!-- ⚠️ Alerta de solapamiento de fechas (se muestra si hay conflicto) -->
+            <div class="alerta-solapamiento" id="alertaSolapamiento">
+                <span class="material-icons">event_busy</span>
+                <span id="alertaSolapamientoText"></span>
             </div>
 
             <div class="form-row">
@@ -190,10 +228,11 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Hora de llegada</label>
-                    <input type="time" id="horaLlegada" class="form-control" placeholder="14:00">
+                    <input type="time" id="horaLlegada" class="form-control">
                     <p class="form-hint">Hora estimada que informó el huésped</p>
                 </div>
             </div>
+
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Check-out <span class="required">*</span></label>
@@ -201,12 +240,12 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Hora de salida</label>
-                    <input type="time" id="horaSalida" class="form-control" placeholder="10:00">
+                    <input type="time" id="horaSalida" class="form-control">
                     <p class="form-hint">Hora de salida acordada</p>
                 </div>
             </div>
 
-            <!-- Cliente — búsqueda + crear -->
+            <!-- Cliente: búsqueda + crear -->
             <div class="form-group">
                 <label class="form-label">Cliente <span class="required">*</span></label>
                 <div class="cliente-search-wrap" id="clienteSearchWrap">
@@ -229,11 +268,12 @@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Adultos</label>
-                    <input type="number" id="adultos" class="form-control" value="2" min="1">
+                    <!-- type=number con appearance:auto restaurado via CSS local -->
+                    <input type="number" id="adultos" class="form-control" value="2" min="1" max="20">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Niños</label>
-                    <input type="number" id="ninos" class="form-control" value="0" min="0">
+                    <input type="number" id="ninos" class="form-control" value="0" min="0" max="20">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Origen</label>
@@ -261,6 +301,7 @@
                     </select>
                 </div>
             </div>
+
             <div class="form-group">
                 <label class="form-label">Notas y requerimientos especiales</label>
                 <textarea id="notas" class="form-control" rows="3"
@@ -270,16 +311,23 @@
             <!-- Precio calculado -->
             <div id="precioBox" class="precio-box" style="display:none;"></div>
 
-
-            <!-- Panel de historial — solo visible al editar -->
-            <div id="historialPanel" style="display:none; margin:var(--space-4) 0; background:var(--color-surface-2); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-4);">
-                <div style="font-size:var(--text-xs); font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--color-text-muted); margin-bottom:var(--space-3);">
+            <!-- Historial de pagos — visible solo al editar -->
+            <div id="historialPanel" style="display:none; margin:var(--space-4) 0;
+                background:var(--color-surface-2); border:1px solid var(--color-border);
+                border-radius:var(--radius-md); padding:var(--space-4);">
+                <div style="font-size:var(--text-xs); font-weight:700; text-transform:uppercase;
+                    letter-spacing:.06em; color:var(--color-text-muted); margin-bottom:var(--space-3);">
                     Historial y saldo
                 </div>
                 <div id="historialContent">
-                    <div class="state-loading"><div class="spinner spinner-sm"></div><span>Cargando...</span></div>
+                    <div class="state-loading">
+                        <div class="spinner spinner-sm"></div>
+                        <span>Cargando...</span>
+                    </div>
                 </div>
             </div>
+
+            <!-- Error inline del modal -->
             <div class="alert alert-error" id="errorModal" style="display:none;">
                 <span class="material-icons">error_outline</span>
                 <span id="errorModalText"></span>
@@ -300,6 +348,7 @@
     </div>
 </div>
 
+<!-- Firebase + utils -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -311,16 +360,20 @@
     CVC.renderNav('reservas.html');
 
     const db = CVC.db;
-    const { escapeHtml, badgeEstado, formatFecha, calcularPrecio, crearTareaLimpieza, sincronizarDisponibilidad, showEmpty, showError, showToast } = CVC;
+    const {
+        escapeHtml, badgeEstado, formatFecha,
+        calcularPrecio, verificarDisponibilidadCabana, mensajeConflicto,
+        crearTareaLimpieza, sincronizarDisponibilidad,
+        showEmpty, showError, showToast
+    } = CVC;
 
-    let reservasCache = [];
-    let cabanasCache  = [];
-    let clientesCache = [];
-    let ultimoPrecio  = null;
+    let reservasCache       = [];
+    let cabanasCache        = [];
+    let clientesCache       = [];
+    let ultimoPrecio        = null;
     let clienteSeleccionado = null; // { id, nombre, email, telefono } | null
 
     // ── Cargar todo en paralelo ───────────────────────────────
-    // Fix bug #2: cargar cabañas ANTES de abrir el modal
     async function inicializar() {
         try {
             const [cabanasSnap, clientesSnap, reservasSnap] = await Promise.all([
@@ -329,30 +382,36 @@
                 db.collection('reservas').get()
             ]);
 
-            cabanasCache  = cabanasSnap.docs.map(d => ({ docId: d.id, ...d.data() }))
+            cabanasCache = cabanasSnap.docs
+                .map(d => ({ docId: d.id, ...d.data() }))
                 .filter(c => c.activa === true || c.activa === 'true' || c.activa === undefined)
                 .sort((a, b) => (a.orden || 0) - (b.orden || 0));
-            clientesCache = clientesSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
-            reservasCache = reservasSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => { const ta=b.checkIn?.toDate?.()?.getTime()||0; const tb=a.checkIn?.toDate?.()?.getTime()||0; return ta-tb; });
+
+            clientesCache = clientesSnap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+
+            reservasCache = reservasSnap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .sort((a, b) => (b.checkIn?.toDate?.()?.getTime() || 0) - (a.checkIn?.toDate?.()?.getTime() || 0));
 
             // Poblar select de cabañas
             const select = document.getElementById('cabanaSelect');
-            if (cabanasCache.length) {
-                select.innerHTML = cabanasCache.map(c =>
+            select.innerHTML = cabanasCache.length
+                ? cabanasCache.map(c =>
                     `<option value="${c.id}">${escapeHtml(c.nombre?.es || `Cabaña ${c.id}`)}</option>`
-                ).join('');
-            } else {
-                select.innerHTML = '<option value="">Sin cabañas activas</option>';
-            }
+                  ).join('')
+                : '<option value="">Sin cabañas activas</option>';
 
             renderReservas();
 
-            // URL params
+            // Responder a URL params
             const params = new URLSearchParams(window.location.search);
-            if (params.get('id'))    abrirModalEditar(params.get('id'));
-            else if (params.get('nuevo') || params.get('filtro') === 'pendiente') {
-                if (params.get('nuevo')) abrirModalNueva();
-                else { document.getElementById('filtroEstado').value = 'pendiente'; renderReservas(); }
+            if (params.get('id'))                           abrirModalEditar(params.get('id'));
+            else if (params.get('nuevo'))                   abrirModalNueva();
+            else if (params.get('filtro') === 'pendiente') {
+                document.getElementById('filtroEstado').value = 'pendiente';
+                renderReservas();
             }
 
         } catch (e) {
@@ -360,16 +419,16 @@
         }
     }
 
-    // ── Render reservas ───────────────────────────────────────
+    // ── Render tabla de reservas ──────────────────────────────
     function getReservasFiltradas() {
-        const estado  = document.getElementById('filtroEstado').value;
-        const cabana  = document.getElementById('filtroCabana').value;
-        const busq    = document.getElementById('busqueda').value.toLowerCase().trim();
+        const estado = document.getElementById('filtroEstado').value;
+        const cabana = document.getElementById('filtroCabana').value;
+        const busq   = document.getElementById('busqueda').value.toLowerCase().trim();
 
         return reservasCache.filter(r => {
-            if (estado !== 'todos'  && r.estado !== estado)         return false;
-            if (cabana !== 'todas'  && String(r.caba) !== cabana)   return false;
-            if (busq && !r.nombre?.toLowerCase().includes(busq))    return false;
+            if (estado !== 'todos' && r.estado !== estado)       return false;
+            if (cabana !== 'todas' && String(r.caba) !== cabana) return false;
+            if (busq && !r.nombre?.toLowerCase().includes(busq)) return false;
             return true;
         });
     }
@@ -379,21 +438,26 @@
         const container = document.getElementById('reservasContainer');
 
         if (!lista.length) {
-            showEmpty(container, 'Sin reservas', 'No hay reservas para los filtros seleccionados.', 'event_busy');
+            showEmpty(container, 'Sin reservas',
+                'No hay reservas para los filtros seleccionados.', 'event_busy');
             return;
         }
 
         const rows = lista.map(r => {
-            const esAirbnb          = r.origen === 'airbnb' || r.airbnb_id;
-            const esCancelada       = r.estado === 'airbnb_cancelada';
-            const advertenciaBadge  = esCancelada
-                ? `<div style="background:#fff3e0;border:1px solid #e07b00;border-radius:var(--radius-sm);padding:4px 8px;font-size:var(--text-xs);color:#e07b00;margin-top:4px;display:flex;align-items:center;gap:4px;">
+            const esAirbnb    = r.origen === 'airbnb' || r.airbnb_google_id;
+            const esCancelada = r.estado === 'airbnb_cancelada';
+
+            const advertenciaBadge = esCancelada
+                ? `<div style="background:var(--color-warning-bg);border:1px solid var(--color-warning);
+                    border-radius:var(--radius-sm);padding:4px 8px;font-size:var(--text-xs);
+                    color:var(--color-warning);margin-top:4px;display:flex;align-items:center;gap:4px;">
                        <span class="material-icons" style="font-size:13px;">warning</span>
                        Ya no figura en Airbnb — verificar si fue cancelada
                    </div>`
                 : '';
+
             return `
-            <tr style="${esCancelada ? 'opacity:0.75; background:var(--color-warning-bg);' : ''}">
+            <tr style="${esCancelada ? 'opacity:0.75;background:var(--color-warning-bg);' : ''}">
                 <td data-label="Cliente">
                     <strong>${escapeHtml(r.nombre || '—')}</strong>
                     ${esAirbnb ? '<span class="badge badge-neutral" style="margin-left:4px;">Airbnb</span>' : ''}
@@ -405,12 +469,16 @@
                 <td data-label="Huéspedes">${r.huespedes || ((r.adultos||0)+(r.ninos||0)) || '—'}</td>
                 <td data-label="Total" class="text-mono">
                     R$ ${(r.totalBRL||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
-                    ${r.pagadoBRL > 0 && r.pagadoBRL < r.totalBRL ? `<div style="font-size:10px;color:var(--color-warning);font-weight:700;">Debe R$ ${((r.totalBRL||0)-(r.pagadoBRL||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>` : ''}
-                    ${r.pagadoBRL >= r.totalBRL && r.totalBRL > 0 ? '<div style="font-size:10px;color:var(--color-success);">✅ Saldado</div>' : ''}
+                    ${r.pagadoBRL > 0 && r.pagadoBRL < r.totalBRL
+                        ? `<div style="font-size:10px;color:var(--color-warning);font-weight:700;">
+                            Debe R$ ${((r.totalBRL||0)-(r.pagadoBRL||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                           </div>` : ''}
+                    ${r.pagadoBRL >= r.totalBRL && r.totalBRL > 0
+                        ? '<div style="font-size:10px;color:var(--color-success);">✅ Saldado</div>' : ''}
                 </td>
                 <td data-label="Estado">${badgeEstado(r.estado)}</td>
                 <td data-label="Acciones">
-                    <div style="display:flex; gap:var(--space-1); flex-wrap:wrap;">
+                    <div style="display:flex;gap:var(--space-1);flex-wrap:wrap;">
                         <button class="btn btn-secondary btn-sm" onclick="abrirModalEditar('${r.id}')">
                             <span class="material-icons">edit</span>
                         </button>
@@ -419,15 +487,18 @@
                             <span class="material-icons">check_circle</span> Confirmar
                         </button>` : ''}
                         ${r.estado === 'airbnb_cancelada' ? `
-                        <button class="btn btn-warning btn-sm" onclick="anularReserva('${r.id}')" title="Anular reserva cancelada de Airbnb">
+                        <button class="btn btn-warning btn-sm" onclick="anularReserva('${r.id}')"
+                            title="Anular reserva cancelada de Airbnb">
                             <span class="material-icons">delete_forever</span> Anular
                         </button>` : ''}
                         ${r.estado === 'confirmada' ? `
-                        <button class="btn btn-ghost btn-sm" onclick="finalizarReserva('${r.id}')">
+                        <button class="btn btn-ghost btn-sm" onclick="finalizarReserva('${r.id}')"
+                            title="Marcar como finalizada">
                             <span class="material-icons">flag</span>
                         </button>` : ''}
-                        ${r.estado !== 'anulada' && r.estado !== 'finalizada' && r.estado !== 'airbnb_cancelada' ? `
-                        <button class="btn btn-danger btn-sm" onclick="anularReserva('${r.id}')">
+                        ${!['anulada','finalizada','airbnb_cancelada'].includes(r.estado) ? `
+                        <button class="btn btn-danger btn-sm" onclick="anularReserva('${r.id}')"
+                            title="Anular reserva">
                             <span class="material-icons">block</span>
                         </button>` : ''}
                     </div>
@@ -462,16 +533,13 @@
     document.getElementById('busqueda').addEventListener('input', renderReservas);
 
     // ── CLIENTE: búsqueda y selección ────────────────────────
-    // Fix bug #3: cliente vinculado al flujo de reserva
-
     document.getElementById('clienteBusqueda').addEventListener('input', function() {
         const q = this.value.trim().toLowerCase();
         if (!q) { ocultarSuggestions(); return; }
 
-        const matches = clientesCache.filter(c =>
-            c.nombre?.toLowerCase().includes(q) ||
-            c.email?.toLowerCase().includes(q)
-        ).slice(0, 6);
+        const matches = clientesCache
+            .filter(c => c.nombre?.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q))
+            .slice(0, 6);
 
         const items = matches.map(c => `
             <div class="cliente-suggestion-item" onclick="seleccionarCliente('${c.id}')">
@@ -479,18 +547,18 @@
                 <div class="sub">${escapeHtml(c.email || c.telefono || '')}</div>
             </div>`).join('');
 
-        // Opción para crear nuevo
+        const rawNombre = this.value.trim();
         const crearItem = `
-            <div class="cliente-suggestion-item nuevo" onclick="crearNuevoCliente('${escapeHtml(this.value.trim())}')">
+            <div class="cliente-suggestion-item nuevo"
+                onclick="crearNuevoCliente('${escapeHtml(rawNombre)}')">
                 <span class="material-icons">person_add</span>
-                Crear "${escapeHtml(this.value.trim())}" como nuevo cliente
+                Crear "${escapeHtml(rawNombre)}" como nuevo cliente
             </div>`;
 
         document.getElementById('clienteSuggestions').innerHTML = items + crearItem;
         document.getElementById('clienteSuggestions').style.display = 'block';
     });
 
-    // Cerrar suggestions al hacer click fuera
     document.addEventListener('click', function(e) {
         if (!document.getElementById('clienteSearchWrap').contains(e.target)) {
             ocultarSuggestions();
@@ -510,7 +578,6 @@
     };
 
     window.crearNuevoCliente = function(nombre) {
-        // Marcar como "nuevo" — se creará al guardar la reserva
         clienteSeleccionado = { id: null, nombre, esNuevo: true };
         document.getElementById('clienteId').value = '';
         mostrarClienteChip(nombre, 'Cliente nuevo — se creará al guardar');
@@ -518,71 +585,116 @@
 
     function mostrarClienteChip(nombre, sub) {
         ocultarSuggestions();
-        document.getElementById('clienteBusqueda').style.display   = 'none';
-        document.getElementById('clienteChipNombre').textContent   = nombre;
-        document.getElementById('clienteChipSub').textContent      = sub;
-        document.getElementById('clienteChip').style.display       = 'flex';
+        document.getElementById('clienteBusqueda').style.display = 'none';
+        document.getElementById('clienteChipNombre').textContent = nombre;
+        document.getElementById('clienteChipSub').textContent   = sub;
+        document.getElementById('clienteChip').style.display    = 'flex';
     }
 
     window.limpiarCliente = function() {
         clienteSeleccionado = null;
-        document.getElementById('clienteId').value              = '';
-        document.getElementById('clienteBusqueda').value        = '';
+        document.getElementById('clienteId').value               = '';
+        document.getElementById('clienteBusqueda').value         = '';
         document.getElementById('clienteBusqueda').style.display = 'block';
-        document.getElementById('clienteChip').style.display    = 'none';
+        document.getElementById('clienteChip').style.display     = 'none';
     };
 
-    // ── Modal nueva reserva ───────────────────────────────────
+    // ── Verificación de solapamiento en tiempo real ───────────
+    //
+    //  Se dispara al cambiar cabaña, check-in o check-out.
+    //  Solo muestra advertencia, no bloquea — el bloqueo real
+    //  ocurre en guardarReserva() antes de escribir en Firestore.
+    //
+    let solapamientoTimer = null;
+    function verificarSolapamientoLive() {
+        clearTimeout(solapamientoTimer);
+        solapamientoTimer = setTimeout(async () => {
+            const cabaId   = parseInt(document.getElementById('cabanaSelect').value);
+            const checkIn  = document.getElementById('checkIn').value;
+            const checkOut = document.getElementById('checkOut').value;
+            const editId   = document.getElementById('reservaId').value || null;
+
+            const alerta = document.getElementById('alertaSolapamiento');
+            if (!cabaId || !checkIn || !checkOut || checkOut <= checkIn) {
+                alerta.style.display = 'none';
+                return;
+            }
+
+            try {
+                const { disponible, conflicto } = await verificarDisponibilidadCabana(
+                    cabaId, checkIn, checkOut, editId
+                );
+                if (!disponible) {
+                    document.getElementById('alertaSolapamientoText').textContent =
+                        mensajeConflicto(conflicto);
+                    alerta.style.display = 'flex';
+                } else {
+                    alerta.style.display = 'none';
+                }
+            } catch(e) {
+                // Silenciar errores de red en la verificación live
+                alerta.style.display = 'none';
+            }
+        }, 600); // debounce 600ms
+    }
+
+    ['cabanaSelect', 'checkIn', 'checkOut'].forEach(id =>
+        document.getElementById(id).addEventListener('change', verificarSolapamientoLive)
+    );
+
+    // ── Modal: nueva reserva ──────────────────────────────────
     window.abrirModalNueva = function() {
-        document.getElementById('modalTitulo').textContent    = 'Nueva reserva';
-        document.getElementById('reservaId').value           = '';
-        document.getElementById('estadoSelect').value        = 'confirmada';
-        document.getElementById('checkIn').value             = '';
-        document.getElementById('checkOut').value            = '';
-        document.getElementById('adultos').value             = '2';
-        document.getElementById('ninos').value               = '0';
-        document.getElementById('horaLlegada').value         = '';
-        document.getElementById('horaSalida').value          = '';
-        document.getElementById('mascotas').value            = 'no';
-        document.getElementById('niniosPequenos').value      = 'no';
-        document.getElementById('origen').value              = 'directa';
-        document.getElementById('notas').value               = '';
-        document.getElementById('precioBox').style.display   = 'none';
-        document.getElementById('alertaAirbnb').style.display = 'none';
+        document.getElementById('modalTitulo').textContent       = 'Nueva reserva';
+        document.getElementById('reservaId').value              = '';
+        document.getElementById('estadoSelect').value           = 'confirmada';
+        document.getElementById('checkIn').value                = '';
+        document.getElementById('checkOut').value               = '';
+        document.getElementById('adultos').value                = '2';
+        document.getElementById('ninos').value                  = '0';
+        document.getElementById('horaLlegada').value            = '';
+        document.getElementById('horaSalida').value             = '';
+        document.getElementById('mascotas').value               = 'no';
+        document.getElementById('niniosPequenos').value         = 'no';
+        document.getElementById('origen').value                 = 'directa';
+        document.getElementById('notas').value                  = '';
+        document.getElementById('precioBox').style.display      = 'none';
+        document.getElementById('alertaAirbnb').style.display   = 'none';
+        document.getElementById('alertaSolapamiento').style.display = 'none';
         document.getElementById('historialPanel').style.display = 'none';
-        document.getElementById('errorModal').style.display  = 'none';
+        document.getElementById('errorModal').style.display     = 'none';
         limpiarCliente();
         ultimoPrecio = null;
         document.getElementById('modalOverlay').style.display = 'flex';
         setTimeout(() => document.getElementById('clienteBusqueda').focus(), 100);
     };
 
-    // ── Modal editar reserva ──────────────────────────────────
+    // ── Modal: editar reserva ─────────────────────────────────
     window.abrirModalEditar = async function(id) {
         const docSnap = await db.collection('reservas').doc(id).get();
         if (!docSnap.exists) return;
         const r = docSnap.data();
 
-        document.getElementById('modalTitulo').textContent   = 'Editar reserva';
-        document.getElementById('reservaId').value          = id;
-        document.getElementById('cabanaSelect').value       = r.caba;
-        document.getElementById('estadoSelect').value       = r.estado || 'confirmada';
-        document.getElementById('checkIn').value  = r.checkIn?.toDate?.()?.toISOString().split('T')[0] || '';
+        document.getElementById('modalTitulo').textContent       = 'Editar reserva';
+        document.getElementById('reservaId').value              = id;
+        document.getElementById('cabanaSelect').value           = r.caba;
+        document.getElementById('estadoSelect').value           = r.estado || 'confirmada';
+        document.getElementById('checkIn').value  = r.checkIn?.toDate?.()?.toISOString().split('T')[0]  || '';
         document.getElementById('checkOut').value = r.checkOut?.toDate?.()?.toISOString().split('T')[0] || '';
-        document.getElementById('adultos').value         = r.adultos          || 2;
-        document.getElementById('ninos').value            = r.ninos            || 0;
-        document.getElementById('origen').value           = r.origen           || 'directa';
-        document.getElementById('notas').value            = r.notas            || '';
-        document.getElementById('horaLlegada').value      = r.horaLlegada      || '';
-        document.getElementById('horaSalida').value       = r.horaSalida       || '';
-        document.getElementById('mascotas').value         = r.mascotas         || 'no';
-        document.getElementById('niniosPequenos').value   = r.niniosPequenos   || 'no';
-        document.getElementById('errorModal').style.display  = 'none';
+        document.getElementById('adultos').value                = r.adultos         || 2;
+        document.getElementById('ninos').value                  = r.ninos           || 0;
+        document.getElementById('origen').value                 = r.origen          || 'directa';
+        document.getElementById('notas').value                  = r.notas           || '';
+        document.getElementById('horaLlegada').value            = r.horaLlegada     || '';
+        document.getElementById('horaSalida').value             = r.horaSalida      || '';
+        document.getElementById('mascotas').value               = r.mascotas        || 'no';
+        document.getElementById('niniosPequenos').value         = r.niniosPequenos  || 'no';
+        document.getElementById('alertaSolapamiento').style.display = 'none';
+        document.getElementById('errorModal').style.display     = 'none';
 
-        // Airbnb alert
+        // Alerta Airbnb
         document.getElementById('alertaAirbnb').style.display =
-            (r.origen === 'airbnb' || r.airbnb_id) ? 'flex' : 'none';
-        
+            (r.origen === 'airbnb' || r.airbnb_google_id) ? 'flex' : 'none';
+
         // Historial y saldo
         document.getElementById('historialPanel').style.display = 'block';
         cargarHistorialReserva(id, r);
@@ -594,17 +706,15 @@
             if (cli) {
                 seleccionarCliente(cli.id);
             } else {
-                // Cliente no está en caché, mostrar solo nombre
                 clienteSeleccionado = { id: r.clienteId, nombre: r.nombre };
                 mostrarClienteChip(r.nombre, '');
             }
         } else {
-            // Reserva sin clienteId (legacy) — usar nombre directo
             clienteSeleccionado = { id: null, nombre: r.nombre, esNuevo: false };
             mostrarClienteChip(r.nombre, 'Sin cuenta de cliente vinculada');
         }
 
-        // Precio
+        // Precio guardado
         ultimoPrecio = {
             total:    r.totalBRL         || 0,
             subtotal: r.subtotalBRL      || 0,
@@ -616,25 +726,25 @@
         document.getElementById('modalOverlay').style.display = 'flex';
     };
 
-
-    // ── Historial y saldo de reserva ─────────────────────────
+    // ── Historial y saldo de la reserva ──────────────────────
     async function cargarHistorialReserva(reservaId, r) {
         const panel = document.getElementById('historialContent');
         panel.innerHTML = '<div class="state-loading"><div class="spinner spinner-sm"></div><span>Cargando historial...</span></div>';
 
         try {
-            // Leer pagos de esta reserva
             const pagosSnap = await db.collection('pagos')
                 .where('reservaId', '==', reservaId).get();
-            const pagos = pagosSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-                .sort((a,b) => (a.creadoEn?.toDate?.()?.getTime()||0) - (b.creadoEn?.toDate?.()?.getTime()||0));
+            const pagos = pagosSnap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .sort((a, b) => (a.creadoEn?.toDate?.()?.getTime() || 0) - (b.creadoEn?.toDate?.()?.getTime() || 0));
 
-            const totalPagado = pagos.filter(p => p.moneda === 'BRL')
+            const totalPagado = pagos
+                .filter(p => p.moneda === 'BRL')
                 .reduce((s, p) => s + (p.monto || 0), 0);
-            const saldo = Math.max(0, (r.totalBRL || 0) - totalPagado);
-            const fmt = n => `R$ ${n.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+            const saldo   = Math.max(0, (r.totalBRL || 0) - totalPagado);
+            const fmt     = n => `R$ ${n.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
 
-            // Leer presupuesto origen si existe
+            // Origen: presupuesto
             let presupuestoHtml = '';
             if (r.presupuestoId) {
                 try {
@@ -642,13 +752,14 @@
                     if (presSnap.exists) {
                         const p = presSnap.data();
                         presupuestoHtml = `
-                            <div style="margin-bottom:var(--space-3); padding-bottom:var(--space-3); border-bottom:1px solid var(--color-border);">
-                                <div style="font-size:var(--text-xs); color:var(--color-text-muted); margin-bottom:4px;">Origen</div>
-                                <div style="font-size:var(--text-sm); display:flex; align-items:center; gap:8px;">
-                                    <span class="material-icons" style="font-size:15px; color:var(--color-primary);">request_quote</span>
+                            <div style="margin-bottom:var(--space-3);padding-bottom:var(--space-3);
+                                border-bottom:1px solid var(--color-border);">
+                                <div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-bottom:4px;">Origen</div>
+                                <div style="font-size:var(--text-sm);display:flex;align-items:center;gap:8px;">
+                                    <span class="material-icons" style="font-size:15px;color:var(--color-primary);">request_quote</span>
                                     Presupuesto del ${p.creadoEn?.toDate?.()?.toLocaleDateString('es-AR') || '—'}
                                     · ${fmt(p.totalBRL || 0)}
-                                    <a href="presupuestos.html" style="font-size:var(--text-xs); color:var(--color-info);">Ver</a>
+                                    <a href="presupuestos.html" style="font-size:var(--text-xs);color:var(--color-info);">Ver</a>
                                 </div>
                             </div>`;
                     }
@@ -657,43 +768,52 @@
 
             // Saldo
             const saldoColor = saldo <= 0 ? 'var(--color-success)' : 'var(--color-warning)';
-            const saldoHtml = `
-                <div style="display:flex; justify-content:space-between; margin-bottom:var(--space-3); padding-bottom:var(--space-3); border-bottom:1px solid var(--color-border);">
+            const saldoHtml  = `
+                <div style="display:flex;justify-content:space-between;margin-bottom:var(--space-3);
+                    padding-bottom:var(--space-3);border-bottom:1px solid var(--color-border);">
                     <div>
-                        <div style="font-size:var(--text-xs); color:var(--color-text-muted);">Total reserva</div>
-                        <div style="font-size:var(--text-md); font-weight:700; font-family:var(--font-mono);">${fmt(r.totalBRL||0)}</div>
+                        <div style="font-size:var(--text-xs);color:var(--color-text-muted);">Total reserva</div>
+                        <div style="font-size:var(--text-md);font-weight:700;font-family:var(--font-mono);">${fmt(r.totalBRL||0)}</div>
                     </div>
                     <div>
-                        <div style="font-size:var(--text-xs); color:var(--color-text-muted);">Pagado</div>
-                        <div style="font-size:var(--text-md); font-weight:700; font-family:var(--font-mono); color:var(--color-success);">${fmt(totalPagado)}</div>
+                        <div style="font-size:var(--text-xs);color:var(--color-text-muted);">Pagado</div>
+                        <div style="font-size:var(--text-md);font-weight:700;font-family:var(--font-mono);color:var(--color-success);">${fmt(totalPagado)}</div>
                     </div>
                     <div>
-                        <div style="font-size:var(--text-xs); color:var(--color-text-muted);">Saldo</div>
-                        <div style="font-size:var(--text-md); font-weight:800; font-family:var(--font-mono); color:${saldoColor};">
+                        <div style="font-size:var(--text-xs);color:var(--color-text-muted);">Saldo</div>
+                        <div style="font-size:var(--text-md);font-weight:800;font-family:var(--font-mono);color:${saldoColor};">
                             ${saldo <= 0 ? '✅ Saldado' : fmt(saldo)}
                         </div>
                     </div>
                 </div>`;
 
-            // Lista de pagos
             const pagosHtml = pagos.length === 0
-                ? '<div style="font-size:var(--text-xs); color:var(--color-text-muted); text-align:center; padding:var(--space-3);">Sin pagos registrados</div>'
+                ? `<div style="font-size:var(--text-xs);color:var(--color-text-muted);
+                    text-align:center;padding:var(--space-3);">Sin pagos registrados</div>`
                 : pagos.map(p => `
-                    <div style="display:flex; justify-content:space-between; align-items:center; padding:var(--space-2) 0; border-bottom:1px solid var(--color-border-light); font-size:var(--text-xs);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;
+                        padding:var(--space-2) 0;border-bottom:1px solid var(--color-border-light);
+                        font-size:var(--text-xs);">
                         <div>
-                            <span style="color:var(--color-text-secondary);">${p.creadoEn?.toDate?.()?.toLocaleDateString('es-AR') || '—'}</span>
+                            <span style="color:var(--color-text-secondary);">
+                                ${p.creadoEn?.toDate?.()?.toLocaleDateString('es-AR') || '—'}
+                            </span>
                             · ${p.metodo || '—'} · ${p.tipo || '—'}
                             ${p.observaciones ? `· <em>${escapeHtml(p.observaciones)}</em>` : ''}
                         </div>
-                        <strong style="font-family:var(--font-mono); color:var(--color-success);">+${fmt(p.monto||0)}</strong>
+                        <strong style="font-family:var(--font-mono);color:var(--color-success);">
+                            +${fmt(p.monto||0)}
+                        </strong>
                     </div>`).join('');
 
-            panel.innerHTML = presupuestoHtml + saldoHtml +
-                `<div style="font-size:var(--text-xs); font-weight:700; color:var(--color-text-muted); margin-bottom:var(--space-2);">PAGOS RECIBIDOS</div>` +
-                pagosHtml;
+            panel.innerHTML = presupuestoHtml + saldoHtml
+                + `<div style="font-size:var(--text-xs);font-weight:700;color:var(--color-text-muted);
+                    margin-bottom:var(--space-2);">PAGOS RECIBIDOS</div>`
+                + pagosHtml;
 
         } catch(e) {
-            panel.innerHTML = `<div style="font-size:12px; color:var(--color-danger);">Error al cargar historial: ${e.message}</div>`;
+            panel.innerHTML = `<div style="font-size:12px;color:var(--color-danger);">
+                Error al cargar historial: ${e.message}</div>`;
         }
     }
 
@@ -710,8 +830,8 @@
         const adultos  = parseInt(document.getElementById('adultos').value) || 0;
         const ninos    = parseInt(document.getElementById('ninos').value)   || 0;
 
-        if (!checkIn || !checkOut)   { mostrarErrorModal('Ingresá las fechas primero.'); return; }
-        if (checkOut <= checkIn)     { mostrarErrorModal('El check-out debe ser posterior al check-in.'); return; }
+        if (!checkIn || !checkOut) { mostrarErrorModal('Ingresá las fechas primero.'); return; }
+        if (checkOut <= checkIn)   { mostrarErrorModal('El check-out debe ser posterior al check-in.'); return; }
 
         const cabana = cabanasCache.find(c => c.id == cabaId);
         if (!cabana) { mostrarErrorModal('Seleccioná una cabaña válida.'); return; }
@@ -732,60 +852,73 @@
 
     // ── Guardar reserva ───────────────────────────────────────
     window.guardarReserva = async function() {
-        const id       = document.getElementById('reservaId').value;
-        const cabaId   = parseInt(document.getElementById('cabanaSelect').value);
-        const checkIn  = document.getElementById('checkIn').value;
-        const checkOut = document.getElementById('checkOut').value;
-        const adultos  = parseInt(document.getElementById('adultos').value) || 0;
-        const ninos    = parseInt(document.getElementById('ninos').value)   || 0;
-        const estado   = document.getElementById('estadoSelect').value;
-        const origen   = document.getElementById('origen').value;
-        const notas    = document.getElementById('notas').value.trim();
+        const id      = document.getElementById('reservaId').value;
+        const cabaId  = parseInt(document.getElementById('cabanaSelect').value);
+        const checkIn = document.getElementById('checkIn').value;
+        const checkOut= document.getElementById('checkOut').value;
+        const adultos = parseInt(document.getElementById('adultos').value) || 0;
+        const ninos   = parseInt(document.getElementById('ninos').value)   || 0;
+        const estado  = document.getElementById('estadoSelect').value;
+        const origen  = document.getElementById('origen').value;
+        const notas   = document.getElementById('notas').value.trim();
 
         document.getElementById('errorModal').style.display = 'none';
 
+        // Validaciones básicas
         if (!clienteSeleccionado?.nombre) { mostrarErrorModal('Seleccioná o ingresá un cliente.'); return; }
         if (!checkIn || !checkOut)        { mostrarErrorModal('Las fechas son requeridas.');       return; }
         if (checkOut <= checkIn)          { mostrarErrorModal('El check-out debe ser posterior al check-in.'); return; }
         if (!cabaId)                      { mostrarErrorModal('Seleccioná una cabaña.'); return; }
 
-        // Calcular precio si no se hizo
-        if (!ultimoPrecio) {
-            const cabana = cabanasCache.find(c => c.id == cabaId);
-            if (cabana) ultimoPrecio = calcularPrecio(cabana, checkIn, checkOut, adultos, ninos);
-        }
-
         setLoading(true);
 
         try {
+            // ── Verificación de solapamiento (bloqueo real antes de escribir) ──
+            //    Solo para estados bloqueantes; pendiente y anulada no colisionan
+            if (['confirmada', 'airbnb_activa'].includes(estado)) {
+                const { disponible, conflicto } = await verificarDisponibilidadCabana(
+                    cabaId, checkIn, checkOut, id || null
+                );
+                if (!disponible) {
+                    mostrarErrorModal(mensajeConflicto(conflicto));
+                    setLoading(false);
+                    return;
+                }
+            }
+
+            // Calcular precio si no se hizo
+            if (!ultimoPrecio) {
+                const cabana = cabanasCache.find(c => c.id == cabaId);
+                if (cabana) ultimoPrecio = calcularPrecio(cabana, checkIn, checkOut, adultos, ninos);
+            }
+
             // Crear cliente nuevo si corresponde
             let clienteId = clienteSeleccionado.id || null;
             if (clienteSeleccionado.esNuevo) {
                 const clienteRef = await db.collection('clientes').add({
-                    nombre:    clienteSeleccionado.nombre,
-                    email:     '',
-                    telefono:  '',
-                    creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
-                    creadoPor: user.uid
+                    nombre:   clienteSeleccionado.nombre,
+                    email:    '',
+                    telefono: '',
+                    creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                    creadoPor:user.uid
                 });
                 clienteId = clienteRef.id;
-                // Actualizar caché local
                 clientesCache.push({ id: clienteId, nombre: clienteSeleccionado.nombre });
             }
 
-            const horaLlegada     = document.getElementById('horaLlegada').value;
-            const horaSalida      = document.getElementById('horaSalida').value;
-            const mascotas        = document.getElementById('mascotas').value;
-            const niniosPequenos  = document.getElementById('niniosPequenos').value;
+            const horaLlegada    = document.getElementById('horaLlegada').value;
+            const horaSalida     = document.getElementById('horaSalida').value;
+            const mascotas       = document.getElementById('mascotas').value;
+            const niniosPequenos = document.getElementById('niniosPequenos').value;
 
             const reservaData = {
                 caba:             cabaId,
                 nombre:           clienteSeleccionado.nombre,
-                clienteId:        clienteId,
+                clienteId,
                 checkIn:  firebase.firestore.Timestamp.fromDate(new Date(checkIn  + 'T12:00:00')),
                 checkOut: firebase.firestore.Timestamp.fromDate(new Date(checkOut + 'T12:00:00')),
-                horaLlegada:      horaLlegada || '',
-                horaSalida:       horaSalida  || '',
+                horaLlegada:      horaLlegada  || '',
+                horaSalida:       horaSalida   || '',
                 adultos, ninos,
                 huespedes:        adultos + ninos,
                 mascotas,
@@ -799,12 +932,13 @@
             };
 
             if (id) {
+                // Editar reserva existente
                 await db.collection('reservas').doc(id).update(reservaData);
                 await sincronizarDisponibilidad(id, reservaData);
-                // Actualizar tarea de limpieza asociada si existe
                 await actualizarTareaLimpieza(id, reservaData);
                 showToast('Reserva actualizada.', 'success');
             } else {
+                // Nueva reserva
                 reservaData.creadoEn  = firebase.firestore.FieldValue.serverTimestamp();
                 reservaData.creadoPor = user.uid;
                 const ref = await db.collection('reservas').add(reservaData);
@@ -827,28 +961,33 @@
         }
     };
 
-    // ── Acciones rápidas ──────────────────────────────────────
+    // ── Acciones rápidas desde la tabla ──────────────────────
     window.confirmarReserva = async function(id) {
         if (!confirm('¿Confirmar esta reserva? Se generará una tarea de limpieza.')) return;
         try {
-            const docSnap = await db.collection('reservas').doc(id).get();
+            const docSnap    = await db.collection('reservas').doc(id).get();
             const reservaData = { ...docSnap.data(), estado: 'confirmada' };
+
+            // Verificar solapamiento antes de confirmar
+            const ci  = reservaData.checkIn?.toDate?.()?.toISOString().slice(0, 10) || '';
+            const co  = reservaData.checkOut?.toDate?.()?.toISOString().slice(0, 10) || '';
+            if (ci && co) {
+                const { disponible, conflicto } = await verificarDisponibilidadCabana(
+                    reservaData.caba, ci, co, id
+                );
+                if (!disponible) {
+                    showToast(mensajeConflicto(conflicto), 'error');
+                    return;
+                }
+            }
+
             await db.collection('reservas').doc(id).update({
                 estado: 'confirmada',
                 actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
             });
             await sincronizarDisponibilidad(id, reservaData);
-
-            // CORRECCIÓN: verificar si ya existe tarea de limpieza para esta reserva
-            // antes de crear una nueva, para evitar duplicados si se confirma dos veces.
-            const tarExist = await db.collection('tareas').where('reservaId', '==', id).get();
-            if (tarExist.empty) {
-                await crearTareaLimpieza(id, reservaData, user.uid);
-                showToast('Reserva confirmada y tarea de limpieza generada.', 'success');
-            } else {
-                showToast('Reserva confirmada.', 'success');
-            }
-
+            await crearTareaLimpieza(id, reservaData, user.uid);
+            showToast('Reserva confirmada y tarea de limpieza generada.', 'success');
             await recargarReservas();
         } catch (e) { showToast('Error: ' + e.message, 'error'); }
     };
@@ -867,7 +1006,7 @@
     };
 
     window.anularReserva = async function(id) {
-        if (!confirm('¿Anular esta reserva?')) return;
+        if (!confirm('¿Anular esta reserva? Esta acción libera las fechas en el calendario.')) return;
         try {
             await db.collection('reservas').doc(id).update({
                 estado: 'anulada',
@@ -879,10 +1018,65 @@
         } catch(e) { showToast('Error: ' + e.message, 'error'); }
     };
 
+    // ── Actualizar tarea de limpieza al editar reserva ────────
+    //
+    //  Cuando se edita una reserva confirmada, la tarea de limpieza
+    //  asociada se regenera con los datos actualizados del huésped.
+    //
+    async function actualizarTareaLimpieza(reservaId, reservaData) {
+        try {
+            const tareasSnap = await db.collection('tareas')
+                .where('reservaId', '==', reservaId).get();
+            if (tareasSnap.empty) return;
+
+            const checkOut = reservaData.checkOut?.toDate
+                ? reservaData.checkOut.toDate()
+                : new Date(reservaData.checkOut);
+
+            let nombreCab = 'Cabana ' + reservaData.caba;
+            try {
+                const cs = await db.collection('cabanas').doc(String(reservaData.caba)).get();
+                if (cs.exists) nombreCab = cs.data().nombre?.es || nombreCab;
+            } catch(e) {}
+
+            const alertas = [];
+            if (reservaData.mascotas === 'si')       alertas.push('🐾 MASCOTAS');
+            if (reservaData.niniosPequenos === 'si') alertas.push('👶 NIÑOS PEQUEÑOS');
+
+            const updates = {
+                nombre:      'Limpiar ' + nombreCab + ' — ' + reservaData.nombre,
+                fechaInicio: checkOut.toISOString().split('T')[0],
+                cabana:      reservaData.caba,
+                monto:       reservaData.costoLimpiezaBRL || 0,
+                descripcion: [
+                    '🔑 SALIDA — ' + nombreCab,
+                    '   Huésped: ' + reservaData.nombre,
+                    '   Personas: ' + (reservaData.huespedes || ((reservaData.adultos||0)+(reservaData.ninos||0)))
+                        + ' (' + (reservaData.adultos||0) + ' adultos, ' + (reservaData.ninos||0) + ' niños)',
+                    '   Sale: ' + checkOut.toLocaleDateString('es-AR')
+                        + (reservaData.horaSalida ? ' a las ' + reservaData.horaSalida + 'hs' : ''),
+                    reservaData.notas ? '   Notas: ' + reservaData.notas : '',
+                    alertas.length ? '\n⚠️ ATENCIÓN: ' + alertas.join(' · ') : '',
+                    '',
+                    '💰 Monto limpieza: R$ ' + (reservaData.costoLimpiezaBRL || 0)
+                ].filter(s => s !== null && s !== undefined).join('\n'),
+                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            const batch = db.batch();
+            tareasSnap.docs.forEach(doc => batch.update(doc.ref, updates));
+            await batch.commit();
+        } catch(e) {
+            console.warn('actualizarTareaLimpieza:', e.message);
+        }
+    }
+
     // ── Helpers ───────────────────────────────────────────────
     async function recargarReservas() {
         const snap    = await db.collection('reservas').get();
-        reservasCache = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.checkIn?.toDate?.()?.getTime()||0)-(a.checkIn?.toDate?.()?.getTime()||0));
+        reservasCache = snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => (b.checkIn?.toDate?.()?.getTime()||0) - (a.checkIn?.toDate?.()?.getTime()||0));
         renderReservas();
     }
 
@@ -894,40 +1088,12 @@
     function setLoading(loading) {
         const btn  = document.getElementById('btnGuardar');
         const text = document.getElementById('btnGuardarText');
-        btn.disabled      = loading;
-        text.textContent  = loading ? 'Guardando...' : 'Guardar';
+        btn.disabled     = loading;
+        text.textContent = loading ? 'Guardando...' : 'Guardar';
     }
 
     // ── Init ──────────────────────────────────────────────────
     await inicializar();
-
-    // ── Actualizar tarea de limpieza al editar reserva ────────
-    //
-    //  CORRECCIÓN: en lugar de hacer una actualización parcial (que perdía el
-    //  bloque 🚪 ENTRADA con los datos del próximo huésped), ahora eliminamos
-    //  la tarea vieja y la regeneramos completamente desde CVC.crearTareaLimpieza,
-    //  que contiene toda la lógica centralizada incluyendo la búsqueda de la
-    //  próxima reserva en la misma cabaña.
-    //
-    async function actualizarTareaLimpieza(reservaId, reservaData) {
-        try {
-            const tareasSnap = await db.collection('tareas')
-                .where('reservaId', '==', reservaId).get();
-            if (tareasSnap.empty) return;
-
-            // Eliminar tarea(s) anterior(es) de esta reserva
-            const batch = db.batch();
-            tareasSnap.docs.forEach(doc => batch.delete(doc.ref));
-            await batch.commit();
-
-            // Regenerar con toda la lógica de utils.js
-            // Esto incluye búsqueda de próximo huésped y bloque ENTRADA completo
-            await CVC.crearTareaLimpieza(reservaId, reservaData, user.uid);
-
-        } catch(e) {
-            console.warn('actualizarTareaLimpieza:', e.message);
-        }
-    }
 
 })();
 </script>
