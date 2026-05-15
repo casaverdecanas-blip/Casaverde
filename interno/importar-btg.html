@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Importar extracto BTG · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        input[type="number"].form-control { appearance: auto; -webkit-appearance: auto; }
+
+        /* ── Layout de pasos ──────────────────────────────────── */
+        .paso { display: none; }
+        .paso.activo { display: block; }
+
+        .pasos-header {
+            display: flex;
+            gap: 0;
+            margin-bottom: var(--space-6);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            border: 1px solid var(--color-border);
+        }
+        .paso-tab {
+            flex: 1;
+            padding: var(--space-3) var(--space-4);
+            font-size: var(--text-sm);
+            font-weight: 600;
+            text-align: center;
+            background: var(--color-surface-2);
+            color: var(--color-text-muted);
+            border-right: 1px solid var(--color-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-2);
+        }
+        .paso-tab:last-child { border-right: none; }
+        .paso-tab.activo {
+            background: var(--color-primary);
+            color: white;
+        }
+        .paso-tab.completo {
+            background: var(--color-success-bg);
+            color: var(--color-success);
+        }
+        .paso-tab .material-icons { font-size: 16px; }
+
+        /* ── Resumen del extracto ─────────────────────────────── */
+        .extracto-meta {
+            background: var(--color-primary-xlight);
+            border: 1px solid var(--color-primary-light);
+            border-radius: var(--radius-md);
+            padding: var(--space-4);
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: var(--space-3);
+            margin-bottom: var(--space-4);
+            font-size: var(--text-sm);
+        }
+        .extracto-meta__item { }
+        .extracto-meta__label {
+            font-size: var(--text-xs);
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+        .extracto-meta__valor { font-weight: 700; margin-top: 2px; }
+
+        /* ── Stats del parse ──────────────────────────────────── */
+        .parse-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: var(--space-3);
+            margin-bottom: var(--space-4);
+        }
+        .stat-card {
+            background: var(--color-surface-2);
+            border-radius: var(--radius-md);
+            padding: var(--space-3) var(--space-4);
+            text-align: center;
+        }
+        .stat-card .label { font-size: var(--text-xs); color: var(--color-text-muted); }
+        .stat-card .valor { font-size: var(--text-xl); font-weight: 800; font-family: var(--font-mono); }
+        .stat-card.verde  .valor { color: var(--color-success); }
+        .stat-card.rojo   .valor { color: var(--color-danger); }
+        .stat-card.naranja .valor { color: var(--color-warning); }
+
+        /* ── Tabla de preview ─────────────────────────────────── */
+        .tabla-preview {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: var(--text-xs);
+        }
+        .tabla-preview th {
+            background: var(--color-surface-2);
+            color: var(--color-text-muted);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            padding: 6px 10px;
+            border-bottom: 2px solid var(--color-border);
+            text-align: left;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        .tabla-preview td {
+            padding: 6px 10px;
+            border-bottom: 1px solid var(--color-border-light);
+            vertical-align: middle;
+        }
+        .tabla-preview tr.dup td { background: rgba(224,123,0,.08); }
+        .tabla-preview tr.dup td:first-child { border-left: 3px solid var(--color-warning); }
+        .tabla-preview tr.saldo td { background: var(--color-surface-2); color: var(--color-text-muted); font-style: italic; }
+        .tabla-preview .credito { color: var(--color-success); font-weight: 700; font-family: var(--font-mono); }
+        .tabla-preview .debito  { color: var(--color-danger);  font-weight: 700; font-family: var(--font-mono); }
+        .tabla-preview .neutral { color: var(--color-text-muted); font-family: var(--font-mono); }
+
+        /* Filtros de la tabla preview */
+        .preview-filtros {
+            display: flex;
+            gap: var(--space-3);
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: var(--space-3);
+        }
+        .preview-filtros select,
+        .preview-filtros input {
+            font-size: var(--text-xs);
+            padding: 5px 8px;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            background: var(--color-surface);
+            height: 32px;
+        }
+
+        /* ── Progress bar de importación ──────────────────────── */
+        .progress-wrap {
+            background: var(--color-surface-2);
+            border-radius: var(--radius-full);
+            height: 12px;
+            overflow: hidden;
+            margin: var(--space-4) 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background: var(--color-primary);
+            border-radius: var(--radius-full);
+            transition: width .3s ease;
+            width: 0%;
+        }
+        .progress-label {
+            font-size: var(--text-sm);
+            color: var(--color-text-muted);
+            text-align: center;
+            margin-top: var(--space-2);
+        }
+
+        /* ── Resultado final ──────────────────────────────────── */
+        .resultado-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: var(--space-3);
+            margin: var(--space-4) 0;
+        }
+
+        /* Textarea del CSV */
+        .csv-textarea {
+            width: 100%;
+            min-height: 200px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            line-height: 1.5;
+            padding: var(--space-3);
+            border: 1.5px solid var(--color-border);
+            border-radius: var(--radius-md);
+            background: var(--color-surface-2);
+            resize: vertical;
+        }
+
+        /* Categoría badge en preview */
+        .cat-btg {
+            display: inline-block;
+            background: var(--color-surface-2);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: 1px 5px;
+            font-size: 10px;
+            color: var(--color-text-muted);
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">cottage</span>
+        Casa Verde Canas
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span><span id="userName">—</span></div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons">logout</span> Salir
+        </button>
+    </div>
+</header>
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+
+    <!-- Indicador de pasos -->
+    <div class="pasos-header">
+        <div class="paso-tab activo" id="tab1">
+            <span class="material-icons">upload_file</span> 1. Pegar CSV
+        </div>
+        <div class="paso-tab" id="tab2">
+            <span class="material-icons">preview</span> 2. Revisar
+        </div>
+        <div class="paso-tab" id="tab3">
+            <span class="material-icons">cloud_upload</span> 3. Importar
+        </div>
+        <div class="paso-tab" id="tab4">
+            <span class="material-icons">check_circle</span> 4. Listo
+        </div>
+    </div>
+
+    <!-- ── PASO 1: Pegar el CSV ────────────────────────────── -->
+    <div class="paso activo" id="paso1">
+        <div class="card">
+            <div class="card__header">
+                <h2 class="card__title">
+                    <span class="material-icons">upload_file</span>
+                    Pegar extracto BTG Pactual
+                </h2>
+            </div>
+
+            <div class="alert alert-info" style="margin-bottom:var(--space-4);">
+                <span class="material-icons">info</span>
+                <span>
+                    Abrí el CSV en cualquier editor de texto (Notes, Bloc de notas),
+                    seleccioná todo (<strong>Ctrl+A</strong> o <strong>Cmd+A</strong>),
+                    copiá y pegá acá abajo. El sistema reconoce automáticamente el formato BTG Pactual.
+                </span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Contenido del archivo CSV</label>
+                <textarea id="csvInput" class="csv-textarea"
+                    placeholder=",Extrato de conta corrente,,,,,,,,12/05/2026,
+,Cliente:,Maria Florencia De Tezanos Pinto,,,,,,,,
+..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">¿A qué cuenta pertenece este extracto? <span class="required">*</span></label>
+                <select id="cuentaSelect" class="form-control">
+                    <option value="">Cargando cuentas...</option>
+                </select>
+                <p class="form-hint">Si la cuenta no existe aún, creala primero en <a href="cuentas.html">Cuentas</a>.</p>
+            </div>
+
+            <div class="alert alert-error" id="paso1Error" style="display:none;">
+                <span class="material-icons">error_outline</span>
+                <span id="paso1ErrorText"></span>
+            </div>
+
+            <div style="display:flex; gap:var(--space-3); flex-wrap:wrap; margin-top:var(--space-4);">
+                <button class="btn btn-primary" onclick="procesarCSV()">
+                    <span class="material-icons">auto_fix_high</span> Interpretar y revisar
+                </button>
+                <a href="cuentas.html" class="btn btn-ghost">
+                    <span class="material-icons">arrow_back</span> Volver a cuentas
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── PASO 2: Revisar datos parseados ────────────────── -->
+    <div class="paso" id="paso2">
+        <div class="card">
+            <div class="card__header">
+                <h2 class="card__title">
+                    <span class="material-icons">preview</span>
+                    Revisar movimientos detectados
+                </h2>
+                <button class="btn btn-ghost btn-sm" onclick="irPaso(1)">
+                    <span class="material-icons">edit</span> Volver a editar
+                </button>
+            </div>
+
+            <!-- Datos del extracto -->
+            <div class="extracto-meta" id="extractoMeta"></div>
+
+            <!-- Stats -->
+            <div class="parse-stats" id="parseStats"></div>
+
+            <!-- Filtros de la preview -->
+            <div class="preview-filtros">
+                <select id="filtroTipo" onchange="filtrarPreview()">
+                    <option value="">Todos los movimientos</option>
+                    <option value="credito">Solo créditos (+)</option>
+                    <option value="debito">Solo débitos (−)</option>
+                </select>
+                <select id="filtroMes" onchange="filtrarPreview()">
+                    <option value="">Todos los meses</option>
+                </select>
+                <input type="text" id="filtroBusqueda" placeholder="Buscar descripción..."
+                    oninput="filtrarPreview()">
+                <label style="font-size:var(--text-xs); color:var(--color-text-muted);">
+                    <input type="checkbox" id="ocultarDups" onchange="filtrarPreview()">
+                    Ocultar posibles duplicados
+                </label>
+                <label style="font-size:var(--text-xs); color:var(--color-text-muted);">
+                    <input type="checkbox" id="ocultarSaldos" checked onchange="filtrarPreview()">
+                    Ocultar saldos diarios
+                </label>
+            </div>
+
+            <!-- Selección masiva -->
+            <div style="display:flex; gap:var(--space-3); align-items:center; margin-bottom:var(--space-3); flex-wrap:wrap;">
+                <label style="font-size:var(--text-sm); font-weight:600;">
+                    <input type="checkbox" id="chkTodos" onchange="toggleTodosVisible(this.checked)">
+                    Seleccionar / deseleccionar visibles
+                </label>
+                <span id="contSeleccionados" style="font-size:var(--text-xs); color:var(--color-text-muted);"></span>
+            </div>
+
+            <!-- Tabla -->
+            <div style="overflow-x:auto; max-height:480px; overflow-y:auto; border:1px solid var(--color-border); border-radius:var(--radius-md);">
+                <table class="tabla-preview">
+                    <thead>
+                        <tr>
+                            <th style="width:36px;"></th>
+                            <th>Fecha y hora</th>
+                            <th>Transacción</th>
+                            <th>Descripción</th>
+                            <th>Cat. BTG</th>
+                            <th style="text-align:right;">Valor</th>
+                            <th style="text-align:right;">Saldo post</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="previewBody"></tbody>
+                </table>
+            </div>
+
+            <div style="display:flex; gap:var(--space-3); margin-top:var(--space-5); flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="irPaso(3)">
+                    <span class="material-icons">cloud_upload</span> Continuar con importación
+                </button>
+                <button class="btn btn-ghost" onclick="irPaso(1)">
+                    <span class="material-icons">arrow_back</span> Volver
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── PASO 3: Confirmar e importar ───────────────────── -->
+    <div class="paso" id="paso3">
+        <div class="card">
+            <div class="card__header">
+                <h2 class="card__title">
+                    <span class="material-icons">cloud_upload</span>
+                    Confirmar importación
+                </h2>
+            </div>
+
+            <!-- Resumen final -->
+            <div class="resultado-grid" id="resumenFinal"></div>
+
+            <div class="alert alert-warning" style="margin-bottom:var(--space-4);">
+                <span class="material-icons">warning</span>
+                <span>
+                    Se importarán solo los movimientos <strong>seleccionados</strong> en el paso anterior.
+                    Los "Saldos Diarios" nunca se importan — son de referencia.
+                    Esta operación no se puede deshacer fácilmente.
+                </span>
+            </div>
+
+            <!-- Progress -->
+            <div id="progressWrap" style="display:none;">
+                <div class="progress-wrap">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="progress-label" id="progressLabel">Preparando...</div>
+            </div>
+
+            <div id="importLog" style="max-height:200px; overflow-y:auto; font-family:var(--font-mono);
+                font-size:11px; background:var(--color-surface-2); border-radius:var(--radius-md);
+                padding:var(--space-3); display:none; line-height:1.8;"></div>
+
+            <div style="display:flex; gap:var(--space-3); margin-top:var(--space-5); flex-wrap:wrap;">
+                <button class="btn btn-primary" id="btnImportar" onclick="ejecutarImportacion()">
+                    <span class="material-icons">cloud_upload</span>
+                    <span id="btnImportarText">Importar ahora</span>
+                </button>
+                <button class="btn btn-ghost" onclick="irPaso(2)" id="btnVolverPaso2">
+                    <span class="material-icons">arrow_back</span> Volver a revisar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── PASO 4: Resultado ───────────────────────────────── -->
+    <div class="paso" id="paso4">
+        <div class="card" style="text-align:center; padding:var(--space-8);">
+            <div style="font-size:64px; margin-bottom:var(--space-4);">✅</div>
+            <h2 style="font-size:var(--text-2xl); font-weight:800; color:var(--color-primary-dark); margin-bottom:var(--space-3);">
+                Importación completada
+            </h2>
+            <div class="resultado-grid" id="resultadoFinal" style="max-width:500px; margin:0 auto var(--space-6);"></div>
+            <div style="display:flex; gap:var(--space-3); justify-content:center; flex-wrap:wrap;">
+                <a href="movimientos.html" id="linkMovimientos" class="btn btn-primary">
+                    <span class="material-icons">list</span> Ver movimientos importados
+                </a>
+                <a href="cuentas.html" class="btn btn-secondary">
+                    <span class="material-icons">account_balance</span> Volver a cuentas
+                </a>
+                <button class="btn btn-ghost" onclick="reiniciar()">
+                    <span class="material-icons">refresh</span> Importar otro extracto
+                </button>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async () => {
+    const { user, userData } = await CVC.verificarAuth('admin');
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+    CVC.renderNav('cuentas.html');
+
+    const db = CVC.db;
+    const { escapeHtml, showToast } = CVC;
+
+    // ── Estado global ─────────────────────────────────────────
+    let movimientosParsed  = [];   // todos los parseados (incluye saldos)
+    let metaExtracto       = {};   // datos del encabezado del CSV
+    let cuentaSeleccionada = null;
+
+    // ── Cargar cuentas disponibles ────────────────────────────
+    try {
+        const snap = await db.collection('cuentas').get();
+        const cuentas = snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => (a.orden || 99) - (b.orden || 99));
+
+        const sel = document.getElementById('cuentaSelect');
+        if (cuentas.length) {
+            sel.innerHTML = '<option value="">— Seleccionar cuenta —</option>'
+                + cuentas.map(c =>
+                    `<option value="${c.id}" data-moneda="${c.moneda || 'BRL'}">
+                        ${escapeHtml(c.nombre)} (${c.moneda || 'BRL'})
+                    </option>`
+                ).join('');
+        } else {
+            sel.innerHTML = '<option value="">Sin cuentas — creá una en Cuentas primero</option>';
+        }
+
+        // Si viene ?cuenta= en la URL, preseleccionar
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('cuenta')) sel.value = params.get('cuenta');
+    } catch(e) {
+        console.warn('No se pudieron cargar cuentas:', e);
+    }
+
+    // ── Navegación entre pasos ────────────────────────────────
+    function irPaso(n) {
+        document.querySelectorAll('.paso').forEach((el, i) => {
+            el.classList.toggle('activo', i + 1 === n);
+        });
+        document.querySelectorAll('.paso-tab').forEach((el, i) => {
+            el.classList.remove('activo', 'completo');
+            if (i + 1 === n) el.classList.add('activo');
+            if (i + 1 < n)  el.classList.add('completo');
+        });
+        window.scrollTo(0, 0);
+    }
+    window.irPaso = irPaso;
+
+    // ═══════════════════════════════════════════════════════════
+    //  PARSER ESPECÍFICO DE BTG PACTUAL
+    //
+    //  Formato del CSV:
+    //  Col 0: vacía siempre
+    //  Col 1: "Data e hora" (DD/MM/YYYY HH:MM) o metadato
+    //  Col 2: Categoria (del banco)
+    //  Col 3: Transação (tipo de operación)
+    //  Col 6: Descripción (beneficiario/origen)
+    //  Col 10: Valor (BR format: punto miles, coma decimal, negativos con guión)
+    //
+    //  Filas especiales a ignorar o tratar distinto:
+    //  - "Saldo Diário" en col 6 → registrar pero marcar como saldo
+    //  - "Ouvidoria:", "©BTG", vacías → ignorar
+    //  - Encabezado repetido ("Extrato de conta corrente") → extraer meta y omitir
+    // ═══════════════════════════════════════════════════════════
+
+    function parsearBTG(texto) {
+        const lineas    = texto.split('\n');
+        const resultado = [];
+        const meta      = {};
+
+        for (const linea of lineas) {
+            const cols = parsearLineaCSV(linea);
+            if (!cols || cols.length < 2) continue;
+
+            const col1 = (cols[1] || '').trim();
+            const col2 = (cols[2] || '').trim();
+            const col3 = (cols[3] || '').trim();
+            const col6 = (cols[6] || '').trim();
+            const col10 = (cols[10] || '').trim();
+
+            // ── Metadatos del encabezado ──────────────────────
+            if (col1 === 'Cliente:')              { meta.cliente     = (cols[2] || '').trim(); continue; }
+            if (col1 === 'CPF:')                  { meta.cpf         = (cols[2] || '').trim(); continue; }
+            if (col1 === 'Agência:')              { meta.agencia     = (cols[2] || '').trim(); continue; }
+            if (col1 === 'Conta:')                { meta.conta       = (cols[2] || '').trim(); continue; }
+            if (col1 === 'Período do extrato:')   { meta.periodo     = (cols[2] || '').trim(); continue; }
+            if (col1 === 'Data e hora')            continue; // encabezado de columnas
+            if (col6.includes('Ouvidoria'))        continue;
+            if (col6.includes('BTG Pactual'))      continue;
+            if (col1.includes('Extrato de conta')) continue;
+            if (col1 === 'Lançamentos:')           continue;
+
+            // ── Saldo actual del encabezado ───────────────────
+            if (col1 === 'Lançamentos:' || (col1 === '' && col10 !== '' && !col1.match(/\d/))) {
+                // ignorar línea de saldo actual del encabezado
+                continue;
+            }
+
+            // ── Detectar si es una fila de movimiento ─────────
+            const fechaMatch = col1.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2})/);
+            if (!fechaMatch) continue;
+
+            const fecha     = `${fechaMatch[3]}-${fechaMatch[2]}-${fechaMatch[1]}`;
+            const hora      = fechaMatch[4];
+            const fechaHora = `${fecha}T${hora}`;
+            const descripcion = col6 || col3 || '(sin descripción)';
+            const esSaldo   = descripcion === 'Saldo Diário';
+            const valor     = parsearMontoBR(col10);
+
+            if (valor === null) continue; // línea sin valor válido
+
+            resultado.push({
+                fechaHora,
+                fecha,
+                hora,
+                descripcion:       esSaldo ? 'Saldo Diário' : descripcion,
+                transacao:         col3,
+                categoriaBTG:      col2,
+                monto:             valor,
+                tipo:              valor >= 0 ? 'credito' : 'debito',
+                esSaldo,
+                seleccionado:      !esSaldo, // saldos siempre deseleccionados
+                duplicado:         false,
+                id:                fechaHora + '_' + Math.abs(valor) + '_' + descripcion.slice(0, 10)
+            });
+        }
+
+        return { movimientos: resultado, meta };
+    }
+
+    // ── Parser de línea CSV respetando comillas ───────────────
+    function parsearLineaCSV(linea) {
+        const result = [];
+        let actual   = '';
+        let enComillas = false;
+
+        for (let i = 0; i < linea.length; i++) {
+            const c = linea[i];
+            if (c === '"') {
+                if (enComillas && linea[i+1] === '"') { actual += '"'; i++; }
+                else enComillas = !enComillas;
+            } else if (c === ',' && !enComillas) {
+                result.push(actual);
+                actual = '';
+            } else {
+                actual += c;
+            }
+        }
+        result.push(actual);
+        return result;
+    }
+
+    // ── Parser de monto formato BR ────────────────────────────
+    //  Ejemplos: "-1,859.72" → -1859.72  (confuso: el CSV usa punto como miles y coma decimal)
+    //  Casos reales vistos: "2,406.97"  "-1,202.94"  "-25.00"  "978.33"
+    //  Pero también: "-5,390.00" y "15,456.85"
+    //  → En este CSV: punto = separador de decimales, coma = separador de miles
+    //    (formato AMERICANO a pesar de ser banco brasilero)
+    function parsearMontoBR(str) {
+        if (!str || str.trim() === '') return null;
+        let s = str.trim().replace(/\s/g, '');
+        const negativo = s.startsWith('-');
+        s = s.replace(/^-/, '');
+        // Eliminar comas (miles) y dejar punto (decimal)
+        s = s.replace(/,/g, '');
+        const n = parseFloat(s);
+        if (isNaN(n)) return null;
+        return negativo ? -n : n;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  PASO 1 → Procesar CSV
+    // ═══════════════════════════════════════════════════════════
+    window.procesarCSV = async function() {
+        const texto    = document.getElementById('csvInput').value.trim();
+        const cuentaId = document.getElementById('cuentaSelect').value;
+        const errEl    = document.getElementById('paso1Error');
+        errEl.style.display = 'none';
+
+        if (!texto) {
+            document.getElementById('paso1ErrorText').textContent = 'Pegá el contenido del CSV primero.';
+            errEl.style.display = 'flex'; return;
+        }
+        if (!cuentaId) {
+            document.getElementById('paso1ErrorText').textContent = 'Seleccioná la cuenta de destino.';
+            errEl.style.display = 'flex'; return;
+        }
+
+        const opt = document.getElementById('cuentaSelect').selectedOptions[0];
+        cuentaSeleccionada = {
+            id:     cuentaId,
+            nombre: opt.textContent,
+            moneda: opt.dataset.moneda || 'BRL'
+        };
+
+        const { movimientos, meta } = parsearBTG(texto);
+        metaExtracto       = meta;
+        movimientosParsed  = movimientos;
+
+        if (!movimientos.length) {
+            document.getElementById('paso1ErrorText').textContent =
+                'No se detectaron movimientos. Verificá que el texto sea el CSV de BTG completo.';
+            errEl.style.display = 'flex'; return;
+        }
+
+        // Detectar duplicados contra Firestore
+        await detectarDuplicados(cuentaId, movimientos);
+
+        // Poblar filtro de mes
+        const meses = [...new Set(movimientos.map(m => m.fecha.slice(0, 7)))].sort().reverse();
+        document.getElementById('filtroMes').innerHTML =
+            '<option value="">Todos los meses</option>'
+            + meses.map(m => {
+                const [y, mo] = m.split('-');
+                return `<option value="${m}">${new Date(parseInt(y), parseInt(mo)-1).toLocaleDateString('es-AR', {month:'long', year:'numeric'})}</option>`;
+            }).join('');
+
+        renderMeta(meta, movimientos, cuentaSeleccionada);
+        renderStats(movimientos);
+        filtrarPreview();
+
+        irPaso(2);
+    };
+
+    // ── Detectar duplicados comparando con Firestore ──────────
+    async function detectarDuplicados(cuentaId, movimientos) {
+        try {
+            const fechas = [...new Set(movimientos.map(m => m.fecha))];
+            // Consultar por lotes de 10 (límite de 'in' en Firestore)
+            const CHUNK = 10;
+            const existentes = [];
+
+            for (let i = 0; i < fechas.length; i += CHUNK) {
+                const lote = fechas.slice(i, i + CHUNK);
+                const snap = await db.collection('movimientos')
+                    .where('cuentaId', '==', cuentaId)
+                    .where('fecha',    'in',  lote)
+                    .get();
+                snap.docs.forEach(d => existentes.push(d.data()));
+            }
+
+            movimientos.forEach(m => {
+                const dup = existentes.some(e =>
+                    e.fecha === m.fecha &&
+                    Math.abs(e.monto - m.monto) < 0.01 &&
+                    (e.descripcion || '').slice(0,15) === m.descripcion.slice(0,15)
+                );
+                m.duplicado = dup;
+                if (dup) m.seleccionado = false;
+            });
+        } catch(e) {
+            console.warn('Detección de duplicados:', e.message);
+        }
+    }
+
+    // ── Render meta del extracto ──────────────────────────────
+    function renderMeta(meta, movs, cuenta) {
+        const reales   = movs.filter(m => !m.esSaldo);
+        const fechas   = reales.map(m => m.fecha).sort();
+        document.getElementById('extractoMeta').innerHTML = `
+            <div class="extracto-meta__item">
+                <div class="extracto-meta__label">Banco</div>
+                <div class="extracto-meta__valor">BTG Pactual</div>
+            </div>
+            <div class="extracto-meta__item">
+                <div class="extracto-meta__label">Titular</div>
+                <div class="extracto-meta__valor">${escapeHtml(meta.cliente || '—')}</div>
+            </div>
+            <div class="extracto-meta__item">
+                <div class="extracto-meta__label">Cuenta</div>
+                <div class="extracto-meta__valor">Ag. ${escapeHtml(meta.agencia || '—')} · ${escapeHtml(meta.conta || '—')}</div>
+            </div>
+            <div class="extracto-meta__item">
+                <div class="extracto-meta__label">Período del extracto</div>
+                <div class="extracto-meta__valor">${escapeHtml(meta.periodo || '—')}</div>
+            </div>
+            <div class="extracto-meta__item">
+                <div class="extracto-meta__label">Destino en el sistema</div>
+                <div class="extracto-meta__valor" style="color:var(--color-primary);">${escapeHtml(cuenta.nombre)}</div>
+            </div>
+        `;
+    }
+
+    // ── Render stats ──────────────────────────────────────────
+    function renderStats(movs) {
+        const reales   = movs.filter(m => !m.esSaldo);
+        const creditos = reales.filter(m => m.tipo === 'credito');
+        const debitos  = reales.filter(m => m.tipo === 'debito');
+        const dups     = reales.filter(m => m.duplicado);
+
+        const sumCred = creditos.reduce((a, m) => a + m.monto, 0);
+        const sumDeb  = debitos.reduce((a, m)  => a + Math.abs(m.monto), 0);
+
+        const fmt = n => `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
+        document.getElementById('parseStats').innerHTML = `
+            <div class="stat-card">
+                <div class="label">Total movimientos</div>
+                <div class="valor">${reales.length}</div>
+            </div>
+            <div class="stat-card verde">
+                <div class="label">Créditos</div>
+                <div class="valor">${creditos.length}</div>
+                <div style="font-size:10px; color:var(--color-success);">${fmt(sumCred)}</div>
+            </div>
+            <div class="stat-card rojo">
+                <div class="label">Débitos</div>
+                <div class="valor">${debitos.length}</div>
+                <div style="font-size:10px; color:var(--color-danger);">${fmt(sumDeb)}</div>
+            </div>
+            ${dups.length ? `
+            <div class="stat-card naranja">
+                <div class="label">Posibles duplicados</div>
+                <div class="valor">${dups.length}</div>
+                <div style="font-size:10px; color:var(--color-warning);">deseleccionados</div>
+            </div>` : ''}
+        `;
+    }
+
+    // ── Render tabla de preview con filtros ───────────────────
+    let movsFiltrados = [];
+
+    window.filtrarPreview = function() {
+        const tipo     = document.getElementById('filtroTipo').value;
+        const mes      = document.getElementById('filtroMes').value;
+        const busq     = document.getElementById('filtroBusqueda').value.toLowerCase();
+        const sinDups  = document.getElementById('ocultarDups').checked;
+        const sinSaldos= document.getElementById('ocultarSaldos').checked;
+
+        movsFiltrados = movimientosParsed.filter(m => {
+            if (sinSaldos && m.esSaldo)                return false;
+            if (sinDups   && m.duplicado)              return false;
+            if (tipo      && m.tipo !== tipo && !m.esSaldo) return false;
+            if (mes       && !m.fecha.startsWith(mes)) return false;
+            if (busq      && !m.descripcion.toLowerCase().includes(busq)) return false;
+            return true;
+        });
+
+        const sel = movsFiltrados.filter(m => m.seleccionado).length;
+        document.getElementById('contSeleccionados').textContent =
+            `${sel} de ${movsFiltrados.filter(m => !m.esSaldo).length} seleccionados`;
+
+        const SIMBOLO = { BRL: 'R$', USD: 'US$', UYU: '$U', ARS: '$' };
+        const sim = SIMBOLO[cuentaSeleccionada?.moneda] || 'R$';
+
+        document.getElementById('previewBody').innerHTML = movsFiltrados.map((m, vi) => {
+            const idx = movimientosParsed.indexOf(m);
+            if (m.esSaldo) {
+                return `<tr class="saldo">
+                    <td></td>
+                    <td colspan="5" style="color:var(--color-text-muted); font-style:italic;">
+                        📊 Saldo diário ${m.fecha}
+                    </td>
+                    <td class="neutral" style="text-align:right;">
+                        ${sim} ${Math.abs(m.monto).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                    </td>
+                    <td>—</td>
+                </tr>`;
+            }
+            return `
+            <tr class="${m.duplicado ? 'dup' : ''}">
+                <td style="text-align:center;">
+                    <input type="checkbox" id="chk_${idx}"
+                        ${m.seleccionado ? 'checked' : ''}
+                        onchange="movimientosParsed[${idx}].seleccionado = this.checked; actualizarConteo()">
+                </td>
+                <td style="white-space:nowrap; font-family:var(--font-mono);">
+                    <div>${m.fecha}</div>
+                    <div style="color:var(--color-text-muted); font-size:10px;">${m.hora}</div>
+                </td>
+                <td style="font-size:11px; color:var(--color-text-muted);">${escapeHtml(m.transacao || '—')}</td>
+                <td style="max-width:240px; word-break:break-word;">${escapeHtml(m.descripcion)}</td>
+                <td>${m.categoriaBTG ? `<span class="cat-btg">${escapeHtml(m.categoriaBTG)}</span>` : '—'}</td>
+                <td class="${m.tipo}" style="text-align:right; white-space:nowrap;">
+                    ${m.monto >= 0 ? '+' : '−'} ${sim} ${Math.abs(m.monto).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                </td>
+                <td style="text-align:right; color:var(--color-text-muted); white-space:nowrap;">—</td>
+                <td style="font-size:10px;">
+                    ${m.duplicado ? '<span style="color:var(--color-warning); font-weight:700;">⚠ Posible dup.</span>' : '<span style="color:var(--color-success);">✓ Nuevo</span>'}
+                </td>
+            </tr>`;
+        }).join('');
+    };
+
+    window.actualizarConteo = function() {
+        const sel = movimientosParsed.filter(m => m.seleccionado && !m.esSaldo).length;
+        const tot = movimientosParsed.filter(m => !m.esSaldo).length;
+        document.getElementById('contSeleccionados').textContent =
+            `${sel} de ${tot} seleccionados`;
+    };
+
+    window.toggleTodosVisible = function(checked) {
+        movsFiltrados.forEach(m => {
+            if (m.esSaldo) return;
+            const idx = movimientosParsed.indexOf(m);
+            m.seleccionado = checked;
+            const chk = document.getElementById('chk_' + idx);
+            if (chk) chk.checked = checked;
+        });
+        actualizarConteo();
+    };
+
+    // ═══════════════════════════════════════════════════════════
+    //  PASO 3 → Confirmar
+    // ═══════════════════════════════════════════════════════════
+    const originalIrPaso = irPaso;
+    window.irPaso = function(n) {
+        if (n === 3) {
+            // Calcular resumen final antes de ir al paso 3
+            const seleccionados = movimientosParsed.filter(m => m.seleccionado && !m.esSaldo);
+            const creditos = seleccionados.filter(m => m.tipo === 'credito');
+            const debitos  = seleccionados.filter(m => m.tipo === 'debito');
+            const sim = { BRL:'R$', USD:'US$', UYU:'$U', ARS:'$' }[cuentaSeleccionada?.moneda] || 'R$';
+            const fmt = n => `${sim} ${Math.abs(n).toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
+
+            document.getElementById('resumenFinal').innerHTML = `
+                <div class="stat-card">
+                    <div class="label">A importar</div>
+                    <div class="valor">${seleccionados.length}</div>
+                </div>
+                <div class="stat-card verde">
+                    <div class="label">Créditos</div>
+                    <div class="valor" style="font-size:var(--text-md);">${fmt(creditos.reduce((a,m)=>a+m.monto,0))}</div>
+                </div>
+                <div class="stat-card rojo">
+                    <div class="label">Débitos</div>
+                    <div class="valor" style="font-size:var(--text-md);">${fmt(debitos.reduce((a,m)=>a+Math.abs(m.monto),0))}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Cuenta destino</div>
+                    <div class="valor" style="font-size:var(--text-sm); color:var(--color-primary);">${escapeHtml(cuentaSeleccionada?.nombre || '—')}</div>
+                </div>
+            `;
+        }
+        originalIrPaso(n);
+    };
+
+    // ═══════════════════════════════════════════════════════════
+    //  IMPORTACIÓN REAL — en batches de 400
+    // ═══════════════════════════════════════════════════════════
+    window.ejecutarImportacion = async function() {
+        const seleccionados = movimientosParsed.filter(m => m.seleccionado && !m.esSaldo);
+        if (!seleccionados.length) { showToast('No hay movimientos seleccionados.', 'error'); return; }
+
+        const btn  = document.getElementById('btnImportar');
+        const text = document.getElementById('btnImportarText');
+        const prog = document.getElementById('progressWrap');
+        const bar  = document.getElementById('progressBar');
+        const label= document.getElementById('progressLabel');
+        const log  = document.getElementById('importLog');
+        const volv = document.getElementById('btnVolverPaso2');
+
+        btn.disabled  = true;
+        volv.disabled = true;
+        text.textContent = 'Importando...';
+        prog.style.display = 'block';
+        log.style.display  = 'block';
+        log.innerHTML = '';
+
+        const cuentaId = cuentaSeleccionada.id;
+        const moneda   = cuentaSeleccionada.moneda;
+        const CHUNK    = 400;
+        let importados = 0, errores = 0;
+
+        function logLine(msg) {
+            log.innerHTML += msg + '\n';
+            log.scrollTop  = log.scrollHeight;
+        }
+
+        try {
+            logLine(`▶ Iniciando importación de ${seleccionados.length} movimientos...`);
+
+            for (let i = 0; i < seleccionados.length; i += CHUNK) {
+                const lote   = seleccionados.slice(i, i + CHUNK);
+                const batch  = db.batch();
+
+                lote.forEach(m => {
+                    const ref = db.collection('movimientos').doc();
+                    batch.set(ref, {
+                        cuentaId,
+                        moneda,
+                        fecha:         m.fecha,
+                        hora:          m.hora,
+                        fechaHora:     m.fechaHora,
+                        descripcion:   m.descripcion,
+                        transacao:     m.transacao      || '',
+                        categoriaBTG:  m.categoriaBTG   || '',
+                        monto:         m.monto,
+                        tipo:          m.tipo,
+                        saldoPost:     null, // BTG no da saldo por movimiento, solo diario
+                        categoriaId:   null, // el usuario lo asignará después
+                        etiqueta:      '',
+                        reservaId:     null,
+                        tareaId:       null,
+                        pixId:         '',
+                        origen:        'btg-csv',
+                        importadoEn:   firebase.firestore.FieldValue.serverTimestamp(),
+                        importadoPor:  user.uid
+                    });
+                });
+
+                await batch.commit();
+                importados += lote.length;
+
+                const pct = Math.round((importados / seleccionados.length) * 100);
+                bar.style.width    = pct + '%';
+                label.textContent  = `${importados} de ${seleccionados.length} (${pct}%)`;
+                logLine(`  ✓ Lote ${Math.floor(i/CHUNK)+1}: ${lote.length} movimientos guardados`);
+            }
+
+            // Actualizar saldo actual de la cuenta
+            // Buscamos el último "Saldo Diário" del extracto
+            const saldosDelExtracto = movimientosParsed
+                .filter(m => m.esSaldo)
+                .sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+            if (saldosDelExtracto.length) {
+                const ultimoSaldo = saldosDelExtracto[0].monto;
+                await db.collection('cuentas').doc(cuentaId).update({
+                    saldoActual:   ultimoSaldo,
+                    actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                logLine(`  ✓ Saldo de la cuenta actualizado: R$ ${ultimoSaldo.toLocaleString('pt-BR',{minimumFractionDigits:2})}`);
+            }
+
+            logLine(`\n✅ Importación completada: ${importados} movimientos importados.`);
+            if (errores) logLine(`⚠ ${errores} errores.`);
+
+            bar.style.width   = '100%';
+            bar.style.background = 'var(--color-success)';
+            label.textContent = '¡Completado!';
+
+            // Ir al paso 4
+            document.getElementById('linkMovimientos').href = `movimientos.html?cuenta=${cuentaId}`;
+            document.getElementById('resultadoFinal').innerHTML = `
+                <div class="stat-card verde">
+                    <div class="label">Importados</div>
+                    <div class="valor">${importados}</div>
+                </div>
+                ${errores ? `<div class="stat-card naranja"><div class="label">Errores</div><div class="valor">${errores}</div></div>` : ''}
+            `;
+
+            setTimeout(() => irPaso(4), 800);
+
+        } catch(e) {
+            logLine(`\n❌ Error: ${e.message}`);
+            btn.disabled  = false;
+            volv.disabled = false;
+            text.textContent = 'Reintentar';
+            showToast('Error en la importación: ' + e.message, 'error');
+        }
+    };
+
+    window.reiniciar = function() {
+        document.getElementById('csvInput').value = '';
+        movimientosParsed = [];
+        metaExtracto = {};
+        irPaso(1);
+    };
+
+})();
+</script>
+</body>
+</html>
