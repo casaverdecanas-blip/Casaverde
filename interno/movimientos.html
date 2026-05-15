@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movimientos · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        /* ── Cabecera de cuenta ───────────────────────────────── */
+        .cuenta-header {
+            background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary-mid));
+            border-radius: var(--radius-lg);
+            padding: var(--space-5) var(--space-6);
+            color: white;
+            margin-bottom: var(--space-5);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: var(--space-4);
+        }
+        .cuenta-header__saldo {
+            font-size: var(--text-3xl);
+            font-weight: 800;
+            font-family: var(--font-mono);
+        }
+        .cuenta-header__nombre { font-size: var(--text-md); opacity: .9; }
+        .cuenta-header__banco  { font-size: var(--text-xs); opacity: .6; }
+
+        /* ── Filtros ──────────────────────────────────────────── */
+        .filtros-bar {
+            display: flex;
+            gap: var(--space-3);
+            flex-wrap: wrap;
+            align-items: center;
+            padding: var(--space-4);
+            background: var(--color-surface-2);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-4);
+        }
+        .filtros-bar select,
+        .filtros-bar input[type=month],
+        .filtros-bar input[type=text] {
+            font-size: var(--text-sm);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: 6px 10px;
+            background: var(--color-surface);
+            height: 36px;
+        }
+        .filtros-bar input[type=text] { min-width: 180px; }
+
+        /* ── Tabla de movimientos ─────────────────────────────── */
+        .tabla-movimientos { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+        .tabla-movimientos th {
+            background: var(--color-surface-2);
+            color: var(--color-text-muted);
+            font-weight: 700;
+            font-size: var(--text-xs);
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            padding: var(--space-2) var(--space-3);
+            border-bottom: 2px solid var(--color-border);
+            text-align: left;
+            white-space: nowrap;
+        }
+        .tabla-movimientos td {
+            padding: var(--space-3);
+            border-bottom: 1px solid var(--color-border-light);
+            vertical-align: middle;
+        }
+        .tabla-movimientos tr:hover td { background: var(--color-primary-xlight); }
+        .tabla-movimientos tr.sin-categorizar td:first-child {
+            border-left: 3px solid var(--color-warning);
+        }
+
+        /* Monto */
+        .monto-credito { color: var(--color-success); font-weight: 700; font-family: var(--font-mono); }
+        .monto-debito  { color: var(--color-danger);  font-weight: 700; font-family: var(--font-mono); }
+
+        /* Categoría select inline */
+        .cat-select {
+            border: 1.5px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: 4px 8px;
+            font-size: var(--text-xs);
+            background: var(--color-surface);
+            cursor: pointer;
+            max-width: 200px;
+            width: 100%;
+            transition: border-color var(--transition-fast);
+        }
+        .cat-select:focus  { border-color: var(--color-primary); outline: none; }
+        .cat-select.asignada { border-color: var(--color-success); background: var(--color-success-bg); }
+        .cat-select.guardando { opacity: .6; pointer-events: none; }
+
+        /* Etiqueta inline */
+        .etiqueta-input {
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            padding: 3px 6px;
+            font-size: var(--text-xs);
+            background: transparent;
+            width: 120px;
+            transition: all var(--transition-fast);
+            color: var(--color-text-secondary);
+        }
+        .etiqueta-input:hover  { border-color: var(--color-border); background: var(--color-surface); }
+        .etiqueta-input:focus  { border-color: var(--color-primary); background: var(--color-surface); outline: none; }
+
+        /* PIX ID input */
+        .pix-input {
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            padding: 2px 6px;
+            font-size: 10px;
+            font-family: var(--font-mono);
+            background: transparent;
+            width: 100px;
+            color: var(--color-text-muted);
+            transition: all var(--transition-fast);
+        }
+        .pix-input:hover { border-color: var(--color-border); background: var(--color-surface); }
+        .pix-input:focus { border-color: var(--color-primary); background: var(--color-surface); outline: none; }
+
+        /* ── Resumen de filtro ────────────────────────────────── */
+        .resumen-filtro {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: var(--space-3);
+            margin-bottom: var(--space-4);
+        }
+        .resumen-item {
+            background: var(--color-surface-2);
+            border-radius: var(--radius-md);
+            padding: var(--space-3) var(--space-4);
+            text-align: center;
+        }
+        .resumen-item .label { font-size: var(--text-xs); color: var(--color-text-muted); }
+        .resumen-item .valor { font-size: var(--text-md); font-weight: 800; font-family: var(--font-mono); margin-top: 2px; }
+
+        /* Badge sin clasificar */
+        .badge-pendcat {
+            background: var(--color-warning-bg);
+            color: var(--color-warning);
+            border: 1px solid rgba(224,123,0,.2);
+            border-radius: var(--radius-sm);
+            padding: 1px 6px;
+            font-size: 10px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">cottage</span>
+        Casa Verde Canas
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span><span id="userName">—</span></div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons">logout</span> Salir
+        </button>
+    </div>
+</header>
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+
+    <!-- Cabecera de la cuenta -->
+    <div id="cuentaHeader" style="display:none;" class="cuenta-header">
+        <div>
+            <div class="cuenta-header__banco" id="hBanco">—</div>
+            <div class="cuenta-header__nombre" id="hNombre">—</div>
+        </div>
+        <div style="text-align:right;">
+            <div style="font-size:var(--text-xs); opacity:.6; margin-bottom:4px;">Saldo actual</div>
+            <div class="cuenta-header__saldo" id="hSaldo">—</div>
+        </div>
+    </div>
+
+    <!-- Barra de acciones -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-4); flex-wrap:wrap; gap:var(--space-3);">
+        <div style="display:flex; gap:var(--space-2);">
+            <a href="cuentas.html" class="btn btn-ghost btn-sm">
+                <span class="material-icons">arrow_back</span> Cuentas
+            </a>
+            <a href="categorias.html" class="btn btn-secondary btn-sm">
+                <span class="material-icons">label</span> Categorías
+            </a>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="exportarCSV()">
+            <span class="material-icons">download</span> Exportar CSV
+        </button>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filtros-bar">
+        <div>
+            <label style="font-size:var(--text-xs); color:var(--color-text-muted); display:block; margin-bottom:2px;">Período</label>
+            <input type="month" id="filtroMes" onchange="aplicarFiltros()">
+        </div>
+        <div>
+            <label style="font-size:var(--text-xs); color:var(--color-text-muted); display:block; margin-bottom:2px;">Categoría</label>
+            <select id="filtroCategoria" onchange="aplicarFiltros()">
+                <option value="">Todas</option>
+                <option value="__sin__">Sin categorizar</option>
+            </select>
+        </div>
+        <div>
+            <label style="font-size:var(--text-xs); color:var(--color-text-muted); display:block; margin-bottom:2px;">Tipo</label>
+            <select id="filtroTipo" onchange="aplicarFiltros()">
+                <option value="">Todos</option>
+                <option value="credito">Solo créditos (+)</option>
+                <option value="debito">Solo débitos (−)</option>
+            </select>
+        </div>
+        <div>
+            <label style="font-size:var(--text-xs); color:var(--color-text-muted); display:block; margin-bottom:2px;">Buscar</label>
+            <input type="text" id="filtroBusqueda" placeholder="Descripción, etiqueta..." oninput="aplicarFiltros()">
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="limpiarFiltros()" style="margin-top:16px;">
+            <span class="material-icons">clear</span>
+        </button>
+    </div>
+
+    <!-- Resumen del filtro actual -->
+    <div class="resumen-filtro" id="resumenFiltro"></div>
+
+    <!-- Tabla -->
+    <div class="card" style="padding:0; overflow:hidden;">
+        <div id="movimientosContainer" style="overflow-x:auto;">
+            <div class="state-loading" style="padding:var(--space-6);">
+                <div class="spinner"></div><span>Cargando movimientos...</span>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async () => {
+    const { user, userData } = await CVC.verificarAuth('admin');
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+    CVC.renderNav('cuentas.html'); // Activa "Cuentas" en la nav
+
+    const db = CVC.db;
+    const { escapeHtml, showEmpty, showToast } = CVC;
+
+    const params   = new URLSearchParams(window.location.search);
+    const cuentaId = params.get('cuenta');
+    if (!cuentaId) { window.location.href = 'cuentas.html'; return; }
+
+    let movimientosCache = [];
+    let categoriasCache  = [];
+    let cuenta           = null;
+
+    const SIMBOLO = { BRL: 'R$', USD: 'US$', UYU: '$U', ARS: '$' };
+
+    function fmtMonto(n, moneda) {
+        const s   = SIMBOLO[moneda] || '';
+        const abs = Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        return `${n >= 0 ? '+' : '−'} ${s} ${abs}`;
+    }
+
+    // ── Cargar todo ───────────────────────────────────────────
+    async function cargarTodo() {
+        try {
+            const [cuentaDoc, movSnap, catSnap] = await Promise.all([
+                db.collection('cuentas').doc(cuentaId).get(),
+                db.collection('movimientos').where('cuentaId', '==', cuentaId).get(),
+                db.collection('categorias').get()
+            ]);
+
+            if (!cuentaDoc.exists) { window.location.href = 'cuentas.html'; return; }
+            cuenta = { id: cuentaDoc.id, ...cuentaDoc.data() };
+
+            categoriasCache = catSnap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .filter(c => c.activa !== false)
+                .sort((a, b) => (a.grupo + a.nombre).localeCompare(b.grupo + b.nombre));
+
+            movimientosCache = movSnap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+            renderHeader();
+            poblarFiltroCategoria();
+            aplicarFiltros();
+        } catch(e) {
+            CVC.showError('#movimientosContainer', 'Error al cargar', e.message, cargarTodo);
+        }
+    }
+
+    function renderHeader() {
+        const moneda = cuenta.moneda || 'BRL';
+        const saldo  = cuenta.saldoActual || 0;
+        document.getElementById('hBanco').textContent  = cuenta.banco || cuenta.pais || '—';
+        document.getElementById('hNombre').textContent = cuenta.nombre;
+        document.getElementById('hSaldo').textContent  =
+            `${SIMBOLO[moneda] || ''} ${saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+        document.getElementById('cuentaHeader').style.display = 'flex';
+        document.title = `${cuenta.nombre} · Movimientos · Casa Verde`;
+    }
+
+    function poblarFiltroCategoria() {
+        const grupos = {};
+        categoriasCache.forEach(c => {
+            if (!grupos[c.grupo]) grupos[c.grupo] = [];
+            grupos[c.grupo].push(c);
+        });
+
+        const sel = document.getElementById('filtroCategoria');
+        sel.innerHTML = '<option value="">Todas las categorías</option>'
+            + '<option value="__sin__">⏳ Sin categorizar</option>'
+            + Object.entries(grupos).map(([g, cats]) =>
+                `<optgroup label="${escapeHtml(g)}">`
+                + cats.map(c => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('')
+                + '</optgroup>'
+            ).join('');
+    }
+
+    // ── Filtros ───────────────────────────────────────────────
+    function getFiltrados() {
+        const mes    = document.getElementById('filtroMes').value;
+        const catId  = document.getElementById('filtroCategoria').value;
+        const tipo   = document.getElementById('filtroTipo').value;
+        const busq   = document.getElementById('filtroBusqueda').value.toLowerCase();
+
+        return movimientosCache.filter(m => {
+            if (mes   && !m.fecha.startsWith(mes))                  return false;
+            if (tipo  && m.tipo !== tipo)                            return false;
+            if (catId === '__sin__' && m.categoriaId)                return false;
+            if (catId && catId !== '__sin__' && m.categoriaId !== catId) return false;
+            if (busq) {
+                const texto = (m.descripcion + ' ' + (m.etiqueta || '')).toLowerCase();
+                if (!texto.includes(busq)) return false;
+            }
+            return true;
+        });
+    }
+
+    window.aplicarFiltros = function() {
+        const lista   = getFiltrados();
+        const moneda  = cuenta?.moneda || 'BRL';
+        renderResumen(lista, moneda);
+        renderTabla(lista, moneda);
+    };
+
+    window.limpiarFiltros = function() {
+        document.getElementById('filtroMes').value        = '';
+        document.getElementById('filtroCategoria').value  = '';
+        document.getElementById('filtroTipo').value       = '';
+        document.getElementById('filtroBusqueda').value   = '';
+        aplicarFiltros();
+    };
+
+    function renderResumen(lista, moneda) {
+        const sim     = SIMBOLO[moneda] || '';
+        const creditos = lista.filter(m => m.tipo === 'credito').reduce((a, m) => a + (m.monto || 0), 0);
+        const debitos  = lista.filter(m => m.tipo === 'debito').reduce((a, m) => a + Math.abs(m.monto || 0), 0);
+        const sinCat   = lista.filter(m => !m.categoriaId).length;
+
+        document.getElementById('resumenFiltro').innerHTML = `
+            <div class="resumen-item">
+                <div class="label">Movimientos</div>
+                <div class="valor">${lista.length}</div>
+            </div>
+            <div class="resumen-item">
+                <div class="label" style="color:var(--color-success);">Créditos</div>
+                <div class="valor" style="color:var(--color-success);">
+                    ${sim} ${creditos.toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                </div>
+            </div>
+            <div class="resumen-item">
+                <div class="label" style="color:var(--color-danger);">Débitos</div>
+                <div class="valor" style="color:var(--color-danger);">
+                    ${sim} ${debitos.toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                </div>
+            </div>
+            <div class="resumen-item">
+                <div class="label">Balance período</div>
+                <div class="valor" style="color:${creditos - debitos >= 0 ? 'var(--color-success)' : 'var(--color-danger)'};">
+                    ${creditos - debitos >= 0 ? '+' : '−'} ${sim} ${Math.abs(creditos - debitos).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                </div>
+            </div>
+            ${sinCat > 0 ? `
+            <div class="resumen-item" style="background:var(--color-warning-bg);">
+                <div class="label" style="color:var(--color-warning);">Sin categorizar</div>
+                <div class="valor" style="color:var(--color-warning);">${sinCat}</div>
+            </div>` : ''}
+        `;
+    }
+
+    // ── Tabla de movimientos ──────────────────────────────────
+    function renderTabla(lista, moneda) {
+        const container = document.getElementById('movimientosContainer');
+
+        if (!lista.length) {
+            CVC.showEmpty(container, 'Sin movimientos',
+                'No hay movimientos para los filtros seleccionados.', 'receipt_long');
+            return;
+        }
+
+        // Construir opciones de categoría (una vez, para reutilizar)
+        const grupos = {};
+        categoriasCache.forEach(c => {
+            if (!grupos[c.grupo]) grupos[c.grupo] = [];
+            grupos[c.grupo].push(c);
+        });
+        const catOpts = '<option value="">— Sin categorizar —</option>'
+            + Object.entries(grupos).map(([g, cats]) =>
+                `<optgroup label="${escapeHtml(g)}">`
+                + cats.map(c => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('')
+                + '</optgroup>'
+            ).join('');
+
+        const rows = lista.map(m => {
+            const esCred   = m.tipo === 'credito';
+            const catActual = categoriasCache.find(c => c.id === m.categoriaId);
+            const sinCat   = !m.categoriaId;
+
+            const catSelected = catOpts.replace(
+                m.categoriaId ? `value="${m.categoriaId}"` : 'value=""',
+                `$& selected`
+            );
+
+            return `
+            <tr class="${sinCat ? 'sin-categorizar' : ''}">
+                <td style="white-space:nowrap; color:var(--color-text-muted); font-size:var(--text-xs);">
+                    ${m.fecha}
+                </td>
+                <td style="max-width:280px;">
+                    <div style="font-weight:600; font-size:var(--text-sm);">${escapeHtml(m.descripcion)}</div>
+                    ${m.pixId ? `<div style="font-size:10px; color:var(--color-text-muted); font-family:var(--font-mono);">PIX: ${escapeHtml(m.pixId)}</div>` : ''}
+                </td>
+                <td class="${esCred ? 'monto-credito' : 'monto-debito'}" style="text-align:right; white-space:nowrap;">
+                    ${fmtMonto(m.monto, moneda)}
+                </td>
+                <td>
+                    <!-- Select de categoría — guarda automáticamente al cambiar -->
+                    <select class="cat-select ${m.categoriaId ? 'asignada' : ''}"
+                        id="cat-${m.id}"
+                        onchange="asignarCategoria('${m.id}', this)">
+                        ${catSelected}
+                    </select>
+                </td>
+                <td>
+                    <!-- Etiqueta libre — guarda al perder foco -->
+                    <input type="text" class="etiqueta-input"
+                        id="etiq-${m.id}"
+                        value="${escapeHtml(m.etiqueta || '')}"
+                        placeholder="Etiqueta..."
+                        onblur="guardarEtiqueta('${m.id}', this.value)">
+                </td>
+                <td style="text-align:right; color:var(--color-text-muted); font-size:var(--text-xs); white-space:nowrap;">
+                    ${m.saldoPost != null
+                        ? `${SIMBOLO[moneda]} ${Math.abs(m.saldoPost).toLocaleString('pt-BR',{minimumFractionDigits:2})}`
+                        : '—'}
+                </td>
+                <td>
+                    <button class="btn btn-danger btn-sm" style="padding:2px 6px;"
+                        onclick="eliminarMovimiento('${m.id}')" title="Eliminar">
+                        <span class="material-icons" style="font-size:14px;">delete</span>
+                    </button>
+                </td>
+            </tr>`;
+        }).join('');
+
+        container.innerHTML = `
+            <table class="tabla-movimientos">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Descripción</th>
+                        <th style="text-align:right;">Monto</th>
+                        <th>Categoría</th>
+                        <th>Etiqueta</th>
+                        <th style="text-align:right;">Saldo</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+    }
+
+    // ── Asignar categoría (guarda al cambiar el select) ───────
+    window.asignarCategoria = async function(movId, selectEl) {
+        const categoriaId = selectEl.value || null;
+        selectEl.classList.add('guardando');
+        try {
+            await db.collection('movimientos').doc(movId).update({ categoriaId });
+            // Actualizar cache
+            const m = movimientosCache.find(x => x.id === movId);
+            if (m) m.categoriaId = categoriaId;
+            selectEl.classList.remove('guardando');
+            selectEl.classList.toggle('asignada', !!categoriaId);
+            // Actualizar clase de la fila
+            const fila = selectEl.closest('tr');
+            if (fila) fila.classList.toggle('sin-categorizar', !categoriaId);
+            // Actualizar resumen sin re-renderizar la tabla entera
+            renderResumen(getFiltrados(), cuenta.moneda || 'BRL');
+        } catch(e) {
+            selectEl.classList.remove('guardando');
+            showToast('Error al guardar categoría: ' + e.message, 'error');
+        }
+    };
+
+    // ── Guardar etiqueta al perder foco ───────────────────────
+    window.guardarEtiqueta = async function(movId, valor) {
+        try {
+            await db.collection('movimientos').doc(movId).update({ etiqueta: valor.trim() });
+            const m = movimientosCache.find(x => x.id === movId);
+            if (m) m.etiqueta = valor.trim();
+        } catch(e) { showToast('Error al guardar etiqueta: ' + e.message, 'error'); }
+    };
+
+    // ── Eliminar movimiento ───────────────────────────────────
+    window.eliminarMovimiento = async function(id) {
+        if (!confirm('¿Eliminar este movimiento? No se puede deshacer.')) return;
+        try {
+            await db.collection('movimientos').doc(id).delete();
+            movimientosCache = movimientosCache.filter(m => m.id !== id);
+            aplicarFiltros();
+            showToast('Movimiento eliminado.', 'warning');
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    // ── Exportar CSV ──────────────────────────────────────────
+    window.exportarCSV = function() {
+        const lista   = getFiltrados();
+        const moneda  = cuenta?.moneda || 'BRL';
+        const encab   = ['Fecha','Descripcion','Monto','Tipo','Categoria','Etiqueta','Saldo_post','PixId'];
+        const filas   = lista.map(m => {
+            const cat = categoriasCache.find(c => c.id === m.categoriaId);
+            return [
+                m.fecha,
+                `"${(m.descripcion || '').replace(/"/g,'""')}"`,
+                m.monto,
+                m.tipo,
+                cat ? `"${cat.nombre}"` : '',
+                `"${(m.etiqueta || '').replace(/"/g,'""')}"`,
+                m.saldoPost ?? '',
+                m.pixId || ''
+            ].join(',');
+        });
+
+        const csv  = [encab.join(','), ...filas].join('\n');
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `movimientos-${cuenta.nombre.replace(/\s/g,'-')}-${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    // ── Init ──────────────────────────────────────────────────
+    // Preseleccionar mes actual
+    const hoy = new Date();
+    document.getElementById('filtroMes').value =
+        `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}`;
+
+    await cargarTodo();
+
+})();
+</script>
+</body>
+</html>
