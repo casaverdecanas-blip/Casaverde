@@ -32,12 +32,11 @@
             transform: translateY(-2px);
         }
 
-        /* Color izquierdo por urgencia */
+        /* Color izquierdo por urgencia real — en_curso no cambia el color */
         .task-card.urgencia-gris     { border-left-color: #bdc3bc; }
         .task-card.urgencia-verde    { border-left-color: var(--color-success); }
         .task-card.urgencia-amarillo { border-left-color: var(--color-warning); }
         .task-card.urgencia-rojo     { border-left-color: var(--color-danger); background: #fffafa; }
-        .task-card.urgencia-en_curso { border-left-color: #0277bd; background: #f8fcff; }
 
         .task-card__top {
             display: flex;
@@ -383,26 +382,150 @@
     // ── Cargar tareas ────────────────────────────────────────
     async function cargarTareas() {
         try {
-            // Sin where+orderBy combinados para evitar índice compuesto
-            // Filtramos y ordenamos en cliente
             const snap = await db.collection('tareas').get();
             tareasCache = snap.docs
                 .map(d => ({ id: d.id, ...d.data() }))
-                .filter(t => t.activa !== false && t.estado !== 'finalizada')
-                .sort((a, b) => {
-                    // Limpieza siempre primero, luego por fecha
-                    const aLimp = a.tipo === 'limpieza' ? 0 : 1;
-                    const bLimp = b.tipo === 'limpieza' ? 0 : 1;
-                    if (aLimp !== bLimp) return aLimp - bLimp;
-                    return (a.fechaInicio || '').localeCompare(b.fechaInicio || '');
-                });
+                .filter(t => t.activa !== false && t.estado !== 'finalizada');
+
+            // ── CONTROL DE SESIONES FANTASMA ─────────────────
+            //
+            //  Al cargar, verificamos si hay sesiones abiertas con
+            //  más de 8 horas de antigüedad — lo que indica que el
+            //  colaborador olvidó marcar pausa o fin.
+            //
+            //  Acción: cerrar la sesión como "olvidada" (marcada con
+            //  `olvido: true`) sin acumular horas. La tarea vuelve a
+            //  pendiente si no quedan otras sesiones abiertas.
+            //  El colaborador verá que su inicio fue descartado.
+            //
+            await invalidarSesionesOlvidadas(tareasCache);
+
+            // Recargar el cache después de la limpieza (los estados pueden haber cambiado)
+            const snap2 = await db.collection('tareas').get();
+            tareasCache = snap2.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .filter(t => t.activa !== false && t.estado !== 'finalizada');
+
         } catch (e) {
             showError('#tareasContainer', 'Error al cargar tareas', e.message, cargarTareas);
             return;
         }
 
+        // ── ORDENAMIENTO ─────────────────────────────────────
+        //
+        //  Prioridad fija: limpieza → rojo → amarillo → verde → gris
+        //  Dentro de cada grupo: por fecha de inicio (más antigua primero)
+        //  Las tareas en_curso no cambian de grupo — mantienen su urgencia real.
+        //
+        const ORDEN_URGENCIA = { rojo: 1, amarillo: 2, verde: 3, gris: 4 };
+
+        tareasCache.sort((a, b) => {
+            // 1. Limpieza siempre al tope
+            const aLimp = a.tipo === 'limpieza' ? 0 : 1;
+            const bLimp = b.tipo === 'limpieza' ? 0 : 1;
+            if (aLimp !== bLimp) return aLimp - bLimp;
+
+            // 2. Por urgencia real (ignorando en_curso — usamos la urgencia de la fecha)
+            const urgA = urgenciaReal(a);
+            const urgB = urgenciaReal(b);
+            const oA   = ORDEN_URGENCIA[urgA] || 5;
+            const oB   = ORDEN_URGENCIA[urgB] || 5;
+            if (oA !== oB) return oA - oB;
+
+            // 3. Por fecha de inicio (más antigua primero)
+            return (a.fechaInicio || '').localeCompare(b.fechaInicio || '');
+        });
+
         actualizarKPIs();
         renderTareas();
+    }
+
+    // ── Urgencia real (sin considerar en_curso) ───────────────
+    //
+    //  La urgencia de una tarea se basa siempre en la fecha,
+    //  independientemente de si está en_curso o no.
+    //  Esto permite el ordenamiento correcto y el color correcto.
+    //
+    function urgenciaReal(tarea) {
+        if (!tarea.fechaInicio) return 'gris';
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        const inicio     = new Date(tarea.fechaInicio + 'T00:00:00');
+        const diasAtraso = Math.floor((hoy - inicio) / 86400000);
+        if (diasAtraso < 0)  return 'gris';
+        if (diasAtraso === 0) return 'verde';
+        const ciclo = tarea.recurrencia > 0 ? tarea.recurrencia : 3;
+        if (diasAtraso > ciclo || diasAtraso > 10) return 'rojo';
+        return 'amarillo';
+    }
+
+    // ── Control de sesiones olvidadas (>8 horas) ─────────────
+    //
+    //  Por cada tarea en_curso, revisa la subcolección sesiones.
+    //  Si encuentra una sesión con fin === null y más de 8 horas
+    //  desde el inicio, la invalida:
+    //    - Cierra la sesión con fin = inicio (duración 0)
+    //    - Marca olvido: true (visible en el historial)
+    //    - Si no quedan otras sesiones abiertas, tarea → pendiente
+    //
+    async function invalidarSesionesOlvidadas(tareas) {
+        const LIMITE_HORAS = 8;
+        const ahora = new Date();
+
+        for (const tarea of tareas) {
+            if (tarea.estado !== 'en_curso') continue;
+
+            try {
+                const sesSnap = await db.collection('tareas').doc(tarea.id)
+                    .collection('sesiones').get();
+
+                let huboInvalidacion = false;
+
+                const batch = db.batch();
+                for (const sesDoc of sesSnap.docs) {
+                    const s = sesDoc.data();
+                    if (s.fin !== null && s.fin !== undefined) continue; // ya cerrada
+
+                    const inicio = s.inicio?.toDate ? s.inicio.toDate() : new Date(s.inicio);
+                    const horas  = (ahora - inicio) / 3600000;
+
+                    if (horas > LIMITE_HORAS) {
+                        // Invalidar: cerrar con duración 0 y marcar como olvido
+                        batch.update(sesDoc.ref, {
+                            fin:    s.inicio, // duración = 0
+                            olvido: true,     // marca visible
+                            invalidadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                            nota:   `Sesión invalidada automáticamente — más de ${LIMITE_HORAS}h sin cierre`
+                        });
+                        huboInvalidacion = true;
+                    }
+                }
+
+                if (huboInvalidacion) {
+                    await batch.commit();
+
+                    // Verificar si quedan sesiones abiertas (de otros usuarios)
+                    const sesSnap2 = await db.collection('tareas').doc(tarea.id)
+                        .collection('sesiones').get();
+                    const quedanAbiertas = sesSnap2.docs.some(d =>
+                        d.data().fin === null || d.data().fin === undefined
+                    );
+
+                    // Actualizar estado y sesionesActivas en el doc raíz
+                    await db.collection('tareas').doc(tarea.id).update({
+                        estado: quedanAbiertas ? 'en_curso' : 'pendiente',
+                        sesionesActivas: [] // limpiar el array — las sesiones válidas se reconstruyen
+                    });
+
+                    CVC.showToast(
+                        `⏰ Sesión de "${tarea.nombre}" invalidada por inactividad (+${LIMITE_HORAS}h). No se acumularon horas.`,
+                        'warning'
+                    );
+                }
+            } catch(e) {
+                console.warn('invalidarSesionesOlvidadas:', tarea.id, e.message);
+            }
+        }
     }
 
     // ── KPIs ─────────────────────────────────────────────────
@@ -474,22 +597,36 @@
     }
 
     function renderTareaCard(t) {
-        const estado    = t.estado || 'pendiente';
-        const urgencia  = urgenciaTarea(t);
-        // sesionesActivas es el campo del doc raíz con las sesiones abiertas
+        const estado   = t.estado || 'pendiente';
+        const urgencia = urgenciaReal(t);   // siempre la urgencia real de la fecha
         const activos  = (t.sesionesActivas || []);
         const yoActivo = activos.find(s => s.uid === currentUser.uid);
 
-        const claseUrgencia = estado === 'en_curso' ? 'urgencia-en_curso' : `urgencia-${urgencia.color}`;
+        // Color de la card: siempre por urgencia real (rojo/amarillo/verde/gris)
+        // Una tarea en_curso NO cambia su color — solo muestra el badge de quién trabaja
+        const claseUrgencia = `urgencia-${urgencia}`;
 
-        // Chips de colaboradores activos
-        const colabChips = activos.map(s => `
-            <span class="colab-chip ${s.uid === currentUser.uid ? 'yo' : ''}">
-                <span class="material-icons">engineering</span>
-                ${escapeHtml(s.nombre)}${s.uid === currentUser.uid ? ' (vos)' : ''}
-            </span>`).join('');
+        // Badge de urgencia — si está en curso, se agrega el anuncio pero NO reemplaza el color
+        const labelUrgencia = estado === 'en_curso'
+            ? urgencia.charAt(0).toUpperCase() + urgencia.slice(1)
+            : urgenciaReal(t) === 'verde' && estado === 'pendiente'
+                ? 'Hoy'
+                : urgenciaReal(t) === 'gris' ? 'Próximamente'
+                : (urgenciaReal(t) === 'rojo' || urgenciaReal(t) === 'amarillo')
+                    ? calcularDiasAtraso(t) + 'd de atraso'
+                    : 'Hoy';
 
-        // Botones según estado y rol del usuario
+        // Chips de colaboradores en curso — solo como anuncio informativo
+        const colabAnuncio = activos.length > 0 ? `
+            <div class="task-card__colabs">
+                ${activos.map(s => `
+                    <span class="colab-chip ${s.uid === currentUser.uid ? 'yo' : ''}">
+                        <span class="material-icons">engineering</span>
+                        ${escapeHtml(s.nombre)}${s.uid === currentUser.uid ? ' (vos)' : ' — trabajando ahora'}
+                    </span>`).join('')}
+            </div>` : '';
+
+        // Botones según estado y rol
         let acciones = '';
         if (estado === 'pendiente') {
             acciones = `
@@ -510,12 +647,13 @@
                     <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); accionIniciar('${t.id}')">
                         <span class="material-icons">play_arrow</span> Unirse
                     </button>
+                    ${userData.rol === 'admin' ? `
                     <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); accionFinalizar('${t.id}')">
                         <span class="material-icons">check_circle</span> Finalizar
-                    </button>`;
+                    </button>` : ''}`;
             }
         }
-        // Botón editar solo para admin
+
         const btnEditar = userData.rol === 'admin' ? `
             <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); abrirModalEditar('${t.id}')" title="Editar tarea">
                 <span class="material-icons">edit</span>
@@ -526,21 +664,23 @@
             <div class="task-card__top">
                 <div class="task-card__nombre">${escapeHtml(t.nombre)}</div>
                 <div class="task-card__badges">
-                    <span class="badge ${urgBadge[urgencia.color] || 'badge-neutral'}">${urgencia.label}</span>
+                    <span class="badge ${urgBadge[urgencia] || 'badge-neutral'}">${labelUrgencia}</span>
+                    ${estado === 'en_curso' ? '<span class="badge" style="background:#e3f2fd;color:#0277bd;border:1px solid #b3d4f5;">▶ En curso</span>' : ''}
                     ${badgePrioridad(t.prioridad)}
+                    ${t.tipo === 'limpieza' ? '<span class="badge badge-neutral">🧹 Limpieza</span>' : ''}
                 </div>
             </div>
 
             <div class="task-card__meta">
                 ${t.fechaInicio ? `<span><span class="material-icons">calendar_today</span>${t.fechaInicio}</span>` : ''}
-                ${t.tipo       ? `<span><span class="material-icons">${t.tipo === 'limpieza' ? 'cleaning_services' : 'checklist'}</span>${t.tipo}</span>` : ''}
-                ${t.monto > 0  ? `<span><span class="material-icons">payments</span>R$ ${t.monto}</span>` : ''}
+                ${t.tipo        ? `<span><span class="material-icons">${t.tipo === 'limpieza' ? 'cleaning_services' : 'checklist'}</span>${t.tipo}</span>` : ''}
+                ${t.monto > 0   ? `<span><span class="material-icons">payments</span>R$ ${t.monto}</span>` : ''}
                 ${t.recurrencia > 0 ? `<span><span class="material-icons">repeat</span>Cada ${t.recurrencia}d</span>` : ''}
             </div>
 
             ${t.descripcion ? `<div class="task-card__desc">${escapeHtml(t.descripcion)}</div>` : ''}
 
-            ${activos.length ? `<div class="task-card__colabs">${colabChips}</div>` : ''}
+            ${colabAnuncio}
 
             <div class="task-card__actions" onclick="event.stopPropagation()">
                 ${acciones}
@@ -550,6 +690,14 @@
                 </button>
             </div>
         </div>`;
+    }
+
+    // Helper para calcular días de atraso en el label
+    function calcularDiasAtraso(tarea) {
+        if (!tarea.fechaInicio) return 0;
+        const hoy    = new Date(); hoy.setHours(0,0,0,0);
+        const inicio = new Date(tarea.fechaInicio + 'T00:00:00');
+        return Math.max(0, Math.floor((hoy - inicio) / 86400000));
     }
 
     // ── ACCIONES ─────────────────────────────────────────────
