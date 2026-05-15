@@ -665,30 +665,66 @@ function showToast(mensaje, tipo) {
 
 
 // ── NAV CENTRALIZADA ─────────────────────────────────────────
+//
+//  Estructura agrupada. Cada item puede ser:
+//  - { href, icon, label }          → link normal
+//  - { divider: true }              → separador visual
+//  - { groupLabel: 'texto' }        → etiqueta de grupo (oculta en móvil)
+//
 const NAV_ADMIN_ITEMS = [
-    { href: 'dashboard.html',     icon: 'dashboard',       label: 'Dashboard'     },
-    { href: 'reservas.html',      icon: 'event',           label: 'Reservas'      },
-    { href: 'presupuestos.html',  icon: 'request_quote',   label: 'Presupuestos'  },
-    { href: 'pagos.html',         icon: 'payments',        label: 'Finanzas'      },
-    { href: 'clientes.html',      icon: 'people',          label: 'Clientes'      },
-    { href: 'cabanas-admin.html', icon: 'cottage',         label: 'Cabañas'       },
-    { href: 'tareas.html',        icon: 'checklist',       label: 'Tareas'        },
-    { href: 'calendario.html',    icon: 'calendar_month',  label: 'Calendario'    },
-    { href: 'usuarios.html',      icon: 'manage_accounts', label: 'Usuarios'      }
+
+    // ── Operaciones ───────────────────────────────────────────
+    { groupLabel: 'Operaciones' },
+    { href: 'dashboard.html',     icon: 'dashboard',       label: 'Dashboard'    },
+    { href: 'reservas.html',      icon: 'event',           label: 'Reservas'     },
+    { href: 'presupuestos.html',  icon: 'request_quote',   label: 'Presupuestos' },
+    { href: 'calendario.html',    icon: 'calendar_month',  label: 'Calendario'   },
+    { href: 'tareas.html',        icon: 'checklist',       label: 'Tareas'       },
+    { href: 'clientes.html',      icon: 'people',          label: 'Clientes'     },
+
+    // ── Finanzas ─────────────────────────────────────────────
+    { divider: true },
+    { groupLabel: 'Finanzas' },
+    { href: 'pagos.html',         icon: 'payments',        label: 'Ingresos / Egresos' },
+    { href: 'cuentas.html',       icon: 'account_balance', label: 'Cuentas'      },
+    { href: 'movimientos.html',   icon: 'receipt_long',    label: 'Movimientos'  },
+    { href: 'categorias.html',    icon: 'label',           label: 'Categorías'   },
+
+    // ── Configuración ────────────────────────────────────────
+    { divider: true },
+    { groupLabel: 'Config.' },
+    { href: 'cabanas-admin.html', icon: 'cottage',         label: 'Cabañas'      },
+    { href: 'usuarios.html',      icon: 'manage_accounts', label: 'Usuarios'     },
+    { href: 'manual-sistema.html',icon: 'menu_book',       label: 'Manual'       }
 ];
 
 const NAV_USER_ITEMS = [
-    { href: 'tareas.html', icon: 'checklist', label: 'Tareas'     },
-    { href: 'pagos.html',  icon: 'payments',  label: 'Mis cobros' }
+    { href: 'tareas.html',        icon: 'checklist',  label: 'Tareas'     },
+    { href: 'pagos.html',         icon: 'payments',   label: 'Mis cobros' },
+    { href: 'manual-sistema.html',icon: 'menu_book',  label: 'Manual'     }
 ];
 
 function renderNav(paginaActiva, rol) {
     rol = rol || 'admin';
-    const el    = document.getElementById('appNav') || document.querySelector('.admin-nav');
+    const el = document.getElementById('appNav') || document.querySelector('.admin-nav');
     if (!el) return;
+
     const items = rol === 'admin' ? NAV_ADMIN_ITEMS : NAV_USER_ITEMS;
+
     el.innerHTML = items.map(function(item) {
-        const activo = item.href === paginaActiva || item.href.replace('.html', '') === paginaActiva;
+        // Separador vertical
+        if (item.divider) {
+            return '<div class="nav-divider"></div>';
+        }
+        // Etiqueta de grupo (oculta en móvil por CSS)
+        if (item.groupLabel) {
+            return '<span class="nav-group-label">' + item.groupLabel + '</span>';
+        }
+        // Link normal
+        const activo = item.href === paginaActiva
+            || item.href.replace('.html', '') === paginaActiva
+            // movimientos.html activa si la URL tiene ?cuenta= (se accede siempre con param)
+            || (item.href === 'movimientos.html' && paginaActiva === 'movimientos.html');
         return '<a href="' + item.href + '" class="nav-item' + (activo ? ' active' : '') + '">'
             + '<span class="material-icons">' + item.icon + '</span> ' + item.label + '</a>';
     }).join('');
