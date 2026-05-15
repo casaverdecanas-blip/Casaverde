@@ -45,11 +45,31 @@
         </div>
     </div>
 
+    <!-- Widget posición consolidada de cuentas -->
+    <div id="widgetCuentas" style="display:none; margin-bottom:var(--space-5);">
+        <p class="section-title" style="margin-bottom:var(--space-3);">
+            Posición bancaria
+            <a href="cuentas.html" style="font-size:var(--text-xs); font-weight:400; color:var(--color-primary); margin-left:8px;">Ver detalle →</a>
+        </p>
+        <div style="background:linear-gradient(135deg, var(--color-primary-dark), var(--color-primary-mid));
+            border-radius:var(--radius-lg); padding:var(--space-5) var(--space-6); color:white;
+            display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--space-4);">
+            <div>
+                <div style="font-size:var(--text-xs); opacity:.7; margin-bottom:4px;">Total consolidado en BRL</div>
+                <div id="wcTotal" style="font-size:var(--text-3xl); font-weight:800; font-family:var(--font-mono);">—</div>
+            </div>
+            <div id="wcDetalle" style="display:flex; gap:var(--space-5); flex-wrap:wrap;"></div>
+        </div>
+        <div id="wcCuentas" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+            gap:var(--space-3); margin-top:var(--space-3);"></div>
+    </div>
+
     <!-- Accesos rápidos -->
     <p class="section-title">Accesos rápidos</p>
     <div class="accesos-grid">
         <a href="presupuestos.html?nuevo=1" class="acceso-card"><span class="material-icons">calculate</span>Nuevo presupuesto</a>
         <a href="pagos.html"                class="acceso-card"><span class="material-icons">payments</span>Finanzas</a>
+        <a href="cuentas.html"             class="acceso-card"><span class="material-icons">account_balance</span>Cuentas</a>
         <a href="clientes.html?nuevo=1"     class="acceso-card"><span class="material-icons">person_add</span>Nuevo cliente</a>
         <a href="cabanas-admin.html"        class="acceso-card"><span class="material-icons">cottage</span>Cabañas</a>
         <a href="calendario.html"           class="acceso-card"><span class="material-icons">calendar_month</span>Calendario</a>
@@ -475,6 +495,77 @@
             resultEl.textContent = '❌ Error: ' + e.message;
         }
     };
+
+    // ── Widget posición bancaria ──────────────────────────────
+    async function cargarWidgetCuentas() {
+        try {
+            const snap    = await db.collection('cuentas').get();
+            const cuentas = snap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .filter(c => c.activa !== false)
+                .sort((a, b) => (a.orden || 99) - (b.orden || 99));
+
+            if (!cuentas.length) return;
+
+            const SIMBOLO    = { BRL: 'R$', USD: 'US$', UYU: '$U', ARS: '$' };
+            const PAIS_EMOJI = { BR: '🇧🇷', UY: '🇺🇾', AR: '🇦🇷' };
+
+            let totalBRL = 0;
+            const paises = {};
+
+            cuentas.forEach(c => {
+                const saldo = c.saldoActual || 0;
+                const tc    = c.tipoCambio  || 1;
+                const equiv = saldo * tc;
+                totalBRL += equiv;
+                const p = c.pais || 'BR';
+                paises[p] = (paises[p] || 0) + equiv;
+            });
+
+            document.getElementById('wcTotal').textContent =
+                `R$ ${totalBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
+            document.getElementById('wcDetalle').innerHTML = Object.entries(paises)
+                .map(([p, v]) => `
+                    <div style="text-align:right;">
+                        <div style="font-size:var(--text-xs); opacity:.7;">${PAIS_EMOJI[p] || ''} ${p}</div>
+                        <div style="font-weight:700; font-family:var(--font-mono);">
+                            R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                        </div>
+                    </div>`).join('');
+
+            document.getElementById('wcCuentas').innerHTML = cuentas.map(c => {
+                const sim   = SIMBOLO[c.moneda] || '';
+                const saldo = c.saldoActual || 0;
+                const neg   = saldo < 0;
+                const pend  = c._sinCat || 0;
+                return `
+                <a href="movimientos.html?cuenta=${c.id}"
+                    style="border:1.5px solid var(--color-border); border-radius:var(--radius-md);
+                    padding:var(--space-3) var(--space-4); text-decoration:none; display:block;
+                    background:var(--color-surface); transition:box-shadow var(--transition-fast);"
+                    onmouseover="this.style.boxShadow='var(--shadow-md)'"
+                    onmouseout="this.style.boxShadow='none'">
+                    <div style="font-size:var(--text-xs); color:var(--color-text-muted);">
+                        ${PAIS_EMOJI[c.pais] || ''} ${escapeHtml(c.banco || c.moneda)}
+                    </div>
+                    <div style="font-weight:600; font-size:var(--text-sm); margin:2px 0;">
+                        ${escapeHtml(c.nombre)}
+                    </div>
+                    <div style="font-family:var(--font-mono); font-weight:800;
+                        color:${neg ? 'var(--color-danger)' : 'var(--color-primary-dark)'};">
+                        ${sim} ${saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </div>
+                </a>`;
+            }).join('');
+
+            document.getElementById('widgetCuentas').style.display = 'block';
+        } catch(e) {
+            console.warn('Widget cuentas:', e.message);
+        }
+    }
+
+    cargarWidgetCuentas();
 
     // Sincronizar Airbnb automáticamente al abrir el dashboard
     sincronizarAirbnb();
