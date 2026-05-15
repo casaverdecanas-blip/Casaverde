@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cuentas bancarias · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        input[type="number"].form-control { appearance: auto; -webkit-appearance: auto; }
+
+        /* ── Cuenta cards ─────────────────────────────────────── */
+        .cuentas-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: var(--space-4);
+            margin-bottom: var(--space-6);
+        }
+        .cuenta-card {
+            border: 1.5px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-5);
+            position: relative;
+            overflow: hidden;
+            transition: box-shadow var(--transition-fast);
+        }
+        .cuenta-card:hover { box-shadow: var(--shadow-md); }
+        .cuenta-card__flag {
+            position: absolute;
+            top: 0; right: 0;
+            padding: 4px 10px;
+            font-size: 10px;
+            font-weight: 700;
+            background: var(--color-primary-xlight);
+            color: var(--color-primary-dark);
+            border-radius: 0 0 0 var(--radius-md);
+        }
+        .cuenta-card__banco {
+            font-size: var(--text-xs);
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            margin-bottom: var(--space-1);
+        }
+        .cuenta-card__nombre {
+            font-size: var(--text-md);
+            font-weight: 700;
+            margin-bottom: var(--space-3);
+        }
+        .cuenta-card__saldo {
+            font-size: var(--text-2xl);
+            font-weight: 800;
+            font-family: var(--font-mono);
+            color: var(--color-primary-dark);
+            margin-bottom: var(--space-2);
+        }
+        .cuenta-card__saldo.negativo { color: var(--color-danger); }
+        .cuenta-card__meta {
+            font-size: var(--text-xs);
+            color: var(--color-text-muted);
+            display: flex; gap: var(--space-3); flex-wrap: wrap;
+        }
+        .cuenta-card__acciones {
+            display: flex; gap: var(--space-2); margin-top: var(--space-4);
+            flex-wrap: wrap;
+        }
+
+        /* ── Resumen consolidado ──────────────────────────────── */
+        .consolidado {
+            background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary-mid));
+            border-radius: var(--radius-lg);
+            padding: var(--space-5) var(--space-6);
+            color: white;
+            margin-bottom: var(--space-6);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: var(--space-4);
+        }
+        .consolidado__label { font-size: var(--text-sm); opacity: .8; }
+        .consolidado__monto {
+            font-size: var(--text-3xl);
+            font-weight: 800;
+            font-family: var(--font-mono);
+        }
+        .consolidado__detalle {
+            display: flex; gap: var(--space-5); flex-wrap: wrap;
+        }
+        .consolidado__item { text-align: right; }
+        .consolidado__item .label { font-size: var(--text-xs); opacity: .7; }
+        .consolidado__item .valor { font-size: var(--text-md); font-weight: 700; font-family: var(--font-mono); }
+
+        /* ── Parser de extracto ───────────────────────────────── */
+        .parser-area {
+            width: 100%;
+            min-height: 180px;
+            font-family: var(--font-mono);
+            font-size: var(--text-xs);
+            padding: var(--space-3);
+            border: 1.5px solid var(--color-border);
+            border-radius: var(--radius-md);
+            background: var(--color-surface-2);
+            resize: vertical;
+            line-height: 1.6;
+        }
+        .parser-area:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(45,90,39,.15);
+        }
+
+        /* ── Preview de líneas parseadas ──────────────────────── */
+        .preview-table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
+        .preview-table th {
+            background: var(--color-primary-xlight);
+            color: var(--color-primary-dark);
+            font-weight: 700; text-align: left;
+            padding: 6px 8px; border: 1px solid var(--color-border);
+        }
+        .preview-table td {
+            padding: 6px 8px;
+            border: 1px solid var(--color-border-light);
+            vertical-align: middle;
+        }
+        .preview-table tr:nth-child(even) td { background: var(--color-surface-2); }
+        .preview-table .credito { color: var(--color-success); font-weight: 700; }
+        .preview-table .debito  { color: var(--color-danger);  font-weight: 700; }
+        .preview-table .error-row td { background: var(--color-danger-bg) !important; }
+
+        /* Tipo de cambio */
+        .tc-row {
+            display: flex; align-items: center; gap: var(--space-3);
+            background: var(--color-warning-bg);
+            border-radius: var(--radius-md);
+            padding: var(--space-3) var(--space-4);
+            margin-bottom: var(--space-4);
+            font-size: var(--text-sm);
+        }
+        .tc-row label { font-weight: 600; white-space: nowrap; }
+        .tc-row input {
+            width: 100px;
+            font-family: var(--font-mono);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: 4px 8px;
+            background: white;
+        }
+        .tc-row .hint { font-size: var(--text-xs); color: var(--color-text-muted); flex: 1; }
+    </style>
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">cottage</span>
+        Casa Verde Canas
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip">
+            <span class="material-icons">person</span>
+            <span id="userName">—</span>
+        </div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons">logout</span> Salir
+        </button>
+    </div>
+</header>
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+
+    <!-- Posición consolidada -->
+    <div class="consolidado" id="consolidado" style="display:none;">
+        <div>
+            <div class="consolidado__label">Posición consolidada total</div>
+            <div class="consolidado__monto" id="consolidadoMonto">—</div>
+            <div style="font-size:var(--text-xs); opacity:.6; margin-top:4px;">Tipo de cambio actualizado manualmente</div>
+        </div>
+        <div class="consolidado__detalle" id="consolidadoDetalle"></div>
+    </div>
+
+    <!-- Lista de cuentas -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-4);">
+        <h2 class="card__title" style="margin:0;">
+            <span class="material-icons">account_balance</span>
+            Cuentas bancarias
+        </h2>
+        <div style="display:flex; gap:var(--space-2);">
+            <a href="categorias.html" class="btn btn-secondary btn-sm">
+                <span class="material-icons">label</span> Categorías
+            </a>
+            <button class="btn btn-primary" onclick="abrirModalCuenta()">
+                <span class="material-icons">add</span> Nueva cuenta
+            </button>
+        </div>
+    </div>
+
+    <div id="cuentasContainer">
+        <div class="state-loading"><div class="spinner"></div><span>Cargando cuentas...</span></div>
+    </div>
+
+</main>
+
+<!-- ── MODAL: Cuenta ─────────────────────────────────────────── -->
+<div class="modal-overlay" id="modalCuenta" style="display:none;" onclick="cerrarModalCuenta(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <div class="modal__title">
+                <span class="material-icons">account_balance</span>
+                <span id="modalCuentaTitulo">Nueva cuenta</span>
+            </div>
+            <button class="modal__close" onclick="cerrarModalCuenta()">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+            <input type="hidden" id="cuentaId">
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Nombre <span class="required">*</span></label>
+                    <input type="text" id="cNombre" class="form-control" placeholder="Ej: Nubank Brasil">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Banco / Institución</label>
+                    <input type="text" id="cBanco" class="form-control" placeholder="Ej: Nubank">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">País <span class="required">*</span></label>
+                    <select id="cPais" class="form-control">
+                        <option value="BR">🇧🇷 Brasil</option>
+                        <option value="UY">🇺🇾 Uruguay</option>
+                        <option value="AR">🇦🇷 Argentina</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Moneda <span class="required">*</span></label>
+                    <select id="cMoneda" class="form-control">
+                        <option value="BRL">BRL — Real brasileño</option>
+                        <option value="USD">USD — Dólar</option>
+                        <option value="UYU">UYU — Peso uruguayo</option>
+                        <option value="ARS">ARS — Peso argentino</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Titular</label>
+                    <input type="text" id="cTitular" class="form-control" placeholder="Nombre del titular">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Tipo</label>
+                    <select id="cTipo" class="form-control">
+                        <option value="operativa">Operativa (recibe ingresos)</option>
+                        <option value="respaldo">Respaldo / ahorro</option>
+                        <option value="personal">Personal / mixta</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Saldo inicial</label>
+                    <input type="number" id="cSaldoInicial" class="form-control" value="0" step="0.01">
+                    <p class="form-hint">El saldo se actualizará automáticamente con los movimientos cargados.</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Tipo de cambio a BRL</label>
+                    <input type="number" id="cTipoCambio" class="form-control" value="1" step="0.001">
+                    <p class="form-hint">1 unidad de esta moneda = ? BRL. Para BRL usar 1.</p>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">¿Relevante fiscalmente en Brasil?</label>
+                    <select id="cFiscal" class="form-control">
+                        <option value="true">Sí — aparece en reportes fiscales</option>
+                        <option value="false">No — solo control interno</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Orden en el dashboard</label>
+                    <input type="number" id="cOrden" class="form-control" value="10" min="1">
+                </div>
+            </div>
+
+            <div class="alert alert-error" id="cuentaError" style="display:none;">
+                <span class="material-icons">error_outline</span>
+                <span id="cuentaErrorText"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModalCuenta()">Cancelar</button>
+            <button class="btn btn-primary" id="btnGuardarCuenta" onclick="guardarCuenta()">
+                <span class="material-icons">save</span>
+                <span id="btnGuardarCuentaText">Guardar</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ── MODAL: Importar extracto ──────────────────────────────── -->
+<div class="modal-overlay" id="modalExtracto" style="display:none;" onclick="cerrarModalExtracto(event)">
+    <div class="modal modal--lg" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <div class="modal__title">
+                <span class="material-icons">upload_file</span>
+                <span id="extractoTitulo">Importar extracto</span>
+            </div>
+            <button class="modal__close" onclick="cerrarModalExtracto()">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+            <input type="hidden" id="extractoCuentaId">
+            <input type="hidden" id="extractoMoneda">
+
+            <!-- Paso 1: pegar extracto -->
+            <div id="paso1">
+                <div class="alert alert-info" style="margin-bottom:var(--space-4); font-size:var(--text-sm);">
+                    <span class="material-icons">info</span>
+                    <span>Pegá el texto de tu extracto bancario. Funciona con cualquier formato: copiado del banco, CSV, o texto plano. El sistema detecta las líneas automáticamente.</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Texto del extracto</label>
+                    <textarea id="extractoTexto" class="parser-area"
+                        placeholder="Pegá acá el extracto...
+
+Ejemplo:
+14/05/2026  PIX recibido - JUAN GARCIA       +1.400,00    18.400,00
+13/05/2026  CELESC                           -287,50      16.900,00
+12/05/2026  PIX enviado - ANA GARCIA         -150,00      17.187,50"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Formato de fecha en el extracto</label>
+                    <select id="formatoFecha" class="form-control">
+                        <option value="dd/mm/yyyy">DD/MM/AAAA (Brasil, Uruguay)</option>
+                        <option value="yyyy-mm-dd">AAAA-MM-DD (ISO)</option>
+                        <option value="mm/dd/yyyy">MM/DD/AAAA</option>
+                    </select>
+                </div>
+
+                <div class="alert alert-error" id="parserError" style="display:none;">
+                    <span class="material-icons">error_outline</span>
+                    <span id="parserErrorText"></span>
+                </div>
+
+                <div style="display:flex; gap:var(--space-3); margin-top:var(--space-4);">
+                    <button class="btn btn-primary" onclick="parsearExtracto()">
+                        <span class="material-icons">auto_fix_high</span> Interpretar extracto
+                    </button>
+                    <button class="btn btn-ghost" onclick="cerrarModalExtracto()">Cancelar</button>
+                </div>
+            </div>
+
+            <!-- Paso 2: revisar y confirmar -->
+            <div id="paso2" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-3); flex-wrap:wrap; gap:var(--space-2);">
+                    <div>
+                        <strong id="resumenLineas">— líneas detectadas</strong>
+                        <span style="font-size:var(--text-xs); color:var(--color-text-muted); margin-left:8px;" id="resumenDuplicados"></span>
+                    </div>
+                    <button class="btn btn-ghost btn-sm" onclick="volverPaso1()">
+                        <span class="material-icons">arrow_back</span> Volver a editar
+                    </button>
+                </div>
+
+                <div style="overflow-x:auto; max-height:380px; overflow-y:auto;">
+                    <table class="preview-table" id="previewTable">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="chkTodos" onchange="toggleTodos(this.checked)"> Importar</th>
+                                <th>Fecha</th>
+                                <th>Descripción</th>
+                                <th>Monto</th>
+                                <th>Saldo post</th>
+                            </tr>
+                        </thead>
+                        <tbody id="previewBody"></tbody>
+                    </table>
+                </div>
+
+                <div style="display:flex; gap:var(--space-3); margin-top:var(--space-4); flex-wrap:wrap;">
+                    <button class="btn btn-primary" id="btnImportar" onclick="importarMovimientos()">
+                        <span class="material-icons">save</span>
+                        <span id="btnImportarText">Importar seleccionados</span>
+                    </button>
+                    <button class="btn btn-ghost" onclick="cerrarModalExtracto()">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async () => {
+    const { user, userData } = await CVC.verificarAuth('admin');
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+    CVC.renderNav('cuentas.html');
+
+    const db = CVC.db;
+    const { escapeHtml, showToast, showEmpty, showError } = CVC;
+
+    let cuentasCache   = [];
+    let lineasParseadas = [];
+
+    const SIMBOLO = { BRL: 'R$', USD: 'US$', UYU: '$U', ARS: '$' };
+    const PAIS_EMOJI = { BR: '🇧🇷', UY: '🇺🇾', AR: '🇦🇷' };
+
+    const fmt = (n, moneda) =>
+        `${SIMBOLO[moneda] || ''} ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
+    // ── Cargar cuentas ────────────────────────────────────────
+    async function cargarCuentas() {
+        try {
+            const snap = await db.collection('cuentas').get();
+            cuentasCache = snap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .sort((a, b) => (a.orden || 99) - (b.orden || 99));
+            renderCuentas();
+            renderConsolidado();
+        } catch(e) {
+            showError('#cuentasContainer', 'Error al cargar cuentas', e.message, cargarCuentas);
+        }
+    }
+
+    function renderCuentas() {
+        const container = document.getElementById('cuentasContainer');
+        if (!cuentasCache.length) {
+            showEmpty(container, 'Sin cuentas', 'Agregá la primera cuenta bancaria.', 'account_balance');
+            return;
+        }
+        container.innerHTML = `<div class="cuentas-grid">${
+            cuentasCache.map(c => {
+                const saldo   = c.saldoActual || 0;
+                const neg     = saldo < 0;
+                const moneda  = c.moneda || 'BRL';
+                const tipo    = c.tipo || 'operativa';
+                const tipoLabel = { operativa: 'Operativa', respaldo: 'Respaldo', personal: 'Personal/Mixta' };
+                return `
+                <div class="cuenta-card">
+                    <div class="cuenta-card__flag">${PAIS_EMOJI[c.pais] || ''} ${moneda}</div>
+                    <div class="cuenta-card__banco">${escapeHtml(c.banco || c.pais || '—')}</div>
+                    <div class="cuenta-card__nombre">${escapeHtml(c.nombre)}</div>
+                    <div class="cuenta-card__saldo ${neg ? 'negativo' : ''}">${fmt(saldo, moneda)}</div>
+                    <div class="cuenta-card__meta">
+                        <span>${tipoLabel[tipo] || tipo}</span>
+                        ${c.fiscal ? '<span style="color:var(--color-primary); font-weight:600;">Fiscal BR</span>' : ''}
+                        ${c.titular ? `<span>${escapeHtml(c.titular)}</span>` : ''}
+                    </div>
+                    <div class="cuenta-card__acciones">
+                        <a href="movimientos.html?cuenta=${c.id}" class="btn btn-primary btn-sm">
+                            <span class="material-icons">list</span> Movimientos
+                        </a>
+                        <button class="btn btn-secondary btn-sm" onclick="abrirModalExtracto('${c.id}', '${escapeHtml(c.nombre)}', '${moneda}')">
+                            <span class="material-icons">upload_file</span> Importar extracto
+                        </button>
+                        <button class="btn btn-ghost btn-sm" onclick="editarCuenta('${c.id}')" title="Editar">
+                            <span class="material-icons">edit</span>
+                        </button>
+                    </div>
+                </div>`;
+            }).join('')
+        }</div>`;
+    }
+
+    function renderConsolidado() {
+        if (!cuentasCache.length) return;
+        const box = document.getElementById('consolidado');
+        box.style.display = 'flex';
+
+        // Sumar todo en BRL usando tipoCambio
+        let totalBRL = 0;
+        const paises = { BR: 0, UY: 0, AR: 0 };
+
+        cuentasCache.forEach(c => {
+            const saldo = c.saldoActual || 0;
+            const tc    = c.tipoCambio  || 1;
+            const equiv = saldo * tc;
+            totalBRL += equiv;
+            if (paises[c.pais] !== undefined) paises[c.pais] += equiv;
+        });
+
+        document.getElementById('consolidadoMonto').textContent =
+            `R$ ${totalBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
+        document.getElementById('consolidadoDetalle').innerHTML = Object.entries(paises)
+            .filter(([, v]) => Math.abs(v) > 0)
+            .map(([pais, val]) => `
+                <div class="consolidado__item">
+                    <div class="label">${PAIS_EMOJI[pais]} ${pais}</div>
+                    <div class="valor">R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</div>
+                </div>`).join('');
+    }
+
+    // ── Modal cuenta ──────────────────────────────────────────
+    window.abrirModalCuenta = function() {
+        document.getElementById('modalCuentaTitulo').textContent = 'Nueva cuenta';
+        document.getElementById('cuentaId').value    = '';
+        document.getElementById('cNombre').value     = '';
+        document.getElementById('cBanco').value      = '';
+        document.getElementById('cPais').value       = 'BR';
+        document.getElementById('cMoneda').value     = 'BRL';
+        document.getElementById('cTitular').value    = '';
+        document.getElementById('cTipo').value       = 'operativa';
+        document.getElementById('cSaldoInicial').value = '0';
+        document.getElementById('cTipoCambio').value   = '1';
+        document.getElementById('cFiscal').value     = 'true';
+        document.getElementById('cOrden').value      = String((cuentasCache.length + 1) * 10);
+        document.getElementById('cuentaError').style.display = 'none';
+        document.getElementById('modalCuenta').style.display = 'flex';
+    };
+
+    window.editarCuenta = function(id) {
+        const c = cuentasCache.find(x => x.id === id);
+        if (!c) return;
+        document.getElementById('modalCuentaTitulo').textContent = 'Editar cuenta';
+        document.getElementById('cuentaId').value    = id;
+        document.getElementById('cNombre').value     = c.nombre    || '';
+        document.getElementById('cBanco').value      = c.banco     || '';
+        document.getElementById('cPais').value       = c.pais      || 'BR';
+        document.getElementById('cMoneda').value     = c.moneda    || 'BRL';
+        document.getElementById('cTitular').value    = c.titular   || '';
+        document.getElementById('cTipo').value       = c.tipo      || 'operativa';
+        document.getElementById('cSaldoInicial').value = String(c.saldoInicial || 0);
+        document.getElementById('cTipoCambio').value   = String(c.tipoCambio   || 1);
+        document.getElementById('cFiscal').value     = String(c.fiscal !== false);
+        document.getElementById('cOrden').value      = String(c.orden || 10);
+        document.getElementById('cuentaError').style.display = 'none';
+        document.getElementById('modalCuenta').style.display = 'flex';
+    };
+
+    window.cerrarModalCuenta = function(e) {
+        if (e && e.target !== document.getElementById('modalCuenta')) return;
+        document.getElementById('modalCuenta').style.display = 'none';
+    };
+
+    window.guardarCuenta = async function() {
+        const id     = document.getElementById('cuentaId').value;
+        const nombre = document.getElementById('cNombre').value.trim();
+        if (!nombre) {
+            document.getElementById('cuentaErrorText').textContent = 'El nombre es obligatorio.';
+            document.getElementById('cuentaError').style.display = 'flex';
+            return;
+        }
+        const btn  = document.getElementById('btnGuardarCuenta');
+        const text = document.getElementById('btnGuardarCuentaText');
+        btn.disabled = true; text.textContent = 'Guardando...';
+        try {
+            const data = {
+                nombre,
+                banco:        document.getElementById('cBanco').value.trim(),
+                pais:         document.getElementById('cPais').value,
+                moneda:       document.getElementById('cMoneda').value,
+                titular:      document.getElementById('cTitular').value.trim(),
+                tipo:         document.getElementById('cTipo').value,
+                saldoInicial: parseFloat(document.getElementById('cSaldoInicial').value) || 0,
+                tipoCambio:   parseFloat(document.getElementById('cTipoCambio').value)   || 1,
+                fiscal:       document.getElementById('cFiscal').value === 'true',
+                orden:        parseInt(document.getElementById('cOrden').value)           || 10,
+                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            if (id) {
+                await db.collection('cuentas').doc(id).update(data);
+                showToast('Cuenta actualizada.', 'success');
+            } else {
+                data.saldoActual = data.saldoInicial;
+                data.creadoEn   = firebase.firestore.FieldValue.serverTimestamp();
+                await db.collection('cuentas').add(data);
+                showToast('Cuenta creada.', 'success');
+            }
+            document.getElementById('modalCuenta').style.display = 'none';
+            await cargarCuentas();
+        } catch(e) {
+            document.getElementById('cuentaErrorText').textContent = 'Error: ' + e.message;
+            document.getElementById('cuentaError').style.display = 'flex';
+        } finally {
+            btn.disabled = false; text.textContent = 'Guardar';
+        }
+    };
+
+    // ── Modal extracto ────────────────────────────────────────
+    window.abrirModalExtracto = function(cuentaId, nombre, moneda) {
+        document.getElementById('extractoCuentaId').value    = cuentaId;
+        document.getElementById('extractoMoneda').value      = moneda;
+        document.getElementById('extractoTitulo').textContent = `Importar extracto — ${nombre}`;
+        document.getElementById('extractoTexto').value       = '';
+        document.getElementById('parserError').style.display = 'none';
+        document.getElementById('paso1').style.display       = 'block';
+        document.getElementById('paso2').style.display       = 'none';
+        lineasParseadas = [];
+        document.getElementById('modalExtracto').style.display = 'flex';
+    };
+
+    window.cerrarModalExtracto = function(e) {
+        if (e && e.target !== document.getElementById('modalExtracto')) return;
+        document.getElementById('modalExtracto').style.display = 'none';
+    };
+
+    // ── Parser inteligente de extracto ────────────────────────
+    //
+    //  Detecta líneas con fecha + descripción + monto (+ saldo opcional).
+    //  Soporta formatos brasileros (punto como separador de miles, coma decimal)
+    //  y formatos internacionales.
+    //
+    window.parsearExtracto = async function() {
+        const texto  = document.getElementById('extractoTexto').value.trim();
+        const formato = document.getElementById('formatoFecha').value;
+        const moneda  = document.getElementById('extractoMoneda').value;
+        const errEl  = document.getElementById('parserError');
+        errEl.style.display = 'none';
+
+        if (!texto) {
+            document.getElementById('parserErrorText').textContent = 'Pegá el texto del extracto primero.';
+            errEl.style.display = 'flex';
+            return;
+        }
+
+        const lineas = texto.split('\n').map(l => l.trim()).filter(l => l.length > 3);
+        const resultado = [];
+
+        // Regex para montos (formatos BR y estándar)
+        const reMontosBR = /([+-]?\s*[\d.]+,\d{2})/g;
+        const reMontosEN = /([+-]?\s*[\d,]+\.\d{2})/g;
+        const reFechaDMY = /(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/;
+        const reFechaYMD = /(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/;
+
+        function parseFecha(str) {
+            let m;
+            if (formato === 'dd/mm/yyyy' && (m = str.match(reFechaDMY))) {
+                const y = m[3].length === 2 ? '20' + m[3] : m[3];
+                return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+            }
+            if (formato === 'yyyy-mm-dd' && (m = str.match(reFechaYMD))) {
+                return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+            }
+            if (formato === 'mm/dd/yyyy' && (m = str.match(reFechaDMY))) {
+                const y = m[3].length === 2 ? '20' + m[3] : m[3];
+                return `${y}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+            }
+            return null;
+        }
+
+        function parseMonto(str) {
+            // Detectar si es formato BR (coma decimal) o EN (punto decimal)
+            const esBR = /\d+\.\d{3},\d{2}/.test(str) || /\d+,\d{2}$/.test(str);
+            if (esBR) {
+                return parseFloat(str.replace(/\./g,'').replace(',','.').replace(/\s/g,'')) || null;
+            }
+            return parseFloat(str.replace(/,/g,'').replace(/\s/g,'')) || null;
+        }
+
+        for (const linea of lineas) {
+            const fecha = parseFecha(linea);
+            if (!fecha) continue; // línea sin fecha = encabezado u otra cosa
+
+            // Extraer montos de la línea
+            const montosBR = [...linea.matchAll(reMontosBR)].map(m => parseMonto(m[1])).filter(n => n !== null);
+            const montosEN = [...linea.matchAll(reMontosEN)].map(m => parseMonto(m[1])).filter(n => n !== null);
+            const montos   = (montosBR.length >= montosEN.length) ? montosBR : montosEN;
+
+            if (!montos.length) continue;
+
+            // El primer monto es el movimiento, el último es el saldo post (si hay 2+)
+            const monto    = montos[0];
+            const saldoPost = montos.length >= 2 ? montos[montos.length - 1] : null;
+
+            // Descripción: texto entre fecha y primer monto
+            let desc = linea
+                .replace(reFechaDMY, '').replace(reFechaYMD, '')
+                .replace(reMontosBR, '').replace(reMontosEN, '')
+                .replace(/[+\-]{2,}/g,' ').trim()
+                .replace(/\s{2,}/g,' ');
+            if (!desc) desc = '(sin descripción)';
+
+            resultado.push({
+                fecha,
+                descripcion: desc,
+                monto,
+                tipo:     monto >= 0 ? 'credito' : 'debito',
+                saldoPost,
+                linea,
+                seleccionado: true,
+                duplicado: false
+            });
+        }
+
+        if (!resultado.length) {
+            document.getElementById('parserErrorText').textContent =
+                'No se detectaron líneas válidas. Verificá el formato de fecha seleccionado.';
+            errEl.style.display = 'flex';
+            return;
+        }
+
+        // Detectar duplicados comparando con movimientos ya importados
+        const cuentaId = document.getElementById('extractoCuentaId').value;
+        try {
+            const fechas = [...new Set(resultado.map(r => r.fecha))];
+            const existSnap = await db.collection('movimientos')
+                .where('cuentaId', '==', cuentaId)
+                .where('fecha', 'in', fechas.slice(0, 10)) // Firestore limite
+                .get();
+            const existentes = existSnap.docs.map(d => d.data());
+
+            resultado.forEach(r => {
+                r.duplicado = existentes.some(e =>
+                    e.fecha === r.fecha &&
+                    Math.abs(e.monto - r.monto) < 0.01 &&
+                    e.descripcion.slice(0,15) === r.descripcion.slice(0,15)
+                );
+                if (r.duplicado) r.seleccionado = false;
+            });
+        } catch(e) { /* no bloquear si falla la detección de duplicados */ }
+
+        lineasParseadas = resultado;
+        mostrarPreview(resultado, moneda);
+
+        document.getElementById('paso1').style.display = 'none';
+        document.getElementById('paso2').style.display = 'block';
+    };
+
+    function mostrarPreview(lineas, moneda) {
+        const sim   = SIMBOLO[moneda] || '';
+        const dups  = lineas.filter(l => l.duplicado).length;
+        document.getElementById('resumenLineas').textContent =
+            `${lineas.length} líneas detectadas`;
+        document.getElementById('resumenDuplicados').textContent =
+            dups ? `(${dups} posiblemente ya importadas — deseleccionadas)` : '';
+
+        document.getElementById('previewBody').innerHTML = lineas.map((l, i) => `
+            <tr class="${l.duplicado ? 'error-row' : ''}">
+                <td style="text-align:center;">
+                    <input type="checkbox" id="chk${i}"
+                        ${l.seleccionado ? 'checked' : ''}
+                        onchange="lineasParseadas[${i}].seleccionado = this.checked">
+                </td>
+                <td style="white-space:nowrap;">${l.fecha}</td>
+                <td style="max-width:260px; word-break:break-word; font-size:11px;">${escapeHtml(l.descripcion)}</td>
+                <td class="${l.tipo}" style="text-align:right; white-space:nowrap;">
+                    ${l.monto >= 0 ? '+' : ''}${sim} ${Math.abs(l.monto).toLocaleString('pt-BR', {minimumFractionDigits:2})}
+                </td>
+                <td style="text-align:right; color:var(--color-text-muted); white-space:nowrap; font-size:11px;">
+                    ${l.saldoPost != null ? `${sim} ${Math.abs(l.saldoPost).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—'}
+                </td>
+            </tr>`).join('');
+    }
+
+    window.toggleTodos = function(checked) {
+        lineasParseadas.forEach((l, i) => {
+            l.seleccionado = checked;
+            const chk = document.getElementById('chk' + i);
+            if (chk) chk.checked = checked;
+        });
+    };
+
+    window.volverPaso1 = function() {
+        document.getElementById('paso1').style.display = 'block';
+        document.getElementById('paso2').style.display = 'none';
+    };
+
+    // ── Importar movimientos confirmados ──────────────────────
+    window.importarMovimientos = async function() {
+        const cuentaId = document.getElementById('extractoCuentaId').value;
+        const moneda   = document.getElementById('extractoMoneda').value;
+        const selec    = lineasParseadas.filter(l => l.seleccionado);
+
+        if (!selec.length) { showToast('Seleccioná al menos una línea.', 'error'); return; }
+
+        const btn  = document.getElementById('btnImportar');
+        const text = document.getElementById('btnImportarText');
+        btn.disabled = true; text.textContent = 'Importando...';
+
+        try {
+            // Guardar en batches de 400 (límite Firestore)
+            const CHUNK = 400;
+            for (let i = 0; i < selec.length; i += CHUNK) {
+                const batch = db.batch();
+                selec.slice(i, i + CHUNK).forEach(l => {
+                    const ref = db.collection('movimientos').doc();
+                    batch.set(ref, {
+                        cuentaId,
+                        moneda,
+                        fecha:        l.fecha,
+                        descripcion:  l.descripcion,
+                        monto:        l.monto,
+                        tipo:         l.tipo,
+                        saldoPost:    l.saldoPost,
+                        categoriaId:  null,
+                        etiqueta:     '',
+                        reservaId:    null,
+                        tareaId:      null,
+                        pixId:        '',
+                        importadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
+                        importadoPor: user.uid
+                    });
+                });
+                await batch.commit();
+            }
+
+            // Actualizar saldo actual de la cuenta con el último saldoPost disponible
+            const conSaldo = selec.filter(l => l.saldoPost != null);
+            if (conSaldo.length) {
+                const ultimo = conSaldo.sort((a,b) => b.fecha.localeCompare(a.fecha))[0];
+                await db.collection('cuentas').doc(cuentaId).update({
+                    saldoActual:   ultimo.saldoPost,
+                    actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+
+            showToast(`${selec.length} movimientos importados.`, 'success');
+            document.getElementById('modalExtracto').style.display = 'none';
+            await cargarCuentas();
+        } catch(e) {
+            showToast('Error: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false; text.textContent = 'Importar seleccionados';
+        }
+    };
+
+    await cargarCuentas();
+})();
+</script>
+</body>
+</html>
