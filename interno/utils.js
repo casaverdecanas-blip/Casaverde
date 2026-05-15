@@ -665,34 +665,161 @@ function showToast(mensaje, tipo) {
 
 
 // ── NAV CENTRALIZADA ─────────────────────────────────────────
+//
+//  Estructura de grupos desplegables.
+//  Cada grupo tiene un trigger (label + ícono) y un panel con sus items.
+//  Los items directos (sin grupo) se renderizan como links planos.
+//
+//  Formato:
+//  {
+//    group: 'Finanzas',          ← label del trigger
+//    icon:  'payments',          ← ícono del trigger
+//    items: [                    ← items del dropdown
+//      { href, icon, label },
+//      { sep: true },            ← separador dentro del panel
+//    ]
+//  }
+//  — o —
+//  { href, icon, label }         ← item directo (sin dropdown)
+//
+
 const NAV_ADMIN_ITEMS = [
-    { href: 'dashboard.html',     icon: 'dashboard',       label: 'Dashboard'     },
-    { href: 'reservas.html',      icon: 'event',           label: 'Reservas'      },
-    { href: 'presupuestos.html',  icon: 'request_quote',   label: 'Presupuestos'  },
-    { href: 'pagos.html',         icon: 'payments',        label: 'Finanzas'      },
-    { href: 'clientes.html',      icon: 'people',          label: 'Clientes'      },
-    { href: 'cabanas-admin.html', icon: 'cottage',         label: 'Cabañas'       },
-    { href: 'tareas.html',        icon: 'checklist',       label: 'Tareas'        },
-    { href: 'calendario.html',    icon: 'calendar_month',  label: 'Calendario'    },
-    { href: 'usuarios.html',      icon: 'manage_accounts', label: 'Usuarios'      }
+
+    // ── Items directos ────────────────────────────────────────
+    { href: 'dashboard.html',    icon: 'dashboard',      label: 'Dashboard'  },
+    { href: 'calendario.html',   icon: 'calendar_month', label: 'Calendario' },
+
+    // ── Grupo: Reservas ───────────────────────────────────────
+    {
+        group: 'Reservas',
+        icon:  'event',
+        items: [
+            { href: 'reservas.html',     icon: 'event',         label: 'Reservas'     },
+            { href: 'presupuestos.html', icon: 'request_quote', label: 'Presupuestos' },
+            { href: 'clientes.html',     icon: 'people',        label: 'Clientes'     },
+        ]
+    },
+
+    // ── Grupo: Finanzas ───────────────────────────────────────
+    {
+        group: 'Finanzas',
+        icon:  'payments',
+        items: [
+            { href: 'pagos.html',      icon: 'payments',        label: 'Ingresos / Egresos' },
+            { sep: true },
+            { href: 'cuentas.html',    icon: 'account_balance', label: 'Cuentas'            },
+            { href: 'movimientos.html',icon: 'receipt_long',    label: 'Movimientos'        },
+            { href: 'categorias.html', icon: 'label',           label: 'Categorías'         },
+        ]
+    },
+
+    // ── Grupo: Operaciones ────────────────────────────────────
+    {
+        group: 'Operaciones',
+        icon:  'checklist',
+        items: [
+            { href: 'tareas.html',    icon: 'checklist',      label: 'Tareas'    },
+        ]
+    },
+
+    // ── Grupo: Configuración ──────────────────────────────────
+    {
+        group: 'Config.',
+        icon:  'settings',
+        items: [
+            { href: 'cabanas-admin.html', icon: 'cottage',         label: 'Cabañas'  },
+            { href: 'usuarios.html',      icon: 'manage_accounts', label: 'Usuarios' },
+            { sep: true },
+            { href: 'manual-sistema.html',icon: 'menu_book',       label: 'Manual'   },
+        ]
+    }
 ];
 
 const NAV_USER_ITEMS = [
-    { href: 'tareas.html', icon: 'checklist', label: 'Tareas'     },
-    { href: 'pagos.html',  icon: 'payments',  label: 'Mis cobros' }
+    { href: 'tareas.html',        icon: 'checklist', label: 'Tareas'     },
+    { href: 'pagos.html',         icon: 'payments',  label: 'Mis cobros' },
+    { href: 'manual-sistema.html',icon: 'menu_book', label: 'Manual'     }
 ];
 
+// ── renderNav ─────────────────────────────────────────────────
+//
+//  Construye la barra de navegación con dropdowns.
+//  Cierra el dropdown abierto al hacer click fuera (document listener).
+//  Marca como activo el grupo que contiene la página actual.
+//
 function renderNav(paginaActiva, rol) {
     rol = rol || 'admin';
-    const el    = document.getElementById('appNav') || document.querySelector('.admin-nav');
+    const el = document.getElementById('appNav') || document.querySelector('.admin-nav');
     if (!el) return;
+
     const items = rol === 'admin' ? NAV_ADMIN_ITEMS : NAV_USER_ITEMS;
-    el.innerHTML = items.map(function(item) {
-        const activo = item.href === paginaActiva || item.href.replace('.html', '') === paginaActiva;
-        return '<a href="' + item.href + '" class="nav-item' + (activo ? ' active' : '') + '">'
-            + '<span class="material-icons">' + item.icon + '</span> ' + item.label + '</a>';
+
+    el.innerHTML = items.map(function(item, gi) {
+        // Item directo — link plano
+        if (item.href) {
+            const activo = item.href === paginaActiva;
+            return '<a href="' + item.href + '" class="nav-item' + (activo ? ' active' : '') + '">'
+                + '<span class="material-icons">' + item.icon + '</span> ' + item.label + '</a>';
+        }
+
+        // Grupo con dropdown
+        if (item.group) {
+            const grupoId = 'navdrop-' + gi;
+            // ¿Algún hijo coincide con la página activa?
+            const tieneActivo = (item.items || []).some(function(sub) {
+                return sub.href && (
+                    sub.href === paginaActiva ||
+                    sub.href.replace('.html','') === paginaActiva
+                );
+            });
+
+            const panelItems = (item.items || []).map(function(sub) {
+                if (sub.sep) return '<div class="nav-dropdown__sep"></div>';
+                const esActivo = sub.href === paginaActiva
+                    || sub.href.replace('.html','') === paginaActiva;
+                return '<a href="' + sub.href + '" class="nav-dropdown__item' + (esActivo ? ' active' : '') + '">'
+                    + '<span class="material-icons">' + sub.icon + '</span> ' + sub.label + '</a>';
+            }).join('');
+
+            return '<div class="nav-dropdown' + (tieneActivo ? ' has-active' : '') + '" id="' + grupoId + '">'
+                + '<button class="nav-dropdown__trigger" onclick="toggleNavDrop(event,\'' + grupoId + '\')">'
+                + '<span class="material-icons">' + item.icon + '</span> '
+                + item.group
+                + '<span class="material-icons nav-arrow">expand_more</span>'
+                + '</button>'
+                + '<div class="nav-dropdown__panel">' + panelItems + '</div>'
+                + '</div>';
+        }
+
+        return '';
     }).join('');
+
+    // Cerrar al hacer click fuera
+    document.removeEventListener('click', _cerrarDropdowns);
+    document.addEventListener('click', _cerrarDropdowns);
 }
+
+function toggleNavDrop(e, id) {
+    e.stopPropagation();
+    const el = document.getElementById(id);
+    if (!el) return;
+    const estaAbierto = el.classList.contains('open');
+    // Cerrar todos
+    document.querySelectorAll('.nav-dropdown.open').forEach(function(d) {
+        d.classList.remove('open');
+    });
+    // Abrir el clickeado (si no estaba abierto)
+    if (!estaAbierto) el.classList.add('open');
+}
+
+function _cerrarDropdowns() {
+    document.querySelectorAll('.nav-dropdown.open').forEach(function(d) {
+        d.classList.remove('open');
+    });
+}
+
+// Exponer toggleNavDrop globalmente para los onclick del HTML
+window.toggleNavDrop = toggleNavDrop;
 
 
 // ── EXPORTAR ─────────────────────────────────────────────────
