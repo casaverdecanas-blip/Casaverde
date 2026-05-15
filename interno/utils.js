@@ -801,24 +801,48 @@ function renderNav(paginaActiva, rol) {
 
 function toggleNavDrop(e, id) {
     e.stopPropagation();
-    const el = document.getElementById(id);
-    if (!el) return;
-    const estaAbierto = el.classList.contains('open');
-    // Cerrar todos
+
+    const dropEl  = document.getElementById(id);
+    if (!dropEl) return;
+
+    const estaAbierto = dropEl.classList.contains('open');
+
+    // Cerrar todos los dropdowns abiertos
     document.querySelectorAll('.nav-dropdown.open').forEach(function(d) {
         d.classList.remove('open');
+        const p = d.querySelector('.nav-dropdown__panel');
+        if (p) { p.style.top = ''; p.style.left = ''; }
     });
-    // Abrir el clickeado (si no estaba abierto)
-    if (!estaAbierto) el.classList.add('open');
+
+    if (estaAbierto) return; // ya estaba abierto → solo cerrar
+
+    // Calcular posición del trigger para posicionar el panel con fixed
+    // (necesario porque .admin-nav tiene overflow-x:auto que corta absolute)
+    const trigger = dropEl.querySelector('.nav-dropdown__trigger');
+    const rect    = trigger.getBoundingClientRect();
+    const panel   = dropEl.querySelector('.nav-dropdown__panel');
+
+    // Posicionar debajo del trigger
+    panel.style.top  = (rect.bottom + 2) + 'px';
+    panel.style.left = rect.left + 'px';
+
+    // Ajustar si se sale por la derecha de la pantalla
+    dropEl.classList.add('open');
+    const panelRect = panel.getBoundingClientRect();
+    if (panelRect.right > window.innerWidth - 8) {
+        panel.style.left = (rect.right - panelRect.width) + 'px';
+    }
 }
 
 function _cerrarDropdowns() {
     document.querySelectorAll('.nav-dropdown.open').forEach(function(d) {
         d.classList.remove('open');
+        const p = d.querySelector('.nav-dropdown__panel');
+        if (p) { p.style.top = ''; p.style.left = ''; }
     });
 }
 
-// Exponer toggleNavDrop globalmente para los onclick del HTML
+// Exponer globalmente
 window.toggleNavDrop = toggleNavDrop;
 
 
