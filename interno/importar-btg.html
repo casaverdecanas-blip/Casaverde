@@ -226,34 +226,69 @@
         </div>
     </div>
 
-    <!-- ── PASO 1: Pegar el CSV ────────────────────────────── -->
+    <!-- ── PASO 1: Cargar el CSV ──────────────────────────────── -->
     <div class="paso activo" id="paso1">
         <div class="card">
             <div class="card__header">
                 <h2 class="card__title">
                     <span class="material-icons">upload_file</span>
-                    Pegar extracto BTG Pactual
+                    Cargar extracto BTG Pactual
                 </h2>
             </div>
 
-            <div class="alert alert-info" style="margin-bottom:var(--space-4);">
-                <span class="material-icons">info</span>
-                <span>
-                    Abrí el CSV en cualquier editor de texto (Notes, Bloc de notas),
-                    seleccioná todo (<strong>Ctrl+A</strong> o <strong>Cmd+A</strong>),
-                    copiá y pegá acá abajo. El sistema reconoce automáticamente el formato BTG Pactual.
-                </span>
+            <!-- Selector de método: archivo o pegar texto -->
+            <div style="display:flex; gap:var(--space-3); margin-bottom:var(--space-4);">
+                <button id="modoArchivo" class="btn btn-primary btn-sm" onclick="setModo('archivo')">
+                    <span class="material-icons">attach_file</span> Cargar archivo .csv
+                </button>
+                <button id="modoTexto" class="btn btn-secondary btn-sm" onclick="setModo('texto')">
+                    <span class="material-icons">content_paste</span> Pegar texto
+                </button>
             </div>
 
-            <div class="form-group">
-                <label class="form-label">Contenido del archivo CSV</label>
-                <textarea id="csvInput" class="csv-textarea"
-                    placeholder=",Extrato de conta corrente,,,,,,,,12/05/2026,
-,Cliente:,Maria Florencia De Tezanos Pinto,,,,,,,,
-..."></textarea>
+            <!-- Modo: cargar archivo -->
+            <div id="bloqueArchivo">
+                <!-- Zona de drop / tap para seleccionar archivo -->
+                <div id="dropZone" style="
+                    border: 2px dashed var(--color-border);
+                    border-radius: var(--radius-lg);
+                    padding: var(--space-8) var(--space-6);
+                    text-align: center;
+                    cursor: pointer;
+                    transition: border-color .2s, background .2s;
+                    margin-bottom: var(--space-4);"
+                    onclick="document.getElementById('csvFile').click()"
+                    ondragover="dropZoneOver(event)"
+                    ondragleave="dropZoneOut(event)"
+                    ondrop="dropZoneDrop(event)">
+                    <span class="material-icons" style="font-size:48px; color:var(--color-primary-mid); display:block; margin-bottom:var(--space-3);">upload_file</span>
+                    <div style="font-weight:700; font-size:var(--text-md); margin-bottom:var(--space-2);">
+                        Tocá para seleccionar el archivo
+                    </div>
+                    <div style="font-size:var(--text-sm); color:var(--color-text-muted);">
+                        o arrastrá el .csv acá (en desktop)
+                    </div>
+                    <div id="archivoNombre" style="margin-top:var(--space-3); font-size:var(--text-sm);
+                        color:var(--color-primary); font-weight:600; display:none;"></div>
+                </div>
+                <input type="file" id="csvFile" accept=".csv,text/csv" style="display:none;"
+                    onchange="archivoSeleccionado(this)">
             </div>
 
-            <div class="form-group">
+            <!-- Modo: pegar texto (oculto por defecto) -->
+            <div id="bloqueTexto" style="display:none;">
+                <div class="alert alert-info" style="margin-bottom:var(--space-3); font-size:var(--text-sm);">
+                    <span class="material-icons">info</span>
+                    <span>Abrí el CSV en Notas, seleccioná todo (<strong>Cmd+A</strong>), copiá y pegá acá.</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Contenido del CSV</label>
+                    <textarea id="csvInput" class="csv-textarea"
+                        placeholder=",Extrato de conta corrente,,,,,,,,12/05/2026,&#10;,Cliente:,Maria Florencia..."></textarea>
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top:var(--space-4);">
                 <label class="form-label">¿A qué cuenta pertenece este extracto? <span class="required">*</span></label>
                 <select id="cuentaSelect" class="form-control">
                     <option value="">Cargando cuentas...</option>
@@ -445,7 +480,72 @@
     let metaExtracto       = {};   // datos del encabezado del CSV
     let cuentaSeleccionada = null;
 
-    // ── Cargar cuentas disponibles ────────────────────────────
+    // ── Modo: archivo o texto ─────────────────────────────────
+    let modoActual = 'archivo'; // 'archivo' | 'texto'
+
+    window.setModo = function(modo) {
+        modoActual = modo;
+        document.getElementById('bloqueArchivo').style.display = modo === 'archivo' ? 'block' : 'none';
+        document.getElementById('bloqueTexto').style.display   = modo === 'texto'   ? 'block' : 'none';
+        document.getElementById('modoArchivo').className = 'btn btn-sm ' + (modo === 'archivo' ? 'btn-primary' : 'btn-secondary');
+        document.getElementById('modoTexto').className   = 'btn btn-sm ' + (modo === 'texto'   ? 'btn-primary' : 'btn-secondary');
+    };
+
+    // ── Cargar archivo CSV directamente ───────────────────────
+    window.archivoSeleccionado = function(input) {
+        const file = input.files[0];
+        if (!file) return;
+        leerArchivo(file);
+    };
+
+    function leerArchivo(file) {
+        // Validar extensión
+        if (!file.name.toLowerCase().endsWith('.csv') && file.type !== 'text/csv') {
+            mostrarErrorPaso1('El archivo debe ser .csv');
+            return;
+        }
+
+        const nombreEl = document.getElementById('archivoNombre');
+        const dropZone = document.getElementById('dropZone');
+
+        nombreEl.textContent  = '📄 ' + file.name + ' — ' + (file.size / 1024).toFixed(1) + ' KB';
+        nombreEl.style.display = 'block';
+        dropZone.style.borderColor  = 'var(--color-success)';
+        dropZone.style.background   = 'var(--color-success-bg)';
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            // Guardar el texto leído en el textarea oculto para reutilizar procesarCSV()
+            document.getElementById('csvInput').value = e.target.result;
+        };
+        // Intentar UTF-8 primero; si hay caracteres raros usar latin1
+        reader.onerror = function() {
+            mostrarErrorPaso1('No se pudo leer el archivo. Probá con el modo "Pegar texto".');
+        };
+        reader.readAsText(file, 'UTF-8');
+    }
+
+    // ── Drag and drop (desktop) ───────────────────────────────
+    window.dropZoneOver = function(e) {
+        e.preventDefault();
+        document.getElementById('dropZone').style.borderColor = 'var(--color-primary)';
+        document.getElementById('dropZone').style.background  = 'var(--color-primary-xlight)';
+    };
+    window.dropZoneOut = function(e) {
+        document.getElementById('dropZone').style.borderColor = 'var(--color-border)';
+        document.getElementById('dropZone').style.background  = '';
+    };
+    window.dropZoneDrop = function(e) {
+        e.preventDefault();
+        dropZoneOut(e);
+        const file = e.dataTransfer?.files[0];
+        if (file) leerArchivo(file);
+    };
+
+    function mostrarErrorPaso1(msg) {
+        document.getElementById('paso1ErrorText').textContent = msg;
+        document.getElementById('paso1Error').style.display   = 'flex';
+    }
     try {
         const snap = await db.collection('cuentas').get();
         const cuentas = snap.docs
