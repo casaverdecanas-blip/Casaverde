@@ -13,20 +13,22 @@
             gap: var(--space-6);
             align-items: start;
         }
-        @media (max-width: 768px) {
+        @media (max-width: 900px) {
             .manual-layout { grid-template-columns: 1fr; }
-            .manual-toc    { display: none; }
+            .manual-toc    { display: none; }  /* oculto en móvil — usa el botón flotante */
         }
 
-        /* ── Índice lateral ──────────────────────────────────── */
+        /* ── Índice lateral (desktop) ────────────────────────── */
         .manual-toc {
             position: sticky;
-            top: var(--space-4);
+            top: 120px;           /* debajo del header + nav */
             background: var(--color-surface);
             border: 1px solid var(--color-border);
             border-radius: var(--radius-md);
             padding: var(--space-4);
             font-size: var(--text-xs);
+            max-height: calc(100vh - 160px);
+            overflow-y: auto;
         }
         .manual-toc__title {
             font-weight: 700;
@@ -39,10 +41,10 @@
             display: block;
             color: var(--color-text-secondary);
             text-decoration: none;
-            padding: 3px 0;
+            padding: 3px 0 3px var(--space-2);
             border-left: 2px solid transparent;
-            padding-left: var(--space-2);
             transition: all var(--transition-fast);
+            line-height: 1.5;
         }
         .manual-toc a:hover,
         .manual-toc a.active {
@@ -50,6 +52,111 @@
             border-left-color: var(--color-primary);
         }
         .manual-toc a.nivel-2 { padding-left: var(--space-4); font-size: 11px; }
+
+        /* ── Botón flotante de índice (solo móvil) ───────────── */
+        .toc-fab {
+            display: none;             /* oculto en desktop */
+            position: fixed;
+            bottom: 24px;
+            right: 20px;
+            z-index: 500;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--color-primary);
+            color: white;
+            border: none;
+            box-shadow: 0 4px 16px rgba(45,90,39,.4);
+            cursor: pointer;
+            align-items: center;
+            justify-content: center;
+            transition: transform .15s, box-shadow .15s;
+        }
+        .toc-fab:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(45,90,39,.5); }
+        .toc-fab .material-icons { font-size: 22px; }
+
+        @media (max-width: 900px) {
+            .toc-fab { display: flex; }
+        }
+
+        /* ── Panel modal del índice (móvil) ──────────────────── */
+        .toc-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.45);
+            z-index: 600;
+            align-items: flex-end;    /* panel aparece desde abajo */
+            justify-content: center;
+        }
+        .toc-modal-overlay.open { display: flex; }
+
+        .toc-modal-panel {
+            background: var(--color-surface);
+            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+            width: 100%;
+            max-width: 520px;
+            max-height: 75vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 -8px 32px rgba(0,0,0,.2);
+            animation: slideUp .2s ease;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(40px); opacity: 0; }
+            to   { transform: translateY(0);    opacity: 1; }
+        }
+
+        .toc-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-4) var(--space-5);
+            border-bottom: 1px solid var(--color-border);
+            flex-shrink: 0;
+        }
+        .toc-modal-header strong {
+            font-size: var(--text-md);
+            color: var(--color-primary-dark);
+        }
+        .toc-modal-header button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--color-text-muted);
+            display: flex;
+            align-items: center;
+            padding: 4px;
+            border-radius: var(--radius-sm);
+        }
+        .toc-modal-header button:hover { color: var(--color-text-primary); }
+
+        .toc-modal-links {
+            overflow-y: auto;
+            padding: var(--space-3) var(--space-5) var(--space-5);
+            -webkit-overflow-scrolling: touch;
+        }
+        .toc-modal-links a {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            padding: var(--space-3) 0;
+            border-bottom: 1px solid var(--color-border-light);
+            text-decoration: none;
+            color: var(--color-text-secondary);
+            font-size: var(--text-sm);
+            font-weight: 500;
+            transition: color var(--transition-fast);
+        }
+        .toc-modal-links a:last-child { border-bottom: none; }
+        .toc-modal-links a:hover,
+        .toc-modal-links a.active { color: var(--color-primary); }
+        .toc-modal-links a .material-icons { font-size: 15px; opacity: .6; flex-shrink: 0; }
+        .toc-modal-links a.nivel-2 {
+            padding-left: var(--space-5);
+            font-size: var(--text-xs);
+            font-weight: 400;
+        }
 
         /* ── Contenido del manual ────────────────────────────── */
         .manual-content {
@@ -286,7 +393,7 @@
 
     <div class="manual-layout">
 
-        <!-- Índice lateral -->
+        <!-- Índice lateral (desktop) -->
         <nav class="manual-toc" id="manualToc">
             <div class="manual-toc__title">Contenido</div>
             <div id="tocLinks">
@@ -313,6 +420,26 @@
     </div>
 
 </main>
+
+<!-- ── BOTÓN FLOTANTE (solo móvil) ──────────────────────────── -->
+<button class="toc-fab" id="tocFab" onclick="abrirTocModal()" title="Ver índice">
+    <span class="material-icons">toc</span>
+</button>
+
+<!-- ── PANEL MODAL DEL ÍNDICE (móvil) ───────────────────────── -->
+<div class="toc-modal-overlay" id="tocModalOverlay" onclick="cerrarTocModal(event)">
+    <div class="toc-modal-panel" onclick="event.stopPropagation()">
+        <div class="toc-modal-header">
+            <strong>📋 Contenido del manual</strong>
+            <button onclick="cerrarTocModal()">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        <div class="toc-modal-links" id="tocModalLinks">
+            <!-- Se llena dinámicamente igual que el índice desktop -->
+        </div>
+    </div>
+</div>
 
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -374,31 +501,78 @@
             document.getElementById('manualContent').prepend(metaEl);
         }
 
-        // Generar índice desde los h2 y h3 del contenido
         generarIndice();
-
-        // Scroll suave para links del índice
-        document.querySelectorAll('.manual-toc a').forEach(a => {
-            a.addEventListener('click', e => {
-                e.preventDefault();
-                const target = document.querySelector(a.getAttribute('href'));
-                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            });
-        });
     }
 
     function generarIndice() {
         const headings = document.querySelectorAll('#manualContent h2, #manualContent h3');
-        if (!headings.length) { document.getElementById('manualToc').style.display = 'none'; return; }
+        if (!headings.length) {
+            document.getElementById('manualToc').style.display = 'none';
+            document.getElementById('tocFab').style.display    = 'none';
+            return;
+        }
 
-        let html = '';
-        headings.forEach((h, i) => {
-            if (!h.id) h.id = 'sec-' + i;
-            const nivel = h.tagName === 'H2' ? '' : ' nivel-2';
-            html += `<a href="#${h.id}" class="${nivel}">${h.textContent}</a>`;
+        // Asignar IDs a los headings
+        headings.forEach((h, i) => { if (!h.id) h.id = 'sec-' + i; });
+
+        // ── Índice desktop ────────────────────────────────────
+        document.getElementById('tocLinks').innerHTML = [...headings].map(h => {
+            const nivel = h.tagName === 'H3' ? ' nivel-2' : '';
+            return `<a href="#${h.id}" class="${nivel}">${h.textContent}</a>`;
+        }).join('');
+
+        // Click en índice desktop → scroll suave
+        document.querySelectorAll('#tocLinks a').forEach(a => {
+            a.addEventListener('click', e => {
+                e.preventDefault();
+                navegarA(a.getAttribute('href').slice(1));
+            });
         });
-        document.getElementById('tocLinks').innerHTML = html;
+
+        // ── Índice modal móvil ────────────────────────────────
+        // Ícono según nivel para distinguir secciones y subsecciones
+        document.getElementById('tocModalLinks').innerHTML = [...headings].map(h => {
+            const esH3  = h.tagName === 'H3';
+            const nivel = esH3 ? ' nivel-2' : '';
+            const icon  = esH3 ? 'subdirectory_arrow_right' : 'label';
+            return `<a href="#${h.id}" class="${nivel}" onclick="navegarYCerrar('${h.id}')">
+                <span class="material-icons">${icon}</span>
+                ${h.textContent}
+            </a>`;
+        }).join('');
     }
+
+    // ── Navegación ────────────────────────────────────────────
+    //
+    //  Calcula el offset correcto considerando el header fijo (56px)
+    //  y la barra de nav sticky (~45px). En móvil solo el header.
+    //
+    function navegarA(id) {
+        const target = document.getElementById(id);
+        if (!target) return;
+        const offset = window.innerWidth <= 900 ? 70 : 115;
+        const top    = target.getBoundingClientRect().top + window.scrollY - offset;
+        window.scrollTo({ top, behavior: 'smooth' });
+    }
+
+    // Navegar desde el modal móvil → cerrar el panel primero
+    window.navegarYCerrar = function(id) {
+        cerrarTocModal();
+        // Pequeño delay para que el modal se cierre antes del scroll
+        setTimeout(() => navegarA(id), 180);
+    };
+
+    // ── Modal del índice (móvil) ──────────────────────────────
+    window.abrirTocModal = function() {
+        document.getElementById('tocModalOverlay').classList.add('open');
+        document.body.style.overflow = 'hidden'; // bloquear scroll del body
+    };
+
+    window.cerrarTocModal = function(e) {
+        if (e && e.target !== document.getElementById('tocModalOverlay')) return;
+        document.getElementById('tocModalOverlay').classList.remove('open');
+        document.body.style.overflow = '';
+    };
 
     // ── Editor (solo admin) ───────────────────────────────────
     window.activarEditor = function() {
