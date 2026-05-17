@@ -371,6 +371,72 @@
     let filtroActual   = 'pendiente';
     let tareaModal     = null;
 
+    // ── NOTIFICACIONES WEB (Web Notifications API) ───────────
+    //
+    //  Al abrir tareas.html, el sistema pide permiso para notificar.
+    //  Si el colaborador acepta, cada vez que abra la pantalla
+    //  recibe una notificación push por cada tarea urgente (roja)
+    //  que tenga asignada o sin asignar.
+    //
+    //  No requiere servidor ni Cloud Functions — es nativa del browser.
+    //  Funciona en Chrome/Android. En iOS Safari requiere iOS 16.4+
+    //  con la app agregada a la pantalla de inicio (PWA).
+    //
+    async function iniciarNotificaciones() {
+        // Verificar soporte
+        if (!('Notification' in window)) return;
+
+        // Pedir permiso la primera vez (muestra el diálogo del browser)
+        if (Notification.permission === 'default') {
+            await Notification.requestPermission();
+        }
+
+        // Si el usuario denegó, respetar sin insistir
+        if (Notification.permission !== 'granted') return;
+    }
+
+    function notificarTareasUrgentes(tareas) {
+        if (Notification.permission !== 'granted') return;
+
+        // Solo notificar si la página NO está en primer plano
+        // (si el usuario ya la está mirando, no hace falta)
+        if (document.visibilityState === 'visible') return;
+
+        const urgentes = tareas.filter(t => {
+            if (t.estado === 'finalizada' || t.activa === false) return false;
+            return urgenciaReal(t) === 'rojo';
+        });
+
+        if (!urgentes.length) return;
+
+        // Una notificación por tarea urgente (máximo 3 para no saturar)
+        urgentes.slice(0, 3).forEach(t => {
+            const n = new Notification('🔴 Tarea urgente — Casa Verde Canas', {
+                body: t.nombre + (t.fechaInicio ? ' · ' + t.fechaInicio : ''),
+                icon: '/img/icon-192.png',
+                tag:  'tarea-' + t.id,   // tag evita duplicados si ya existe
+                renotify: false
+            });
+            // Al tocar la notificación — llevar a tareas
+            n.onclick = function() {
+                window.focus();
+                n.close();
+            };
+        });
+
+        // Si hay más de 3, una notificación resumen
+        if (urgentes.length > 3) {
+            new Notification('⚠ ' + urgentes.length + ' tareas urgentes — Casa Verde Canas', {
+                body: 'Abrí la app para ver el detalle',
+                icon: '/img/icon-192.png',
+                tag:  'tareas-resumen'
+            });
+        }
+    }
+
+    // Iniciar notificaciones al cargar (pide permiso si no lo tiene)
+    await iniciarNotificaciones();
+
     // ── Colores CSS por urgencia ─────────────────────────────
     const urgBadge = {
         gris:     'badge-neutral',
@@ -438,6 +504,9 @@
 
         actualizarKPIs();
         renderTareas();
+
+        // Notificar tareas urgentes si la página no está visible
+        notificarTareasUrgentes(tareasCache);
     }
 
     // ── Urgencia real (sin considerar en_curso) ───────────────
