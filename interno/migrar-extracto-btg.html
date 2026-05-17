@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Migrar Extracto BTG · Casa Verde Canas</title>
+<link rel="stylesheet" href="design-system.css">
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="utils.js"></script>
+<style>
+  body { font-family: var(--font-sans, system-ui); background: var(--color-bg, #f8fafc); }
+
+  .page-header {
+    background: #1e293b;
+    color: white;
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-header h1 { font-size: 18px; font-weight: 700; }
+  .page-header p  { font-size: 12px; opacity: .6; margin-top: 2px; }
+  .badge-tool {
+    background: #f59e0b;
+    color: #1e293b;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: .06em;
+  }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+
+  /* ── RESUMEN CARDS ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .stat-card__label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #94a3b8; }
+  .stat-card__val { font-size: 22px; font-weight: 800; font-family: monospace; margin-top: 4px; }
+  .stat-card__sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+  .val-green  { color: #16a34a; }
+  .val-red    { color: #dc2626; }
+  .val-blue   { color: #2563eb; }
+  .val-orange { color: #d97706; }
+  .val-gray   { color: #64748b; }
+
+  /* ── BOTÓN MIGRAR ── */
+  .migrar-bar {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .migrar-bar__info h2 { font-size: 15px; font-weight: 700; color: #1e293b; }
+  .migrar-bar__info p  { font-size: 12px; color: #64748b; margin-top: 3px; }
+  .btn-migrar {
+    background: #1e293b;
+    color: white;
+    border: none;
+    padding: 10px 22px;
+    border-radius: 7px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background .15s;
+  }
+  .btn-migrar:hover { background: #334155; }
+  .btn-migrar:disabled { background: #94a3b8; cursor: not-allowed; }
+
+  /* ── PROGRESS ── */
+  .progress-bar-wrap {
+    background: #e2e8f0;
+    border-radius: 99px;
+    height: 8px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: #2563eb;
+    border-radius: 99px;
+    transition: width .3s;
+    width: 0;
+  }
+  .progress-label { font-size: 12px; color: #64748b; }
+
+  /* ── LOG ── */
+  .log-box {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 8px;
+    padding: 16px;
+    font-family: monospace;
+    font-size: 12px;
+    max-height: 260px;
+    overflow-y: auto;
+    margin-bottom: 24px;
+    display: none;
+  }
+  .log-ok   { color: #4ade80; }
+  .log-skip { color: #facc15; }
+  .log-warn { color: #fb923c; }
+  .log-err  { color: #f87171; }
+  .log-info { color: #93c5fd; }
+
+  /* ── TABLA DE MOVIMIENTOS ── */
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    margin-bottom: 12px;
+    margin-top: 28px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .table-wrap { overflow-x: auto; margin-bottom: 32px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th {
+    background: #f1f5f9;
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: 700;
+    color: #475569;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid #f1f5f9; }
+  tbody tr:hover { background: #f8fafc; }
+  td { padding: 7px 10px; vertical-align: middle; }
+  td.mono { font-family: monospace; }
+  .badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 99px;
+    display: inline-block;
+    white-space: nowrap;
+  }
+  .badge-negocio    { background: #fef3c7; color: #92400e; }
+  .badge-super      { background: #ede9fe; color: #4c1d95; }
+  .badge-alim       { background: #ffedd5; color: #7c2d12; }
+  .badge-servicios  { background: #e2e8f0; color: #334155; }
+  .badge-transporte { background: #dcfce7; color: #14532d; }
+  .badge-salud      { background: #fce7f3; color: #831843; }
+  .badge-ocio       { background: #fef9c3; color: #713f12; }
+  .badge-suscripcion{ background: #f3e8ff; color: #581c87; }
+  .badge-transferencia{ background: #f1f5f9; color: #334155; }
+  .badge-ingreso    { background: #dcfce7; color: #14532d; }
+  .badge-sin        { background: #f1f5f9; color: #94a3b8; }
+  .val-pos { color: #16a34a; font-weight: 700; font-family: monospace; }
+  .val-neg { color: #dc2626; font-weight: 700; font-family: monospace; }
+
+  .estado-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+  .dot-pendiente { background: #94a3b8; }
+  .dot-ok        { background: #4ade80; }
+  .dot-conflicto { background: #fb923c; }
+  .dot-error     { background: #f87171; }
+
+  /* ── MODAL CONFLICTO ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.55);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000;
+    display: none;
+  }
+  .modal {
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 520px;
+    padding: 24px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.2);
+  }
+  .modal h3 { font-size: 16px; font-weight: 700; color: #1e293b; margin-bottom: 8px; }
+  .modal p  { font-size: 13px; color: #475569; margin-bottom: 16px; line-height: 1.5; }
+  .diff-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+  .diff-table th { background: #f1f5f9; padding: 6px 10px; text-align: left; font-weight: 700; }
+  .diff-table td { padding: 6px 10px; border-top: 1px solid #f1f5f9; }
+  .diff-new { color: #16a34a; font-weight: 700; }
+  .diff-old { color: #dc2626; text-decoration: line-through; }
+  .modal-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  .btn { padding: 9px 18px; border-radius: 7px; font-size: 13px; font-weight: 700; border: none; cursor: pointer; }
+  .btn-primary { background: #1e293b; color: white; }
+  .btn-secondary { background: #e2e8f0; color: #334155; }
+  .btn-danger { background: #dc2626; color: white; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+      <span class="badge-tool">HERRAMIENTA</span>
+      <h1>Migrar Extracto BTG → Casa Verde Canas</h1>
+    </div>
+    <p>Importa los movimientos del 01/01/2026 al 15/05/2026 a las colecciones <code>gastos</code> y <code>pagos</code> de Firestore. Solo procesa movimientos de cuenta personal (no reservas).</p>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="stats-row" id="statsRow">
+    <div class="stat-card">
+      <div class="stat-card__label">Total movimientos</div>
+      <div class="stat-card__val val-blue" id="stTotal">—</div>
+      <div class="stat-card__sub">a procesar</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__label">Egresos → gastos</div>
+      <div class="stat-card__val val-red" id="stEgresos">—</div>
+      <div class="stat-card__sub">colección gastos</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__label">Ingresos → pagos</div>
+      <div class="stat-card__val val-green" id="stIngresos">—</div>
+      <div class="stat-card__sub">colección pagos</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__label">Ya migrados</div>
+      <div class="stat-card__val val-gray" id="stYa">—</div>
+      <div class="stat-card__sub">en Firestore</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__label">Conflictos</div>
+      <div class="stat-card__val val-orange" id="stConflictos">—</div>
+      <div class="stat-card__sub">fecha+desc coincide, monto diferente</div>
+    </div>
+  </div>
+
+  <div class="migrar-bar">
+    <div class="migrar-bar__info">
+      <h2>▶ Ejecutar migración</h2>
+      <p>Los movimientos ya existentes (misma fecha + descripción + monto) se saltean. Si hay diferencia de monto se consulta antes de sobreescribir.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
+      <button class="btn-migrar" id="btnMigrar" onclick="iniciarMigracion()">
+        <span>⬆</span> Iniciar migración
+      </button>
+      <div style="font-size:11px;color:#94a3b8;text-align:right;">Requiere sesión de administrador activa</div>
+    </div>
+  </div>
+
+  <div id="progressWrap" style="display:none;margin-bottom:16px;background:white;border:1px solid #e2e8f0;border-radius:8px;padding:16px;">
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressFill"></div></div>
+    <div class="progress-label" id="progressLabel">Preparando...</div>
+  </div>
+
+  <div class="log-box" id="logBox"></div>
+
+  <div class="section-title">
+    Egresos (→ colección <code>gastos</code>)
+    <span style="font-size:11px;font-weight:400;color:#94a3b8;" id="egresosCount"></span>
+  </div>
+  <div class="table-wrap">
+    <table id="tablaEgresos">
+      <thead>
+        <tr>
+          <th>Estado</th>
+          <th>Fecha</th>
+          <th>Descripción</th>
+          <th>Categoría Firestore</th>
+          <th>Etiqueta BTG</th>
+          <th>Monto</th>
+          <th>Proveedor</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyEgresos"></tbody>
+    </table>
+  </div>
+
+  <div class="section-title">
+    Ingresos (→ colección <code>pagos</code>)
+    <span style="font-size:11px;font-weight:400;color:#94a3b8;" id="ingresosCount"></span>
+  </div>
+  <div class="table-wrap">
+    <table id="tablaIngresos">
+      <thead>
+        <tr>
+          <th>Estado</th>
+          <th>Fecha</th>
+          <th>Descripción</th>
+          <th>Etiqueta</th>
+          <th>Monto</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyIngresos"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- MODAL CONFLICTO -->
+<div class="modal-overlay" id="modalConflicto">
+  <div class="modal">
+    <h3>⚠ Diferencia detectada</h3>
+    <p id="modalConflictoDesc">Se encontró un documento con la misma fecha y descripción pero diferente monto.</p>
+    <table class="diff-table">
+      <thead><tr><th>Campo</th><th>En Firestore (actual)</th><th>En extracto BTG (nuevo)</th></tr></thead>
+      <tbody id="diffBody"></tbody>
+    </table>
+    <div class="modal-btns">
+      <button class="btn btn-secondary" id="btnConflictoSaltar">Saltear este</button>
+      <button class="btn btn-danger"    id="btnConflictoReemplazar">Reemplazar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// DATOS: movimientos del extracto BTG (01/01 – 15/05/2026)
+// cat: negocio | super | alim | servicios | transporte | salud
+//      ocio | suscripcion | transferencia | ingreso | sin
+// colFirestore: 'gastos' o 'pagos'
+// ─────────────────────────────────────────────────────────────
+
+// Mapa cat → categoría Firestore (para gastos)
+const CAT_FIRESTORE = {
+  negocio:       'mantenimiento',
+  super:         'alimentos',
+  alim:          'alimentos',
+  servicios:     'servicios',
+  transporte:    'otro',
+  salud:         'otro',
+  ocio:          'otro',
+  suscripcion:   'administrativo',
+  transferencia: 'otro',
+};
+
+const CAT_LABELS = {
+  negocio:'Negocio CVCañas', super:'Supermercado', alim:'Alimentación',
+  servicios:'Servicios', transporte:'Transporte', salud:'Salud',
+  ocio:'Ocio', suscripcion:'Suscripción', transferencia:'Transf. personal',
+  ingreso:'Ingreso', sin:'Sin clasificar'
+};
+
+const movimientos = [
+  {fecha:"2026-01-02",hora:"12:04",desc:"Canas Lanches",cat:"alim",etiqueta:"Almuerzo / local",valor:-9.00},
+  {fecha:"2026-01-02",hora:"12:33",desc:"AMC Materiais de Construção",cat:"negocio",etiqueta:"Materiales Casa Verde Cañas",valor:-135.70},
+  {fecha:"2026-01-02",hora:"12:48",desc:"Mundialmix Comercio de Alimentos",cat:"super",etiqueta:"Supermercado",valor:-24.38},
+  {fecha:"2026-01-05",hora:"07:39",desc:"Esteban Gabriel Mederos Zapata",cat:"suscripcion",etiqueta:"Spotify – cuota grupal 3/5",valor:-27.27},
+  {fecha:"2026-01-08",hora:"20:15",desc:"Sorvetes e Açaí Magias da Ilha",cat:"alim",etiqueta:"Heladería / café",valor:-69.24},
+  {fecha:"2026-01-11",hora:"21:07",desc:"KP Serviços Digitais",cat:"ingreso",etiqueta:"Ingreso – servicio digital",valor:20.00},
+  {fecha:"2026-01-12",hora:"13:06",desc:"Maria Florência de Tezanos Pinto",cat:"ingreso",etiqueta:"Traspaso BTG Flor → BTG Mauro",valor:10000.00},
+  {fecha:"2026-01-12",hora:"13:10",desc:"Telefônica Bras (Vivo)",cat:"servicios",etiqueta:"Internet / telefonía",valor:-38.85},
+  {fecha:"2026-01-12",hora:"17:50",desc:"Casas da Água",cat:"negocio",etiqueta:"Insumos Casa Verde Cañas",valor:-469.13},
+  {fecha:"2026-01-12",hora:"19:33",desc:"SDB Comércio de Alimentos",cat:"super",etiqueta:"Supermercado – compra grande",valor:-697.74},
+  {fecha:"2026-01-12",hora:"20:03",desc:"Havan",cat:"super",etiqueta:"Tienda / supermercado",valor:-119.95},
+  {fecha:"2026-01-12",hora:"21:26",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-6.50},
+  {fecha:"2026-01-13",hora:"07:51",desc:"Farmaôuro Lefa",cat:"salud",etiqueta:"Farmacia",valor:-38.99},
+  {fecha:"2026-01-13",hora:"15:24",desc:"Laís de Fátima Silveira Brazao Faria Souza",cat:"transferencia",etiqueta:"Transferencia personal – devuelta el 20/01",valor:-1295.00},
+  {fecha:"2026-01-13",hora:"21:11",desc:"Mayara Cristhyna Cruz da Silva",cat:"transferencia",etiqueta:"Transferencia personal",valor:-7.50},
+  {fecha:"2026-01-13",hora:"21:23",desc:"Monte Civetta Gelateria",cat:"ocio",etiqueta:"Heladería / salida",valor:-90.72},
+  {fecha:"2026-01-14",hora:"20:24",desc:"Desterro Comercial",cat:"super",etiqueta:"Comercio / compras",valor:-60.00},
+  {fecha:"2026-01-15",hora:"10:25",desc:"AMC Materiais de Construção",cat:"negocio",etiqueta:"Materiales Casa Verde Cañas",valor:-202.03},
+  {fecha:"2026-01-15",hora:"10:26",desc:"AMC Materiais de Construção",cat:"negocio",etiqueta:"Materiales Casa Verde Cañas",valor:-9.90},
+  {fecha:"2026-01-15",hora:"16:48",desc:"AMC Materiais de Construção",cat:"negocio",etiqueta:"Materiales Casa Verde Cañas",valor:-66.90},
+  {fecha:"2026-01-15",hora:"17:48",desc:"Heli Tur",cat:"transporte",etiqueta:"Transporte / excursión",valor:-600.00},
+  {fecha:"2026-01-15",hora:"18:50",desc:"Josefina Ceballos",cat:"ingreso",etiqueta:"Ingreso – transferencia recibida",valor:10.00},
+  {fecha:"2026-01-16",hora:"11:16",desc:"AMC Materiais de Construção",cat:"negocio",etiqueta:"Materiales Casa Verde Cañas",valor:-24.00},
+  {fecha:"2026-01-16",hora:"19:35",desc:"Pix Marketplace",cat:"super",etiqueta:"Compra online (Mercado Libre)",valor:-19.30},
+  {fecha:"2026-01-16",hora:"22:04",desc:"Gilmara Lisboa de Oliveira",cat:"transferencia",etiqueta:"Transferencia personal",valor:-10.00},
+  {fecha:"2026-01-16",hora:"22:17",desc:"Claudio Aparecido de Lima",cat:"transferencia",etiqueta:"Transferencia personal",valor:-50.00},
+  {fecha:"2026-01-17",hora:"09:11",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-6.99},
+  {fecha:"2026-01-17",hora:"12:45",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-14.51},
+  {fecha:"2026-01-18",hora:"10:05",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-36.99},
+  {fecha:"2026-01-19",hora:"11:19",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-9.99},
+  {fecha:"2026-01-19",hora:"13:11",desc:"André Filipe Abreu",cat:"transferencia",etiqueta:"Transferencia personal",valor:-26.00},
+  {fecha:"2026-01-19",hora:"20:43",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-18.48},
+  {fecha:"2026-01-20",hora:"09:15",desc:"Laís de Fátima Silveira Brazao Faria Souza",cat:"ingreso",etiqueta:"Devolución Pix – 13/01",valor:1295.00},
+  {fecha:"2026-01-20",hora:"09:55",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-32.91},
+  {fecha:"2026-01-20",hora:"14:55",desc:"Astro Instituição de Pagamento",cat:"ingreso",etiqueta:"Devolución / cashback",valor:6.00},
+  {fecha:"2026-01-21",hora:"00:06",desc:"Mundialmix Comercio de Alimentos",cat:"super",etiqueta:"Supermercado",valor:-41.27},
+  {fecha:"2026-01-21",hora:"09:15",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-17.38},
+  {fecha:"2026-01-23",hora:"12:00",desc:"AMC Materiais de Construção",cat:"negocio",etiqueta:"Materiales Casa Verde Cañas",valor:-38.80},
+  {fecha:"2026-01-23",hora:"12:07",desc:"Canas Lanches",cat:"alim",etiqueta:"Almuerzo / local",valor:-9.00},
+  {fecha:"2026-01-23",hora:"13:17",desc:"AMC Materiais de Construção",cat:"negocio",etiqueta:"Materiales Casa Verde Cañas",valor:-12.50},
+  {fecha:"2026-01-24",hora:"09:53",desc:"Constrular Norte",cat:"negocio",etiqueta:"Materiales Casa Verde Cañas",valor:-67.00},
+  {fecha:"2026-01-24",hora:"10:13",desc:"Franzoni Materiais de Construção",cat:"negocio",etiqueta:"Materiales Casa Verde Cañas",valor:-18.70},
+  {fecha:"2026-01-24",hora:"22:21",desc:"Mundialmix Comercio de Alimentos",cat:"super",etiqueta:"Supermercado",valor:-115.14},
+  {fecha:"2026-01-25",hora:"23:45",desc:"SDB Comércio de Alimentos",cat:"super",etiqueta:"Supermercado – compra grande",valor:-490.66},
+  {fecha:"2026-01-25",hora:"23:46",desc:"SDB Comércio de Alimentos",cat:"super",etiqueta:"Supermercado",valor:-149.90},
+  {fecha:"2026-01-26",hora:"10:43",desc:"Espaço Corpo e Água",cat:"salud",etiqueta:"Centro de bienestar / spa",valor:-132.00},
+  {fecha:"2026-01-26",hora:"10:52",desc:"Espaço Corpo e Água",cat:"salud",etiqueta:"Centro de bienestar / spa",valor:-38.00},
+  {fecha:"2026-01-26",hora:"19:12",desc:"Leo Gás Água",cat:"servicios",etiqueta:"Gas / agua",valor:-20.00},
+  {fecha:"2026-01-27",hora:"16:31",desc:"Bistek Supermercados Ltda.",cat:"super",etiqueta:"Supermercado",valor:-67.94},
+  {fecha:"2026-01-27",hora:"19:05",desc:"Pix Marketplace",cat:"super",etiqueta:"Compra online (Mercado Libre)",valor:-248.08},
+  {fecha:"2026-01-29",hora:"10:27",desc:"São João Farmácias",cat:"salud",etiqueta:"Farmacia",valor:-13.09},
+  {fecha:"2026-01-29",hora:"10:52",desc:"Cleber Luciano de Oliveira Hoffmeister",cat:"transferencia",etiqueta:"Transferencia personal",valor:-3.60},
+  {fecha:"2026-01-31",hora:"11:42",desc:"Claro",cat:"servicios",etiqueta:"Celular / internet",valor:-119.12},
+  {fecha:"2026-02-02",hora:"18:17",desc:"Princesa Me",cat:"salud",etiqueta:"Peluquería / cuidado personal",valor:-16.00},
+  {fecha:"2026-02-02",hora:"20:06",desc:"Héctor Sebastián Balboa Castro",cat:"transferencia",etiqueta:"Transferencia personal",valor:-133.00},
+  {fecha:"2026-02-02",hora:"21:29",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-58.43},
+  {fecha:"2026-02-03",hora:"13:54",desc:"AMC Materiais de Construção",cat:"negocio",etiqueta:"Materiales Casa Verde Cañas",valor:-823.00},
+  {fecha:"2026-02-03",hora:"14:33",desc:"AMC Materiais de Construção",cat:"negocio",etiqueta:"Materiales Casa Verde Cañas",valor:-28.50},
+  {fecha:"2026-02-03",hora:"14:51",desc:"Mundialmix Comercio de Alimentos",cat:"super",etiqueta:"Supermercado",valor:-162.14},
+  {fecha:"2026-02-05",hora:"07:36",desc:"Esteban Gabriel Mederos Zapata",cat:"suscripcion",etiqueta:"Spotify – cuota grupal 3/5",valor:-27.27},
+  {fecha:"2026-02-05",hora:"19:10",desc:"Daniel Parra dos Santos",cat:"transferencia",etiqueta:"Transferencia personal",valor:-240.00},
+  {fecha:"2026-02-05",hora:"19:34",desc:"Florencia Silvina Carrizo",cat:"transferencia",etiqueta:"Transferencia personal",valor:-90.00},
+  {fecha:"2026-02-05",hora:"20:23",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-63.45},
+  {fecha:"2026-02-06",hora:"07:32",desc:"Claro",cat:"servicios",etiqueta:"Celular / internet",valor:-115.28},
+  {fecha:"2026-02-06",hora:"16:01",desc:"AMC Materiais de Construção",cat:"negocio",etiqueta:"Materiales Casa Verde Cañas",valor:-26.90},
+  {fecha:"2026-02-06",hora:"23:26",desc:"Mundialmix Comercio de Alimentos",cat:"super",etiqueta:"Supermercado",valor:-53.97},
+  {fecha:"2026-02-06",hora:"23:41",desc:"Revistaria Magus Mania de Ler",cat:"ocio",etiqueta:"Librería / revista",valor:-15.90},
+  {fecha:"2026-02-07",hora:"14:01",desc:"João Vitor Pereira",cat:"ingreso",etiqueta:"Ingreso – transferencia recibida",valor:10.70},
+  {fecha:"2026-02-07",hora:"19:06",desc:"Mundialmix Comercio de Alimentos",cat:"super",etiqueta:"Supermercado",valor:-19.63},
+  {fecha:"2026-02-08",hora:"15:58",desc:"Tiziano Gelato",cat:"alim",etiqueta:"Heladería / café",valor:-18.00},
+  {fecha:"2026-02-08",hora:"17:18",desc:"Ana Cristina Henrique Vieira",cat:"super",etiqueta:"Compra particular",valor:-61.94},
+  {fecha:"2026-02-08",hora:"18:33",desc:"Leo Gás Água",cat:"servicios",etiqueta:"Gas / agua",valor:-20.00},
+  {fecha:"2026-02-08",hora:"18:59",desc:"Ana Cristina Henrique Vieira",cat:"super",etiqueta:"Compra particular",valor:-9.86},
+  {fecha:"2026-02-08",hora:"21:52",desc:"Yvonne Maria de Mello",cat:"transferencia",etiqueta:"Transferencia personal",valor:-10.00},
+  {fecha:"2026-02-08",hora:"22:19",desc:"Yvonne Maria de Mello",cat:"transferencia",etiqueta:"Transferencia personal",valor:-10.00},
+  {fecha:"2026-02-08",hora:"22:33",desc:"Yvonne Maria de Mello",cat:"transferencia",etiqueta:"Transferencia personal",valor:-8.00},
+  {fecha:"2026-02-08",hora:"22:58",desc:"Carlos Sebastián Lorier Arismendi",cat:"transferencia",etiqueta:"Transferencia personal",valor:-68.20},
+  {fecha:"2026-02-09",hora:"20:32",desc:"Monte Civetta Gelateria",cat:"ocio",etiqueta:"Heladería / salida",valor:-29.16},
+  {fecha:"2026-02-10",hora:"19:31",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-5.99},
+  {fecha:"2026-02-10",hora:"21:52",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-20.11},
+  {fecha:"2026-02-11",hora:"11:15",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-30.65},
+  {fecha:"2026-02-11",hora:"16:41",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-10.99},
+  {fecha:"2026-02-11",hora:"19:56",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-67.92},
+  {fecha:"2026-02-11",hora:"20:45",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-50.93},
+  {fecha:"2026-02-12",hora:"15:38",desc:"Canas Lanches",cat:"alim",etiqueta:"Almuerzo / local",valor:-9.00},
+  {fecha:"2026-02-13",hora:"09:15",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-44.45},
+  {fecha:"2026-02-15",hora:"22:32",desc:"Monte Civetta Gelateria",cat:"ocio",etiqueta:"Heladería / salida",valor:-43.86},
+  {fecha:"2026-02-17",hora:"20:01",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-15.98},
+  {fecha:"2026-02-17",hora:"20:41",desc:"Monte Civetta Gelateria",cat:"ocio",etiqueta:"Heladería / salida",valor:-29.62},
+  {fecha:"2026-02-18",hora:"16:56",desc:"AMC Materiais de Construção",cat:"negocio",etiqueta:"Materiales Casa Verde Cañas",valor:-27.60},
+  {fecha:"2026-02-22",hora:"10:58",desc:"Pix Marketplace",cat:"super",etiqueta:"Compra online (Mercado Libre)",valor:-69.90},
+  {fecha:"2026-02-24",hora:"17:19",desc:"Pix Marketplace",cat:"super",etiqueta:"Compra online (Mercado Libre)",valor:-37.12},
+  {fecha:"2026-02-25",hora:"12:02",desc:"SDB Comércio de Alimentos",cat:"super",etiqueta:"Supermercado",valor:-58.46},
+  {fecha:"2026-02-25",hora:"19:03",desc:"Posto Galo",cat:"transporte",etiqueta:"Combustible",valor:-100.00},
+  {fecha:"2026-02-26",hora:"12:36",desc:"Victor Fernandes Camilo",cat:"transferencia",etiqueta:"Transferencia personal",valor:-50.00},
+  {fecha:"2026-02-26",hora:"13:36",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-7.50},
+  {fecha:"2026-02-26",hora:"15:15",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-22.99},
+  {fecha:"2026-02-27",hora:"16:01",desc:"Telefônica Bras (Vivo)",cat:"servicios",etiqueta:"Internet / telefonía",valor:-38.00},
+  {fecha:"2026-02-28",hora:"08:19",desc:"Posto Agricopel",cat:"transporte",etiqueta:"Combustible",valor:-200.00},
+  {fecha:"2026-02-28",hora:"19:12",desc:"Monte Civetta Gelateria",cat:"ocio",etiqueta:"Heladería / salida",valor:-31.54},
+  {fecha:"2026-03-01",hora:"15:01",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-50.48},
+  {fecha:"2026-03-02",hora:"19:59",desc:"Prado Supermercado",cat:"ingreso",etiqueta:"Devolución Pix supermercado",valor:131.24},
+  {fecha:"2026-03-02",hora:"19:59",desc:"Prado Supermercado (anulado)",cat:"super",etiqueta:"Supermercado (anulado y repagado)",valor:-131.24},
+  {fecha:"2026-03-02",hora:"20:00",desc:"Prado Supermercado",cat:"super",etiqueta:"Supermercado",valor:-131.24},
+  {fecha:"2026-03-03",hora:"16:25",desc:"Chaveiro Michel",cat:"negocio",etiqueta:"Cerrajería – llaves cabaña",valor:-230.00},
+  {fecha:"2026-03-04",hora:"09:57",desc:"Pix Marketplace",cat:"super",etiqueta:"Compra online (Mercado Libre)",valor:-21.30},
+  {fecha:"2026-03-05",hora:"07:37",desc:"Esteban Gabriel Mederos Zapata",cat:"suscripcion",etiqueta:"Spotify – cuota grupal 3/5",valor:-27.27},
+  {fecha:"2026-03-05",hora:"20:45",desc:"Vuoncard",cat:"super",etiqueta:"Compra online",valor:-41.16},
+  {fecha:"2026-03-05",hora:"23:05",desc:"Felipe Camilo de Melo",cat:"transferencia",etiqueta:"Transferencia personal",valor:-30.00},
+  {fecha:"2026-03-06",hora:"01:05",desc:"Felipe Camilo de Melo",cat:"transferencia",etiqueta:"Transferencia personal",valor:-10.00},
+  {fecha:"2026-03-06",hora:"23:00",desc:"Daniel Parra dos Santos",cat:"transferencia",etiqueta:"Transferencia personal",valor:-240.00},
+  {fecha:"2026-03-08",hora:"17:14",desc:"Mercado Pago",cat:"sin",etiqueta:"Ingreso sin clasificar",valor:1519.00},
+  {fecha:"2026-03-09",hora:"14:04",desc:"Ana Cristina Henrique Vieira",cat:"super",etiqueta:"Compra particular",valor:-17.98},
+  {fecha:"2026-03-10",hora:"08:13",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-23.56},
+  {fecha:"2026-03-10",hora:"12:06",desc:"Milium Tem de Tudo",cat:"super",etiqueta:"Compra varios",valor:-5.90},
+  {fecha:"2026-03-11",hora:"07:50",desc:"Pix Marketplace",cat:"super",etiqueta:"Compra online (Mercado Libre)",valor:-27.94},
+  {fecha:"2026-03-11",hora:"21:49",desc:"Telefônica Bras (Vivo)",cat:"servicios",etiqueta:"Internet / telefonía",valor:-38.86},
+  {fecha:"2026-03-12",hora:"16:45",desc:"Joice Marlete Tome",cat:"transferencia",etiqueta:"Transferencia personal",valor:-36.00},
+  {fecha:"2026-03-15",hora:"07:25",desc:"Israel Gomes da Silva",cat:"transferencia",etiqueta:"Transferencia personal",valor:-80.00},
+  {fecha:"2026-03-15",hora:"15:08",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-33.98},
+  {fecha:"2026-03-16",hora:"09:40",desc:"Vindi Pagamentos Online",cat:"servicios",etiqueta:"Servicio online / suscripción",valor:-26.90},
+  {fecha:"2026-03-17",hora:"13:32",desc:"SDB Comércio de Alimentos",cat:"super",etiqueta:"Supermercado – compra grande",valor:-409.44},
+  {fecha:"2026-03-19",hora:"16:24",desc:"Monte Civetta Gelateria",cat:"ocio",etiqueta:"Heladería / salida",valor:-26.78},
+  {fecha:"2026-03-19",hora:"16:48",desc:"Mundialmix Comercio de Alimentos",cat:"super",etiqueta:"Supermercado",valor:-88.26},
+  {fecha:"2026-03-21",hora:"15:47",desc:"Lenz Comércio de Materiais de Construção",cat:"negocio",etiqueta:"Materiales Casa Verde Cañas",valor:-23.00},
+  {fecha:"2026-03-23",hora:"14:32",desc:"Pix Marketplace",cat:"super",etiqueta:"Compra online (Mercado Libre)",valor:-25.00},
+  {fecha:"2026-03-23",hora:"17:31",desc:"Eugenio Raulino Koerich S.A.",cat:"super",etiqueta:"Tienda / compra",valor:-199.00},
+  {fecha:"2026-03-23",hora:"19:27",desc:"Prado Supermercado",cat:"super",etiqueta:"Supermercado",valor:-179.65},
+  {fecha:"2026-03-23",hora:"19:49",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-36.99},
+  {fecha:"2026-03-24",hora:"11:35",desc:"Francielly Nunes Barbosa",cat:"transferencia",etiqueta:"Transferencia personal",valor:-270.00},
+  {fecha:"2026-03-24",hora:"22:39",desc:"Mundialmix Comercio de Alimentos",cat:"super",etiqueta:"Supermercado",valor:-52.67},
+  {fecha:"2026-03-25",hora:"09:56",desc:"Filipe Gusmão Koch",cat:"transferencia",etiqueta:"Transferencia personal",valor:-29.90},
+  {fecha:"2026-03-25",hora:"10:25",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-45.98},
+  {fecha:"2026-03-25",hora:"15:55",desc:"Canas Lanches",cat:"alim",etiqueta:"Almuerzo / local",valor:-9.00},
+  {fecha:"2026-03-25",hora:"16:06",desc:"Mundialmix Comercio de Alimentos",cat:"super",etiqueta:"Supermercado",valor:-76.37},
+  {fecha:"2026-03-25",hora:"23:49",desc:"SIM - Rede de Postos",cat:"transporte",etiqueta:"Combustible / telepeaje",valor:-6.99},
+  {fecha:"2026-03-26",hora:"00:03",desc:"SIM - Rede de Postos",cat:"transporte",etiqueta:"Combustible / telepeaje",valor:-69.90},
+  {fecha:"2026-03-26",hora:"02:08",desc:"Jorge Lourenço Rosa Grill",cat:"alim",etiqueta:"Restaurante / parrilla",valor:-7.50},
+  {fecha:"2026-03-29",hora:"21:38",desc:"Pix Marketplace",cat:"super",etiqueta:"Compra online (Mercado Libre)",valor:-19.00},
+  {fecha:"2026-04-05",hora:"07:30",desc:"Esteban Gabriel Mederos Zapata",cat:"suscripcion",etiqueta:"Spotify – cuota grupal 3/5",valor:-27.27},
+  {fecha:"2026-05-01",hora:"10:00",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-36.59},
+  {fecha:"2026-05-01",hora:"20:09",desc:"Ademir José do Canto",cat:"servicios",etiqueta:"Servicio / profesional",valor:-72.49},
+  {fecha:"2026-05-02",hora:"17:31",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-17.98},
+  {fecha:"2026-05-03",hora:"19:24",desc:"Pix Marketplace",cat:"super",etiqueta:"Compra online (Mercado Libre)",valor:-226.70},
+  {fecha:"2026-05-03",hora:"19:53",desc:"Revistaria Magus Mania de Ler",cat:"ocio",etiqueta:"Librería / revista",valor:-22.90},
+  {fecha:"2026-05-03",hora:"19:57",desc:"Bazarilene",cat:"super",etiqueta:"Bazar / compra",valor:-10.00},
+  {fecha:"2026-05-04",hora:"10:07",desc:"AMC Materiais de Construção",cat:"negocio",etiqueta:"Materiales Casa Verde Cañas",valor:-95.90},
+  {fecha:"2026-05-04",hora:"12:08",desc:"Fábio Daniel Soto",cat:"transferencia",etiqueta:"Transferencia personal",valor:-40.00},
+  {fecha:"2026-05-05",hora:"07:37",desc:"Esteban Gabriel Mederos Zapata",cat:"suscripcion",etiqueta:"Spotify – cuota grupal 3/5",valor:-27.27},
+  {fecha:"2026-05-05",hora:"11:14",desc:"AMC Materiais de Construção",cat:"negocio",etiqueta:"Materiales Casa Verde Cañas",valor:-31.50},
+  {fecha:"2026-05-05",hora:"11:16",desc:"Canas Lanches",cat:"alim",etiqueta:"Almuerzo / local",valor:-9.00},
+  {fecha:"2026-05-06",hora:"10:00",desc:"Clebe da Silva",cat:"transferencia",etiqueta:"Transferencia personal",valor:-345.00},
+  {fecha:"2026-05-09",hora:"22:12",desc:"Rio Branco Choperia e Petiscaria",cat:"alim",etiqueta:"Bar / restorán",valor:-6.00},
+  {fecha:"2026-05-10",hora:"10:14",desc:"Telefônica Bras (Vivo)",cat:"servicios",etiqueta:"Internet / telefonía",valor:-45.05},
+  {fecha:"2026-05-10",hora:"20:24",desc:"SDB Comércio de Alimentos",cat:"super",etiqueta:"Supermercado – compra grande",valor:-287.25},
+  {fecha:"2026-05-12",hora:"12:57",desc:"Construmais",cat:"negocio",etiqueta:"Materiales Casa Verde Cañas",valor:-6.80},
+  {fecha:"2026-05-12",hora:"13:04",desc:"Direto do Campo",cat:"super",etiqueta:"Feria / productos frescos",valor:-69.10},
+  {fecha:"2026-05-12",hora:"18:02",desc:"Mercado dos Amigos",cat:"super",etiqueta:"Supermercado local",valor:-19.97},
+];
+
+// ─── HELPERS ──────────────────────────────────────────────────
+function fmtBRL(v) {
+  return 'R$ ' + Math.abs(v).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function claveUnica(m) {
+  // Clave de deduplicación: fecha + hora + descripción + monto
+  return `${m.fecha}|${m.hora}|${m.desc}|${Math.abs(m.valor).toFixed(2)}`;
+}
+function claveParcial(m) {
+  // Clave para detectar conflictos: fecha + descripción (sin monto)
+  return `${m.fecha}|${m.hora}|${m.desc}`;
+}
+
+// Separar ingresos y egresos
+const egresos  = movimientos.filter(m => m.valor < 0);
+const ingresos = movimientos.filter(m => m.valor > 0);
+
+// ─── RENDER INICIAL ───────────────────────────────────────────
+document.getElementById('stTotal').textContent    = movimientos.length;
+document.getElementById('stEgresos').textContent  = egresos.length;
+document.getElementById('stIngresos').textContent = ingresos.length;
+document.getElementById('egresosCount').textContent  = egresos.length + ' registros';
+document.getElementById('ingresosCount').textContent = ingresos.length + ' registros';
+
+// Estado visual de cada fila: pendiente | ok | skip | conflicto | error
+const estados = {};
+movimientos.forEach(m => { estados[claveUnica(m)] = 'pendiente'; });
+
+function dotHtml(k) {
+  const e = estados[k] || 'pendiente';
+  const map = {
+    pendiente: ['dot-pendiente','⬦ Pendiente'],
+    ok:        ['dot-ok','✓ Importado'],
+    skip:      ['dot-ok','= Ya existía'],
+    conflicto: ['dot-conflicto','⚠ Conflicto'],
+    error:     ['dot-error','✗ Error'],
+  };
+  const [cls, label] = map[e];
+  return `<span class="estado-dot ${cls}"></span>${label}`;
+}
+
+function renderTabla() {
+  // Egresos
+  document.getElementById('tbodyEgresos').innerHTML = egresos.map(m => {
+    const k = claveUnica(m);
+    const catFS = CAT_FIRESTORE[m.cat] || 'otro';
+    const catEmoji = {mantenimiento:'🔧',alimentos:'🍃',servicios:'💡',administrativo:'📋',otro:'📦'}[catFS] || '📦';
+    return `<tr id="row-${CSS.escape(k)}">
+      <td id="est-${CSS.escape(k)}">${dotHtml(k)}</td>
+      <td>${m.fecha.slice(8)+'/'+ m.fecha.slice(5,7) +'/'+ m.fecha.slice(0,4)}<br><small style="color:#94a3b8">${m.hora}</small></td>
+      <td><strong>${m.desc}</strong></td>
+      <td><span class="badge badge-${m.cat}">${CAT_LABELS[m.cat]}</span> → <span style="font-size:11px;color:#475569">${catEmoji} ${catFS}</span></td>
+      <td style="color:#64748b;font-size:11px">${m.etiqueta}</td>
+      <td class="val-neg mono">${fmtBRL(m.valor)}</td>
+      <td style="font-size:11px;color:#94a3b8">${m.desc}</td>
+    </tr>`;
+  }).join('');
+
+  // Ingresos
+  document.getElementById('tbodyIngresos').innerHTML = ingresos.map(m => {
+    const k = claveUnica(m);
+    return `<tr id="row-${CSS.escape(k)}">
+      <td id="est-${CSS.escape(k)}">${dotHtml(k)}</td>
+      <td>${m.fecha.slice(8)+'/'+ m.fecha.slice(5,7) +'/'+ m.fecha.slice(0,4)}<br><small style="color:#94a3b8">${m.hora}</small></td>
+      <td><strong>${m.desc}</strong></td>
+      <td style="color:#64748b;font-size:11px">${m.etiqueta}</td>
+      <td class="val-pos mono">${fmtBRL(m.valor)}</td>
+    </tr>`;
+  }).join('');
+}
+renderTabla();
+
+// ─── ACTUALIZAR ESTADO VISUAL ─────────────────────────────────
+function setEstado(m, estado) {
+  estados[claveUnica(m)] = estado;
+  const k = claveUnica(m);
+  const cell = document.getElementById('est-' + CSS.escape(k));
+  if (cell) cell.innerHTML = dotHtml(k);
+}
+
+// ─── LOG ─────────────────────────────────────────────────────
+const logBox = document.getElementById('logBox');
+function log(msg, tipo='info') {
+  const cls = {ok:'log-ok', skip:'log-skip', warn:'log-warn', err:'log-err', info:'log-info'}[tipo]||'log-info';
+  logBox.innerHTML += `<div class="${cls}">${msg}</div>`;
+  logBox.scrollTop = logBox.scrollHeight;
+}
+
+// ─── PROGRESO ─────────────────────────────────────────────────
+function setProgress(actual, total, label) {
+  document.getElementById('progressFill').style.width = (actual/total*100)+'%';
+  document.getElementById('progressLabel').textContent = label;
+}
+
+// ─── MODAL CONFLICTO ─────────────────────────────────────────
+let resolveConflicto = null;
+
+function mostrarConflicto(movNuevo, docExistente) {
+  return new Promise(resolve => {
+    resolveConflicto = resolve;
+    document.getElementById('modalConflictoDesc').textContent =
+      `"${movNuevo.desc}" · ${movNuevo.fecha} ${movNuevo.hora}`;
+    document.getElementById('diffBody').innerHTML = `
+      <tr>
+        <td>Monto</td>
+        <td class="diff-old">${fmtBRL(docExistente.monto || docExistente.valor || 0)}</td>
+        <td class="diff-new">${fmtBRL(movNuevo.valor)}</td>
+      </tr>
+      <tr>
+        <td>Descripción</td>
+        <td>${docExistente.concepto || docExistente.clienteNombre || docExistente.desc || '—'}</td>
+        <td>${movNuevo.desc}</td>
+      </tr>
+      <tr>
+        <td>Etiqueta</td>
+        <td>${docExistente.notas || docExistente.observaciones || '—'}</td>
+        <td>${movNuevo.etiqueta}</td>
+      </tr>`;
+    document.getElementById('modalConflicto').style.display = 'flex';
+    document.getElementById('btnConflictoSaltar').onclick = () => {
+      document.getElementById('modalConflicto').style.display = 'none';
+      resolve('saltar');
+    };
+    document.getElementById('btnConflictoReemplazar').onclick = () => {
+      document.getElementById('modalConflicto').style.display = 'none';
+      resolve('reemplazar');
+    };
+  });
+}
+
+// ─── MIGRACIÓN PRINCIPAL ──────────────────────────────────────
+async function iniciarMigracion() {
+  const btn = document.getElementById('btnMigrar');
+  btn.disabled = true;
+  btn.textContent = '⏳ Migrando...';
+  logBox.style.display = 'block';
+  logBox.innerHTML = '';
+  document.getElementById('progressWrap').style.display = 'block';
+
+  let contOk=0, contSkip=0, contConflicto=0, contError=0;
+  const total = movimientos.length;
+
+  try {
+    // 1. Cargar todos los documentos existentes para comparar en memoria
+    log('🔍 Cargando registros existentes de Firestore...', 'info');
+    const [gastosSnap, pagosSnap] = await Promise.all([
+      db.collection('gastos').get(),
+      db.collection('pagos').get()
+    ]);
+
+    // Indexar por clave parcial (fecha+desc) para búsqueda rápida
+    const gastosIndex = {}; // claveParcial → {id, data}
+    gastosSnap.docs.forEach(d => {
+      const data = d.data();
+      // Intentar reconstruir clave desde campos de Firestore
+      const fecha = data.fecha || ''; // ej: "2026-01-02"
+      const desc  = data.proveedor || data.concepto || '';
+      const hora  = data.hora || '';
+      const k = `${fecha}|${hora}|${desc}`;
+      gastosIndex[k] = { id: d.id, data };
+    });
+    const pagosIndex = {};
+    pagosSnap.docs.forEach(d => {
+      const data = d.data();
+      const fecha = data.fecha || (data.creadoEn?.toDate?.()?.toISOString().slice(0,10)) || '';
+      const desc  = data.clienteNombre || data.desc || '';
+      const hora  = data.hora || '';
+      const k = `${fecha}|${hora}|${desc}`;
+      pagosIndex[k] = { id: d.id, data };
+    });
+
+    log(`✓ Encontrados ${gastosSnap.size} gastos y ${pagosSnap.size} pagos en Firestore`, 'ok');
+    log(`→ Procesando ${total} movimientos del extracto...`, 'info');
+
+    document.getElementById('stYa').textContent = gastosSnap.size + pagosSnap.size;
+
+    // 2. Procesar cada movimiento
+    for (let i = 0; i < movimientos.length; i++) {
+      const m = movimientos[i];
+      setProgress(i+1, total, `(${i+1}/${total}) ${m.desc.slice(0,40)}...`);
+
+      const kUnica = claveUnica(m);
+      const kParcial = claveParcial(m);
+      const esEgreso = m.valor < 0;
+      const index = esEgreso ? gastosIndex : pagosIndex;
+      const coleccion = esEgreso ? 'gastos' : 'pagos';
+
+      try {
+        const existente = index[kParcial];
+
+        if (existente) {
+          // Hay un doc con misma fecha + desc: comparar monto
+          const montoExistente = Math.abs(existente.data.monto || existente.data.valor || 0);
+          const montoNuevo     = Math.abs(m.valor);
+          const diferencia     = Math.abs(montoExistente - montoNuevo);
+
+          if (diferencia < 0.01) {
+            // Mismo monto → saltar silencioso
+            log(`= SKIP  [${coleccion}] ${m.fecha} ${m.hora} · ${m.desc} · ${fmtBRL(m.valor)}`, 'skip');
+            setEstado(m, 'skip');
+            contSkip++;
+          } else {
+            // Monto diferente → preguntar
+            log(`⚠ CONFLICTO [${coleccion}] ${m.desc} · existente: ${fmtBRL(montoExistente)} / nuevo: ${fmtBRL(montoNuevo)}`, 'warn');
+            setEstado(m, 'conflicto');
+            contConflicto++;
+            const decision = await mostrarConflicto(m, existente.data);
+            if (decision === 'reemplazar') {
+              const docData = buildDoc(m);
+              await db.collection(coleccion).doc(existente.id).set(docData, { merge: true });
+              log(`✓ REEMPLAZO [${coleccion}] ${m.desc}`, 'ok');
+              setEstado(m, 'ok');
+              contOk++;
+              contConflicto--;
+            } else {
+              log(`→ SALTADO por decisión del usuario: ${m.desc}`, 'skip');
+              setEstado(m, 'skip');
+            }
+          }
+        } else {
+          // No existe → crear
+          const docData = buildDoc(m);
+          await db.collection(coleccion).add(docData);
+          log(`✓ OK [${coleccion}] ${m.fecha} ${m.hora} · ${m.desc} · ${fmtBRL(m.valor)}`, 'ok');
+          setEstado(m, 'ok');
+          contOk++;
+        }
+      } catch(err) {
+        log(`✗ ERROR [${m.desc}]: ${err.message}`, 'err');
+        setEstado(m, 'error');
+        contError++;
+      }
+
+      // Pequeña pausa para no saturar Firestore
+      if (i % 10 === 9) await new Promise(r => setTimeout(r, 200));
+    }
+
+    setProgress(total, total, 'Migración completa.');
+    log(`\n── RESUMEN ────────────────────────────────`, 'info');
+    log(`✓ Importados: ${contOk}`, 'ok');
+    log(`= Existentes (saltados): ${contSkip}`, 'skip');
+    log(`⚠ Conflictos resueltos: ${contConflicto}`, 'warn');
+    log(`✗ Errores: ${contError}`, 'err');
+
+    document.getElementById('stYa').textContent = contSkip;
+    document.getElementById('stConflictos').textContent = contConflicto;
+
+    btn.textContent = '✓ Migración completada';
+    btn.style.background = '#16a34a';
+
+  } catch(err) {
+    log(`✗ Error fatal: ${err.message}`, 'err');
+    btn.disabled = false;
+    btn.textContent = '⬆ Reintentar migración';
+  }
+}
+
+// ─── CONSTRUIR DOCUMENTO FIRESTORE ────────────────────────────
+function buildDoc(m) {
+  const ts = firebase.firestore.Timestamp.fromDate(new Date(`${m.fecha}T${m.hora}:00`));
+
+  if (m.valor < 0) {
+    // → colección gastos
+    return {
+      concepto:  m.desc,
+      categoria: CAT_FIRESTORE[m.cat] || 'otro',
+      monto:     Math.abs(m.valor),
+      moneda:    'BRL',
+      metodo:    'pix',
+      proveedor: m.desc,
+      notas:     m.etiqueta,
+      fecha:     m.fecha,
+      hora:      m.hora,
+      origen:    'extracto_btg',
+      creadoEn:  ts,
+      creadoPor: 'migracion_btg_2026',
+    };
+  } else {
+    // → colección pagos
+    return {
+      clienteNombre: m.desc,
+      monto:         m.valor,
+      moneda:        'BRL',
+      metodo:        'pix',
+      tipo:          m.cat === 'ingreso' ? 'ingreso_externo' : 'otro',
+      observaciones: m.etiqueta,
+      fecha:         m.fecha,
+      hora:          m.hora,
+      origen:        'extracto_btg',
+      creadoEn:      ts,
+      creadoPor:     'migracion_btg_2026',
+      reservaId:     null,
+    };
+  }
+}
+
+// Verificar auth al cargar
+window.addEventListener('load', () => {
+  if (typeof auth !== 'undefined') {
+    auth.onAuthStateChanged(user => {
+      if (!user) {
+        log('⚠ No hay sesión activa. Iniciá sesión en Casa Verde Canas antes de migrar.', 'warn');
+        logBox.style.display = 'block';
+        document.getElementById('btnMigrar').disabled = true;
+        document.getElementById('btnMigrar').textContent = '🔒 Sin sesión activa';
+      } else {
+        log(`✓ Sesión activa: ${user.email}`, 'ok');
+        logBox.style.display = 'block';
+      }
+    });
+  }
+});
+</script>
+</body>
+</html>
