@@ -784,11 +784,13 @@ const NAV_ADMIN_ITEMS = [
         group: 'Finanzas',
         icon:  'payments',
         items: [
-            { href: 'pagos.html',      icon: 'payments',        label: 'Ingresos / Egresos' },
+            { href: 'pagos.html',           icon: 'payments',        label: 'Ingresos / Egresos' },
             { sep: true },
-            { href: 'cuentas.html',    icon: 'account_balance', label: 'Cuentas'            },
-            { href: 'movimientos.html',icon: 'receipt_long',    label: 'Movimientos'        },
-            { href: 'categorias.html', icon: 'label',           label: 'Categorías'         },
+            { href: 'cuentas.html',         icon: 'account_balance', label: 'Cuentas'            },
+            { href: 'movimientos.html',     icon: 'receipt_long',    label: 'Movimientos'        },
+            { href: 'categorias.html',      icon: 'label',           label: 'Categorías'         },
+            { sep: true },
+            { href: 'herramientas-btg.html',icon: 'build',           label: 'BTG'                },
         ]
     },
 
