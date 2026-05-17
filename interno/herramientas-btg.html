@@ -1,0 +1,1501 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Herramientas BTG · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+
+        /* ── TABS ────────────────────────────────────────────── */
+        .btg-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 2px solid var(--color-border);
+            margin-bottom: var(--space-5);
+            overflow-x: auto;
+        }
+        .btg-tab {
+            padding: 10px 20px;
+            font-size: var(--text-sm);
+            font-weight: 600;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            cursor: pointer;
+            color: var(--color-text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+            transition: color var(--transition-fast);
+        }
+        .btg-tab:hover { color: var(--color-text-primary); }
+        .btg-tab.active {
+            color: var(--color-primary);
+            border-bottom-color: var(--color-primary);
+        }
+        .btg-tab .tab-badge {
+            font-size: 10px;
+            font-weight: 800;
+            padding: 1px 6px;
+            border-radius: 99px;
+            background: var(--color-border);
+            color: var(--color-text-muted);
+        }
+        .btg-tab.active .tab-badge { background: var(--color-primary-light); color: var(--color-primary); }
+        .tab-badge.red   { background: var(--color-danger-light)  !important; color: var(--color-danger)  !important; }
+        .tab-badge.amber { background: var(--color-warning-light) !important; color: var(--color-warning) !important; }
+        .tab-badge.green { background: var(--color-success-light) !important; color: var(--color-success) !important; }
+
+        .btg-panel { display: none; }
+        .btg-panel.active { display: block; }
+
+        /* ── TOOLBAR ─────────────────────────────────────────── */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: var(--space-3);
+            margin-bottom: var(--space-4);
+        }
+        .toolbar-title {
+            font-weight: 700;
+            font-size: var(--text-sm);
+            color: var(--color-text-primary);
+            flex: 1;
+        }
+        .toolbar-desc {
+            font-size: var(--text-xs);
+            color: var(--color-text-muted);
+            margin-bottom: var(--space-4);
+        }
+
+        /* ── PROGRESS ────────────────────────────────────────── */
+        .prog-wrap {
+            display: none;
+            background: var(--color-surface-2);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: var(--space-3) var(--space-4);
+            margin-bottom: var(--space-4);
+        }
+        .prog-bar {
+            height: 6px;
+            background: var(--color-border);
+            border-radius: 99px;
+            overflow: hidden;
+            margin-bottom: var(--space-2);
+        }
+        .prog-fill {
+            height: 100%;
+            background: var(--color-primary);
+            border-radius: 99px;
+            transition: width 0.3s;
+            width: 0%;
+        }
+        .prog-label { font-size: var(--text-xs); color: var(--color-text-muted); }
+
+        /* ── PASO WIZARD ──────────────────────────────────────── */
+        .paso-indicator {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            margin-bottom: var(--space-4);
+            font-size: var(--text-xs);
+            color: var(--color-text-muted);
+        }
+        .paso-dot {
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            border: 2px solid var(--color-border);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 700;
+            color: var(--color-text-muted);
+        }
+        .paso-dot.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: white;
+        }
+        .paso-dot.done {
+            background: var(--color-success);
+            border-color: var(--color-success);
+            color: white;
+        }
+        .paso-line {
+            flex: 1; height: 2px;
+            background: var(--color-border);
+        }
+
+        /* ── TABLA PREVIEW ───────────────────────────────────── */
+        .preview-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: var(--text-xs);
+        }
+        .preview-table th {
+            background: var(--color-surface-2);
+            padding: 8px 10px;
+            text-align: left;
+            font-weight: 700;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            color: var(--color-text-muted);
+            border-bottom: 2px solid var(--color-border);
+            white-space: nowrap;
+        }
+        .preview-table td {
+            padding: 7px 10px;
+            border-bottom: 1px solid var(--color-border-light);
+            vertical-align: middle;
+        }
+        .preview-table tr:hover td { background: var(--color-surface-2); }
+        .preview-table tr.dup-row td { background: #fff8f8; }
+        .preview-table tr.posible-dup td { background: #fffbf0; }
+        .preview-table tr.nuevo-row td { background: #f6fef6; }
+
+        .val-pos { color: var(--color-success); font-weight: 700; font-family: var(--font-mono); }
+        .val-neg { color: var(--color-danger);  font-weight: 700; font-family: var(--font-mono); }
+        .val-neu { color: var(--color-text-secondary); font-family: var(--font-mono); }
+
+        /* ── ESTADO BADGES ───────────────────────────────────── */
+        .est-nuevo    { background: var(--color-success-light); color: var(--color-success);  font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px; white-space:nowrap; }
+        .est-dup      { background: var(--color-danger-light);  color: var(--color-danger);   font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px; white-space:nowrap; }
+        .est-posible  { background: var(--color-warning-light); color: var(--color-warning);  font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px; white-space:nowrap; }
+        .est-cat      { background: var(--color-info-light);    color: var(--color-info);     font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px; white-space:nowrap; }
+
+        /* ── TABLA CATEGORÍAS ────────────────────────────────── */
+        .cat-select, .cat-input {
+            font-size: var(--text-xs);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: 4px 8px;
+            background: var(--color-surface);
+            color: var(--color-text-primary);
+            width: 100%;
+        }
+        .cat-select:focus, .cat-input:focus {
+            outline: none;
+            border-color: var(--color-primary);
+        }
+        .cat-select.sugerido, .cat-input.sugerido {
+            border-color: var(--color-warning);
+            background: var(--color-warning-bg);
+        }
+        .cat-select.guardado, .cat-input.guardado {
+            border-color: var(--color-success);
+        }
+        tr.modificado td { background: #fffde7 !important; }
+
+        /* ── GRUPOS DUPLICADOS ───────────────────────────────── */
+        .dup-group {
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-4);
+            overflow: hidden;
+        }
+        .dup-group-header {
+            background: var(--color-warning-bg);
+            border-bottom: 1px solid var(--color-border);
+            padding: 10px 14px;
+            font-size: var(--text-xs);
+            font-weight: 700;
+            color: var(--color-warning);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        /* ── STATS ROW ───────────────────────────────────────── */
+        .stats-row {
+            display: flex;
+            gap: var(--space-3);
+            flex-wrap: wrap;
+            margin-bottom: var(--space-4);
+        }
+        .stat-chip {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-3) var(--space-4);
+            text-align: center;
+            min-width: 90px;
+        }
+        .stat-chip__val {
+            font-size: var(--text-xl);
+            font-weight: 800;
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+        .stat-chip__label {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            color: var(--color-text-muted);
+        }
+        .stat-chip__val.green { color: var(--color-success); }
+        .stat-chip__val.red   { color: var(--color-danger);  }
+        .stat-chip__val.amber { color: var(--color-warning); }
+        .stat-chip__val.blue  { color: var(--color-info);    }
+
+        /* ── RESUMEN IMPORTACIÓN ─────────────────────────────── */
+        .import-summary {
+            background: var(--color-success-bg);
+            border: 1px solid var(--color-success-light);
+            border-radius: var(--radius-md);
+            padding: var(--space-4) var(--space-5);
+            display: none;
+        }
+        .import-summary.visible { display: block; }
+        .import-summary__title {
+            font-weight: 700;
+            color: var(--color-success);
+            margin-bottom: var(--space-2);
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+
+        /* ── TEXTAREA ────────────────────────────────────────── */
+        textarea.extracto-input {
+            width: 100%;
+            min-height: 200px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            resize: vertical;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-3);
+            background: var(--color-surface);
+            color: var(--color-text-primary);
+        }
+        textarea.extracto-input:focus {
+            outline: none;
+            border-color: var(--color-primary);
+        }
+
+        /* ── CUENTA SELECTOR ─────────────────────────────────── */
+        .cuenta-selector {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            background: var(--color-surface-2);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-3) var(--space-4);
+            margin-bottom: var(--space-4);
+        }
+        .cuenta-selector label {
+            font-size: var(--text-sm);
+            font-weight: 600;
+            color: var(--color-text-secondary);
+            white-space: nowrap;
+        }
+        .cuenta-selector select {
+            flex: 1;
+        }
+
+        /* ── ALERTA ──────────────────────────────────────────── */
+        .alert {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-3);
+            padding: var(--space-3) var(--space-4);
+            border-radius: var(--radius-md);
+            font-size: var(--text-xs);
+            margin-bottom: var(--space-4);
+        }
+        .alert-info    { background: var(--color-info-bg);     border: 1px solid var(--color-info-light);    color: var(--color-info);    }
+        .alert-warning { background: var(--color-warning-bg);  border: 1px solid var(--color-warning-light); color: var(--color-warning); }
+        .alert-success { background: var(--color-success-bg);  border: 1px solid var(--color-success-light); color: var(--color-success); }
+        .alert-error   { background: var(--color-danger-bg);   border: 1px solid var(--color-danger-light);  color: var(--color-danger);  }
+
+        /* ── SCROLL TABLE WRAPPER ─────────────────────────────── */
+        .table-scroll { overflow-x: auto; }
+
+        @media (max-width: 600px) {
+            .btg-tab { padding: 8px 12px; font-size: 11px; }
+            .stats-row { gap: var(--space-2); }
+            .stat-chip { min-width: 70px; padding: var(--space-2) var(--space-3); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── HEADER ──────────────────────────────────────────────── -->
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">cottage</span>
+        Casa Verde Canas
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip">
+            <span class="material-icons">person</span>
+            <span id="userName">—</span>
+        </div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons">logout</span>
+            Salir
+        </button>
+    </div>
+</header>
+
+<!-- ── NAVEGACIÓN ──────────────────────────────────────────── -->
+<nav class="admin-nav" id="appNav"></nav>
+
+<!-- ── CONTENIDO ───────────────────────────────────────────── -->
+<main class="admin-content">
+
+    <div class="card">
+        <div class="card__header">
+            <h2 class="card__title">
+                <span class="material-icons">account_balance</span>
+                Herramientas BTG
+            </h2>
+            <span class="badge badge-neutral" style="font-size:11px;">Herramienta administrativa</span>
+        </div>
+
+        <!-- ── TABS ── -->
+        <div class="btg-tabs">
+            <button class="btg-tab active" onclick="mostrarTab('importar', this)">
+                <span class="material-icons" style="font-size:16px;">upload_file</span>
+                Importar
+                <span class="tab-badge" id="badge-importar">—</span>
+            </button>
+            <button class="btg-tab" onclick="mostrarTab('conciliar', this)">
+                <span class="material-icons" style="font-size:16px;">compare_arrows</span>
+                Conciliar
+                <span class="tab-badge" id="badge-conciliar">—</span>
+            </button>
+            <button class="btg-tab" onclick="mostrarTab('categorizar', this)">
+                <span class="material-icons" style="font-size:16px;">label</span>
+                Categorizar
+                <span class="tab-badge" id="badge-categorizar">—</span>
+            </button>
+            <button class="btg-tab" onclick="mostrarTab('depurar', this)">
+                <span class="material-icons" style="font-size:16px;">bug_report</span>
+                Depurar
+                <span class="tab-badge" id="badge-depurar">—</span>
+            </button>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════════
+             PESTAÑA 1 — IMPORTAR
+        ══════════════════════════════════════════════════════ -->
+        <div class="btg-panel active" id="panel-importar">
+
+            <p class="toolbar-desc">
+                Pegá el texto copiado del extracto bancario BTG. El sistema detecta fechas, descripciones y montos automáticamente.
+            </p>
+
+            <!-- Pasos -->
+            <div class="paso-indicator">
+                <div class="paso-dot active" id="pdot1">1</div>
+                <div class="paso-line"></div>
+                <div class="paso-dot" id="pdot2">2</div>
+                <div class="paso-line"></div>
+                <div class="paso-dot" id="pdot3">3</div>
+            </div>
+
+            <!-- Paso 1: Pegar texto -->
+            <div id="paso-texto">
+                <!-- Selector de cuenta -->
+                <div class="cuenta-selector">
+                    <span class="material-icons" style="color:var(--color-text-muted);">account_balance</span>
+                    <label>Cuenta:</label>
+                    <select class="form-control" id="importCuentaId" style="max-width:280px;">
+                        <option value="">Cargando cuentas...</option>
+                    </select>
+                    <select class="form-control" id="importFormatoFecha" style="max-width:160px;">
+                        <option value="dd/mm/yyyy">dd/mm/yyyy</option>
+                        <option value="yyyy-mm-dd">yyyy-mm-dd</option>
+                        <option value="mm/dd/yyyy">mm/dd/yyyy</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Texto del extracto</label>
+                    <textarea class="extracto-input" id="extractoTexto"
+                        placeholder="Pegá aquí el texto copiado del PDF o pantalla del banco BTG..."></textarea>
+                </div>
+
+                <div class="alert alert-error" id="parseError" style="display:none;">
+                    <span class="material-icons">error_outline</span>
+                    <span id="parseErrorMsg">Error</span>
+                </div>
+
+                <div class="toolbar">
+                    <button class="btn btn-primary" onclick="parsearYConciliar()">
+                        <span class="material-icons">search</span>
+                        Analizar extracto
+                    </button>
+                </div>
+            </div>
+
+            <!-- Paso 2: Preview y conciliación -->
+            <div id="paso-preview" style="display:none;">
+
+                <!-- Stats -->
+                <div class="stats-row" id="statsPreview"></div>
+
+                <div class="alert alert-info" id="alertPreview" style="display:none;">
+                    <span class="material-icons">info</span>
+                    <span id="alertPreviewMsg"></span>
+                </div>
+
+                <div class="table-scroll">
+                    <table class="preview-table">
+                        <thead>
+                            <tr>
+                                <th style="width:32px;">
+                                    <input type="checkbox" id="chkTodos" checked
+                                        onchange="toggleTodosImport(this.checked)"
+                                        title="Seleccionar / deseleccionar todos los nuevos">
+                                </th>
+                                <th>Fecha</th>
+                                <th>Descripción</th>
+                                <th style="text-align:right;">Monto</th>
+                                <th>Estado</th>
+                                <th>Categoría sugerida</th>
+                            </tr>
+                        </thead>
+                        <tbody id="previewBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="toolbar" style="margin-top:var(--space-4);">
+                    <button class="btn btn-ghost" onclick="volverPaso1()">
+                        <span class="material-icons">arrow_back</span>
+                        Volver
+                    </button>
+                    <button class="btn btn-primary" id="btnImportar" onclick="confirmarImportacion()">
+                        <span class="material-icons">cloud_upload</span>
+                        <span id="btnImportarText">Importar seleccionados</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Paso 3: Resultado -->
+            <div class="import-summary" id="importSummary">
+                <div class="import-summary__title">
+                    <span class="material-icons">check_circle</span>
+                    Importación completada
+                </div>
+                <div id="importSummaryBody"></div>
+                <div style="margin-top:var(--space-3);">
+                    <button class="btn btn-secondary" onclick="nuevaImportacion()">
+                        <span class="material-icons">add</span>
+                        Nueva importación
+                    </button>
+                    <a href="movimientos.html" class="btn btn-ghost" style="margin-left:8px;">
+                        <span class="material-icons">receipt_long</span>
+                        Ver movimientos
+                    </a>
+                </div>
+            </div>
+
+        </div><!-- /panel-importar -->
+
+
+        <!-- ══════════════════════════════════════════════════════
+             PESTAÑA 2 — CONCILIAR
+             Comparar lo que hay en Firestore vs lo que se espera
+        ══════════════════════════════════════════════════════ -->
+        <div class="btg-panel" id="panel-conciliar">
+
+            <p class="toolbar-desc">
+                Verificá que los movimientos importados cubren el período esperado. Detecta huecos (fechas sin movimientos) y períodos no importados.
+            </p>
+
+            <div class="cuenta-selector">
+                <span class="material-icons" style="color:var(--color-text-muted);">account_balance</span>
+                <label>Cuenta:</label>
+                <select class="form-control" id="concilCuentaId" style="max-width:280px;"></select>
+                <input type="month" class="form-control" id="concilDesde" style="max-width:140px;">
+                <input type="month" class="form-control" id="concilHasta" style="max-width:140px;">
+                <button class="btn btn-primary btn-sm" onclick="analizarCobertura()">
+                    <span class="material-icons">search</span>
+                    Analizar
+                </button>
+            </div>
+
+            <div class="prog-wrap" id="progConcil">
+                <div class="prog-bar"><div class="prog-fill" id="progConcilFill"></div></div>
+                <div class="prog-label" id="progConcilLabel">Analizando...</div>
+            </div>
+
+            <div id="concilResultado"></div>
+
+        </div><!-- /panel-conciliar -->
+
+
+        <!-- ══════════════════════════════════════════════════════
+             PESTAÑA 3 — CATEGORIZAR
+             Revisar y enriquecer movimientos sin categoría
+        ══════════════════════════════════════════════════════ -->
+        <div class="btg-panel" id="panel-categorizar">
+
+            <p class="toolbar-desc">
+                Asigná categorías y etiquetas a los movimientos importados. El sistema sugiere automáticamente según el nombre del comercio.
+            </p>
+
+            <div class="toolbar">
+                <button class="btn btn-secondary" id="btnCargarCat" onclick="cargarParaCategorizar()">
+                    <span class="material-icons">download</span>
+                    Cargar movimientos
+                </button>
+                <button class="btn btn-ghost btn-sm" id="btnToggleSinCat" onclick="toggleSoloPendientes(this)"
+                    style="font-size:var(--text-xs);">
+                    Solo sin categoría
+                </button>
+                <div style="flex:1;"></div>
+                <button class="btn btn-primary" id="btnGuardarCat" onclick="guardarCategorias()" disabled>
+                    <span class="material-icons">save</span>
+                    Guardar cambios
+                </button>
+            </div>
+
+            <div class="prog-wrap" id="progCat">
+                <div class="prog-bar"><div class="prog-fill" id="progCatFill"></div></div>
+                <div class="prog-label" id="progCatLabel">Cargando...</div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="toolbar" id="filtrosCat" style="display:none; font-size:var(--text-xs);">
+                <input type="text" class="form-control" id="filtroTexto"
+                    placeholder="Buscar descripción..." oninput="renderTablaCat()"
+                    style="max-width:220px;">
+                <select class="form-control" id="filtroCol" onchange="renderTablaCat()" style="max-width:140px;">
+                    <option value="">Todas las colecciones</option>
+                    <option value="movimientos">Movimientos</option>
+                    <option value="gastos">Gastos</option>
+                    <option value="pagos">Pagos</option>
+                </select>
+                <select class="form-control" id="filtroCat" onchange="renderTablaCat()" style="max-width:160px;">
+                    <option value="">Todas las categorías</option>
+                    <option value="__sin__">— Sin categoría —</option>
+                </select>
+            </div>
+
+            <div class="stats-row" id="statsCat" style="display:none;"></div>
+
+            <div class="table-scroll" id="tablaCatWrap" style="display:none;">
+                <table class="preview-table" id="tablaCat">
+                    <thead>
+                        <tr>
+                            <th>Colección</th>
+                            <th>Fecha</th>
+                            <th>Descripción</th>
+                            <th style="text-align:right;">Monto</th>
+                            <th style="min-width:140px;">Categoría</th>
+                            <th style="min-width:180px;">Etiqueta</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaCatBody"></tbody>
+                </table>
+            </div>
+
+        </div><!-- /panel-categorizar -->
+
+
+        <!-- ══════════════════════════════════════════════════════
+             PESTAÑA 4 — DEPURAR
+             Escanear duplicados y vista global
+        ══════════════════════════════════════════════════════ -->
+        <div class="btg-panel" id="panel-depurar">
+
+            <p class="toolbar-desc">
+                Herramienta de mantenimiento. Detectá y eliminá registros duplicados en la base de datos.
+            </p>
+
+            <div class="toolbar">
+                <span class="toolbar-title">Escanear duplicados</span>
+                <button class="btn btn-secondary" id="btnEscanear" onclick="escanearDuplicados()">
+                    <span class="material-icons">search</span>
+                    Escanear
+                </button>
+            </div>
+
+            <div class="prog-wrap" id="progDup">
+                <div class="prog-bar"><div class="prog-fill" id="progDupFill"></div></div>
+                <div class="prog-label" id="progDupLabel">Escaneando...</div>
+            </div>
+
+            <div id="dupResultados"></div>
+
+            <div id="btnEliminarWrap" style="display:none; margin-top:var(--space-4);">
+                <button class="btn btn-danger" onclick="confirmarEliminarDups()">
+                    <span class="material-icons">delete_forever</span>
+                    Eliminar duplicados seleccionados
+                </button>
+            </div>
+
+        </div><!-- /panel-depurar -->
+
+    </div><!-- /card -->
+
+</main>
+
+<!-- ── MODAL CONFIRMAR ELIMINACIÓN ─────────────────────────── -->
+<div class="modal-overlay" id="modalConfirmar" style="display:none;"
+    onclick="if(event.target===this) this.style.display='none'">
+    <div class="modal">
+        <div class="modal__header">
+            <h3 class="modal__title">
+                <span class="material-icons" style="color:var(--color-danger);">warning</span>
+                Confirmar eliminación
+            </h3>
+        </div>
+        <div class="modal__body">
+            <p id="modalConfirmarMsg" style="font-size:var(--text-sm); color:var(--color-text-secondary);">
+                Esta acción no se puede deshacer.
+            </p>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="document.getElementById('modalConfirmar').style.display='none'">
+                Cancelar
+            </button>
+            <button class="btn btn-danger" id="btnConfirmarEliminar">
+                <span class="material-icons">delete_forever</span>
+                Sí, eliminar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ── FIREBASE + UTILS ─────────────────────────────────────── -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async () => {
+
+// ── AUTH ──────────────────────────────────────────────────────
+const { user, userData } = await CVC.verificarAuth('admin');
+document.getElementById('userName').textContent = userData.nombre || user.email;
+CVC.renderNav('herramientas-btg.html');
+
+const db = CVC.db;
+const { escapeHtml, showToast, showLoading, showEmpty, showError,
+        inferirCategoria, fingerprintMovimiento,
+        conciliarMovimientos, importarMovimientosConfirmados,
+        BTG_CATEGORIAS } = CVC;
+
+// ── ESTADO GLOBAL ─────────────────────────────────────────────
+let cuentasCache    = [];
+let movParseados    = [];   // resultado del parser
+let movConciliados  = [];   // resultado de conciliarMovimientos()
+let docsCat         = [];   // documentos para categorizar
+let catEdits        = {};   // { docId: { categoria_personal, etiqueta } }
+let soloPendientes  = true;
+let toEliminar      = [];
+let gruposCache     = [];
+
+const SIMBOLO = { BRL: 'R$', USD: 'US$', UYU: '$U', ARS: '$' };
+
+function fmtMonto(n, moneda) {
+    const s = SIMBOLO[moneda || 'BRL'] || '';
+    return s + ' ' + Math.abs(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+}
+function fmtFecha(v) {
+    if (!v) return '—';
+    if (typeof v === 'string') return v.slice(0, 10);
+    if (v.toDate) return v.toDate().toISOString().slice(0, 10);
+    return '—';
+}
+
+
+// ── TABS ──────────────────────────────────────────────────────
+window.mostrarTab = function(id, btn) {
+    document.querySelectorAll('.btg-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.btg-tab').forEach(b => b.classList.remove('active'));
+    document.getElementById('panel-' + id).classList.add('active');
+    btn.classList.add('active');
+};
+
+
+// ── CARGAR CUENTAS ────────────────────────────────────────────
+async function cargarCuentas() {
+    try {
+        const snap = await db.collection('cuentas').get();
+        cuentasCache = snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => (a.orden || 99) - (b.orden || 99));
+
+        const options = cuentasCache.map(c =>
+            `<option value="${c.id}" data-moneda="${c.moneda || 'BRL'}">${escapeHtml(c.nombre)} (${c.moneda || 'BRL'})</option>`
+        ).join('');
+
+        ['importCuentaId', 'concilCuentaId'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = '<option value="">— Seleccionar cuenta —</option>' + options;
+        });
+    } catch(e) {
+        showToast('Error al cargar cuentas: ' + e.message, 'error');
+    }
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// PESTAÑA 1 — IMPORTAR
+// ══════════════════════════════════════════════════════════════
+
+// ── Parser de extracto (migrado de cuentas.html) ──────────────
+function parsearTexto(texto, formatoFecha) {
+    const lineas = texto.split('\n').map(l => l.trim()).filter(l => l.length > 3);
+    const resultado = [];
+
+    const reMontosBR = /([+-]?\s*[\d.]+,\d{2})/g;
+    const reMontosEN = /([+-]?\s*[\d,]+\.\d{2})/g;
+    const reFechaDMY = /(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/;
+    const reFechaYMD = /(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/;
+
+    function parseFecha(str) {
+        let m;
+        if (formatoFecha === 'dd/mm/yyyy' && (m = str.match(reFechaDMY))) {
+            const y = m[3].length === 2 ? '20' + m[3] : m[3];
+            return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+        }
+        if (formatoFecha === 'yyyy-mm-dd' && (m = str.match(reFechaYMD))) {
+            return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+        }
+        if (formatoFecha === 'mm/dd/yyyy' && (m = str.match(reFechaDMY))) {
+            const y = m[3].length === 2 ? '20' + m[3] : m[3];
+            return `${y}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+        }
+        return null;
+    }
+
+    function parseMonto(str) {
+        const esBR = /\d+\.\d{3},\d{2}/.test(str) || /\d+,\d{2}$/.test(str);
+        if (esBR) return parseFloat(str.replace(/\./g,'').replace(',','.').replace(/\s/g,'')) || null;
+        return parseFloat(str.replace(/,/g,'').replace(/\s/g,'')) || null;
+    }
+
+    for (const linea of lineas) {
+        const fecha = parseFecha(linea);
+        if (!fecha) continue;
+
+        const montosBR = [...linea.matchAll(reMontosBR)].map(m => parseMonto(m[1])).filter(n => n !== null);
+        const montosEN = [...linea.matchAll(reMontosEN)].map(m => parseMonto(m[1])).filter(n => n !== null);
+        const montos   = (montosBR.length >= montosEN.length) ? montosBR : montosEN;
+        if (!montos.length) continue;
+
+        const monto    = montos[0];
+        const saldoPost = montos.length >= 2 ? montos[montos.length - 1] : null;
+
+        let desc = linea
+            .replace(reFechaDMY, '').replace(reFechaYMD, '')
+            .replace(reMontosBR, '').replace(reMontosEN, '')
+            .replace(/[+\-]{2,}/g, ' ').trim()
+            .replace(/\s{2,}/g, ' ');
+        if (!desc) desc = '(sin descripción)';
+
+        resultado.push({ fecha, descripcion: desc, monto, tipo: monto >= 0 ? 'credito' : 'debito', saldoPost });
+    }
+    return resultado;
+}
+
+window.parsearYConciliar = async function() {
+    const texto    = document.getElementById('extractoTexto').value.trim();
+    const formato  = document.getElementById('importFormatoFecha').value;
+    const cuentaId = document.getElementById('importCuentaId').value;
+    const errEl    = document.getElementById('parseError');
+    errEl.style.display = 'none';
+
+    if (!cuentaId) {
+        document.getElementById('parseErrorMsg').textContent = 'Seleccioná una cuenta primero.';
+        errEl.style.display = 'flex'; return;
+    }
+    if (!texto) {
+        document.getElementById('parseErrorMsg').textContent = 'Pegá el texto del extracto primero.';
+        errEl.style.display = 'flex'; return;
+    }
+
+    // Parsear
+    movParseados = parsearTexto(texto, formato);
+    if (!movParseados.length) {
+        document.getElementById('parseErrorMsg').textContent = 'No se detectaron líneas válidas. Verificá el formato de fecha.';
+        errEl.style.display = 'flex'; return;
+    }
+
+    // Conciliar contra Firestore
+    try {
+        movConciliados = await conciliarMovimientos(movParseados, cuentaId);
+    } catch(e) {
+        // Si falla la conciliación, marcar todos como nuevos y continuar
+        movConciliados = movParseados.map(m => ({ ...m, estado: 'nuevo',
+            fingerprint: fingerprintMovimiento(m.fecha, m.monto, m.descripcion) }));
+        showToast('No se pudo conciliar contra Firestore — todos marcados como nuevos', 'warning');
+    }
+
+    // Marcar selección inicial: solo nuevos y posibles duplicados
+    movConciliados.forEach(m => {
+        m.seleccionado = m.estado !== 'duplicado';
+    });
+
+    actualizarBadge('importar', movConciliados.filter(m => m.estado === 'nuevo').length);
+    renderPreview();
+
+    document.getElementById('paso-texto').style.display    = 'none';
+    document.getElementById('paso-preview').style.display  = 'block';
+    document.getElementById('importSummary').classList.remove('visible');
+
+    // Actualizar indicadores de paso
+    document.getElementById('pdot1').className = 'paso-dot done';
+    document.getElementById('pdot2').className = 'paso-dot active';
+};
+
+function renderPreview() {
+    const cuenta  = cuentasCache.find(c => c.id === document.getElementById('importCuentaId').value);
+    const moneda  = cuenta?.moneda || 'BRL';
+
+    const nuevos   = movConciliados.filter(m => m.estado === 'nuevo').length;
+    const dups     = movConciliados.filter(m => m.estado === 'duplicado').length;
+    const posibles = movConciliados.filter(m => m.estado === 'posible_duplicado').length;
+
+    document.getElementById('statsPreview').innerHTML = `
+        <div class="stat-chip"><div class="stat-chip__val blue">${movConciliados.length}</div><div class="stat-chip__label">Total</div></div>
+        <div class="stat-chip"><div class="stat-chip__val green">${nuevos}</div><div class="stat-chip__label">Nuevos</div></div>
+        <div class="stat-chip"><div class="stat-chip__val amber">${posibles}</div><div class="stat-chip__label">Posibles dup.</div></div>
+        <div class="stat-chip"><div class="stat-chip__val red">${dups}</div><div class="stat-chip__label">Duplicados</div></div>
+    `;
+
+    if (posibles > 0) {
+        document.getElementById('alertPreviewMsg').textContent =
+            `${posibles} movimiento(s) tienen la misma fecha y monto que uno ya importado pero descripción diferente. Revisalos antes de importar.`;
+        document.getElementById('alertPreview').style.display = 'flex';
+    } else {
+        document.getElementById('alertPreview').style.display = 'none';
+    }
+
+    document.getElementById('previewBody').innerHTML = movConciliados.map((m, i) => {
+        const cat  = inferirCategoria(m.descripcion);
+        const rowClass = m.estado === 'duplicado'         ? 'dup-row'
+                       : m.estado === 'posible_duplicado' ? 'posible-dup'
+                       : 'nuevo-row';
+        const estBadge = m.estado === 'duplicado'
+            ? '<span class="est-dup">Duplicado</span>'
+            : m.estado === 'posible_duplicado'
+            ? '<span class="est-posible">Revisar</span>'
+            : '<span class="est-nuevo">Nuevo</span>';
+
+        return `<tr class="${rowClass}">
+            <td style="text-align:center;">
+                <input type="checkbox" id="chkm${i}"
+                    ${m.seleccionado ? 'checked' : ''}
+                    ${m.estado === 'duplicado' ? 'disabled title="Duplicado exacto — ya importado"' : ''}
+                    onchange="movConciliados[${i}].seleccionado = this.checked">
+            </td>
+            <td style="white-space:nowrap; font-family:var(--font-mono); font-size:11px;">${m.fecha}</td>
+            <td style="max-width:240px; word-break:break-word; font-size:11px;">${escapeHtml(m.descripcion)}</td>
+            <td class="${m.monto >= 0 ? 'val-pos' : 'val-neg'}" style="text-align:right; white-space:nowrap;">
+                ${m.monto >= 0 ? '+' : ''}${fmtMonto(m.monto, moneda)}
+            </td>
+            <td>${estBadge}</td>
+            <td style="font-size:11px; color:var(--color-text-muted);">
+                ${cat.cat ? `<span class="est-cat">${cat.cat}</span> ${escapeHtml(cat.etiqueta)}` : '—'}
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+window.toggleTodosImport = function(checked) {
+    movConciliados.forEach((m, i) => {
+        if (m.estado === 'duplicado') return;
+        m.seleccionado = checked;
+        const chk = document.getElementById('chkm' + i);
+        if (chk) chk.checked = checked;
+    });
+};
+
+window.volverPaso1 = function() {
+    document.getElementById('paso-texto').style.display   = 'block';
+    document.getElementById('paso-preview').style.display = 'none';
+    document.getElementById('pdot1').className = 'paso-dot active';
+    document.getElementById('pdot2').className = 'paso-dot';
+};
+
+window.confirmarImportacion = async function() {
+    const seleccionados = movConciliados.filter(m => m.seleccionado);
+    if (!seleccionados.length) { showToast('Seleccioná al menos un movimiento.', 'error'); return; }
+
+    const cuentaEl = document.getElementById('importCuentaId');
+    const cuentaId = cuentaEl.value;
+    const cuenta   = cuentasCache.find(c => c.id === cuentaId);
+    const moneda   = cuenta?.moneda || 'BRL';
+
+    const btn  = document.getElementById('btnImportar');
+    const text = document.getElementById('btnImportarText');
+    btn.disabled = true; text.textContent = 'Importando...';
+
+    try {
+        const resultado = await importarMovimientosConfirmados(seleccionados, {
+            cuentaId, moneda, importadoPor: user.uid
+        });
+
+        // Actualizar saldo de la cuenta con el último saldoPost disponible
+        const conSaldo = seleccionados.filter(m => m.saldoPost != null);
+        if (conSaldo.length) {
+            const ultimo = conSaldo.sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
+            await db.collection('cuentas').doc(cuentaId).update({
+                saldoActual:   ultimo.saldoPost,
+                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
+        // Mostrar resultado
+        document.getElementById('paso-preview').style.display  = 'none';
+        document.getElementById('pdot2').className = 'paso-dot done';
+        document.getElementById('pdot3').className = 'paso-dot active';
+
+        document.getElementById('importSummaryBody').innerHTML = `
+            <p style="font-size:var(--text-sm); margin-bottom:var(--space-2);">
+                <strong>${resultado.importados}</strong> movimientos importados correctamente a <strong>${escapeHtml(cuenta?.nombre || cuentaId)}</strong>.
+                ${resultado.saltados ? `<br><span style="color:var(--color-text-muted);">${resultado.saltados} duplicados saltados.</span>` : ''}
+            </p>`;
+        document.getElementById('importSummary').classList.add('visible');
+        showToast(`${resultado.importados} movimientos importados.`, 'success');
+
+    } catch(e) {
+        showToast('Error al importar: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false; text.textContent = 'Importar seleccionados';
+    }
+};
+
+window.nuevaImportacion = function() {
+    document.getElementById('extractoTexto').value = '';
+    document.getElementById('paso-texto').style.display    = 'block';
+    document.getElementById('paso-preview').style.display  = 'none';
+    document.getElementById('importSummary').classList.remove('visible');
+    document.getElementById('pdot1').className = 'paso-dot active';
+    document.getElementById('pdot2').className = 'paso-dot';
+    document.getElementById('pdot3').className = 'paso-dot';
+    movParseados = []; movConciliados = [];
+};
+
+
+// ══════════════════════════════════════════════════════════════
+// PESTAÑA 2 — CONCILIAR (cobertura de períodos)
+// ══════════════════════════════════════════════════════════════
+
+// Inicializar fechas con mes actual y anterior
+(function initFechas() {
+    const hoy   = new Date();
+    const anio  = hoy.getFullYear();
+    const mes   = String(hoy.getMonth() + 1).padStart(2, '0');
+    const mesAnt = String(hoy.getMonth()).padStart(2, '0') || '12';
+    const anioAnt = hoy.getMonth() === 0 ? anio - 1 : anio;
+    document.getElementById('concilDesde').value = `${anioAnt}-${mesAnt}`;
+    document.getElementById('concilHasta').value  = `${anio}-${mes}`;
+})();
+
+window.analizarCobertura = async function() {
+    const cuentaId = document.getElementById('concilCuentaId').value;
+    const desde    = document.getElementById('concilDesde').value;
+    const hasta    = document.getElementById('concilHasta').value;
+
+    if (!cuentaId || !desde || !hasta) {
+        showToast('Seleccioná cuenta y rango de fechas.', 'error'); return;
+    }
+
+    const progEl = document.getElementById('progConcil');
+    progEl.style.display = 'block';
+    setProg('progConcilFill', 'progConcilLabel', 20, 100, 'Consultando Firestore...');
+
+    try {
+        const desdeStr = desde + '-01';
+        const hastaDate = new Date(hasta + '-01');
+        hastaDate.setMonth(hastaDate.getMonth() + 1);
+        const hastaStr = hastaDate.toISOString().slice(0, 10);
+
+        const snap = await db.collection('movimientos')
+            .where('cuentaId', '==', cuentaId)
+            .where('fecha', '>=', desdeStr)
+            .where('fecha', '<', hastaStr)
+            .get();
+
+        setProg('progConcilFill', 'progConcilLabel', 80, 100, 'Analizando cobertura...');
+
+        // Agrupar por mes
+        const porMes = {};
+        snap.docs.forEach(d => {
+            const mes = d.data().fecha.slice(0, 7);
+            if (!porMes[mes]) porMes[mes] = { cant: 0, creditos: 0, debitos: 0 };
+            porMes[mes].cant++;
+            const m = d.data().monto || 0;
+            if (m >= 0) porMes[mes].creditos += m;
+            else        porMes[mes].debitos  += Math.abs(m);
+        });
+
+        // Generar todos los meses del rango
+        const meses = [];
+        let cur = new Date(desde + '-01');
+        const fin = new Date(hasta + '-01');
+        while (cur <= fin) {
+            meses.push(cur.toISOString().slice(0, 7));
+            cur.setMonth(cur.getMonth() + 1);
+        }
+
+        const cuenta = cuentasCache.find(c => c.id === cuentaId);
+        const moneda = cuenta?.moneda || 'BRL';
+
+        setProg('progConcilFill', 'progConcilLabel', 100, 100, `${snap.size} movimientos analizados.`);
+
+        document.getElementById('concilResultado').innerHTML = `
+            <div class="table-scroll">
+            <table class="preview-table">
+                <thead>
+                    <tr>
+                        <th>Período</th>
+                        <th style="text-align:right;">Movimientos</th>
+                        <th style="text-align:right;">Créditos</th>
+                        <th style="text-align:right;">Débitos</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${meses.map(mes => {
+                        const data   = porMes[mes];
+                        const estado = !data
+                            ? '<span class="est-dup">Sin datos</span>'
+                            : data.cant < 3
+                            ? '<span class="est-posible">Pocos movimientos</span>'
+                            : '<span class="est-nuevo">Cubierto</span>';
+                        return `<tr class="${!data ? 'dup-row' : ''}">
+                            <td style="font-weight:600; font-family:var(--font-mono);">${mes}</td>
+                            <td style="text-align:right;">${data ? data.cant : '—'}</td>
+                            <td class="val-pos" style="text-align:right;">${data ? fmtMonto(data.creditos, moneda) : '—'}</td>
+                            <td class="val-neg" style="text-align:right;">${data ? fmtMonto(data.debitos, moneda) : '—'}</td>
+                            <td>${estado}</td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+            </div>`;
+
+        const sinDatos = meses.filter(m => !porMes[m]).length;
+        actualizarBadge('conciliar', sinDatos > 0 ? sinDatos : '✓');
+
+    } catch(e) {
+        document.getElementById('concilResultado').innerHTML =
+            `<div class="alert alert-error"><span class="material-icons">error</span> Error: ${escapeHtml(e.message)}</div>`;
+    }
+};
+
+
+// ══════════════════════════════════════════════════════════════
+// PESTAÑA 3 — CATEGORIZAR
+// ══════════════════════════════════════════════════════════════
+
+window.cargarParaCategorizar = async function() {
+    const btn = document.getElementById('btnCargarCat');
+    btn.disabled = true; btn.textContent = 'Cargando...';
+    document.getElementById('progCat').style.display = 'block';
+    setProg('progCatFill', 'progCatLabel', 10, 100, 'Leyendo Firestore...');
+
+    try {
+        // Cargar movimientos, gastos y pagos
+        const [movSnap, gastosSnap, pagosSnap] = await Promise.all([
+            db.collection('movimientos').orderBy('fecha', 'desc').limit(500).get(),
+            db.collection('gastos').get(),
+            db.collection('pagos').get()
+        ]);
+
+        setProg('progCatFill', 'progCatLabel', 60, 100, 'Aplicando sugerencias...');
+
+        const movs   = movSnap.docs.map(d => ({ id: d.id, col: 'movimientos', data: d.data() }));
+        const gastos = gastosSnap.docs.map(d => ({ id: d.id, col: 'gastos', data: d.data() }));
+        const pagos  = pagosSnap.docs.map(d => ({ id: d.id, col: 'pagos',  data: d.data() }));
+        docsCat = [...movs, ...gastos, ...pagos];
+
+        // Inferir sugerencias automáticas
+        docsCat.forEach(doc => {
+            const nombre = doc.data.descripcion || doc.data.concepto || doc.data.proveedor || doc.data.desc || '';
+            doc._sugerencia = inferirCategoria(nombre);
+        });
+
+        const sinCat = docsCat.filter(d => !d.data.categoria_personal).length;
+        actualizarBadge('categorizar', sinCat);
+        setProg('progCatFill', 'progCatLabel', 100, 100, `${docsCat.length} documentos · ${sinCat} sin categoría.`);
+
+        // Poblar filtro de categorías
+        const selCat = document.getElementById('filtroCat');
+        BTG_CATEGORIAS.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c; opt.textContent = c;
+            selCat.appendChild(opt);
+        });
+
+        catEdits = {};
+        document.getElementById('filtrosCat').style.display   = 'flex';
+        document.getElementById('statsCat').style.display     = 'flex';
+        document.getElementById('tablaCatWrap').style.display = 'block';
+        document.getElementById('btnGuardarCat').disabled     = false;
+        renderTablaCat();
+
+    } catch(e) {
+        showToast('Error al cargar: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false; btn.innerHTML = '<span class="material-icons">refresh</span> Recargar';
+    }
+};
+
+function getNombreDoc(doc) {
+    return doc.data.descripcion || doc.data.concepto || doc.data.proveedor || doc.data.desc || '—';
+}
+
+function renderTablaCat() {
+    const texto   = (document.getElementById('filtroTexto')?.value || '').toLowerCase();
+    const col     = document.getElementById('filtroCol')?.value  || '';
+    const catFilt = document.getElementById('filtroCat')?.value  || '';
+
+    let docs = docsCat.filter(doc => {
+        const nombre = getNombreDoc(doc).toLowerCase();
+        if (texto    && !nombre.includes(texto))       return false;
+        if (col      && doc.col !== col)               return false;
+        if (soloPendientes && doc.data.categoria_personal) return false;
+        if (catFilt === '__sin__' && doc.data.categoria_personal) return false;
+        if (catFilt && catFilt !== '__sin__') {
+            const catAct = catEdits[doc.id]?.categoria_personal || doc.data.categoria_personal || doc._sugerencia?.cat || '';
+            if (catAct !== catFilt) return false;
+        }
+        return true;
+    });
+
+    docs.sort((a, b) => {
+        const aCat = !!a.data.categoria_personal;
+        const bCat = !!b.data.categoria_personal;
+        if (aCat !== bCat) return aCat ? 1 : -1;
+        return (fmtFecha(a.data.fecha) || '').localeCompare(fmtFecha(b.data.fecha) || '');
+    });
+
+    // Stats
+    const sinCat  = docs.filter(d => !d.data.categoria_personal).length;
+    const conCat  = docs.filter(d =>  d.data.categoria_personal).length;
+    const edits   = Object.keys(catEdits).length;
+    document.getElementById('statsCat').innerHTML = `
+        <div class="stat-chip"><div class="stat-chip__val blue">${docs.length}</div><div class="stat-chip__label">Mostrando</div></div>
+        <div class="stat-chip"><div class="stat-chip__val red">${sinCat}</div><div class="stat-chip__label">Sin categoría</div></div>
+        <div class="stat-chip"><div class="stat-chip__val green">${conCat}</div><div class="stat-chip__label">Categorizados</div></div>
+        <div class="stat-chip"><div class="stat-chip__val amber">${edits}</div><div class="stat-chip__label">Sin guardar</div></div>
+    `;
+
+    if (!docs.length) {
+        document.getElementById('tablaCatBody').innerHTML =
+            `<tr><td colspan="7" style="text-align:center; padding:var(--space-5); color:var(--color-text-muted);">
+                No hay registros con este filtro.
+            </td></tr>`;
+        return;
+    }
+
+    const catOpts = BTG_CATEGORIAS.map(c => `<option value="${c}">${c}</option>`).join('');
+
+    document.getElementById('tablaCatBody').innerHTML = docs.map(doc => {
+        const nombre   = getNombreDoc(doc);
+        const fecha    = fmtFecha(doc.data.fecha || doc.data.creadoEn);
+        const monto    = doc.data.monto || 0;
+        const tieneCat = !!doc.data.categoria_personal;
+        const catAct   = catEdits[doc.id]?.categoria_personal ?? doc._sugerencia?.cat ?? '';
+        const etqAct   = catEdits[doc.id]?.etiqueta ?? doc._sugerencia?.etiqueta ?? '';
+        const modificado   = !!catEdits[doc.id];
+        const esSugerencia = !tieneCat && !modificado && doc._sugerencia?.cat;
+
+        const colBadge = { movimientos: '#e3f2fd:#1565c0', gastos: '#fce4ec:#c62828', pagos: '#e8f5e9:#2e7d32' }[doc.col] || '#f5f5f5:#555';
+        const [bgC, txC] = colBadge.split(':');
+
+        const estadoBadge = tieneCat
+            ? '<span class="est-nuevo">✓</span>'
+            : esSugerencia
+            ? '<span class="est-posible">★ Sug.</span>'
+            : '<span class="est-dup">✗</span>';
+
+        const catSelectedOpts = `<option value="" ${!catAct ? 'selected' : ''}>— sin categoría —</option>` +
+            BTG_CATEGORIAS.map(c => `<option value="${c}" ${catAct === c ? 'selected' : ''}>${c}</option>`).join('');
+
+        return `<tr class="${modificado ? 'modificado' : ''}" id="catrow-${doc.id}">
+            <td><span style="font-size:9px; background:${bgC}; color:${txC}; padding:2px 6px; border-radius:99px; font-weight:700;">${doc.col.toUpperCase()}</span></td>
+            <td style="font-family:var(--font-mono); font-size:11px; white-space:nowrap;">${fecha}</td>
+            <td style="font-weight:600; max-width:200px; word-break:break-word; font-size:11px;" title="${escapeHtml(doc.id)}">${escapeHtml(nombre)}</td>
+            <td class="${monto >= 0 ? 'val-pos' : 'val-neg'}" style="text-align:right; white-space:nowrap;">
+                ${monto >= 0 ? '+' : '−'}${fmtMonto(Math.abs(monto), doc.data.moneda)}
+            </td>
+            <td>
+                <select class="cat-select ${modificado || esSugerencia ? 'sugerido' : tieneCat ? 'guardado' : ''}"
+                    onchange="editarCat('${doc.id}', 'categoria_personal', this.value)">
+                    ${catSelectedOpts}
+                </select>
+            </td>
+            <td>
+                <input type="text" class="cat-input ${modificado || esSugerencia ? 'sugerido' : tieneCat ? 'guardado' : ''}"
+                    value="${escapeHtml(etqAct)}"
+                    placeholder="Etiqueta..."
+                    oninput="editarCat('${doc.id}', 'etiqueta', this.value)">
+            </td>
+            <td style="text-align:center;">${estadoBadge}</td>
+        </tr>`;
+    }).join('');
+}
+
+window.editarCat = function(id, campo, valor) {
+    if (!catEdits[id]) catEdits[id] = {};
+    catEdits[id][campo] = valor;
+    const row = document.getElementById('catrow-' + id);
+    if (row) row.classList.add('modificado');
+    // Actualizar contador
+    document.getElementById('statsCat') && renderTablaCat();
+};
+
+window.toggleSoloPendientes = function(btn) {
+    soloPendientes = !soloPendientes;
+    btn.textContent = soloPendientes ? 'Solo sin categoría' : 'Todos';
+    btn.classList.toggle('btn-secondary', soloPendientes);
+    renderTablaCat();
+};
+
+window.guardarCategorias = async function() {
+    const ids = Object.keys(catEdits);
+    if (!ids.length) { showToast('No hay cambios para guardar.', 'warning'); return; }
+
+    const btn = document.getElementById('btnGuardarCat');
+    btn.disabled = true; btn.innerHTML = '<span class="material-icons">hourglass_empty</span> Guardando...';
+    document.getElementById('progCat').style.display = 'block';
+
+    let ok = 0, err = 0;
+    for (let i = 0; i < ids.length; i++) {
+        const id  = ids[i];
+        const doc = docsCat.find(d => d.id === id);
+        if (!doc) continue;
+        setProg('progCatFill', 'progCatLabel', (i + 1) / ids.length * 100, 100, `Guardando (${i + 1}/${ids.length})...`);
+        try {
+            await db.collection(doc.col).doc(id).update({
+                ...catEdits[id],
+                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            // Actualizar cache local
+            Object.assign(doc.data, catEdits[id]);
+            ok++;
+        } catch(e) { err++; console.error(id, e); }
+    }
+
+    setProg('progCatFill', 'progCatLabel', 100, 100, `Guardados: ${ok}${err ? ' · Errores: ' + err : ''}`);
+    showToast(`${ok} cambios guardados.${err ? ' ' + err + ' errores.' : ''}`, err ? 'warning' : 'success');
+    catEdits = {};
+    btn.disabled = false; btn.innerHTML = '<span class="material-icons">save</span> Guardar cambios';
+    renderTablaCat();
+};
+
+window.renderTablaCat = renderTablaCat;
+
+
+// ══════════════════════════════════════════════════════════════
+// PESTAÑA 4 — DEPURAR
+// ══════════════════════════════════════════════════════════════
+
+window.escanearDuplicados = async function() {
+    const btn = document.getElementById('btnEscanear');
+    btn.disabled = true; btn.innerHTML = '<span class="material-icons">hourglass_empty</span> Escaneando...';
+    document.getElementById('progDup').style.display = 'block';
+    document.getElementById('dupResultados').innerHTML = '';
+    document.getElementById('btnEliminarWrap').style.display = 'none';
+    toEliminar = []; gruposCache = [];
+
+    setProg('progDupFill', 'progDupLabel', 10, 100, 'Cargando movimientos...');
+
+    try {
+        const [movSnap, gastosSnap, pagosSnap] = await Promise.all([
+            db.collection('movimientos').orderBy('fecha').get(),
+            db.collection('gastos').orderBy('fecha').get(),
+            db.collection('pagos').orderBy('fecha').get()
+        ]);
+        setProg('progDupFill', 'progDupLabel', 60, 100, 'Detectando duplicados...');
+
+        const todos = [
+            ...movSnap.docs.map(d => ({ id: d.id, col: 'movimientos', data: d.data() })),
+            ...gastosSnap.docs.map(d => ({ id: d.id, col: 'gastos', data: d.data() })),
+            ...pagosSnap.docs.map(d => ({ id: d.id, col: 'pagos', data: d.data() }))
+        ];
+
+        // Detectar duplicados por clave fecha + monto
+        const index = {};
+        todos.forEach(doc => {
+            const fecha = fmtFecha(doc.data.fecha || doc.data.creadoEn);
+            const monto = Math.round((doc.data.monto || 0) * 100);
+            const col   = doc.col;
+            const k     = `${col}|${fecha}|${monto}`;
+            if (!index[k]) index[k] = [];
+            index[k].push(doc);
+        });
+
+        gruposCache = Object.entries(index)
+            .filter(([, arr]) => arr.length > 1)
+            .map(([key, docs]) => ({ key, docs }));
+
+        setProg('progDupFill', 'progDupLabel', 100, 100, `${gruposCache.length} grupos con posibles duplicados.`);
+        actualizarBadge('depurar', gruposCache.length);
+        renderDuplicados(todos.length);
+
+        if (gruposCache.length) {
+            document.getElementById('btnEliminarWrap').style.display = 'block';
+        }
+
+    } catch(e) {
+        document.getElementById('dupResultados').innerHTML =
+            `<div class="alert alert-error"><span class="material-icons">error</span> Error: ${escapeHtml(e.message)}</div>`;
+    }
+
+    btn.disabled = false; btn.innerHTML = '<span class="material-icons">search</span> Re-escanear';
+};
+
+function renderDuplicados(totalDocs) {
+    if (!gruposCache.length) {
+        document.getElementById('dupResultados').innerHTML =
+            `<div class="alert alert-success"><span class="material-icons">check_circle</span> No se encontraron duplicados en ninguna colección (${totalDocs} documentos analizados).</div>`;
+        return;
+    }
+
+    let html = `<div class="alert alert-warning">
+        <span class="material-icons">warning</span>
+        <span>${gruposCache.length} grupos con posibles duplicados sobre ${totalDocs} documentos. Seleccioná cuál conservar en cada grupo.</span>
+    </div>`;
+
+    gruposCache.forEach(g => {
+        const [col, fecha, monto] = g.key.split('|');
+        const montoFmt = fmtMonto(parseInt(monto) / 100, 'BRL');
+
+        html += `<div class="dup-group">
+            <div class="dup-group-header">
+                <span>⚠ ${col.toUpperCase()} · ${fecha} · ${montoFmt} · ${g.docs.length} registros</span>
+                <button class="btn btn-ghost btn-sm" style="font-size:10px;"
+                    onclick="autoSeleccionarGrupo('${g.key}')">
+                    Auto: conservar primero
+                </button>
+            </div>
+            <table class="preview-table">
+                <thead>
+                    <tr>
+                        <th style="width:32px;">Conservar</th>
+                        <th>Descripción / concepto</th>
+                        <th>Fecha</th>
+                        <th style="text-align:right;">Monto</th>
+                        <th>Origen</th>
+                        <th>Categoría</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${g.docs.map((doc, i) => {
+                        const nombre = doc.data.descripcion || doc.data.concepto || doc.data.proveedor || '—';
+                        const origen = doc.data.origen || doc.data.banco || 'manual';
+                        const catP   = doc.data.categoria_personal || '—';
+                        return `<tr id="duprow-${doc.id}">
+                            <td style="text-align:center;">
+                                <input type="radio"
+                                    name="dup-${g.key.replace(/[|]/g,'_')}"
+                                    value="${doc.id}"
+                                    ${i === 0 ? 'checked' : ''}
+                                    onchange="marcarGrupo('${g.key}', this)">
+                            </td>
+                            <td style="font-weight:600; font-size:11px;">${escapeHtml(nombre)}</td>
+                            <td style="font-family:var(--font-mono); font-size:11px;">${fecha}</td>
+                            <td class="val-neu" style="text-align:right;">${montoFmt}</td>
+                            <td><span style="font-size:10px; background:var(--color-surface-2); padding:2px 6px; border-radius:99px;">${escapeHtml(origen)}</span></td>
+                            <td style="font-size:11px; color:var(--color-text-muted);">${escapeHtml(catP)}</td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>`;
+    });
+
+    document.getElementById('dupResultados').innerHTML = html;
+
+    // Auto-marcar primero en cada grupo
+    gruposCache.forEach(g => {
+        setTimeout(() => marcarGrupoDirecto(g.key, g.docs[0].id, g.docs), 50);
+    });
+}
+
+window.marcarGrupo = function(key, radio) {
+    const g = gruposCache.find(x => x.key === key);
+    if (g) marcarGrupoDirecto(key, radio.value, g.docs);
+};
+
+function marcarGrupoDirecto(key, keepId, docs) {
+    docs.forEach(doc => {
+        const row = document.getElementById('duprow-' + doc.id);
+        if (!row) return;
+        row.style.background = doc.id === keepId ? '#f0fdf4' : '#fff5f5';
+    });
+    // Actualizar lista toEliminar
+    const ids = docs.map(d => d.id);
+    toEliminar = toEliminar.filter(x => !ids.includes(x.id));
+    docs.filter(d => d.id !== keepId).forEach(d => toEliminar.push({ id: d.id, col: d.col }));
+}
+
+window.autoSeleccionarGrupo = function(key) {
+    const g = gruposCache.find(x => x.key === key);
+    if (!g) return;
+    const radio = document.querySelector(`input[name="dup-${key.replace(/[|]/g,'_')}"][value="${g.docs[0].id}"]`);
+    if (radio) { radio.checked = true; radio.dispatchEvent(new Event('change')); }
+};
+
+window.confirmarEliminarDups = function() {
+    if (!toEliminar.length) { showToast('No hay documentos marcados para eliminar.', 'warning'); return; }
+    document.getElementById('modalConfirmarMsg').textContent =
+        `Se eliminarán ${toEliminar.length} documento(s) duplicado(s). Esta acción no se puede deshacer.`;
+    document.getElementById('btnConfirmarEliminar').onclick = ejecutarEliminarDups;
+    document.getElementById('modalConfirmar').style.display = 'flex';
+};
+
+async function ejecutarEliminarDups() {
+    document.getElementById('modalConfirmar').style.display = 'none';
+    const btn = document.querySelector('#btnEliminarWrap button');
+    btn.disabled = true; btn.textContent = 'Eliminando...';
+
+    let ok = 0, err = 0;
+    for (const e of toEliminar) {
+        try {
+            await db.collection(e.col).doc(e.id).delete();
+            const row = document.getElementById('duprow-' + e.id);
+            if (row) row.style.opacity = '0.3';
+            ok++;
+        } catch(ex) { err++; }
+    }
+
+    showToast(`Eliminados: ${ok}${err ? ' · Errores: ' + err : ''}.`, err ? 'warning' : 'success');
+    toEliminar = [];
+    btn.disabled = false; btn.innerHTML = '<span class="material-icons">delete_forever</span> Eliminar duplicados seleccionados';
+}
+
+
+// ── HELPERS COMPARTIDOS ───────────────────────────────────────
+
+function setProg(fillId, labelId, val, total, label) {
+    document.getElementById(fillId).style.width = (val / total * 100) + '%';
+    document.getElementById(labelId).textContent = label;
+}
+
+function actualizarBadge(tab, valor) {
+    const el = document.getElementById('badge-' + tab);
+    if (!el) return;
+    el.textContent = valor;
+    el.className   = 'tab-badge';
+    if (typeof valor === 'number' && valor > 0) el.classList.add('amber');
+    if (valor === '✓') el.classList.add('green');
+}
+
+
+// ── INIT ──────────────────────────────────────────────────────
+await cargarCuentas();
+
+})();
+</script>
+</body>
+</html>
