@@ -8,6 +8,31 @@
 <style>
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     .acceso-card { cursor: pointer; border: none; font-family: inherit; width: 100%; text-align: center; }
+
+    /* ── ALERTAS PROACTIVAS ──────────────────────────────────── */
+    .alertas-panel { display: none; margin-bottom: var(--space-5); }
+    .alertas-panel.visible { display: block; }
+    .alertas-titulo {
+        display: flex; align-items: center; gap: var(--space-2);
+        font-size: var(--text-xs); font-weight: 800;
+        text-transform: uppercase; letter-spacing: .07em;
+        color: var(--color-text-muted); margin-bottom: var(--space-3);
+    }
+    .alerta-item {
+        display: flex; align-items: flex-start; gap: var(--space-3);
+        padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+        margin-bottom: var(--space-2); font-size: var(--text-sm);
+        border-left: 3px solid; text-decoration: none; color: inherit;
+        transition: opacity var(--transition-fast);
+    }
+    .alerta-item:hover { opacity: .85; }
+    .alerta-item.critico  { background: var(--color-danger-bg);  border-color: var(--color-danger);  color: var(--color-danger);  }
+    .alerta-item.atencion { background: var(--color-warning-bg); border-color: var(--color-warning); color: var(--color-warning); }
+    .alerta-item.info     { background: var(--color-info-bg);    border-color: var(--color-info);    color: var(--color-info);    }
+    .alerta-item__icon  { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .alerta-item__body  { flex: 1; }
+    .alerta-item__title { font-weight: 700; line-height: 1.3; }
+    .alerta-item__desc  { font-size: var(--text-xs); opacity: .8; margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -35,6 +60,15 @@
 
 <!-- ── CONTENIDO ───────────────────────────────────────────── -->
 <main class="admin-content">
+
+    <!-- ── ALERTAS PROACTIVAS ─────────────────────────────────── -->
+    <div class="alertas-panel" id="alertasPanel">
+        <div class="alertas-titulo">
+            <span class="material-icons" style="font-size:14px;">notification_important</span>
+            Requiere atención
+        </div>
+        <div id="alertasList"></div>
+    </div>
 
     <!-- KPIs -->
     <p class="section-title">Resumen general</p>
@@ -565,6 +599,128 @@
         }
     }
 
+    // ── Alertas proactivas ───────────────────────────────────
+    async function cargarAlertas() {
+        const alertas = [];
+
+        // ── Fechas de referencia ──────────────────────────────
+        const hoy48    = new Date(hoy); hoy48.setHours(hoy48.getHours() + 48);
+        const hace14   = new Date(hoy); hace14.setDate(hace14.getDate() - 14);
+
+        // ── 1. Reservas con check-in en < 48hs sin tarea de limpieza ──
+        const proximas48 = reservas.filter(r => {
+            if (!['confirmada','airbnb_activa'].includes(r.estado)) return false;
+            const ci = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
+            return ci >= hoy && ci <= hoy48;
+        });
+
+        for (const r of proximas48) {
+            const tieneTask = tareas.some(t =>
+                t.reservaId === r.id && t.tipo === 'limpieza' && t.estado !== 'finalizada'
+            );
+            if (!tieneTask) {
+                const ci = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
+                const diffH = Math.round((ci - hoy) / 3600000);
+                alertas.push({
+                    nivel: 'critico',
+                    icon:  'cleaning_services',
+                    title: 'Sin tarea de limpieza — ' + escapeHtml(r.nombre || 'Reserva Airbnb'),
+                    desc:  'Check-in en ' + (diffH < 24 ? diffH + 'hs' : 'mañana') + ' · Cabaña ' + r.caba,
+                    href:  'tareas.html'
+                });
+            }
+        }
+
+        // ── 2. Tareas con urgencia roja ───────────────────────
+        const tareasRojas = tareas.filter(t => {
+            if (t.estado === 'finalizada' || t.activa === false) return false;
+            return urgenciaTarea(t).color === 'rojo';
+        });
+        if (tareasRojas.length) {
+            alertas.push({
+                nivel: 'critico',
+                icon:  'warning',
+                title: tareasRojas.length + ' tarea' + (tareasRojas.length > 1 ? 's' : '') + ' con atraso crítico',
+                desc:  tareasRojas.map(t => t.nombre).slice(0, 3).join(' · ') + (tareasRojas.length > 3 ? ' y más...' : ''),
+                href:  'tareas.html'
+            });
+        }
+
+        // ── 3. Honorarios pendientes > 14 días ───────────────
+        try {
+            const honSnap = await db.collection('honorarios')
+                .where('estado', '==', 'pendiente')
+                .get();
+            const viejos = honSnap.docs.filter(d => {
+                const f = d.data().creadoEn?.toDate?.();
+                return f && f < hace14;
+            });
+            if (viejos.length) {
+                const total = viejos.reduce((s, d) => s + (d.data().monto || 0), 0);
+                alertas.push({
+                    nivel: 'atencion',
+                    icon:  'payments',
+                    title: viejos.length + ' honorario' + (viejos.length > 1 ? 's' : '') + ' pendiente' + (viejos.length > 1 ? 's' : '') + ' (+14 días)',
+                    desc:  'Total: R$ ' + total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+                    href:  'pagos.html'
+                });
+            }
+        } catch(e) { /* silencioso */ }
+
+        // ── 4. Presupuestos sin respuesta > 3 días ───────────
+        try {
+            const hace3 = new Date(hoy); hace3.setDate(hace3.getDate() - 3);
+            const presSnap = await db.collection('presupuestos')
+                .where('estado', '==', 'pendiente')
+                .get();
+            const sinRespuesta = presSnap.docs.filter(d => {
+                const f = d.data().creadoEn?.toDate?.();
+                return f && f < hace3;
+            });
+            if (sinRespuesta.length) {
+                alertas.push({
+                    nivel: 'atencion',
+                    icon:  'request_quote',
+                    title: sinRespuesta.length + ' presupuesto' + (sinRespuesta.length > 1 ? 's' : '') + ' sin respuesta +3 días',
+                    desc:  'Revisá si el cliente necesita seguimiento',
+                    href:  'presupuestos.html'
+                });
+            }
+        } catch(e) { /* silencioso */ }
+
+        // ── 5. Movimientos sin categoría ─────────────────────
+        try {
+            const movSnap = await db.collection('movimientos')
+                .where('categoria_personal', '==', '')
+                .limit(1).get();
+            if (!movSnap.empty) {
+                alertas.push({
+                    nivel: 'info',
+                    icon:  'label_off',
+                    title: 'Movimientos BTG sin categorizar',
+                    desc:  'Usá Herramientas BTG → Categorizar para enriquecerlos',
+                    href:  'herramientas-btg.html'
+                });
+            }
+        } catch(e) { /* silencioso */ }
+
+        // ── Renderizar ────────────────────────────────────────
+        if (!alertas.length) return;
+
+        document.getElementById('alertasList').innerHTML = alertas.map(a => `
+            <a href="${a.href}" class="alerta-item ${a.nivel}">
+                <span class="material-icons alerta-item__icon">${a.icon}</span>
+                <div class="alerta-item__body">
+                    <div class="alerta-item__title">${a.title}</div>
+                    ${a.desc ? '<div class="alerta-item__desc">' + escapeHtml(a.desc) + '</div>' : ''}
+                </div>
+                <span class="material-icons" style="font-size:16px; opacity:.5; flex-shrink:0;">arrow_forward</span>
+            </a>`).join('');
+
+        document.getElementById('alertasPanel').classList.add('visible');
+    }
+
+    cargarAlertas();
     cargarWidgetCuentas();
 
     // Sincronizar Airbnb automáticamente al abrir el dashboard
