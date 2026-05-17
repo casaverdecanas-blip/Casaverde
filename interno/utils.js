@@ -925,6 +925,323 @@ function _cerrarDropdowns() {
 window.toggleNavDrop = toggleNavDrop;
 
 
+// ── MÓDULO BTG — CATEGORIZACIÓN Y CONCILIACIÓN ───────────────
+//
+//  Funciones para importar y enriquecer extractos bancarios BTG.
+//  Usadas por herramientas-btg.html y depuracion-finanzas.html.
+//
+//  Flujo:
+//    1. parsear texto del extracto (lógica en herramientas-btg.html)
+//    2. fingerprintMovimiento()  — genera clave única por movimiento
+//    3. conciliarMovimientos()   — detecta nuevos vs duplicados vs Firestore
+//    4. importarMovimientosConfirmados() — graba en batch los aprobados
+//    5. inferirCategoria()       — sugiere categoría+etiqueta por nombre
+//
+//  Para agregar nuevas reglas de categorización:
+//  editar el array BTG_REGLAS_CAT más abajo.
+// ────────────────────────────────────────────────────────────
+
+
+// ── Categorías personales disponibles ────────────────────────
+//
+//  Son las opciones que aparecen en el selector de categoría
+//  en la pantalla de enriquecimiento. Agregar aquí si se necesita
+//  una categoría nueva.
+//
+const BTG_CATEGORIAS = [
+    'negocio',
+    'supermercado',
+    'alimentacion',
+    'transporte',
+    'salud',
+    'servicios',
+    'ocio',
+    'suscripcion',
+    'transferencia',
+    'ingreso',
+    'sin_clasificar'
+];
+
+
+// ── Reglas de categorización automática ──────────────────────
+//
+//  Cada regla tiene:
+//    match[]   — fragmentos de texto a buscar en el nombre (lowercase)
+//    cat       — categoría asignada (debe estar en BTG_CATEGORIAS)
+//    etiqueta  — descripción legible para el administrador
+//
+//  La primera regla que coincide gana — el orden importa.
+//  Para agregar una nueva regla, agregarla al array.
+//
+const BTG_REGLAS_CAT = [
+
+    // ── Negocio (cabaña) ──────────────────────────────────────
+    { match: ['amc materiais','constrular','franzoni','casas da água','casas da agua',
+              'chaveiro','construmais','lenz comercio','lenz comércio'],
+      cat: 'negocio', etiqueta: 'Materiales / insumos Casa Verde Cañas' },
+
+    // ── Supermercado ─────────────────────────────────────────
+    { match: ['mercado dos amigos'],      cat: 'supermercado', etiqueta: 'Supermercado local' },
+    { match: ['mundialmix'],              cat: 'supermercado', etiqueta: 'Supermercado' },
+    { match: ['sdb comercio','sdb comércio'], cat: 'supermercado', etiqueta: 'Supermercado — compra grande' },
+    { match: ['prado supermercado'],      cat: 'supermercado', etiqueta: 'Supermercado' },
+    { match: ['bistek supermercados'],    cat: 'supermercado', etiqueta: 'Supermercado' },
+    { match: ['havan'],                   cat: 'supermercado', etiqueta: 'Tienda / supermercado' },
+    { match: ['desterro comercial'],      cat: 'supermercado', etiqueta: 'Comercio / compras' },
+    { match: ['pix marketplace'],         cat: 'supermercado', etiqueta: 'Compra online (Mercado Libre)' },
+    { match: ['vuoncard'],                cat: 'supermercado', etiqueta: 'Compra online' },
+    { match: ['milium tem'],              cat: 'supermercado', etiqueta: 'Compra varios' },
+    { match: ['eugenio raulino','koerich'], cat: 'supermercado', etiqueta: 'Tienda / compra' },
+    { match: ['bazarilene'],              cat: 'supermercado', etiqueta: 'Bazar / compra' },
+    { match: ['ana cristina henrique'],   cat: 'supermercado', etiqueta: 'Compra particular' },
+    { match: ['direto do campo'],         cat: 'supermercado', etiqueta: 'Feria / productos frescos' },
+
+    // ── Alimentación ─────────────────────────────────────────
+    { match: ['canas lanches'],           cat: 'alimentacion', etiqueta: 'Almuerzo / local Cañas' },
+    { match: ['sorvetes','acai magias','açaí magias'], cat: 'alimentacion', etiqueta: 'Heladería / café' },
+    { match: ['tiziano gelato'],          cat: 'alimentacion', etiqueta: 'Heladería / café' },
+    { match: ['jorge lourenco','jorge lourenço'], cat: 'alimentacion', etiqueta: 'Restaurante / parrilla' },
+    { match: ['rio branco choperia'],     cat: 'alimentacion', etiqueta: 'Bar / restorán' },
+
+    // ── Ocio ─────────────────────────────────────────────────
+    { match: ['monte civetta'],           cat: 'ocio', etiqueta: 'Heladería / salida' },
+    { match: ['revistaria magus'],        cat: 'ocio', etiqueta: 'Librería / revista' },
+
+    // ── Servicios ────────────────────────────────────────────
+    { match: ['telefonica bras','telefônica bras','vivo'], cat: 'servicios', etiqueta: 'Internet / telefonía' },
+    { match: ['claro'],                   cat: 'servicios', etiqueta: 'Celular / internet' },
+    { match: ['leo gas','leo gás'],       cat: 'servicios', etiqueta: 'Gas / agua' },
+    { match: ['vindi pagamentos'],        cat: 'servicios', etiqueta: 'Servicio online / suscripción' },
+    { match: ['ademir jose','ademir josé'], cat: 'servicios', etiqueta: 'Servicio / profesional' },
+
+    // ── Transporte ───────────────────────────────────────────
+    { match: ['posto galo'],              cat: 'transporte', etiqueta: 'Combustible' },
+    { match: ['posto agricopel'],         cat: 'transporte', etiqueta: 'Combustible' },
+    { match: ['sim - rede de postos','sim rede de postos'], cat: 'transporte', etiqueta: 'Combustible / telepeaje' },
+    { match: ['heli tur'],                cat: 'transporte', etiqueta: 'Transporte / excursión' },
+
+    // ── Salud ────────────────────────────────────────────────
+    { match: ['farmaouro','farmaôuro','sao joao farm','são joão farm'], cat: 'salud', etiqueta: 'Farmacia' },
+    { match: ['espaco corpo','espaço corpo'], cat: 'salud', etiqueta: 'Centro de bienestar / spa' },
+    { match: ['princesa me'],             cat: 'salud', etiqueta: 'Peluquería / cuidado personal' },
+
+    // ── Suscripción ──────────────────────────────────────────
+    { match: ['esteban gabriel mederos'], cat: 'suscripcion', etiqueta: 'Spotify — cuota grupal (3/5)' },
+
+    // ── Transferencias personales ────────────────────────────
+    { match: ['daniel parra','florencia silvina carrizo','clebe da silva','israel gomes',
+              'francielly nunes','filipe gusmao','filipe gusmão','victor fernandes',
+              'cleber luciano','joice marlete','felipe camilo','hector sebastian balboa',
+              'héctor sebastián balboa','yvonne maria','carlos sebastian lorier',
+              'carlos sebastián lorier','gilmara lisboa','claudio aparecido','mayara cristhyna',
+              'andre filipe','andré filipe','josefina ceballos','fabio daniel','fábio daniel',
+              'francielly'],
+      cat: 'transferencia', etiqueta: 'Transferencia personal' },
+
+    // ── Ingresos ─────────────────────────────────────────────
+    { match: ['maria florencia de tezanos','maria florência de tezanos'],
+      cat: 'ingreso', etiqueta: 'Traspaso entre cuentas BTG' },
+    { match: ['kp servicos','kp serviços'],  cat: 'ingreso', etiqueta: 'Ingreso — servicio digital' },
+    { match: ['astro instituicao','astro instituição'], cat: 'ingreso', etiqueta: 'Devolución / cashback' },
+    { match: ['lais de fatima','laís de fátima'], cat: 'ingreso', etiqueta: 'Devolución Pix (ver 13/01)' },
+    { match: ['joao vitor pereira','joão vitor pereira'], cat: 'ingreso', etiqueta: 'Ingreso — transferencia recibida' },
+    { match: ['mercado pago'],            cat: 'sin_clasificar', etiqueta: 'Ingreso sin clasificar' },
+];
+
+
+// ── inferirCategoria(nombre) ──────────────────────────────────
+//
+//  Busca el nombre del movimiento en las reglas de categorización.
+//  Devuelve { cat, etiqueta } o { cat: '', etiqueta: '' } si no hay match.
+//
+//  @param  {string} nombre — descripción del movimiento (se normaliza a lowercase)
+//  @returns {{ cat: string, etiqueta: string }}
+//
+function inferirCategoria(nombre) {
+    const n = (nombre || '').toLowerCase();
+    for (const regla of BTG_REGLAS_CAT) {
+        if (regla.match.some(function(m) { return n.includes(m); })) {
+            return { cat: regla.cat, etiqueta: regla.etiqueta };
+        }
+    }
+    return { cat: '', etiqueta: '' };
+}
+
+
+// ── fingerprintMovimiento(fecha, monto, descripcion) ──────────
+//
+//  Genera una clave única por movimiento para detectar duplicados.
+//  Formato: "YYYY-MM-DD|monto_en_centavos|primeras_4_palabras"
+//
+//  El monto se usa en valor absoluto — la dirección (débito/crédito)
+//  no forma parte del fingerprint para tolerar variaciones de signo
+//  entre diferentes formatos de extracto.
+//
+//  @param  {string} fecha       — 'YYYY-MM-DD'
+//  @param  {number} monto       — valor numérico (positivo o negativo)
+//  @param  {string} descripcion — texto del movimiento
+//  @returns {string}
+//
+function fingerprintMovimiento(fecha, monto, descripcion) {
+    var f = (fecha || '').slice(0, 10);
+    var m = Math.round(Math.abs(monto || 0) * 100);
+    var d = (descripcion || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .trim()
+        .split(/\s+/)
+        .slice(0, 4)
+        .join('_');
+    return f + '|' + m + '|' + d;
+}
+
+
+// ── conciliarMovimientos(parseados, cuentaId) ─────────────────
+//
+//  Compara los movimientos parseados del extracto contra los ya
+//  guardados en Firestore para esa cuenta en los últimos 6 meses.
+//
+//  Cada movimiento recibe un estado:
+//    'nuevo'             — no existe en Firestore, se puede importar
+//    'duplicado'         — fingerprint idéntico ya existe → saltar
+//    'posible_duplicado' — misma fecha y monto, descripción diferente → revisar
+//
+//  @param  {Array}  parseados  — [{fecha, monto, descripcion, tipo, ...}]
+//  @param  {string} cuentaId   — ID del documento en colección 'cuentas'
+//  @returns {Promise<Array>}   — mismos objetos con campo 'estado' agregado
+//
+async function conciliarMovimientos(parseados, cuentaId) {
+    // Cargar movimientos de esa cuenta de los últimos 6 meses
+    var hace6meses = new Date();
+    hace6meses.setMonth(hace6meses.getMonth() - 6);
+    var fechaLimite = hace6meses.toISOString().slice(0, 10);
+
+    var snap = await db.collection('movimientos')
+        .where('cuentaId', '==', cuentaId)
+        .where('fecha', '>=', fechaLimite)
+        .get();
+
+    // Construir índice de fingerprints existentes
+    var existentes = snap.docs.map(function(d) {
+        var data = d.data();
+        return {
+            id: d.id,
+            fingerprint: data.fingerprint ||
+                fingerprintMovimiento(data.fecha, data.monto, data.descripcion)
+        };
+    });
+    var fpExistentes = new Set(existentes.map(function(e) { return e.fingerprint; }));
+
+    // Clasificar cada movimiento parseado
+    return parseados.map(function(mov) {
+        var fp = fingerprintMovimiento(mov.fecha, mov.monto, mov.descripcion);
+        var duplicadoExacto = fpExistentes.has(fp);
+
+        // Posible duplicado: misma fecha + mismo monto, descripción diferente
+        var posibleDup = false;
+        if (!duplicadoExacto) {
+            var partesFp = fp.split('|');
+            posibleDup = existentes.some(function(e) {
+                var partesE = e.fingerprint.split('|');
+                return partesE[0] === partesFp[0] && partesE[1] === partesFp[1];
+            });
+        }
+
+        return Object.assign({}, mov, {
+            fingerprint: fp,
+            estado: duplicadoExacto ? 'duplicado'
+                  : posibleDup      ? 'posible_duplicado'
+                  : 'nuevo'
+        });
+    });
+}
+
+
+// ── importarMovimientosConfirmados(movimientos, opts) ─────────
+//
+//  Graba en Firestore (colección 'movimientos') los movimientos
+//  aprobados por el usuario. Usa batch para atomicidad.
+//
+//  Aplica categorización automática a los que no tienen categoría.
+//  Salta automáticamente los que tienen estado 'duplicado'.
+//
+//  @param  {Array}  movimientos  — resultado de conciliarMovimientos(),
+//                                  filtrado por el usuario (puede incluir
+//                                  'posible_duplicado' si el usuario los aprobó)
+//  @param  {Object} opts
+//    opts.cuentaId    {string}  — ID de la cuenta
+//    opts.moneda      {string}  — 'BRL' | 'USD' | 'UYU' | 'ARS'
+//    opts.importadoPor {string} — UID del usuario que importa
+//  @returns {Promise<{ importados: number, saltados: number }>}
+//
+async function importarMovimientosConfirmados(movimientos, opts) {
+    var cuentaId     = opts.cuentaId     || '';
+    var moneda       = opts.moneda       || 'BRL';
+    var importadoPor = opts.importadoPor || null;
+    var ahora        = firebase.firestore.FieldValue.serverTimestamp();
+
+    var importados = 0;
+    var saltados   = 0;
+
+    // Firestore batch admite máximo 500 operaciones — procesar en lotes
+    var LOTE = 400;
+    var pendientes = movimientos.filter(function(m) { return m.estado !== 'duplicado'; });
+    saltados = movimientos.length - pendientes.length;
+
+    for (var i = 0; i < pendientes.length; i += LOTE) {
+        var lote   = pendientes.slice(i, i + LOTE);
+        var batch  = db.batch();
+
+        lote.forEach(function(mov) {
+            var ref = db.collection('movimientos').doc();
+            var cat = inferirCategoria(mov.descripcion);
+            batch.set(ref, {
+                cuentaId:           cuentaId,
+                moneda:             moneda,
+                fecha:              mov.fecha,
+                descripcion:        mov.descripcion || '',
+                monto:              mov.monto || 0,
+                tipo:               (mov.monto || 0) >= 0 ? 'credito' : 'debito',
+                fingerprint:        mov.fingerprint,
+                // Categoría operativa del negocio (vacía por defecto en importación)
+                categoria:          '',
+                // Categoría personal inferida automáticamente
+                categoria_personal: cat.cat      || '',
+                etiqueta:           cat.etiqueta  || '',
+                origen:             'btg_import',
+                importadoPor:       importadoPor,
+                importadoEn:        ahora,
+                notas:              ''
+            });
+        });
+
+        await batch.commit();
+        importados += lote.length;
+    }
+
+    return { importados: importados, saltados: saltados };
+}
+
+
+// ── toDate(val) ───────────────────────────────────────────────
+//
+//  Convierte cualquier representación de fecha a objeto Date.
+//  Resuelve el problema de fechas mixtas (Timestamp vs string)
+//  que existe en algunos documentos de Firestore.
+//
+//  Uso: reemplazar el patrón  val?.toDate ? val.toDate() : new Date(val)
+//       por el más simple      CVC.toDate(val)
+//
+function toDate(val) {
+    if (!val)              return null;
+    if (val instanceof Date) return val;
+    if (val.toDate)        return val.toDate();           // Firestore Timestamp
+    if (typeof val === 'string' && val.length === 10)
+        return new Date(val + 'T12:00:00');               // 'YYYY-MM-DD'
+    return new Date(val);
+}
+
+
 // ── EXPORTAR ─────────────────────────────────────────────────
 window.CVC = {
     db, auth,
@@ -938,6 +1255,14 @@ window.CVC = {
     crearTareaLimpieza,
     sincronizarDisponibilidad,
     iniciarTarea, pausarTarea, finalizarTarea, urgenciaTarea,
+    // ── Módulo BTG ──
+    BTG_CATEGORIAS, BTG_REGLAS_CAT,
+    inferirCategoria,
+    fingerprintMovimiento,
+    conciliarMovimientos,
+    importarMovimientosConfirmados,
+    // ── Helper fechas ──
+    toDate,
     escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
     showLoading, showEmpty, showError, showToast
 };
