@@ -1,0 +1,59 @@
+rules_version = '2';
+
+// ============================================================
+//  Firestore Security Rules — Casa Verde Canas
+//  Proyecto: casaverdecanas-199
+//
+//  ACTUALIZAR EN: Firebase Console → Firestore → Reglas
+//  VERSIONAR EN:  GitHub repo raíz como firestore.rules
+//
+//  Última revisión: Mayo 2026
+//
+//  Lógica de roles:
+//  — La distinción admin / colaborador se maneja en el cliente
+//    via utils.js → verificarAuth(rol)
+//  — A nivel Firestore, la regla es: autenticado = acceso
+//  — Para agregar control de rol en servidor en el futuro,
+//    se necesita Firebase Custom Claims (Admin SDK + Cloud Function)
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── SITIO PÚBLICO — lectura libre, escritura autenticada ──
+    //    Estas colecciones las lee cabana.html e index.html
+    //    sin que el visitante tenga sesión iniciada.
+
+    match /cabanas/{doc} {
+      allow read:  if true;
+      allow write: if request.auth != null;
+    }
+
+    match /disponibilidad/{doc} {
+      allow read:  if true;
+      allow write: if request.auth != null;
+    }
+
+    // ── MANUAL DEL SISTEMA — usuarios autenticados ────────────
+    //    Lo leen tanto admin como colaboradores (rol user).
+    //    El control de que solo admin pueda editarlo
+    //    se hace en el cliente (verificarAuth).
+
+    match /config/manual {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // ── TODO LO DEMÁS — solo autenticados ────────────────────
+    //    Cubre: reservas, tareas, tareas/sesiones, historial_tareas,
+    //    honorarios, pagos, gastos, cuentas, movimientos,
+    //    categorias, clientes, usuarios, presupuestos
+    //
+    //    NOTA: el wildcard ** incluye subcolecciones (ej: tareas/{id}/sesiones/{s})
+
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+  }
+}
