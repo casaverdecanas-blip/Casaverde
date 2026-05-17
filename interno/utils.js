@@ -1,6 +1,11 @@
 // ============================================================
-//  utils.js — Casa Verde Canas  v4.0
+//  utils.js — Casa Verde Canas  v4.1
 //  Funciones compartidas · /interno/
+//
+//  CAMBIOS v4.1 (Mayo 2026):
+//  - [DOC]  Agregado schema de colecciones Firestore
+//  - [DOC]  Advertencia sobre API Key duplicada
+//  - [DOC]  Referencia a firestore.rules versionado en GitHub
 //
 //  CAMBIOS v4.0:
 //  - [NUEVO]   verificarDisponibilidadCabana() — detecta solapamiento
@@ -14,6 +19,17 @@
 
 
 // ── FIREBASE ─────────────────────────────────────────────────
+//
+//  ⚠️  ESTA CONFIG EXISTE EN DOS ARCHIVOS:
+//       1. utils.js  (este archivo)  — usado por todos los módulos /interno/
+//       2. index.html (sitio público) — login embebido en el frontend público
+//       3. cabana.html (sitio público) — ficha de cabaña
+//       4. admin.html  — editor de contenido web (Realtime DB, independiente)
+//
+//  Si cambia algún valor, actualizarlo en TODOS los archivos.
+//  La seguridad real no depende de ocultar esta clave sino de las
+//  Firestore Security Rules → ver /firestore.rules en el repositorio.
+//
 const FIREBASE_CONFIG = {
     apiKey:     'AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4',
     authDomain: 'casaverdecanas-199.firebaseapp.com',
@@ -22,6 +38,69 @@ const FIREBASE_CONFIG = {
 if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
 const db   = firebase.firestore();
 const auth = firebase.auth();
+
+
+// ── SCHEMA FIRESTORE ─────────────────────────────────────────
+//
+//  Referencia rápida de colecciones. Para las reglas de acceso
+//  ver firestore.rules en la raíz del repositorio.
+//
+//  reservas/
+//    caba(number), estado, checkIn(string YYYY-MM-DD), checkOut,
+//    nombre, huespedes(number), adultos, ninos, mascotas(si|no),
+//    niniosPequenos(si|no), horaLlegada, horaSalida, notas,
+//    origen(directa|airbnb), costoLimpiezaBRL, creadoEn, creadoPor
+//
+//  tareas/
+//    nombre, tipo(limpieza|rutina|general), estado(pendiente|en_curso|finalizada),
+//    prioridad(alta|media|baja), monto(BRL), activa(bool),
+//    fechaInicio(string YYYY-MM-DD), recurrencia(días, 0=no recurrente),
+//    ultimaVez(Timestamp), reservaId?, cabana(number)?,
+//    sesionesActivas[], creadoEn(Timestamp), creadoPor
+//    └── sesiones/
+//          uid, nombre, inicio(Timestamp), fin(Timestamp|null), tareaId
+//
+//  historial_tareas/   ← snapshot inmutable al finalizar — NO modificar
+//    tareaId, nombre, tipo, prioridad, fechaInicio, fechaFin,
+//    monto, totalHoras, colaboradores[], reservaId?, cabana?,
+//    finalizadoPor, finalizadoEn(Timestamp), creadoEn
+//
+//  honorarios/
+//    colaboradorId, colaboradorNombre, tareaId, historialId,
+//    reservaId?, monto(BRL), moneda, concepto, horas,
+//    estado(pendiente|pagado), fechaPago?, pagadoPor?, creadoEn
+//
+//  cuentas/
+//    nombre, banco, moneda(BRL|USD|UYU|ARS), pais(BR|UY|AR),
+//    tipo(operativa|respaldo|personal), saldoActual, saldoInicial,
+//    fiscal(bool), titular?, orden(number), creadoEn
+//
+//  movimientos/
+//    cuentaId, moneda, fecha(string YYYY-MM-DD), descripcion,
+//    monto(+ crédito / - débito), tipo(credito|debito),
+//    fingerprint?, categoria, etiqueta, categoria_personal,
+//    origen(manual|btg_import), importadoPor?, importadoEn?, notas
+//
+//  pagos/              ← ingresos y egresos manuales del negocio
+//  gastos/             ← gastos operativos con comprobante opcional
+//  categorias/         ← etiquetas para movimientos y gastos
+//
+//  cabanas/
+//    nombre{es,pt,en}, capacidad{base,max}, tarifas{precioBase,
+//    precioExtraPersona, precioLimpieza, intervalos[]}, fotos[]
+//
+//  clientes/
+//    nombre, email, telefono, pais, notas, historial[]
+//
+//  usuarios/
+//    nombre, email, rol(admin|user), activo(bool), creadoEn
+//
+//  disponibilidad/     ← espejo de reservas bloqueantes → lo lee el sitio público
+//    caba, checkIn, checkOut, estado, bloqueante, origen, actualizadoEn
+//
+//  config/manual       ← contenido HTML editable del manual
+//    contenidoHtml, version, actualizadoEn, actualizadoPor
+//
 
 
 // ── CONSTANTES ───────────────────────────────────────────────
