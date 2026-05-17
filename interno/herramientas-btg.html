@@ -1124,17 +1124,23 @@ window.cargarParaCategorizar = async function() {
 
         const sinCat = docsCat.filter(d => !d.data.categoria_personal).length;
         actualizarBadge('categorizar', sinCat);
-        setProg('progCatFill', 'progCatLabel', 100, 100, `${docsCat.length} documentos · ${sinCat} sin categoría.`);
-
-        // Poblar filtro de categorías
-        const selCat = document.getElementById('filtroCat');
-        BTG_CATEGORIAS.forEach(c => {
-            const opt = document.createElement('option');
-            opt.value = c; opt.textContent = c;
-            selCat.appendChild(opt);
+        // Pre-cargar sugerencias en catEdits para que Guardar las tome
+        // Solo los documentos SIN categoría asignada y CON sugerencia automática
+        catEdits = {};
+        docsCat.forEach(doc => {
+            if (!doc.data.categoria_personal && doc._sugerencia && doc._sugerencia.cat) {
+                catEdits[doc.id] = {
+                    categoria_personal: doc._sugerencia.cat,
+                    etiqueta:           doc._sugerencia.etiqueta
+                };
+            }
         });
 
-        catEdits = {};
+        const conSugerencia = Object.keys(catEdits).length;
+        actualizarBadge('categorizar', sinCat);
+        setProg('progCatFill', 'progCatLabel', 100, 100,
+            `${docsCat.length} documentos · ${sinCat} sin categoría · ${conSugerencia} con sugerencia lista.`);
+
         document.getElementById('filtrosCat').style.display   = 'flex';
         document.getElementById('statsCat').style.display     = 'flex';
         document.getElementById('tablaCatWrap').style.display = 'block';
