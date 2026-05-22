@@ -1,15 +1,14 @@
 // netlify/functions/claude-proxy.js
 //
-// Proxy serverless para llamadas a la API de Anthropic.
-// El browser no puede llamar a api.anthropic.com directamente (CORS).
+// Proxy serverless adaptado para la API gratuita de Google Gemini (Google AI Studio).
+// El browser no puede llamar a generativelanguage.googleapis.com directamente (CORS).
 // Esta función corre en el servidor de Netlify y hace la llamada por el browser.
 //
 // Endpoint: /.netlify/functions/claude-proxy
 // Método:   POST
-// Body:     El mismo body que iría a /v1/messages de Anthropic
+// Body:     El mismo formato de mensajes que espera Gemini 1.5 Flash
 //
-// La API key se guarda como variable de entorno en Netlify:
-// ANTHROPIC_API_KEY → Settings → Environment variables
+// La API key se guarda como variable de entorno en GitHub/Netlify como: GEMINI_API_KEY
 
 exports.handler = async function(event, context) {
 
@@ -22,33 +21,35 @@ exports.handler = async function(event, context) {
         };
     }
 
-    // Verificar que la API key esté configurada
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    // Verificar que la API key de Gemini esté configurada
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
         return {
             statusCode: 500,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ error: 'ANTHROPIC_API_KEY no configurada en Netlify.' })
+            body: JSON.stringify({ error: 'GEMINI_API_KEY no configurada en el servidor.' })
         };
     }
 
     try {
+        // Recibimos el cuerpo que envía el formulario
         const requestBody = JSON.parse(event.body);
 
-        // Llamada a la API de Anthropic desde el servidor
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
+        // URL oficial de Google AI Studio para el modelo gratuito Gemini 1.5 Flash
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+        // Llamada a la API de Google desde el servidor
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
-                'Content-Type':      'application/json',
-                'x-api-key':         apiKey,
-                'anthropic-version': '2023-06-01'
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify(requestBody)
         });
 
         const data = await response.json();
 
-        // Si Anthropic devolvió error, propagarlo con el mismo status
+        // Si Google devolvió un error, propagarlo con el mismo status
         if (!response.ok) {
             return {
                 statusCode: response.status,
@@ -60,6 +61,7 @@ exports.handler = async function(event, context) {
             };
         }
 
+        // Retornar la respuesta exitosa de Gemini al formulario
         return {
             statusCode: 200,
             headers: {
@@ -76,7 +78,7 @@ exports.handler = async function(event, context) {
                 'Content-Type':                'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            body: JSON.stringify({ error: 'Error interno: ' + error.message })
+            body: JSON.stringify({ error: 'Error interno en el proxy de Gemini: ' + error.message })
         };
     }
 };
