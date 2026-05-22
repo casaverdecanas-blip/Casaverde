@@ -1,14 +1,7 @@
 // netlify/functions/claude-proxy.js
 //
-// Proxy serverless adaptado para la API gratuita de Google Gemini (Google AI Studio).
-// El browser no puede llamar a generativelanguage.googleapis.com directamente (CORS).
-// Esta función corre en el servidor de Netlify y hace la llamada por el browser.
-//
-// Endpoint: /.netlify/functions/claude-proxy
-// Método:   POST
-// Body:     El mismo formato de mensajes que espera Gemini 1.5 Flash
-//
-// La API key se guarda como variable de entorno en GitHub/Netlify como: GEMINI_API_KEY
+// Proxy inteligente v2: Recibe el formato de Anthropic desde informes-airbnb.html,
+// lo traduce al formato de Google Gemini 1.5 Flash en el servidor, y procesa gratis.
 
 exports.handler = async function(event, context) {
 
@@ -21,7 +14,7 @@ exports.handler = async function(event, context) {
         };
     }
 
-    // Verificar que la API key de Gemini esté configurada
+    // Verificar la API key de Gemini configurada en GitHub/Netlify
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
         return {
@@ -32,43 +25,74 @@ exports.handler = async function(event, context) {
     }
 
     try {
-        // Recibimos el cuerpo que envía el formulario
-        const requestBody = JSON.parse(event.body);
+        const incomingBody = JSON.parse(event.body);
+        
+        // --- TRADUCCIÓN DE FORMATO: De Anthropic a Gemini ---
+        // Extraemos el texto que venía en el formato de Claude
+        let userPrompt = "Procesar información de formulario."; // Texto por defecto
+        
+        if (incomingBody.messages && incomingBody.messages.length > 0) {
+            userPrompt = incomingBody.messages[0].content;
+        } else if (incomingBody.prompt) {
+            userPrompt = incomingBody.prompt;
+        }
+
+        // Estructuramos el cuerpo exacto que Gemini 1.5 Flash necesita
+        const geminiRequestBody = {
+            contents: [
+                {
+                    parts: [
+                        { text: userPrompt }
+                    ]
+                }
+            ]
+        };
 
         // URL oficial de Google AI Studio para el modelo gratuito Gemini 1.5 Flash
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-        // Llamada a la API de Google desde el servidor
+        // Llamada a la API de Google
         const response = await fetch(url, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(geminiRequestBody)
         });
 
-        const data = await response.json();
+        const googleData = await response.json();
 
-        // Si Google devolvió un error, propagarlo con el mismo status
         if (!response.ok) {
             return {
                 statusCode: response.status,
-                headers: {
-                    'Content-Type':                'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                body: JSON.stringify(data)
+                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+                body: JSON.stringify(googleData)
             };
         }
 
-        // Retornar la respuesta exitosa de Gemini al formulario
+        // --- TRADUCCIÓN DE RESPUESTA: De Gemini a lo que espera el Front-End ---
+        // Tu HTML original espera encontrar la respuesta en data.content[0].text
+        // Adaptamos la respuesta de Google para que simule ser Claude y la web no rompa
+        const textoRespuestaGemini = googleData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+        const fakeClaudeResponse = {
+            id: "gemini-converted-" + Date.now(),
+            type: "message",
+            role: "assistant",
+            model: "gemini-1.5-flash",
+            content: [
+                {
+                    type: "text",
+                    text: textoRespuestaGemini
+                }
+            ]
+        };
+
         return {
             statusCode: 200,
             headers: {
                 'Content-Type':                'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            body: JSON.stringify(data)
+            body: JSON.stringify(fakeClaudeResponse)
         };
 
     } catch (error) {
@@ -78,7 +102,7 @@ exports.handler = async function(event, context) {
                 'Content-Type':                'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            body: JSON.stringify({ error: 'Error interno en el proxy de Gemini: ' + error.message })
+            body: JSON.stringify({ error: 'Error interno en la conversión a Gemini: ' + error.message })
         };
     }
 };
