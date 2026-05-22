@@ -6,1088 +6,900 @@
     <title>Informes Airbnb · Casa Verde Canas</title>
     <link rel="stylesheet" href="design-system.css">
     <style>
-        /* ── Tabs ──────────────────────────────────────────────── */
-        .tabs { display:flex; gap:0; border-bottom:2px solid var(--color-border); margin-bottom:var(--space-5); }
+        .upload-zone {
+            border: 2px dashed var(--color-primary-light);
+            border-radius: var(--radius-lg);
+            padding: var(--space-8) var(--space-6);
+            text-align: center;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            background: var(--color-primary-xlight);
+            position: relative;
+        }
+        .upload-zone:hover, .upload-zone.drag-over {
+            border-color: var(--color-primary);
+            background: var(--color-primary-light);
+        }
+        .upload-zone input[type=file] {
+            position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+        }
+        .upload-zone__icon { font-size: 40px; margin-bottom: var(--space-3); }
+        .upload-zone__title { font-size: var(--text-md); font-weight: 700; color: var(--color-primary-dark); }
+        .upload-zone__sub   { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 6px; }
+
+        .log-box {
+            background: #0f172a; color: #e2e8f0;
+            border-radius: var(--radius-md);
+            padding: var(--space-4); font-family: var(--font-mono); font-size: 12px;
+            line-height: 1.8; margin: var(--space-3) 0; max-height: 200px; overflow-y: auto;
+            display: none;
+        }
+        .log-box.visible { display: block; }
+        .log-ok   { color: #4ade80; }
+        .log-info { color: #93c5fd; }
+        .log-warn { color: #fbbf24; }
+        .log-err  { color: #f87171; }
+
+        .preview-card {
+            background: var(--color-surface);
+            border: 1.5px solid var(--color-primary-light);
+            border-radius: var(--radius-lg);
+            overflow: hidden; margin: var(--space-4) 0; display: none;
+        }
+        .preview-card.visible { display: block; }
+        .preview-card__header {
+            background: var(--color-primary-dark); color: white;
+            padding: var(--space-4) var(--space-5);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .preview-card__header h3 { font-size: var(--text-md); font-weight: 700; margin: 0; }
+        .preview-card__body { padding: var(--space-5); }
+
+        .fields-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+            gap: var(--space-3); margin-bottom: var(--space-4);
+        }
+        .field-item { display: flex; flex-direction: column; gap: 4px; }
+        .field-item label {
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .07em; color: var(--color-text-muted);
+        }
+        .field-item input, .field-item select {
+            font-size: var(--text-sm); border: 1.5px solid var(--color-border);
+            border-radius: var(--radius-sm); padding: 6px 10px;
+            background: var(--color-surface); font-family: var(--font-mono);
+            transition: border-color var(--transition-fast);
+        }
+        .field-item input:focus, .field-item select:focus {
+            border-color: var(--color-primary); outline: none;
+        }
+        .field-item input.neto { color: var(--color-success); font-weight: 700; }
+        .field-item input.fee  { color: var(--color-danger); }
+
+        .cab-edit { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: var(--space-4); }
+        .cab-edit th {
+            background: var(--color-surface-2); padding: 7px 8px;
+            text-align: left; font-size: 10px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted);
+            border-bottom: 2px solid var(--color-border);
+        }
+        .cab-edit td { padding: 5px 6px; border-bottom: 1px solid var(--color-border-light); }
+        .cab-edit input {
+            width: 100%; border: 1px solid var(--color-border); border-radius: 4px;
+            padding: 4px 6px; font-size: 12px; font-family: var(--font-mono);
+            background: var(--color-surface);
+        }
+        .cab-edit input:focus { border-color: var(--color-primary); outline: none; }
+        .cab-name { font-weight: 600; font-size: 11px; white-space: nowrap; }
+
+        .verif-row {
+            display: flex; gap: var(--space-4); flex-wrap: wrap;
+            background: var(--color-surface-2); border-radius: var(--radius-md);
+            padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4);
+            align-items: center;
+        }
+        .verif-item { text-align: center; }
+        .verif-item__label { font-size: 9px; text-transform: uppercase; letter-spacing: .07em; color: var(--color-text-muted); }
+        .verif-item__val   { font-family: var(--font-mono); font-weight: 700; font-size: var(--text-sm); }
+        .verif-ok   { color: var(--color-success); }
+        .verif-diff { color: var(--color-danger); }
+
+        .sec-label {
+            font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+            color: var(--color-text-muted); border-bottom: 1px solid var(--color-border-light);
+            padding-bottom: 6px; margin: var(--space-4) 0 var(--space-3);
+            display: flex; align-items: center; gap: 6px;
+        }
+        .sec-label .material-icons { font-size: 15px; color: var(--color-primary); }
+
+        /* Tabs */
+        .tabs { display: flex; border-bottom: 2px solid var(--color-border); margin-bottom: var(--space-5); }
         .tab-btn {
-            padding:var(--space-3) var(--space-5);
-            font-size:var(--text-sm); font-weight:600;
-            border:none; background:none; cursor:pointer;
-            color:var(--color-text-muted);
-            border-bottom:3px solid transparent;
-            margin-bottom:-2px;
-            transition:all var(--transition-fast);
-            display:flex; align-items:center; gap:var(--space-2);
+            padding: var(--space-3) var(--space-5); font-size: var(--text-sm); font-weight: 600;
+            border: none; background: none; cursor: pointer; color: var(--color-text-muted);
+            border-bottom: 3px solid transparent; margin-bottom: -2px;
+            transition: all var(--transition-fast); display: flex; align-items: center; gap: var(--space-2);
         }
-        .tab-btn.active { color:var(--color-primary); border-bottom-color:var(--color-primary); }
-        .tab-btn:hover:not(.active) { color:var(--color-text-secondary); }
-        .tab-panel { display:none; }
-        .tab-panel.active { display:block; }
+        .tab-btn.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
 
-        /* ── KPI strip ─────────────────────────────────────────── */
-        .kpi-strip {
-            display:grid;
-            grid-template-columns:repeat(auto-fit, minmax(150px,1fr));
-            gap:var(--space-3);
-            margin-bottom:var(--space-5);
-        }
-        .kpi {
-            background:var(--color-surface);
-            border:1px solid var(--color-border);
-            border-top:3px solid var(--color-primary);
-            border-radius:var(--radius-md);
-            padding:var(--space-4);
-        }
-        .kpi.airbnb  { border-top-color:#ff5a5f; }
-        .kpi.warn    { border-top-color:var(--color-warning); }
-        .kpi.ok      { border-top-color:var(--color-success); }
-        .kpi__label  { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--color-text-muted); margin-bottom:4px; }
-        .kpi__val    { font-size:var(--text-xl); font-weight:800; font-family:var(--font-mono); color:var(--color-text-primary); line-height:1.1; }
-        .kpi__sub    { font-size:11px; color:var(--color-text-muted); margin-top:3px; }
+        /* KPIs */
+        .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-5); }
+        .kpi { background: var(--color-surface); border: 1px solid var(--color-border); border-top: 3px solid var(--color-primary); border-radius: var(--radius-md); padding: var(--space-4); }
+        .kpi.red { border-top-color: #ff5a5f; }
+        .kpi.warn { border-top-color: var(--color-warning); }
+        .kpi.ok   { border-top-color: var(--color-success); }
+        .kpi__label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--color-text-muted); margin-bottom: 4px; }
+        .kpi__val   { font-size: var(--text-xl); font-weight: 800; font-family: var(--font-mono); line-height: 1.1; }
+        .kpi__sub   { font-size: 11px; color: var(--color-text-muted); margin-top: 3px; }
 
-        /* ── Timeline de informes ──────────────────────────────── */
-        .informe-row {
-            background:var(--color-surface);
-            border:1px solid var(--color-border);
-            border-radius:var(--radius-md);
-            margin-bottom:var(--space-3);
-            overflow:hidden;
-            transition:box-shadow var(--transition-fast);
-        }
-        .informe-row:hover { box-shadow:var(--shadow-md); }
-        .informe-row__head {
-            display:flex; align-items:center; gap:var(--space-4);
-            padding:var(--space-4) var(--space-5);
-            cursor:pointer;
-            flex-wrap:wrap;
-        }
-        .informe-row__periodo {
-            font-family:var(--font-mono); font-size:var(--text-sm); font-weight:700;
-            color:var(--color-primary-dark); min-width:90px;
-        }
-        .informe-row__tipo {
-            font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
-            background:var(--color-primary-xlight); color:var(--color-primary);
-            padding:2px 8px; border-radius:99px;
-        }
-        .informe-row__tipo.anual { background:#fff8ee; color:var(--color-warning); }
-        .informe-row__montos {
-            flex:1; display:flex; gap:var(--space-5); flex-wrap:wrap; align-items:center;
-        }
-        .informe-row__monto { text-align:center; }
-        .informe-row__monto-label { font-size:9px; text-transform:uppercase; letter-spacing:.07em; color:var(--color-text-muted); }
-        .informe-row__monto-val   { font-family:var(--font-mono); font-size:var(--text-sm); font-weight:700; }
-        .val-neto  { color:var(--color-success); }
-        .val-bruto { color:var(--color-text-primary); }
-        .val-fee   { color:var(--color-danger); }
-        .informe-row__noches {
-            font-size:var(--text-xs); color:var(--color-text-muted);
-            display:flex; align-items:center; gap:4px;
-        }
-        .informe-row__concil {
-            font-size:10px; font-weight:700; padding:3px 8px; border-radius:99px;
-            white-space:nowrap;
-        }
-        .concil-ok      { background:var(--color-success-light); color:var(--color-success); }
-        .concil-parcial { background:#fff8ee; color:var(--color-warning); }
-        .concil-pend    { background:var(--color-danger-light); color:var(--color-danger); }
-        .concil-na      { background:var(--color-surface-2); color:var(--color-text-muted); }
-        .informe-row__chevron { color:var(--color-text-muted); transition:transform var(--transition-fast); }
-        .informe-row.open .informe-row__chevron { transform:rotate(180deg); }
+        /* Historial */
+        .inf-row { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); margin-bottom: var(--space-3); overflow: hidden; }
+        .inf-row:hover { box-shadow: var(--shadow-md); }
+        .inf-row__head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4) var(--space-5); cursor: pointer; flex-wrap: wrap; }
+        .inf-row__periodo { font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700; color: var(--color-primary-dark); min-width: 90px; }
+        .tipo-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 2px 8px; border-radius: 99px; }
+        .tipo-mensual { background: var(--color-primary-xlight); color: var(--color-primary); }
+        .tipo-anual   { background: #fff8ee; color: var(--color-warning); }
+        .inf-montos { flex: 1; display: flex; gap: var(--space-4); flex-wrap: wrap; align-items: center; }
+        .m { text-align: center; }
+        .m__l { font-size: 9px; text-transform: uppercase; letter-spacing: .07em; color: var(--color-text-muted); }
+        .m__v { font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700; }
+        .neto-c { color: var(--color-success); }
+        .fee-c  { color: var(--color-danger); }
+        .cb { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 99px; white-space: nowrap; }
+        .cb-ok   { background: var(--color-success-light); color: var(--color-success); }
+        .cb-par  { background: #fff8ee; color: var(--color-warning); }
+        .cb-pend { background: var(--color-danger-light); color: var(--color-danger); }
+        .inf-chev { color: var(--color-text-muted); transition: transform var(--transition-fast); }
+        .inf-row.open .inf-chev { transform: rotate(180deg); }
+        .inf-detail { display: none; padding: 0 var(--space-5) var(--space-5); border-top: 1px solid var(--color-border-light); }
+        .inf-row.open .inf-detail { display: block; }
 
-        /* ── Detalle expandido ─────────────────────────────────── */
-        .informe-detalle {
-            display:none; padding:0 var(--space-5) var(--space-5);
-            border-top:1px solid var(--color-border-light);
-        }
-        .informe-row.open .informe-detalle { display:block; }
+        .ct { width: 100%; border-collapse: collapse; font-size: 12px; margin: var(--space-3) 0; }
+        .ct th { background: var(--color-surface-2); padding: 6px 10px; text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--color-text-muted); border-bottom: 2px solid var(--color-border); }
+        .ct td { padding: 7px 10px; border-bottom: 1px solid var(--color-border-light); }
+        .ct tr:last-child td { border-bottom: none; }
+        .mono { font-family: var(--font-mono); font-weight: 700; }
 
-        /* ── Tabla de cabañas dentro del detalle ───────────────── */
-        .cabana-table { width:100%; border-collapse:collapse; font-size:12px; margin:var(--space-3) 0 var(--space-4); }
-        .cabana-table th {
-            background:var(--color-surface-2); padding:7px 10px;
-            text-align:left; font-size:10px; font-weight:700;
-            text-transform:uppercase; letter-spacing:.06em;
-            color:var(--color-text-muted); border-bottom:2px solid var(--color-border);
-        }
-        .cabana-table td { padding:8px 10px; border-bottom:1px solid var(--color-border-light); vertical-align:middle; }
-        .cabana-table tr:last-child td { border-bottom:none; }
-        .cabana-table tr:hover td { background:var(--color-primary-xlight); }
-        .cabana-table .mono { font-family:var(--font-mono); font-weight:700; }
+        /* Balance */
+        .bal-filter { display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: flex-end; background: var(--color-surface-2); border-radius: var(--radius-md); padding: var(--space-4); margin-bottom: var(--space-4); }
+        .bal-result { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+        .bal-header { background: var(--color-primary-dark); color: white; padding: var(--space-4) var(--space-5); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+        .bal-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: var(--space-3); padding: var(--space-5); }
+        .bk { text-align: center; padding: var(--space-3); background: var(--color-surface-2); border-radius: var(--radius-sm); }
+        .bk__l { font-size: 9px; text-transform: uppercase; letter-spacing: .07em; color: var(--color-text-muted); margin-bottom: 4px; }
+        .bk__v { font-family: var(--font-mono); font-size: var(--text-md); font-weight: 800; }
+        .bal-tabla { padding: 0 var(--space-5) var(--space-5); overflow-x: auto; }
+        .bt { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .bt th { background: var(--color-surface-2); padding: 8px 10px; text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; border-bottom: 2px solid var(--color-border); white-space: nowrap; }
+        .bt td { padding: 8px 10px; border-bottom: 1px solid var(--color-border-light); vertical-align: middle; }
+        .bt tfoot td { font-weight: 700; background: var(--color-success-bg); }
 
-        /* ── Depósitos vinculados ──────────────────────────────── */
-        .deposito-chip {
-            display:inline-flex; align-items:center; gap:6px;
-            background:var(--color-success-light); color:var(--color-success);
-            font-size:11px; font-weight:600; padding:4px 10px; border-radius:99px;
-            margin:2px;
-        }
-        .deposito-chip.pendiente { background:var(--color-danger-light); color:var(--color-danger); }
-        .deposito-chip__remove {
-            background:none; border:none; cursor:pointer; padding:0; line-height:1;
-            color:inherit; font-size:14px; opacity:.7;
-        }
-        .deposito-chip__remove:hover { opacity:1; }
+        /* Modals */
+        .modal-ov { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200; align-items: flex-start; justify-content: center; padding: var(--space-4); overflow-y: auto; }
+        .modal-ov.open { display: flex; }
+        .modal-bx { background: var(--color-surface); border-radius: var(--radius-lg); width: 100%; max-width: 800px; padding: var(--space-6); box-shadow: var(--shadow-xl); margin: auto; }
+        .modal-bx h3 { font-size: var(--text-md); font-weight: 700; margin-bottom: var(--space-4); }
+        .modal-btns { display: flex; gap: var(--space-3); justify-content: flex-end; margin-top: var(--space-5); flex-wrap: wrap; }
 
-        /* ── Formulario de nuevo informe ───────────────────────── */
-        .form-section {
-            background:var(--color-surface);
-            border:1px solid var(--color-border);
-            border-radius:var(--radius-md);
-            padding:var(--space-5);
-            margin-bottom:var(--space-4);
-        }
-        .form-section__title {
-            font-size:var(--text-sm); font-weight:700; color:var(--color-text-secondary);
-            text-transform:uppercase; letter-spacing:.06em;
-            margin-bottom:var(--space-4);
-            display:flex; align-items:center; gap:var(--space-2);
-            padding-bottom:var(--space-3); border-bottom:1px solid var(--color-border-light);
-        }
-        .form-section__title .material-icons { font-size:18px; color:var(--color-primary); }
-        .grid-3 { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:var(--space-3); }
-        .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3); }
-
-        /* ── Tabla de cabañas editable en el formulario ─────────── */
-        .cabana-edit-row { display:grid; gap:var(--space-2); grid-template-columns:2fr repeat(5,1fr); align-items:center; margin-bottom:var(--space-2); }
-        .cabana-edit-row input { font-size:12px; }
-        .cabana-edit-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--color-text-muted); }
-
-        /* ── Totales calculados ─────────────────────────────────── */
-        .calc-box {
-            background:var(--color-primary-xlight); border:1px solid var(--color-primary-light);
-            border-radius:var(--radius-md); padding:var(--space-4);
-            display:flex; gap:var(--space-5); flex-wrap:wrap; align-items:center;
-        }
-        .calc-item { text-align:center; }
-        .calc-item__label { font-size:10px; text-transform:uppercase; letter-spacing:.07em; color:var(--color-text-muted); }
-        .calc-item__val   { font-family:var(--font-mono); font-size:var(--text-md); font-weight:800; color:var(--color-primary); }
-
-        /* ── Alerta de integración ──────────────────────────────── */
-        .integ-card {
-            border:1.5px dashed var(--color-primary-light);
-            border-radius:var(--radius-md);
-            padding:var(--space-4);
-            background:var(--color-primary-xlight);
-            margin-bottom:var(--space-3);
-        }
-        .integ-card__title { font-size:var(--text-sm); font-weight:700; color:var(--color-primary-dark); margin-bottom:6px; display:flex; align-items:center; gap:6px; }
-        .integ-card p { font-size:var(--text-xs); color:var(--color-text-secondary); line-height:1.6; }
-
-        /* ── Modal ──────────────────────────────────────────────── */
-        .modal-overlay {
-            display:none; position:fixed; inset:0;
-            background:rgba(0,0,0,.5);
-            z-index:200; align-items:center; justify-content:center;
-        }
-        .modal-overlay.open { display:flex; }
-        .modal-box {
-            background:var(--color-surface); border-radius:var(--radius-lg);
-            width:92%; max-width:560px; max-height:90vh; overflow-y:auto;
-            padding:var(--space-6); box-shadow:var(--shadow-xl);
-        }
-        .modal-box h3 { font-size:var(--text-md); font-weight:700; margin-bottom:var(--space-4); }
-        .modal-btns { display:flex; gap:var(--space-3); justify-content:flex-end; margin-top:var(--space-5); flex-wrap:wrap; }
-
-        /* ── Próximos pasos ─────────────────────────────────────── */
-        .roadmap-item {
-            background:var(--color-surface);
-            border:1px solid var(--color-border);
-            border-left:4px solid var(--color-primary-light);
-            border-radius:var(--radius-md);
-            padding:var(--space-4) var(--space-5);
-            margin-bottom:var(--space-3);
-        }
-        .roadmap-item.phase-2 { border-left-color:var(--color-warning); }
-        .roadmap-item.phase-3 { border-left-color:var(--color-success); }
-        .roadmap-item__title { font-size:var(--text-sm); font-weight:700; margin-bottom:6px; display:flex; align-items:center; gap:8px; }
-        .roadmap-item p { font-size:var(--text-xs); color:var(--color-text-secondary); line-height:1.6; margin-bottom:4px; }
-        .roadmap-item code { font-family:var(--font-mono); font-size:11px; background:var(--color-surface-2); padding:1px 5px; border-radius:3px; }
-
-        @media(max-width:600px) {
-            .cabana-edit-row { grid-template-columns:1fr 1fr; }
-            .informe-row__montos { gap:var(--space-3); }
-            .kpi-strip { grid-template-columns:1fr 1fr; }
+        @media (max-width: 600px) {
+            .kpi-strip { grid-template-columns: 1fr 1fr; }
+            .cab-edit th:nth-child(n+5), .cab-edit td:nth-child(n+5) { display: none; }
         }
     </style>
 </head>
 <body>
 
-<!-- ── HEADER ──────────────────────────────────────────────── -->
 <header class="admin-header">
-    <div class="admin-header__brand">
-        <span class="material-icons">cottage</span>
-        Casa Verde Canas
-    </div>
+    <div class="admin-header__brand"><span class="material-icons">cottage</span>Casa Verde Canas</div>
     <div class="admin-header__actions">
-        <div class="user-chip">
-            <span class="material-icons">person</span>
-            <span id="userName">—</span>
-        </div>
-        <button class="btn-logout" onclick="CVC.cerrarSesion()">
-            <span class="material-icons">logout</span>Salir
-        </button>
+        <div class="user-chip"><span class="material-icons">person</span><span id="userName">—</span></div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()"><span class="material-icons">logout</span>Salir</button>
     </div>
 </header>
-
 <nav class="admin-nav" id="appNav"></nav>
 
-<!-- ── CONTENIDO ───────────────────────────────────────────── -->
 <main class="admin-content">
-    <div class="card">
-        <div class="card__header">
-            <h2 class="card__title">
-                <span style="color:#ff5a5f; font-size:20px; margin-right:4px;">⬤</span>
-                Informes Airbnb
-            </h2>
-            <button class="btn btn-primary" onclick="abrirNuevoInforme()">
-                <span class="material-icons">add</span> Cargar informe
-            </button>
+<div class="card">
+    <div class="card__header">
+        <h2 class="card__title"><span style="color:#ff5a5f">⬤</span> Informes Airbnb</h2>
+        <button class="btn btn-primary" onclick="abrirImport()">
+            <span class="material-icons">upload_file</span> Importar PDF
+        </button>
+    </div>
+
+    <div class="kpi-strip">
+        <div class="kpi red"><div class="kpi__label">Neto histórico</div><div class="kpi__val" id="kNeto">—</div><div class="kpi__sub" id="kNetoSub">—</div></div>
+        <div class="kpi"><div class="kpi__label">Comisión Airbnb</div><div class="kpi__val" id="kComis">—</div><div class="kpi__sub" id="kComisSub">—</div></div>
+        <div class="kpi warn"><div class="kpi__label">Imp. Airbnb al fisco</div><div class="kpi__val" id="kImp">—</div><div class="kpi__sub">Pagado a autoridades</div></div>
+        <div class="kpi ok"><div class="kpi__label">Noches vendidas</div><div class="kpi__val" id="kNoches">—</div><div class="kpi__sub" id="kNochesSub">—</div></div>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="doTab('historial',this)"><span class="material-icons" style="font-size:16px">history</span>Historial</button>
+        <button class="tab-btn" onclick="doTab('balance',this)"><span class="material-icons" style="font-size:16px">bar_chart</span>Balance por período</button>
+        <button class="tab-btn" onclick="doTab('cabanas',this)"><span class="material-icons" style="font-size:16px">cottage</span>Por cabaña</button>
+    </div>
+
+    <div class="tab-panel active" id="tab-historial">
+        <div id="histCont"><div class="state-loading"><div class="spinner"></div><span>Cargando…</span></div></div>
+    </div>
+
+    <div class="tab-panel" id="tab-balance">
+        <div class="bal-filter">
+            <div class="field-item"><label>Desde</label><input type="month" id="bDesde" class="form-control"></div>
+            <div class="field-item"><label>Hasta</label><input type="month" id="bHasta" class="form-control"></div>
+            <button class="btn btn-primary" onclick="calcBal()"><span class="material-icons">bar_chart</span>Calcular</button>
         </div>
+        <div id="balResult"></div>
+    </div>
 
-        <!-- KPIs globales -->
-        <div class="kpi-strip" id="kpiStrip">
-            <div class="kpi airbnb">
-                <div class="kpi__label">Total neto histórico</div>
-                <div class="kpi__val" id="kpiTotalNeto">—</div>
-                <div class="kpi__sub" id="kpiTotalSub">—</div>
-            </div>
-            <div class="kpi">
-                <div class="kpi__label">Comisión Airbnb total</div>
-                <div class="kpi__val" id="kpiComision">—</div>
-                <div class="kpi__sub" id="kpiComisionPct">—</div>
-            </div>
-            <div class="kpi warn">
-                <div class="kpi__label">Impuesto liquidado Airbnb</div>
-                <div class="kpi__val" id="kpiImpuesto">—</div>
-                <div class="kpi__sub">Pagado a autoridades fiscales</div>
-            </div>
-            <div class="kpi ok" id="kpiConcilCard">
-                <div class="kpi__label">Depósitos conciliados</div>
-                <div class="kpi__val" id="kpiConcil">—</div>
-                <div class="kpi__sub" id="kpiConcilSub">—</div>
-            </div>
-        </div>
-
-        <!-- Tabs -->
-        <div class="tabs">
-            <button class="tab-btn active" onclick="cambiarTab('historial', this)">
-                <span class="material-icons" style="font-size:16px;">history</span> Historial
-            </button>
-            <button class="tab-btn" onclick="cambiarTab('cabanas', this)">
-                <span class="material-icons" style="font-size:16px;">cottage</span> Por cabaña
-            </button>
-            <button class="tab-btn" onclick="cambiarTab('roadmap', this)">
-                <span class="material-icons" style="font-size:16px;">map</span> Próximos pasos
-            </button>
-        </div>
-
-        <!-- TAB: Historial ──────────────────────────────────── -->
-        <div class="tab-panel active" id="tab-historial">
-            <div id="informesContainer">
-                <div class="empty-state">
-                    <span class="material-icons">cloud_download</span>
-                    <p>Cargando informes…</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- TAB: Por cabaña ─────────────────────────────────── -->
-        <div class="tab-panel" id="tab-cabanas">
-            <div id="cabanaResumenContainer"></div>
-        </div>
-
-        <!-- TAB: Próximos pasos ─────────────────────────────── -->
-        <div class="tab-panel" id="tab-roadmap">
-            <div style="max-width:720px;">
-
-                <div class="integ-card" style="margin-bottom:var(--space-5);">
-                    <div class="integ-card__title">
-                        <span class="material-icons" style="font-size:16px;">info</span>
-                        Arquitectura de integración — estado actual
-                    </div>
-                    <p>Esta página es el <strong>núcleo financiero de Airbnb</strong>. Cada informe cargado aquí genera los datos que alimentan el balance en Finanzas y permite la conciliación con los extractos bancarios de Cuentas.</p>
-                    <p style="margin-top:6px;">Las claves de integración ya están en cada documento: <code>periodo</code>, <code>cuentaId</code>, <code>movimientoId</code>, <code>estado_conciliacion</code>. Esos campos permiten construir los siguientes módulos sin migrar datos.</p>
-                </div>
-
-                <div class="roadmap-item">
-                    <div class="roadmap-item__title">
-                        <span class="material-icons" style="font-size:16px; color:var(--color-primary);">check_circle</span>
-                        Fase actual — Registro de informes (ya operativo)
-                    </div>
-                    <p>✅ Colección <code>informes_airbnb</code> con todos los campos necesarios para conciliación futura.</p>
-                    <p>✅ Vinculación a cuenta bancaria (<code>cuentaId</code> + <code>movimientoId</code>).</p>
-                    <p>✅ Estado de conciliación por informe: pendiente / parcial / conciliado.</p>
-                    <p>✅ Desglose por cabaña con neto individual, tarifa servicio e impuesto Airbnb.</p>
-                </div>
-
-                <div class="roadmap-item phase-2">
-                    <div class="roadmap-item__title">
-                        <span class="material-icons" style="font-size:16px; color:var(--color-warning);">pending</span>
-                        Fase 2 — Integración con Finanzas (pagos.html)
-                    </div>
-                    <p><strong>Qué hacer:</strong> Agregar una pestaña "Liquidaciones Airbnb" en <code>pagos.html</code> que lea <code>informes_airbnb</code> y sume <code>total_neto</code> al balance del mes.</p>
-                    <p><strong>Cambio en código:</strong> En <code>renderBalance()</code>, agregar: <code>const airbnb = sum(informes del mes → total_neto)</code>. El campo <code>periodo</code> (YYYY-MM) ya permite filtrar por mes.</p>
-                    <p><strong>Resultado:</strong> El balance de Finanzas mostrará: Ingresos directos + Ingresos Airbnb − Egresos − Honorarios.</p>
-                </div>
-
-                <div class="roadmap-item phase-2">
-                    <div class="roadmap-item__title">
-                        <span class="material-icons" style="font-size:16px; color:var(--color-warning);">pending</span>
-                        Fase 2b — Conciliación bancaria en Cuentas (cuentas.html / movimientos.html)
-                    </div>
-                    <p><strong>Qué hacer:</strong> En <code>movimientos.html</code>, cuando el admin visualiza un depósito, permitir marcarlo como "Este depósito es el pago de Airbnb del período X". Eso guarda <code>movimientoId</code> e <code>informeId</code> en ambos documentos.</p>
-                    <p><strong>Campo ya preparado:</strong> <code>movimientoId</code> en cada informe Airbnb. Solo falta la UI de matching en movimientos.html.</p>
-                    <p><strong>Resultado:</strong> Ver en esta página si cada informe tiene su depósito confirmado en la cuenta bancaria.</p>
-                </div>
-
-                <div class="roadmap-item phase-3">
-                    <div class="roadmap-item__title">
-                        <span class="material-icons" style="font-size:16px; color:var(--color-success);">rocket_launch</span>
-                        Fase 3 — Dashboard consolidado
-                    </div>
-                    <p><strong>Qué hacer:</strong> Agregar en <code>dashboard.html</code> un bloque "Airbnb este mes" que muestre: reservas activas, neto esperado del informe del mes, y si el depósito ya fue conciliado.</p>
-                    <p><strong>Dato nuevo en reservas:</strong> Agregar <code>airbnb_informe_periodo</code> al completar cada reserva Airbnb → permite cruzar reservas individuales con el informe mensual correspondiente.</p>
-                    <p><strong>Resultado:</strong> Vista unificada: reservas → informe → depósito → balance. Sin saltar entre páginas.</p>
-                </div>
-
-                <div class="roadmap-item phase-3">
-                    <div class="roadmap-item__title">
-                        <span class="material-icons" style="font-size:16px; color:var(--color-success);">auto_awesome</span>
-                        Fase 4 — Datos en reservas individuales (opcional pero recomendado)
-                    </div>
-                    <p>Agregar en el modal "Completar reserva Airbnb" de <code>reservas.html</code> los campos: <code>airbnb_ingreso_bruto</code>, <code>airbnb_tarifa_servicio</code>, <code>airbnb_neto</code>.</p>
-                    <p>Esto permite ver el ingreso real por cada estadía individual, en vez de solo el consolidado mensual. Los datos ya existen en el PDF de Airbnb a nivel de alojamiento.</p>
-                    <p><strong>Nota:</strong> Si los montos por reserva no están disponibles en el PDF (solo están los totales por cabaña/mes), esta fase queda como referencia opcional.</p>
-                </div>
-
-            </div>
-        </div>
-    </div><!-- /card -->
+    <div class="tab-panel" id="tab-cabanas">
+        <div id="cabCont"></div>
+    </div>
+</div>
 </main>
 
-<!-- ═══════════════════════════════════════════════════════════ -->
-<!-- MODAL: Nuevo informe                                        -->
-<!-- ═══════════════════════════════════════════════════════════ -->
-<div class="modal-overlay" id="modalInforme" onclick="cerrarModal(event)">
-    <div class="modal-box">
-        <h3 id="modalTitulo">Cargar informe Airbnb</h3>
+<!-- ═══ MODAL IMPORTAR PDF ════════════════════════════════════ -->
+<div class="modal-ov" id="mImport" onclick="cImport(event)">
+<div class="modal-bx">
+    <h3>📄 Importar informe Airbnb — PDF</h3>
+    <p class="text-muted text-xs" style="margin-bottom:var(--space-4)">Subí el PDF. La IA lee todos los campos automáticamente. Revisalos y guardá.</p>
 
-        <!-- Paso 1: Período y tipo -->
-        <div id="paso1">
-            <div class="form-section">
-                <div class="form-section__title">
-                    <span class="material-icons">calendar_month</span>
-                    Identificación del informe
-                </div>
-                <div class="grid-3">
-                    <div class="form-group">
-                        <label class="form-label">Tipo de informe</label>
-                        <select id="iTipo" class="form-control" onchange="actualizarCampoPeriodo()">
-                            <option value="mensual">Mensual</option>
-                            <option value="anual">Anual</option>
-                        </select>
-                    </div>
-                    <div class="form-group" id="grupoMes">
-                        <label class="form-label">Mes</label>
-                        <select id="iMes" class="form-control">
-                            <option value="01">Enero</option><option value="02">Febrero</option>
-                            <option value="03">Marzo</option><option value="04">Abril</option>
-                            <option value="05">Mayo</option><option value="06">Junio</option>
-                            <option value="07">Julio</option><option value="08">Agosto</option>
-                            <option value="09">Septiembre</option><option value="10">Octubre</option>
-                            <option value="11">Noviembre</option><option value="12">Diciembre</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Año</label>
-                        <select id="iAnio" class="form-control">
-                            <option value="2024">2024</option>
-                            <option value="2025">2025</option>
-                            <option value="2026" selected>2026</option>
-                        </select>
-                    </div>
-                </div>
+    <div class="upload-zone" id="upZone">
+        <input type="file" accept=".pdf" id="pdfIn" onchange="procesarPDF(this.files[0])">
+        <div class="upload-zone__icon">📄</div>
+        <div class="upload-zone__title">Arrastrá el PDF aquí o hacé clic para seleccionar</div>
+        <div class="upload-zone__sub">Informe mensual o anual de Airbnb · Solo archivos PDF</div>
+    </div>
+
+    <div class="log-box" id="logBox"></div>
+
+    <div class="preview-card" id="prevCard">
+        <div class="preview-card__header">
+            <h3 id="prevTitulo">Datos extraídos</h3>
+            <span style="font-size:11px;opacity:.7">Revisá y editá antes de guardar</span>
+        </div>
+        <div class="preview-card__body">
+            <div class="sec-label"><span class="material-icons">calendar_month</span>Período</div>
+            <div class="fields-grid">
+                <div class="field-item"><label>Tipo</label><select id="eTipo" onchange="updPeriodo()"><option value="mensual">Mensual</option><option value="anual">Anual</option></select></div>
+                <div class="field-item" id="grpMes"><label>Mes</label><select id="eMes"><option value="01">Enero</option><option value="02">Febrero</option><option value="03">Marzo</option><option value="04">Abril</option><option value="05">Mayo</option><option value="06">Junio</option><option value="07">Julio</option><option value="08">Agosto</option><option value="09">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option></select></div>
+                <div class="field-item"><label>Año</label><select id="eAnio"><option value="2024">2024</option><option value="2025">2025</option><option value="2026" selected>2026</option></select></div>
+                <div class="field-item"><label>Anfitrión</label><input type="text" id="eAnf" value="Florencia De Tezanos Pinto"></div>
             </div>
 
-            <!-- Totales del período -->
-            <div class="form-section">
-                <div class="form-section__title">
-                    <span class="material-icons">summarize</span>
-                    Totales del período (del PDF de Airbnb)
-                </div>
-                <div class="grid-3">
-                    <div class="form-group">
-                        <label class="form-label">Ingresos brutos (R$)</label>
-                        <input type="number" id="iIngresoBruto" class="form-control" step="0.01" min="0" placeholder="0.00" oninput="recalcularTotales()">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Ajustes / cancelaciones (R$)</label>
-                        <input type="number" id="iAjustes" class="form-control" step="0.01" placeholder="0.00" oninput="recalcularTotales()">
-                        <p class="form-hint">Negativo si es descuento</p>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Tarifa servicio Airbnb (R$)</label>
-                        <input type="number" id="iTarifaServicio" class="form-control" step="0.01" placeholder="-0.00" oninput="recalcularTotales()">
-                        <p class="form-hint">Ingresar en negativo</p>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Total neto recibido (R$)</label>
-                        <input type="number" id="iTotalNeto" class="form-control" step="0.01" placeholder="0.00" style="font-weight:700; color:var(--color-success);">
-                        <p class="form-hint">Verificar que coincida con el PDF</p>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Impuesto liquidado por Airbnb (R$)</label>
-                        <input type="number" id="iImpuesto" class="form-control" step="0.01" placeholder="0.00">
-                        <p class="form-hint">Lo que Airbnb pagó al fisco</p>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Noches reservadas</label>
-                        <input type="number" id="iNoches" class="form-control" step="1" min="0" placeholder="0">
-                    </div>
-                </div>
-
-                <!-- Totales calculados (verificación) -->
-                <div class="calc-box" id="calcBox" style="margin-top:var(--space-3);">
-                    <div class="calc-item">
-                        <div class="calc-item__label">Neto calculado</div>
-                        <div class="calc-item__val" id="calcNeto">R$ —</div>
-                    </div>
-                    <div class="calc-item">
-                        <div class="calc-item__label">Diferencia con PDF</div>
-                        <div class="calc-item__val" id="calcDif" style="color:var(--color-text-muted);">—</div>
-                    </div>
-                    <div class="calc-item">
-                        <div class="calc-item__label">% Comisión Airbnb</div>
-                        <div class="calc-item__val" id="calcPct">—</div>
-                    </div>
-                </div>
+            <div class="sec-label"><span class="material-icons">summarize</span>Totales del período</div>
+            <div class="fields-grid">
+                <div class="field-item"><label>Ingresos brutos (R$)</label><input type="number" id="eBruto" step="0.01" oninput="recalc()"></div>
+                <div class="field-item"><label>Ajustes (R$)</label><input type="number" id="eAjustes" step="0.01" placeholder="0" oninput="recalc()"></div>
+                <div class="field-item"><label>Tarifa servicio (R$)</label><input type="number" id="eTarifa" step="0.01" class="fee" oninput="recalc()"><small style="font-size:10px;color:var(--color-text-muted)">Negativo</small></div>
+                <div class="field-item"><label>Total neto recibido (R$)</label><input type="number" id="eNeto" step="0.01" class="neto" oninput="recalc()"></div>
+                <div class="field-item"><label>Impuesto Airbnb (R$)</label><input type="number" id="eImp" step="0.01"></div>
+                <div class="field-item"><label>Noches reservadas</label><input type="number" id="eNoches" step="1" min="0"></div>
             </div>
 
-            <!-- Desglose por cabaña -->
-            <div class="form-section">
-                <div class="form-section__title">
-                    <span class="material-icons">cottage</span>
-                    Desglose por cabaña
-                </div>
-
-                <!-- Headers de columnas -->
-                <div class="cabana-edit-row" style="margin-bottom:var(--space-1);">
-                    <span class="cabana-edit-label">Cabaña</span>
-                    <span class="cabana-edit-label">Bruto (R$)</span>
-                    <span class="cabana-edit-label">Tarifa (R$)</span>
-                    <span class="cabana-edit-label">Neto (R$)</span>
-                    <span class="cabana-edit-label">Imp. Airbnb (R$)</span>
-                    <span class="cabana-edit-label">Noches</span>
-                </div>
-
-                <!-- Fila: Cabaña 1 -->
-                <div class="cabana-edit-row">
-                    <span style="font-size:var(--text-xs); font-weight:600;">🌳 Cabaña (C1)</span>
-                    <input type="number" class="form-control" id="c1_bruto" step="0.01" placeholder="0.00">
-                    <input type="number" class="form-control" id="c1_tarifa" step="0.01" placeholder="-0.00">
-                    <input type="number" class="form-control" id="c1_neto" step="0.01" placeholder="0.00">
-                    <input type="number" class="form-control" id="c1_imp" step="0.01" placeholder="0.00">
-                    <input type="number" class="form-control" id="c1_noches" step="1" placeholder="0">
-                </div>
-                <!-- Fila: Cabaña 2 -->
-                <div class="cabana-edit-row">
-                    <span style="font-size:var(--text-xs); font-weight:600;">🏠 Dpto. Familias (C2)</span>
-                    <input type="number" class="form-control" id="c2_bruto" step="0.01" placeholder="0.00">
-                    <input type="number" class="form-control" id="c2_tarifa" step="0.01" placeholder="-0.00">
-                    <input type="number" class="form-control" id="c2_neto" step="0.01" placeholder="0.00">
-                    <input type="number" class="form-control" id="c2_imp" step="0.01" placeholder="0.00">
-                    <input type="number" class="form-control" id="c2_noches" step="1" placeholder="0">
-                </div>
-                <!-- Fila: Cabaña 3 -->
-                <div class="cabana-edit-row">
-                    <span style="font-size:var(--text-xs); font-weight:600;">🏖️ Loft Canasvieiras (C3)</span>
-                    <input type="number" class="form-control" id="c3_bruto" step="0.01" placeholder="0.00">
-                    <input type="number" class="form-control" id="c3_tarifa" step="0.01" placeholder="-0.00">
-                    <input type="number" class="form-control" id="c3_neto" step="0.01" placeholder="0.00">
-                    <input type="number" class="form-control" id="c3_imp" step="0.01" placeholder="0.00">
-                    <input type="number" class="form-control" id="c3_noches" step="1" placeholder="0">
-                </div>
+            <div class="verif-row">
+                <div class="verif-item"><div class="verif-item__label">Calculado</div><div class="verif-item__val" id="vCalc">—</div></div>
+                <div class="verif-item"><div class="verif-item__label">Del PDF</div><div class="verif-item__val" id="vPDF">—</div></div>
+                <div class="verif-item"><div class="verif-item__label">Diferencia</div><div class="verif-item__val" id="vDif">—</div></div>
+                <div class="verif-item"><div class="verif-item__label">% Comisión</div><div class="verif-item__val" id="vPct">—</div></div>
             </div>
 
-            <!-- Vinculación a cuenta bancaria -->
-            <div class="form-section">
-                <div class="form-section__title">
-                    <span class="material-icons">account_balance</span>
-                    Depósito en cuenta bancaria
-                </div>
-                <p class="text-muted text-xs" style="margin-bottom:var(--space-3);">
-                    Indicá en qué cuenta fue depositado el pago de Airbnb para este período. Esto permite la conciliación con los movimientos bancarios.
-                </p>
-                <div class="grid-2">
-                    <div class="form-group">
-                        <label class="form-label">Cuenta bancaria receptora</label>
-                        <select id="iCuentaId" class="form-control">
-                            <option value="">— Sin asignar todavía —</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Estado de conciliación</label>
-                        <select id="iEstadoConcil" class="form-control">
-                            <option value="pendiente">⏳ Pendiente — aún no conciliado</option>
-                            <option value="parcial">🟡 Parcial — depósito recibido, sin confirmar</option>
-                            <option value="conciliado">✅ Conciliado — depósito confirmado en extracto</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Notas sobre el depósito</label>
-                    <input type="text" id="iNotasConcil" class="form-control" placeholder="Ej: Depósito recibido 15/01/2026 · Ref: AIRBNB-xxxxx">
-                </div>
+            <div class="sec-label"><span class="material-icons">cottage</span>Desglose por cabaña</div>
+            <div style="overflow-x:auto">
+            <table class="cab-edit">
+                <thead><tr><th>Cabaña</th><th>Bruto (R$)</th><th>Tarifa (R$)</th><th>Neto (R$)</th><th>Imp. (R$)</th><th>Noches</th><th>Prom.</th></tr></thead>
+                <tbody>
+                    <tr><td class="cab-name">🌳 Cabaña C1</td><td><input type="number" id="c1b" step="0.01" placeholder="0"></td><td><input type="number" id="c1t" step="0.01" placeholder="-0"></td><td><input type="number" id="c1n" step="0.01" placeholder="0"></td><td><input type="number" id="c1i" step="0.01" placeholder="0"></td><td><input type="number" id="c1no" step="1" placeholder="0"></td><td><input type="number" id="c1pn" step="0.1" placeholder="0"></td></tr>
+                    <tr><td class="cab-name">🏠 Dpto. C2</td><td><input type="number" id="c2b" step="0.01" placeholder="0"></td><td><input type="number" id="c2t" step="0.01" placeholder="-0"></td><td><input type="number" id="c2n" step="0.01" placeholder="0"></td><td><input type="number" id="c2i" step="0.01" placeholder="0"></td><td><input type="number" id="c2no" step="1" placeholder="0"></td><td><input type="number" id="c2pn" step="0.1" placeholder="0"></td></tr>
+                    <tr><td class="cab-name">🏖️ Loft C3</td><td><input type="number" id="c3b" step="0.01" placeholder="0"></td><td><input type="number" id="c3t" step="0.01" placeholder="-0"></td><td><input type="number" id="c3n" step="0.01" placeholder="0"></td><td><input type="number" id="c3i" step="0.01" placeholder="0"></td><td><input type="number" id="c3no" step="1" placeholder="0"></td><td><input type="number" id="c3pn" step="0.1" placeholder="0"></td></tr>
+                </tbody>
+            </table>
             </div>
 
-            <div id="modalError" class="alert alert-error" style="display:none; margin-bottom:var(--space-3);">
-                <span class="material-icons">error_outline</span>
-                <span id="modalErrorText"></span>
+            <div class="sec-label"><span class="material-icons">account_balance</span>Depósito bancario</div>
+            <div class="fields-grid">
+                <div class="field-item" style="grid-column:span 2"><label>Cuenta receptora</label><select id="eCuenta" class="form-control"><option value="">— Sin asignar —</option></select></div>
+                <div class="field-item"><label>Estado conciliación</label><select id="eConcil" class="form-control"><option value="pendiente">⏳ Pendiente</option><option value="parcial">🟡 Parcial</option><option value="conciliado">✅ Conciliado</option></select></div>
+                <div class="field-item" style="grid-column:span 3"><label>Referencia del depósito</label><input type="text" id="eNotas" placeholder="Ej: Depósito 15/01 · Ref AIRBNB-xxxx"></div>
             </div>
 
-            <div class="modal-btns">
-                <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
-                <button class="btn btn-primary" onclick="guardarInforme()">
-                    <span class="material-icons">save</span>
-                    <span id="btnGuardarText">Guardar informe</span>
-                </button>
+            <div class="alert alert-error" id="impErr" style="display:none;margin-top:var(--space-3)">
+                <span class="material-icons">error_outline</span><span id="impErrTxt"></span>
             </div>
         </div>
     </div>
-</div>
 
-<!-- ═══════════════════════════════════════════════════════════ -->
-<!-- MODAL: Vinculación de depósito                              -->
-<!-- ═══════════════════════════════════════════════════════════ -->
-<div class="modal-overlay" id="modalDeposito" onclick="cerrarModalDeposito(event)">
-    <div class="modal-box" style="max-width:460px;">
-        <h3>Actualizar conciliación</h3>
-        <input type="hidden" id="dInformeId">
-        <div class="form-group">
-            <label class="form-label">Cuenta bancaria</label>
-            <select id="dCuentaId" class="form-control"></select>
-        </div>
-        <div class="form-group">
-            <label class="form-label">Estado</label>
-            <select id="dEstado" class="form-control">
-                <option value="pendiente">⏳ Pendiente</option>
-                <option value="parcial">🟡 Parcial</option>
-                <option value="conciliado">✅ Conciliado</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label class="form-label">Notas / referencia del depósito</label>
-            <input type="text" id="dNotas" class="form-control" placeholder="Ref bancaria, fecha del depósito, etc.">
-        </div>
-        <div class="modal-btns">
-            <button class="btn btn-ghost" onclick="cerrarModalDeposito()">Cancelar</button>
-            <button class="btn btn-primary" onclick="guardarDeposito()">
-                <span class="material-icons">save</span> Guardar
-            </button>
-        </div>
+    <div class="modal-btns">
+        <button class="btn btn-ghost" onclick="cImport()">Cancelar</button>
+        <button class="btn btn-primary" id="btnGuardar" onclick="guardar()" disabled>
+            <span class="material-icons">save</span><span id="btnTxt">Guardar en Firestore</span>
+        </button>
     </div>
 </div>
+</div>
 
-<!-- ── SCRIPTS ──────────────────────────────────────────────── -->
+<!-- ═══ MODAL EDITAR ══════════════════════════════════════════ -->
+<div class="modal-ov" id="mEditar" onclick="cEditar(event)">
+<div class="modal-bx">
+    <h3 id="editTit">Editar informe</h3>
+    <input type="hidden" id="editId">
+
+    <div class="sec-label"><span class="material-icons">summarize</span>Totales</div>
+    <div class="fields-grid">
+        <div class="field-item"><label>Ingresos brutos (R$)</label><input type="number" id="xBruto" step="0.01" oninput="recalcX()"></div>
+        <div class="field-item"><label>Ajustes (R$)</label><input type="number" id="xAjustes" step="0.01" oninput="recalcX()"></div>
+        <div class="field-item"><label>Tarifa servicio (R$)</label><input type="number" id="xTarifa" step="0.01" class="fee" oninput="recalcX()"></div>
+        <div class="field-item"><label>Total neto (R$)</label><input type="number" id="xNeto" step="0.01" class="neto" oninput="recalcX()"></div>
+        <div class="field-item"><label>Impuesto Airbnb (R$)</label><input type="number" id="xImp" step="0.01"></div>
+        <div class="field-item"><label>Noches reservadas</label><input type="number" id="xNoches" step="1"></div>
+    </div>
+    <div class="verif-row">
+        <div class="verif-item"><div class="verif-item__label">Calculado</div><div class="verif-item__val" id="xvCalc">—</div></div>
+        <div class="verif-item"><div class="verif-item__label">Del PDF</div><div class="verif-item__val" id="xvPDF">—</div></div>
+        <div class="verif-item"><div class="verif-item__label">Diferencia</div><div class="verif-item__val" id="xvDif">—</div></div>
+    </div>
+
+    <div class="sec-label"><span class="material-icons">cottage</span>Desglose por cabaña</div>
+    <div style="overflow-x:auto">
+    <table class="cab-edit">
+        <thead><tr><th>Cabaña</th><th>Bruto</th><th>Tarifa</th><th>Neto</th><th>Imp.</th><th>Noches</th><th>Prom.</th></tr></thead>
+        <tbody>
+            <tr><td class="cab-name">🌳 C1</td><td><input type="number" id="x1b" step="0.01"></td><td><input type="number" id="x1t" step="0.01"></td><td><input type="number" id="x1n" step="0.01"></td><td><input type="number" id="x1i" step="0.01"></td><td><input type="number" id="x1no" step="1"></td><td><input type="number" id="x1pn" step="0.1"></td></tr>
+            <tr><td class="cab-name">🏠 C2</td><td><input type="number" id="x2b" step="0.01"></td><td><input type="number" id="x2t" step="0.01"></td><td><input type="number" id="x2n" step="0.01"></td><td><input type="number" id="x2i" step="0.01"></td><td><input type="number" id="x2no" step="1"></td><td><input type="number" id="x2pn" step="0.1"></td></tr>
+            <tr><td class="cab-name">🏖️ C3</td><td><input type="number" id="x3b" step="0.01"></td><td><input type="number" id="x3t" step="0.01"></td><td><input type="number" id="x3n" step="0.01"></td><td><input type="number" id="x3i" step="0.01"></td><td><input type="number" id="x3no" step="1"></td><td><input type="number" id="x3pn" step="0.1"></td></tr>
+        </tbody>
+    </table>
+    </div>
+
+    <div class="sec-label"><span class="material-icons">account_balance</span>Depósito bancario</div>
+    <div class="fields-grid">
+        <div class="field-item" style="grid-column:span 2"><label>Cuenta receptora</label><select id="xCuenta" class="form-control"><option value="">— Sin asignar —</option></select></div>
+        <div class="field-item"><label>Estado conciliación</label><select id="xConcil" class="form-control"><option value="pendiente">⏳ Pendiente</option><option value="parcial">🟡 Parcial</option><option value="conciliado">✅ Conciliado</option></select></div>
+        <div class="field-item" style="grid-column:span 3"><label>Referencia</label><input type="text" id="xNotas" placeholder="Referencia del depósito…"></div>
+    </div>
+
+    <div class="modal-btns">
+        <button class="btn btn-danger btn-sm" onclick="eliminar()">Eliminar</button>
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost" onclick="cEditar()">Cancelar</button>
+        <button class="btn btn-primary" onclick="actualizar()"><span class="material-icons">save</span>Guardar cambios</button>
+    </div>
+</div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="utils.js"></script>
 <script>
 (async () => {
-    const { user, userData } = await CVC.verificarAuth('admin');
-    document.getElementById('userName').textContent = userData.nombre || user.email;
-    CVC.renderNav('informes-airbnb.html');
+const { user, userData } = await CVC.verificarAuth('admin');
+document.getElementById('userName').textContent = userData.nombre || user.email;
+CVC.renderNav('informes-airbnb.html');
 
-    const db = CVC.db;
-    const { escapeHtml, showToast, showEmpty } = CVC;
+const db = CVC.db;
+const { escapeHtml, showToast, showEmpty } = CVC;
 
-    // ─── CACHÉ ───────────────────────────────────────────────
-    let informesCache = [];
-    let cuentasCache  = [];
+let informes = [], cuentas = [];
 
-    // Mapeo ID cabaña → nombre Airbnb del PDF
-    const NOMBRE_AIRBNB = {
-        1: 'Cabaña confortable y amplia rodeada de arboles',
-        2: 'Departamento ideal para familias',
-        3: 'Loft en Canasvieiras cerquita de la playa'
-    };
+const NOMB = {
+    1:'Cabaña confortable y amplia rodeada de arboles',
+    2:'Departamento ideal para familias',
+    3:'Loft en Canasvieiras cerquita de la playa'
+};
+const MESES = {1:'Enero',2:'Febrero',3:'Marzo',4:'Abril',5:'Mayo',6:'Junio',
+               7:'Julio',8:'Agosto',9:'Septiembre',10:'Octubre',11:'Noviembre',12:'Diciembre'};
 
-    const fmtBRL = n =>
-        'R$ ' + (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const R  = n => 'R$ '+(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const pct= (n,d) => d ? (Math.abs(n)/d*100).toFixed(1)+'%':'—';
+const vn = id => parseFloat(document.getElementById(id)?.value)||0;
+const sv = (id,val) => { const el=document.getElementById(id); if(el) el.value=val??''; };
 
-    const fmtPct = (n, total) =>
-        total ? (Math.abs(n) / total * 100).toFixed(1) + '%' : '—';
+// ── CARGA ─────────────────────────────────────────────────────
+async function cargar() {
+    const [iS, cS] = await Promise.all([
+        db.collection('informes_airbnb').orderBy('periodo','desc').get(),
+        db.collection('cuentas').orderBy('orden').get()
+    ]);
+    informes = iS.docs.map(d=>({id:d.id,...d.data()}));
+    cuentas  = cS.docs.map(d=>({id:d.id,...d.data()}));
+    ['eCuenta','xCuenta'].forEach(poblarC);
+    renderKPIs(); renderHist(); renderCabs();
+    const h=new Date();
+    document.getElementById('bDesde').value=`${h.getFullYear()-1}-01`;
+    document.getElementById('bHasta').value=`${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}`;
+}
 
-    // ─── CARGA INICIAL ────────────────────────────────────────
-    async function cargarTodo() {
-        try {
-            const [infSnap, cuentaSnap] = await Promise.all([
-                db.collection('informes_airbnb').orderBy('periodo', 'desc').get(),
-                db.collection('cuentas').orderBy('orden').get()
-            ]);
+function poblarC(sel) {
+    const el=document.getElementById(sel); if(!el) return;
+    const prev=el.value;
+    el.innerHTML='<option value="">— Sin asignar —</option>'+
+        cuentas.map(c=>`<option value="${c.id}">${escapeHtml(c.nombre)} (${c.moneda})</option>`).join('');
+    if(prev) el.value=prev;
+}
 
-            informesCache = infSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-            cuentasCache  = cuentaSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+// ── KPIs ──────────────────────────────────────────────────────
+function renderKPIs() {
+    const mens=informes.filter(i=>i.tipo==='mensual');
+    const anios=new Set(mens.map(i=>i.periodo.slice(0,4)));
+    const base=[...mens,...informes.filter(i=>i.tipo==='anual'&&!anios.has(i.periodo))];
+    const neto=base.reduce((s,i)=>s+(i.total_neto||0),0);
+    const bruto=base.reduce((s,i)=>s+(i.ingreso_bruto||0),0);
+    const comis=base.reduce((s,i)=>s+Math.abs(i.tarifa_servicio||0),0);
+    const imp=base.reduce((s,i)=>s+(i.impuesto_airbnb||0),0);
+    const noch=base.reduce((s,i)=>s+(i.noches_reservadas||0),0);
+    document.getElementById('kNeto').textContent=R(neto);
+    document.getElementById('kNetoSub').textContent=`${base.length} informes · bruto ${R(bruto)}`;
+    document.getElementById('kComis').textContent=R(comis);
+    document.getElementById('kComisSub').textContent=`${pct(comis,bruto)} del bruto`;
+    document.getElementById('kImp').textContent=R(imp);
+    document.getElementById('kNoches').textContent=noch||'—';
+    document.getElementById('kNochesSub').textContent=noch?`${R(neto/noch)} / noche prom`:'';
+}
 
-            poblarSelectCuentas('iCuentaId');
-            poblarSelectCuentas('dCuentaId');
-
-            renderKPIs();
-            renderHistorial();
-            renderCabanas();
-        } catch(e) {
-            showToast('Error al cargar datos: ' + e.message, 'error');
-        }
-    }
-
-    function poblarSelectCuentas(selectId) {
-        const sel = document.getElementById(selectId);
-        if (!sel) return;
-        const prev = sel.value;
-        sel.innerHTML = '<option value="">— Sin asignar —</option>' +
-            cuentasCache.map(c =>
-                `<option value="${c.id}">${escapeHtml(c.nombre)} (${c.moneda})</option>`
-            ).join('');
-        if (prev) sel.value = prev;
-    }
-
-    // ─── KPIs GLOBALES ────────────────────────────────────────
-    function renderKPIs() {
-        if (!informesCache.length) return;
-
-        // Solo informes mensuales para evitar doble conteo con anuales
-        const mensuales = informesCache.filter(i => i.tipo === 'mensual');
-        const anuales   = informesCache.filter(i => i.tipo === 'anual');
-
-        // Si hay anuales sin equivalentes mensuales, usarlos también
-        // Usamos todos los informes pero evitando doble conteo.
-        // La lógica: si hay datos mensuales de un año → ignorar el anual de ese año para KPIs
-        const aniosConMensuales = new Set(
-            mensuales.map(i => i.periodo.slice(0, 4))
-        );
-        const anualesSinCobertura = anuales.filter(
-            i => !aniosConMensuales.has(i.periodo)
-        );
-
-        const todos = [...mensuales, ...anualesSinCobertura];
-
-        const totalNeto     = todos.reduce((s, i) => s + (i.total_neto || 0), 0);
-        const totalBruto    = todos.reduce((s, i) => s + (i.ingreso_bruto || 0), 0);
-        const totalComision = todos.reduce((s, i) => s + Math.abs(i.tarifa_servicio || 0), 0);
-        const totalImpuesto = todos.reduce((s, i) => s + (i.impuesto_airbnb || 0), 0);
-
-        const conciliados = informesCache.filter(i => i.estado_conciliacion === 'conciliado').length;
-        const total       = informesCache.length;
-
-        document.getElementById('kpiTotalNeto').textContent  = fmtBRL(totalNeto);
-        document.getElementById('kpiTotalSub').textContent   = `${todos.length} informes · ${fmtBRL(totalBruto)} bruto`;
-        document.getElementById('kpiComision').textContent   = fmtBRL(totalComision);
-        document.getElementById('kpiComisionPct').textContent = `${fmtPct(-totalComision, totalBruto)} del bruto`;
-        document.getElementById('kpiImpuesto').textContent   = fmtBRL(totalImpuesto);
-        document.getElementById('kpiConcil').textContent     = `${conciliados} / ${total}`;
-        document.getElementById('kpiConcilSub').textContent  = conciliados === total
-            ? 'Todos conciliados ✅'
-            : `${total - conciliados} pendiente${total - conciliados !== 1 ? 's' : ''}`;
-    }
-
-    // ─── RENDER: HISTORIAL ────────────────────────────────────
-    function renderHistorial() {
-        const container = document.getElementById('informesContainer');
-        if (!informesCache.length) {
-            showEmpty(container, 'Sin informes', 'Cargá el primer informe de Airbnb con el botón superior.', 'cloud_download');
-            return;
-        }
-
-        container.innerHTML = informesCache.map(inf => renderInforme(inf)).join('');
-    }
-
-    function renderInforme(inf) {
-        const cuenta    = cuentasCache.find(c => c.id === inf.cuentaId);
-        const concil    = inf.estado_conciliacion || 'pendiente';
-        const concilCls = { conciliado: 'concil-ok', parcial: 'concil-parcial', pendiente: 'concil-pend' }[concil] || 'concil-na';
-        const concilLbl = { conciliado: '✅ Conciliado', parcial: '🟡 Parcial', pendiente: '⏳ Pendiente' }[concil] || '—';
-        const tipoLabel = inf.tipo === 'anual' ? 'Anual' : 'Mensual';
-        const tarifaPct = inf.ingreso_bruto ? (Math.abs(inf.tarifa_servicio || 0) / inf.ingreso_bruto * 100).toFixed(1) : '—';
-
-        // Desglose de cabañas
-        const cabanas = Array.isArray(inf.cabanas) ? inf.cabanas : [];
-        const cabRowsHtml = cabanas.length
-            ? `<table class="cabana-table">
-                <thead><tr>
-                    <th>Cabaña</th><th>Bruto</th><th>Tarifa servicio</th>
-                    <th>Neto</th><th>Imp. Airbnb</th><th>Noches</th>
-                </tr></thead>
-                <tbody>
-                    ${cabanas.map(c => `
-                    <tr>
-                        <td><strong>${escapeHtml(c.nombre_airbnb || '—')}</strong><br>
-                            <span style="font-size:10px; color:var(--color-text-muted);">ID: C${c.caba_id || '?'}</span>
-                        </td>
-                        <td class="mono">${fmtBRL(c.ingreso_bruto)}</td>
-                        <td class="mono val-fee">${fmtBRL(c.tarifa_servicio)}</td>
-                        <td class="mono val-neto">${fmtBRL(c.total_neto)}</td>
-                        <td class="mono" style="color:var(--color-text-muted);">${fmtBRL(c.impuesto_airbnb)}</td>
-                        <td>${c.noches || 0} nch · ${c.promedio_noches || 0} prom</td>
-                    </tr>`).join('')}
-                </tbody>
-               </table>`
-            : '<p class="text-muted text-xs">Sin desglose por cabaña registrado.</p>';
-
-        return `
-        <div class="informe-row" id="row_${inf.id}">
-            <div class="informe-row__head" onclick="toggleRow('${inf.id}')">
-                <span class="informe-row__periodo">${inf.periodo}</span>
-                <span class="informe-row__tipo ${inf.tipo === 'anual' ? 'anual' : ''}">${tipoLabel}</span>
-                <div class="informe-row__montos">
-                    <div class="informe-row__monto">
-                        <div class="informe-row__monto-label">Bruto</div>
-                        <div class="informe-row__monto-val val-bruto">${fmtBRL(inf.ingreso_bruto)}</div>
-                    </div>
-                    <div class="informe-row__monto">
-                        <div class="informe-row__monto-label">Comisión (${tarifaPct}%)</div>
-                        <div class="informe-row__monto-val val-fee">${fmtBRL(inf.tarifa_servicio)}</div>
-                    </div>
-                    <div class="informe-row__monto">
-                        <div class="informe-row__monto-label">Neto recibido</div>
-                        <div class="informe-row__monto-val val-neto">${fmtBRL(inf.total_neto)}</div>
-                    </div>
-                    ${inf.noches_reservadas ? `
-                    <div class="informe-row__noches">
-                        <span class="material-icons" style="font-size:14px;">nights_stay</span>
-                        ${inf.noches_reservadas} noches
-                    </div>` : ''}
+// ── HISTORIAL ─────────────────────────────────────────────────
+function renderHist() {
+    const c=document.getElementById('histCont');
+    if(!informes.length){showEmpty(c,'Sin informes','Importá el primer PDF de Airbnb.','cloud_download');return;}
+    c.innerHTML=informes.map(inf=>{
+        const cta=cuentas.find(x=>x.id===inf.cuentaId);
+        const co=inf.estado_conciliacion||'pendiente';
+        const cCl={conciliado:'cb-ok',parcial:'cb-par',pendiente:'cb-pend'}[co]||'cb-pend';
+        const cLb={conciliado:'✅ Conciliado',parcial:'🟡 Parcial',pendiente:'⏳ Pendiente'}[co];
+        const tp=inf.ingreso_bruto?(Math.abs(inf.tarifa_servicio||0)/inf.ingreso_bruto*100).toFixed(1):'—';
+        const cabs=Array.isArray(inf.cabanas)?inf.cabanas:[];
+        const cr=cabs.map(c=>`<tr>
+            <td><strong>${escapeHtml(c.nombre_airbnb||'—')}</strong></td>
+            <td class="mono">${R(c.ingreso_bruto)}</td>
+            <td class="mono fee-c">${R(c.tarifa_servicio)}</td>
+            <td class="mono neto-c">${R(c.total_neto)}</td>
+            <td class="mono" style="color:var(--color-text-muted)">${R(c.impuesto_airbnb)}</td>
+            <td>${c.noches||0}n · ${c.promedio_noches||0}p</td>
+        </tr>`).join('');
+        return `<div class="inf-row" id="r_${inf.id}">
+            <div class="inf-row__head" onclick="toggleR('${inf.id}')">
+                <span class="inf-row__periodo">${inf.periodo}</span>
+                <span class="tipo-badge tipo-${inf.tipo||'mensual'}">${inf.tipo==='anual'?'Anual':'Mensual'}</span>
+                <div class="inf-montos">
+                    <div class="m"><div class="m__l">Bruto</div><div class="m__v">${R(inf.ingreso_bruto)}</div></div>
+                    <div class="m"><div class="m__l">Comisión ${tp}%</div><div class="m__v fee-c">${R(inf.tarifa_servicio)}</div></div>
+                    <div class="m"><div class="m__l">Neto</div><div class="m__v neto-c">${R(inf.total_neto)}</div></div>
+                    ${inf.noches_reservadas?`<div class="m"><div class="m__l">Noches</div><div class="m__v">${inf.noches_reservadas}</div></div>`:''}
                 </div>
-                <span class="informe-row__concil ${concilCls}">${concilLbl}</span>
-                <span class="material-icons informe-row__chevron">expand_more</span>
+                <span class="cb ${cCl}">${cLb}</span>
+                <span class="material-icons inf-chev">expand_more</span>
             </div>
-
-            <div class="informe-detalle">
-                <!-- Cuenta vinculada -->
-                <div style="display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap; margin:var(--space-4) 0 var(--space-3);">
-                    <div style="font-size:var(--text-xs); font-weight:600; color:var(--color-text-muted);">
-                        <span class="material-icons" style="font-size:14px; vertical-align:middle;">account_balance</span>
-                        Cuenta receptora:
-                        <strong style="color:var(--color-text-primary);">
-                            ${cuenta ? escapeHtml(cuenta.nombre) : '<em>Sin asignar</em>'}
-                        </strong>
-                    </div>
-                    ${inf.notas_conciliacion ? `
-                    <div style="font-size:11px; color:var(--color-text-muted);">
-                        📝 ${escapeHtml(inf.notas_conciliacion)}
-                    </div>` : ''}
-                    <button class="btn btn-secondary btn-sm" onclick="abrirModalDeposito('${inf.id}')">
-                        <span class="material-icons">edit</span> Actualizar conciliación
-                    </button>
-                    <button class="btn btn-ghost btn-sm" onclick="eliminarInforme('${inf.id}', '${escapeHtml(inf.periodo)}')">
-                        <span class="material-icons">delete</span>
+            <div class="inf-detail">
+                <div style="display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin:var(--space-3) 0">
+                    <span style="font-size:var(--text-xs);color:var(--color-text-muted)">
+                        <span class="material-icons" style="font-size:14px;vertical-align:middle">account_balance</span>
+                        Cuenta: <strong style="color:var(--color-text-primary)">${cta?escapeHtml(cta.nombre):'<em>Sin asignar</em>'}</strong>
+                        ${inf.notas_conciliacion?` · 📝 ${escapeHtml(inf.notas_conciliacion)}`:''}
+                    </span>
+                    <button class="btn btn-secondary btn-sm" onclick="abrirEditar('${inf.id}')">
+                        <span class="material-icons">edit</span>Editar
                     </button>
                 </div>
-
-                <!-- Impuesto Airbnb -->
-                ${inf.impuesto_airbnb ? `
-                <div style="font-size:11px; color:var(--color-text-muted); margin-bottom:var(--space-3);">
-                    <span class="material-icons" style="font-size:13px; vertical-align:middle;">receipt</span>
-                    Impuesto liquidado por Airbnb a autoridades fiscales: <strong>${fmtBRL(inf.impuesto_airbnb)}</strong>
-                </div>` : ''}
-
-                <!-- Desglose por cabaña -->
-                ${cabRowsHtml}
-
-                <!-- Metadata -->
-                <div style="font-size:10px; color:var(--color-text-muted); margin-top:var(--space-3);">
-                    Cargado: ${inf.cargado_en?.toDate?.()?.toLocaleDateString('es-AR') || '—'} · Fuente: ${escapeHtml(inf.fuente || '—')}
+                ${inf.impuesto_airbnb?`<div style="font-size:11px;color:var(--color-text-muted);margin-bottom:var(--space-2)">Imp. Airbnb al fisco: <strong>${R(inf.impuesto_airbnb)}</strong></div>`:''}
+                ${cabs.length?`<table class="ct"><thead><tr><th>Cabaña</th><th>Bruto</th><th>Tarifa</th><th>Neto</th><th>Imp.</th><th>Noches</th></tr></thead><tbody>${cr}</tbody></table>`:''}
+                <div style="font-size:10px;color:var(--color-text-muted);margin-top:var(--space-2)">
+                    Cargado: ${inf.cargado_en?.toDate?.()?.toLocaleDateString('es-AR')||'—'} · ${escapeHtml(inf.fuente||'—')}
                 </div>
             </div>
         </div>`;
+    }).join('');
+}
+window.toggleR = id => document.getElementById('r_'+id)?.classList.toggle('open');
+
+// ── BALANCE ───────────────────────────────────────────────────
+window.calcBal = function() {
+    const desde=document.getElementById('bDesde').value;
+    const hasta=document.getElementById('bHasta').value;
+    if(!desde||!hasta){showToast('Seleccioná ambas fechas.','error');return;}
+    const rango=informes.filter(i=>i.tipo==='mensual'&&i.periodo>=desde&&i.periodo<=hasta)
+        .sort((a,b)=>a.periodo.localeCompare(b.periodo));
+    const cont=document.getElementById('balResult');
+    if(!rango.length){
+        cont.innerHTML='<div class="alert alert-error"><span class="material-icons">info</span><span>Sin informes mensuales en ese rango. Importá los PDFs correspondientes.</span></div>';
+        return;
     }
+    const tNeto=rango.reduce((s,i)=>s+(i.total_neto||0),0);
+    const tBruto=rango.reduce((s,i)=>s+(i.ingreso_bruto||0),0);
+    const tComis=rango.reduce((s,i)=>s+Math.abs(i.tarifa_servicio||0),0);
+    const tImp=rango.reduce((s,i)=>s+(i.impuesto_airbnb||0),0);
+    const tNoch=rango.reduce((s,i)=>s+(i.noches_reservadas||0),0);
 
-    window.toggleRow = function(id) {
-        const el = document.getElementById('row_' + id);
-        if (el) el.classList.toggle('open');
-    };
+    // Agrupar neto por cuenta
+    const porC={};
+    rango.forEach(i=>{
+        const k=i.cuentaId||'__sin__';
+        porC[k]=(porC[k]||0)+(i.total_neto||0);
+    });
+    const cuentasHtml=Object.entries(porC).map(([cid,m])=>{
+        const c=cid==='__sin__'?{nombre:'Sin cuenta'}:cuentas.find(x=>x.id===cid);
+        return `<div class="bk"><div class="bk__l">${escapeHtml(c?.nombre||'Cuenta')}</div><div class="bk__v neto-c">${R(m)}</div></div>`;
+    }).join('');
 
-    // ─── RENDER: POR CABAÑA ───────────────────────────────────
-    function renderCabanas() {
-        const container = document.getElementById('cabanaResumenContainer');
-        if (!informesCache.length) {
-            showEmpty(container, 'Sin datos', 'Cargá informes para ver el resumen por cabaña.', 'cottage');
+    const filas=rango.map(i=>{
+        const cta=cuentas.find(c=>c.id===i.cuentaId);
+        const co=i.estado_conciliacion||'pendiente';
+        const cCl={conciliado:'cb-ok',parcial:'cb-par',pendiente:'cb-pend'}[co]||'cb-pend';
+        return `<tr>
+            <td style="font-family:var(--font-mono);font-weight:600">${i.periodo}</td>
+            <td style="font-family:var(--font-mono)">${R(i.ingreso_bruto)}</td>
+            <td style="font-family:var(--font-mono);color:var(--color-danger)">${R(i.tarifa_servicio)}</td>
+            <td style="font-family:var(--font-mono);font-weight:700;color:var(--color-success)">${R(i.total_neto)}</td>
+            <td style="font-size:11px;color:var(--color-text-muted)">${R(i.impuesto_airbnb)}</td>
+            <td>${i.noches_reservadas||'—'}</td>
+            <td style="font-size:12px">${cta?escapeHtml(cta.nombre):'<em style="color:var(--color-text-muted)">Sin asignar</em>'}</td>
+            <td><span class="cb ${cCl}">${{conciliado:'✅',parcial:'🟡',pendiente:'⏳'}[co]||'⏳'} ${co}</span></td>
+        </tr>`;
+    }).join('');
+
+    cont.innerHTML=`<div class="bal-result">
+        <div class="bal-header">
+            <div><div style="font-size:11px;opacity:.7">Balance Airbnb</div><div style="font-size:var(--text-lg);font-weight:800">${desde} → ${hasta}</div></div>
+            <div style="text-align:right"><div style="font-size:11px;opacity:.7">Neto total recibido</div><div style="font-size:var(--text-2xl);font-weight:800;font-family:var(--font-mono)">${R(tNeto)}</div></div>
+        </div>
+        <div class="bal-kpis">
+            <div class="bk"><div class="bk__l">Bruto cobrado</div><div class="bk__v">${R(tBruto)}</div></div>
+            <div class="bk"><div class="bk__l">Comisión Airbnb</div><div class="bk__v fee-c">−${R(tComis)}</div></div>
+            <div class="bk"><div class="bk__l">Imp. Airbnb</div><div class="bk__v">${R(tImp)}</div></div>
+            <div class="bk"><div class="bk__l">Noches vendidas</div><div class="bk__v">${tNoch}</div></div>
+            <div class="bk"><div class="bk__l">Períodos</div><div class="bk__v">${rango.length} meses</div></div>
+            ${cuentasHtml}
+        </div>
+        <div class="bal-tabla">
+        <table class="bt">
+            <thead><tr><th>Período</th><th>Bruto</th><th>Tarifa</th><th>Neto</th><th>Imp.</th><th>Noches</th><th>Cuenta depósito</th><th>Conciliación</th></tr></thead>
+            <tbody>${filas}</tbody>
+            <tfoot><tr><td>TOTAL</td><td style="font-family:var(--font-mono)">${R(tBruto)}</td><td style="font-family:var(--font-mono);color:var(--color-danger)">−${R(tComis)}</td><td style="font-family:var(--font-mono);color:var(--color-success)">${R(tNeto)}</td><td style="font-family:var(--font-mono)">${R(tImp)}</td><td>${tNoch}</td><td colspan="2"></td></tr></tfoot>
+        </table>
+        </div>
+    </div>`;
+};
+
+// ── POR CABAÑA ────────────────────────────────────────────────
+function renderCabs() {
+    const cont=document.getElementById('cabCont');
+    const a={1:{n:NOMB[1],b:0,nt:0,t:0,i:0,no:0,p:0},2:{n:NOMB[2],b:0,nt:0,t:0,i:0,no:0,p:0},3:{n:NOMB[3],b:0,nt:0,t:0,i:0,no:0,p:0}};
+    informes.forEach(inf=>(inf.cabanas||[]).forEach(c=>{
+        const x=a[c.caba_id];if(!x)return;
+        x.b+=c.ingreso_bruto||0;x.nt+=c.total_neto||0;x.t+=c.tarifa_servicio||0;
+        x.i+=c.impuesto_airbnb||0;x.no+=c.noches||0;x.p++;
+    }));
+    cont.innerHTML=Object.entries(a).map(([id,d])=>`
+    <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);margin-bottom:var(--space-3);overflow:hidden">
+        <div style="background:var(--color-primary-xlight);padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-border-light);display:flex;justify-content:space-between;align-items:center">
+            <strong>C${id} — ${escapeHtml(d.n)}</strong>
+            <span style="font-size:11px;color:var(--color-text-muted)">${d.p} período${d.p!==1?'s':''}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:var(--space-3);padding:var(--space-4)">
+            ${[['Bruto acumulado',R(d.b),''],['Neto acumulado',R(d.nt),'var(--color-success)'],['Comisión',R(d.t),'var(--color-danger)'],['Imp. Airbnb',R(d.i),''],['Noches totales',d.no+' nch',''],['R$/noche prom',d.no?R(d.nt/d.no):'—','var(--color-primary)']].map(([l,v,c])=>`
+            <div style="text-align:center;padding:var(--space-3);background:var(--color-surface-2);border-radius:var(--radius-sm)">
+                <div style="font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--color-text-muted);margin-bottom:3px">${l}</div>
+                <div style="font-family:var(--font-mono);font-weight:700;${c?'color:'+c:''}">${v}</div>
+            </div>`).join('')}
+        </div>
+    </div>`).join('');
+}
+
+// ── TABS ──────────────────────────────────────────────────────
+window.doTab = (n,btn) => {
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.getElementById('tab-'+n).classList.add('active');
+    btn.classList.add('active');
+};
+
+// ── IMPORTADOR ────────────────────────────────────────────────
+window.abrirImport = () => {
+    document.getElementById('pdfIn').value='';
+    document.getElementById('logBox').innerHTML='';
+    document.getElementById('logBox').classList.remove('visible');
+    document.getElementById('prevCard').classList.remove('visible');
+    document.getElementById('btnGuardar').disabled=true;
+    document.getElementById('upZone').style.display='block';
+    document.getElementById('impErr').style.display='none';
+    document.getElementById('mImport').classList.add('open');
+};
+window.cImport = (e) => {
+    if(e&&e.target!==document.getElementById('mImport'))return;
+    document.getElementById('mImport').classList.remove('open');
+};
+
+function log(msg,tipo='info') {
+    const b=document.getElementById('logBox');
+    b.classList.add('visible');
+    const c={ok:'log-ok',info:'log-info',warn:'log-warn',err:'log-err'}[tipo]||'log-info';
+    b.innerHTML+=`<div class="${c}">${msg}</div>`;
+    b.scrollTop=b.scrollHeight;
+}
+
+window.recalc = () => {
+    const br=vn('eBruto'),aj=vn('eAjustes'),ta=vn('eTarifa'),ne=vn('eNeto');
+    const cl=br+aj+ta;
+    document.getElementById('vCalc').textContent=R(cl);
+    document.getElementById('vPDF').textContent=R(ne);
+    const d=cl-ne, dEl=document.getElementById('vDif');
+    if(!ne){dEl.textContent='—';dEl.className='verif-item__val';}
+    else if(Math.abs(d)<0.05){dEl.textContent='✅ Cuadra';dEl.className='verif-item__val verif-ok';}
+    else{dEl.textContent=(d>0?'+':'')+R(d);dEl.className='verif-item__val verif-diff';}
+    document.getElementById('vPct').textContent=br?pct(ta,br)+' com':'—';
+};
+
+window.recalcX = () => {
+    const br=vn('xBruto'),aj=vn('xAjustes'),ta=vn('xTarifa'),ne=vn('xNeto');
+    const cl=br+aj+ta;
+    document.getElementById('xvCalc').textContent=R(cl);
+    document.getElementById('xvPDF').textContent=R(ne);
+    const d=cl-ne, dEl=document.getElementById('xvDif');
+    if(!ne){dEl.textContent='—';dEl.className='verif-item__val';}
+    else if(Math.abs(d)<0.05){dEl.textContent='✅';dEl.className='verif-item__val verif-ok';}
+    else{dEl.textContent=(d>0?'+':'')+R(d);dEl.className='verif-item__val verif-diff';}
+};
+
+window.updPeriodo = () => {
+    document.getElementById('grpMes').style.display=
+        document.getElementById('eTipo').value==='mensual'?'':'none';
+};
+
+// ── PROCESAR PDF → CLAUDE API ─────────────────────────────────
+window.procesarPDF = async function(file) {
+    if(!file)return;
+    document.getElementById('upZone').style.display='none';
+    document.getElementById('logBox').innerHTML='';
+    document.getElementById('logBox').classList.add('visible');
+    document.getElementById('prevCard').classList.remove('visible');
+    document.getElementById('btnGuardar').disabled=true;
+
+    log(`📄 ${file.name} (${(file.size/1024).toFixed(0)} KB)`,'info');
+    log('🔄 Leyendo PDF...','info');
+
+    let b64;
+    try {
+        b64=await new Promise((res,rej)=>{
+            const r=new FileReader();
+            r.onload=()=>res(r.result.split(',')[1]);
+            r.onerror=()=>rej(new Error('Error leyendo archivo'));
+            r.readAsDataURL(file);
+        });
+    } catch(e){log('❌ '+e.message,'err');return;}
+
+    log('✅ PDF listo. Enviando a Claude...','ok');
+
+    const PROMPT=`Sos un extractor de datos de informes de Airbnb en PDF.
+Extrae TODOS los datos numéricos y respondé ÚNICAMENTE con JSON válido, sin texto adicional ni markdown.
+
+Formato exacto:
+{
+  "tipo": "mensual" o "anual",
+  "anio": número,
+  "mes": número (1-12) o null si es anual,
+  "ingreso_bruto": número,
+  "ajustes": número (negativo o 0),
+  "tarifa_servicio": número NEGATIVO,
+  "total_neto": número,
+  "impuesto_airbnb": número,
+  "noches_reservadas": número,
+  "anfitrion": "nombre del anfitrión",
+  "cabanas": [
+    {
+      "caba_id": 1 o 2 o 3,
+      "nombre_airbnb": "nombre exacto del alojamiento en el PDF",
+      "ingreso_bruto": número,
+      "tarifa_servicio": número NEGATIVO,
+      "total_neto": número,
+      "impuesto_airbnb": número,
+      "noches": número,
+      "promedio_noches": número
+    }
+  ]
+}
+
+Mapeo de cabañas:
+- "Cabaña confortable y amplia rodeada de arboles" → caba_id: 1
+- "Departamento ideal para familias" → caba_id: 2
+- "Loft en Canasvieiras cerquita de la playa" → caba_id: 3
+
+Si un campo no aparece, usá 0. No inventes datos.`;
+
+    try {
+        const res=await fetch('https://api.anthropic.com/v1/messages',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({
+                model:'claude-sonnet-4-20250514',
+                max_tokens:1000,
+                messages:[{
+                    role:'user',
+                    content:[
+                        {type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},
+                        {type:'text',text:PROMPT}
+                    ]
+                }]
+            })
+        });
+
+        if(!res.ok){
+            const er=await res.json().catch(()=>({error:{message:`HTTP ${res.status}`}}));
+            throw new Error(er.error?.message||`HTTP ${res.status}`);
+        }
+
+        const data=await res.json();
+        const raw=data.content.map(b=>b.text||'').join('').trim();
+        log('✅ Respuesta recibida. Interpretando...','ok');
+
+        let ext;
+        try{ext=JSON.parse(raw.replace(/```json|```/g,'').trim());}
+        catch(e){
+            log('❌ Error en JSON: '+e.message,'err');
+            log('Respuesta: '+raw.slice(0,300),'warn');
+            // Habilitar formulario manual de todos modos
+            document.getElementById('prevCard').classList.add('visible');
+            document.getElementById('btnGuardar').disabled=false;
             return;
         }
 
-        // Acumular por caba_id
-        const acum = { 1: { nombre: NOMBRE_AIRBNB[1], bruto:0, neto:0, tarifa:0, imp:0, noches:0, count:0 },
-                        2: { nombre: NOMBRE_AIRBNB[2], bruto:0, neto:0, tarifa:0, imp:0, noches:0, count:0 },
-                        3: { nombre: NOMBRE_AIRBNB[3], bruto:0, neto:0, tarifa:0, imp:0, noches:0, count:0 } };
+        log('✅ Datos extraídos. Revisalos antes de guardar.','ok');
+        poblarForm(ext);
 
-        informesCache.forEach(inf => {
-            (inf.cabanas || []).forEach(c => {
-                const a = acum[c.caba_id];
-                if (!a) return;
-                a.bruto  += c.ingreso_bruto    || 0;
-                a.neto   += c.total_neto       || 0;
-                a.tarifa += c.tarifa_servicio  || 0;
-                a.imp    += c.impuesto_airbnb  || 0;
-                a.noches += c.noches           || 0;
-                a.count++;
-            });
-        });
-
-        container.innerHTML = Object.entries(acum).map(([id, d]) => `
-            <div style="background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); margin-bottom:var(--space-3); overflow:hidden;">
-                <div style="background:var(--color-primary-xlight); padding:var(--space-3) var(--space-4); border-bottom:1px solid var(--color-border-light); display:flex; justify-content:space-between; align-items:center;">
-                    <strong style="font-size:var(--text-sm);">C${id} — ${escapeHtml(d.nombre)}</strong>
-                    <span style="font-size:11px; color:var(--color-text-muted);">${d.count} período${d.count !== 1 ? 's' : ''}</span>
-                </div>
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px,1fr)); gap:var(--space-3); padding:var(--space-4);">
-                    <div><div style="font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--color-text-muted); margin-bottom:3px;">Bruto acumulado</div>
-                        <div style="font-family:var(--font-mono); font-weight:700;">${fmtBRL(d.bruto)}</div></div>
-                    <div><div style="font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--color-text-muted); margin-bottom:3px;">Neto acumulado</div>
-                        <div style="font-family:var(--font-mono); font-weight:700; color:var(--color-success);">${fmtBRL(d.neto)}</div></div>
-                    <div><div style="font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--color-text-muted); margin-bottom:3px;">Comisión Airbnb</div>
-                        <div style="font-family:var(--font-mono); font-weight:700; color:var(--color-danger);">${fmtBRL(d.tarifa)}</div></div>
-                    <div><div style="font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--color-text-muted); margin-bottom:3px;">Imp. Airbnb</div>
-                        <div style="font-family:var(--font-mono);">${fmtBRL(d.imp)}</div></div>
-                    <div><div style="font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--color-text-muted); margin-bottom:3px;">Noches totales</div>
-                        <div style="font-weight:700;">${d.noches} noches</div></div>
-                    <div><div style="font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--color-text-muted); margin-bottom:3px;">Ingreso/noche prom.</div>
-                        <div style="font-family:var(--font-mono);">${d.noches ? fmtBRL(d.neto / d.noches) : '—'}</div></div>
-                </div>
-            </div>`).join('');
+    } catch(e){
+        log('❌ Error API: '+e.message,'err');
+        // Habilitar carga manual
+        document.getElementById('prevCard').classList.add('visible');
+        document.getElementById('btnGuardar').disabled=false;
     }
+};
 
-    // ─── TABS ─────────────────────────────────────────────────
-    window.cambiarTab = function(nombre, btn) {
-        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById('tab-' + nombre).classList.add('active');
-        btn.classList.add('active');
+function poblarForm(d) {
+    sv('eTipo',d.tipo||'mensual'); updPeriodo();
+    if(d.anio) sv('eAnio',d.anio);
+    if(d.mes)  sv('eMes',String(d.mes).padStart(2,'0'));
+    if(d.anfitrion) sv('eAnf',d.anfitrion);
+    sv('eBruto',d.ingreso_bruto||''); sv('eAjustes',d.ajustes||'');
+    sv('eTarifa',d.tarifa_servicio||''); sv('eNeto',d.total_neto||'');
+    sv('eImp',d.impuesto_airbnb||''); sv('eNoches',d.noches_reservadas||'');
+    const m={1:'c1',2:'c2',3:'c3'};
+    (d.cabanas||[]).forEach(c=>{
+        const p=m[c.caba_id];if(!p)return;
+        sv(p+'b',c.ingreso_bruto||''); sv(p+'t',c.tarifa_servicio||'');
+        sv(p+'n',c.total_neto||'');   sv(p+'i',c.impuesto_airbnb||'');
+        sv(p+'no',c.noches||'');      sv(p+'pn',c.promedio_noches||'');
+    });
+    const tit=d.tipo==='anual'?`Año ${d.anio}`:`${MESES[d.mes]||''} ${d.anio}`;
+    document.getElementById('prevTitulo').textContent=`Datos extraídos — ${tit}`;
+    document.getElementById('prevCard').classList.add('visible');
+    document.getElementById('btnGuardar').disabled=false;
+    recalc();
+}
+
+// ── GUARDAR ───────────────────────────────────────────────────
+function buildDocData(prefix,periodo,tipo,anio,mes) {
+    const cab=(id,p)=>({
+        caba_id:id, nombre_airbnb:NOMB[id],
+        ingreso_bruto:vn(p+id+'b'), tarifa_servicio:vn(p+id+'t'),
+        total_neto:vn(p+id+'n'),   impuesto_airbnb:vn(p+id+'i'),
+        noches:vn(p+id+'no'),      promedio_noches:vn(p+id+'pn')
+    });
+    const ePfx=prefix==='e'?'e':'x';
+    return {
+        tipo, periodo,
+        fecha_inicio:tipo==='mensual'?`${anio}-${mes}-01`:`${anio}-01-01`,
+        fecha_fin:tipo==='mensual'?`${anio}-${mes}-28`:`${anio}-12-31`,
+        anfitrion:document.getElementById('eAnf')?.value||'Florencia De Tezanos Pinto',
+        airbnb_user_id:'305975988', moneda:'BRL',
+        ingreso_bruto:vn(ePfx+'Bruto'), ajustes:vn(ePfx+'Ajustes'),
+        tarifa_servicio:vn(ePfx+'Tarifa'), total_neto:vn(ePfx+'Neto'),
+        impuesto_airbnb:vn(ePfx+'Imp'), noches_reservadas:vn(ePfx+'Noches'),
+        cabanas:[cab(1,prefix),cab(2,prefix),cab(3,prefix)],
+        cuentaId:document.getElementById(ePfx+'Cuenta').value||null,
+        estado_conciliacion:document.getElementById(ePfx+'Concil').value,
+        notas_conciliacion:document.getElementById(ePfx+'Notas').value.trim()||null,
+        movimientoId:null,
+        fuente:'pdf_ia',
+        cargado_en:firebase.firestore.FieldValue.serverTimestamp(),
+        cargado_por:user.uid
     };
+}
 
-    // ─── MODAL: NUEVO INFORME ─────────────────────────────────
-    window.abrirNuevoInforme = function() {
-        document.getElementById('modalTitulo').textContent = 'Cargar informe Airbnb';
-        // Resetear campos
-        ['iIngresoBruto','iAjustes','iTarifaServicio','iTotalNeto','iImpuesto','iNoches'].forEach(id => {
-            document.getElementById(id).value = '';
+window.guardar = async function() {
+    const tipo=document.getElementById('eTipo').value;
+    const anio=document.getElementById('eAnio').value;
+    const mes=document.getElementById('eMes').value;
+    const periodo=tipo==='mensual'?`${anio}-${mes}`:anio;
+    if(!vn('eBruto')){showImpErr('Ingresá el monto de ingresos brutos.');return;}
+    if(!vn('eNeto')) {showImpErr('Ingresá el total neto recibido.');return;}
+    if(informes.find(i=>i.periodo===periodo)){showImpErr(`Ya existe el informe ${periodo}. Editalo desde el historial.`);return;}
+    const btn=document.getElementById('btnTxt');
+    btn.textContent='Guardando…';
+    document.getElementById('btnGuardar').disabled=true;
+    try {
+        await db.collection('informes_airbnb').doc(periodo).set(buildDocData('e',periodo,tipo,anio,mes));
+        showToast(`Informe ${periodo} guardado.`,'success');
+        document.getElementById('mImport').classList.remove('open');
+        await cargar();
+    } catch(e){showImpErr('Error: '+e.message);document.getElementById('btnGuardar').disabled=false;}
+    finally{btn.textContent='Guardar en Firestore';}
+};
+
+function showImpErr(m){
+    document.getElementById('impErrTxt').textContent=m;
+    document.getElementById('impErr').style.display='flex';
+}
+
+// ── EDITAR ────────────────────────────────────────────────────
+window.abrirEditar = function(id) {
+    const inf=informes.find(i=>i.id===id);if(!inf)return;
+    document.getElementById('editId').value=id;
+    document.getElementById('editTit').textContent=`Editar — ${inf.periodo}`;
+    sv('xBruto',inf.ingreso_bruto||''); sv('xAjustes',inf.ajustes||'');
+    sv('xTarifa',inf.tarifa_servicio||''); sv('xNeto',inf.total_neto||'');
+    sv('xImp',inf.impuesto_airbnb||''); sv('xNoches',inf.noches_reservadas||'');
+    const m={1:'x1',2:'x2',3:'x3'};
+    (inf.cabanas||[]).forEach(c=>{
+        const p=m[c.caba_id];if(!p)return;
+        sv(p+'b',c.ingreso_bruto||''); sv(p+'t',c.tarifa_servicio||'');
+        sv(p+'n',c.total_neto||'');   sv(p+'i',c.impuesto_airbnb||'');
+        sv(p+'no',c.noches||'');      sv(p+'pn',c.promedio_noches||'');
+    });
+    document.getElementById('xCuenta').value=inf.cuentaId||'';
+    document.getElementById('xConcil').value=inf.estado_conciliacion||'pendiente';
+    document.getElementById('xNotas').value=inf.notas_conciliacion||'';
+    recalcX();
+    document.getElementById('mEditar').classList.add('open');
+};
+window.cEditar=(e)=>{if(e&&e.target!==document.getElementById('mEditar'))return;document.getElementById('mEditar').classList.remove('open');};
+
+window.actualizar = async function() {
+    const id=document.getElementById('editId').value;
+    const inf=informes.find(i=>i.id===id);if(!inf)return;
+    const cab=(n,p)=>({caba_id:n,nombre_airbnb:NOMB[n],ingreso_bruto:vn(p+'b'),tarifa_servicio:vn(p+'t'),total_neto:vn(p+'n'),impuesto_airbnb:vn(p+'i'),noches:vn(p+'no'),promedio_noches:vn(p+'pn')});
+    try {
+        await db.collection('informes_airbnb').doc(id).update({
+            ingreso_bruto:vn('xBruto'), ajustes:vn('xAjustes'),
+            tarifa_servicio:vn('xTarifa'), total_neto:vn('xNeto'),
+            impuesto_airbnb:vn('xImp'), noches_reservadas:vn('xNoches'),
+            cabanas:[cab(1,'x1'),cab(2,'x2'),cab(3,'x3')],
+            cuentaId:document.getElementById('xCuenta').value||null,
+            estado_conciliacion:document.getElementById('xConcil').value,
+            notas_conciliacion:document.getElementById('xNotas').value.trim()||null,
+            actualizadoEn:firebase.firestore.FieldValue.serverTimestamp()
         });
-        ['c1','c2','c3'].forEach(p => {
-            ['_bruto','_tarifa','_neto','_imp','_noches'].forEach(s => {
-                document.getElementById(p + s).value = '';
-            });
-        });
-        document.getElementById('iCuentaId').value       = '';
-        document.getElementById('iEstadoConcil').value   = 'pendiente';
-        document.getElementById('iNotasConcil').value    = '';
-        document.getElementById('modalError').style.display = 'none';
-        actualizarCampoPeriodo();
-        document.getElementById('modalInforme').classList.add('open');
-    };
+        showToast('Informe actualizado.','success');
+        document.getElementById('mEditar').classList.remove('open');
+        await cargar();
+    } catch(e){showToast('Error: '+e.message,'error');}
+};
 
-    window.cerrarModal = function(e) {
-        if (e && e.target !== document.getElementById('modalInforme')) return;
-        document.getElementById('modalInforme').classList.remove('open');
-    };
+window.eliminar = async function() {
+    const id=document.getElementById('editId').value;
+    const inf=informes.find(i=>i.id===id);
+    if(!inf||!confirm(`¿Eliminar informe ${inf.periodo}?`))return;
+    try {
+        await db.collection('informes_airbnb').doc(id).delete();
+        showToast('Eliminado.','warning');
+        document.getElementById('mEditar').classList.remove('open');
+        await cargar();
+    } catch(e){showToast('Error: '+e.message,'error');}
+};
 
-    window.actualizarCampoPeriodo = function() {
-        const tipo = document.getElementById('iTipo').value;
-        document.getElementById('grupoMes').style.display = tipo === 'mensual' ? '' : 'none';
-    };
+// ── Drag & drop ───────────────────────────────────────────────
+const zone=document.getElementById('upZone');
+zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag-over');});
+zone.addEventListener('dragleave',()=>zone.classList.remove('drag-over'));
+zone.addEventListener('drop',e=>{
+    e.preventDefault();zone.classList.remove('drag-over');
+    const f=e.dataTransfer.files[0];
+    if(f?.type==='application/pdf')procesarPDF(f);
+    else showToast('Solo PDF.','error');
+});
 
-    // ─── RECALCULAR VERIFICACIÓN ──────────────────────────────
-    window.recalcularTotales = function() {
-        const bruto   = parseFloat(document.getElementById('iIngresoBruto').value)   || 0;
-        const ajustes = parseFloat(document.getElementById('iAjustes').value)         || 0;
-        const tarifa  = parseFloat(document.getElementById('iTarifaServicio').value)  || 0;
-        const neto    = parseFloat(document.getElementById('iTotalNeto').value)        || 0;
-
-        const calculado = bruto + ajustes + tarifa; // tarifa es negativo
-
-        document.getElementById('calcNeto').textContent = fmtBRL(calculado);
-
-        const dif = calculado - neto;
-        const difEl = document.getElementById('calcDif');
-        if (neto === 0) {
-            difEl.textContent = '—';
-            difEl.style.color = 'var(--color-text-muted)';
-        } else if (Math.abs(dif) < 0.05) {
-            difEl.textContent = '✅ Cuadra';
-            difEl.style.color = 'var(--color-success)';
-        } else {
-            difEl.textContent = `${dif > 0 ? '+' : ''}${fmtBRL(dif)}`;
-            difEl.style.color = 'var(--color-danger)';
-        }
-
-        document.getElementById('calcPct').textContent = bruto
-            ? fmtPct(tarifa, bruto) + ' de comisión'
-            : '—';
-    };
-
-    // ─── GUARDAR INFORME ──────────────────────────────────────
-    window.guardarInforme = async function() {
-        const tipo     = document.getElementById('iTipo').value;
-        const anio     = document.getElementById('iAnio').value;
-        const mes      = document.getElementById('iMes').value;
-        const periodo  = tipo === 'mensual' ? `${anio}-${mes}` : anio;
-
-        const ingresoBruto   = parseFloat(document.getElementById('iIngresoBruto').value)   || 0;
-        const ajustes        = parseFloat(document.getElementById('iAjustes').value)         || 0;
-        const tarifaServicio = parseFloat(document.getElementById('iTarifaServicio').value)  || 0;
-        const totalNeto      = parseFloat(document.getElementById('iTotalNeto').value)        || 0;
-        const impuesto       = parseFloat(document.getElementById('iImpuesto').value)         || 0;
-        const noches         = parseInt(document.getElementById('iNoches').value)             || 0;
-
-        const errEl = document.getElementById('modalError');
-        errEl.style.display = 'none';
-
-        if (!ingresoBruto) {
-            document.getElementById('modalErrorText').textContent = 'Ingresá el monto de ingresos brutos del PDF.';
-            errEl.style.display = 'flex'; return;
-        }
-        if (!totalNeto) {
-            document.getElementById('modalErrorText').textContent = 'Ingresá el total neto recibido del PDF.';
-            errEl.style.display = 'flex'; return;
-        }
-
-        // Verificar que no exista ya ese período
-        const existe = informesCache.find(i => i.periodo === periodo);
-        if (existe) {
-            document.getElementById('modalErrorText').textContent = `Ya existe un informe para el período ${periodo}. Eliminalo primero si querés reemplazarlo.`;
-            errEl.style.display = 'flex'; return;
-        }
-
-        const btn = document.getElementById('btnGuardarText');
-        btn.textContent = 'Guardando…';
-
-        // Construir array de cabañas
-        const cabanas = [
-            { caba_id: 1, nombre_airbnb: NOMBRE_AIRBNB[1],
-              ingreso_bruto:  parseFloat(document.getElementById('c1_bruto').value)  || 0,
-              tarifa_servicio:parseFloat(document.getElementById('c1_tarifa').value) || 0,
-              total_neto:     parseFloat(document.getElementById('c1_neto').value)   || 0,
-              impuesto_airbnb:parseFloat(document.getElementById('c1_imp').value)    || 0,
-              noches:         parseInt(document.getElementById('c1_noches').value)   || 0 },
-            { caba_id: 2, nombre_airbnb: NOMBRE_AIRBNB[2],
-              ingreso_bruto:  parseFloat(document.getElementById('c2_bruto').value)  || 0,
-              tarifa_servicio:parseFloat(document.getElementById('c2_tarifa').value) || 0,
-              total_neto:     parseFloat(document.getElementById('c2_neto').value)   || 0,
-              impuesto_airbnb:parseFloat(document.getElementById('c2_imp').value)    || 0,
-              noches:         parseInt(document.getElementById('c2_noches').value)   || 0 },
-            { caba_id: 3, nombre_airbnb: NOMBRE_AIRBNB[3],
-              ingreso_bruto:  parseFloat(document.getElementById('c3_bruto').value)  || 0,
-              tarifa_servicio:parseFloat(document.getElementById('c3_tarifa').value) || 0,
-              total_neto:     parseFloat(document.getElementById('c3_neto').value)   || 0,
-              impuesto_airbnb:parseFloat(document.getElementById('c3_imp').value)    || 0,
-              noches:         parseInt(document.getElementById('c3_noches').value)   || 0 }
-        ];
-
-        // ── Estructura del documento ──────────────────────────
-        // CAMPOS DE INTEGRACIÓN FUTURA ya incluidos:
-        // - movimientoId: para cruzar con movimientos bancarios (cuentas.html)
-        // - estado_conciliacion: semáforo de conciliación bancaria
-        // - cuentaId: referencia directa a la cuenta de Cuentas
-        // - periodo en YYYY-MM: permite filtrar en pagos.html por mes
-        const docData = {
-            // ── Identificación ────
-            tipo,
-            periodo,
-            fecha_inicio: tipo === 'mensual' ? `${anio}-${mes}-01` : `${anio}-01-01`,
-            fecha_fin:    tipo === 'mensual' ? `${anio}-${mes}-28` : `${anio}-12-31`,
-            anfitrion:    'Florencia De Tezanos Pinto',
-            airbnb_user_id: '305975988',
-            moneda: 'BRL',
-
-            // ── Totales ───────────
-            ingreso_bruto:    ingresoBruto,
-            ajustes,
-            tarifa_servicio:  tarifaServicio,
-            total_neto:       totalNeto,
-            impuesto_airbnb:  impuesto,
-            noches_reservadas: noches,
-            promedio_noches:  noches ? (noches / Math.max(cabanas.filter(c=>c.noches>0).length, 1)) : 0,
-
-            // ── Por cabaña ────────
-            cabanas,
-
-            // ── Integración bancaria (cuentas.html + movimientos.html) ──
-            cuentaId:            document.getElementById('iCuentaId').value || null,
-            estado_conciliacion: document.getElementById('iEstadoConcil').value,
-            notas_conciliacion:  document.getElementById('iNotasConcil').value.trim() || null,
-            movimientoId:        null,  // Se llenará desde movimientos.html (Fase 2)
-
-            // ── Integración con pagos.html (Fase 2) ──────────────────────
-            // El campo 'periodo' (YYYY-MM) permite que pagos.html filtre:
-            // db.collection('informes_airbnb').where('periodo', '>=', '2026-01')
-            // y sume total_neto al balance del mes
-
-            // ── Trazabilidad ──────
-            fuente:          'pdf_manual',
-            cargado_en:      firebase.firestore.FieldValue.serverTimestamp(),
-            cargado_por:     user.uid
-        };
-
-        try {
-            // Usar el período como ID del documento para evitar duplicados
-            await db.collection('informes_airbnb').doc(periodo).set(docData);
-            showToast(`Informe ${periodo} guardado.`, 'success');
-            document.getElementById('modalInforme').classList.remove('open');
-            await cargarTodo();
-        } catch(e) {
-            document.getElementById('modalErrorText').textContent = 'Error: ' + e.message;
-            errEl.style.display = 'flex';
-        } finally {
-            btn.textContent = 'Guardar informe';
-        }
-    };
-
-    // ─── MODAL: ACTUALIZAR CONCILIACIÓN ──────────────────────
-    window.abrirModalDeposito = function(informeId) {
-        const inf = informesCache.find(i => i.id === informeId);
-        if (!inf) return;
-        document.getElementById('dInformeId').value   = informeId;
-        document.getElementById('dCuentaId').value    = inf.cuentaId    || '';
-        document.getElementById('dEstado').value      = inf.estado_conciliacion || 'pendiente';
-        document.getElementById('dNotas').value       = inf.notas_conciliacion || '';
-        document.getElementById('modalDeposito').classList.add('open');
-    };
-
-    window.cerrarModalDeposito = function(e) {
-        if (e && e.target !== document.getElementById('modalDeposito')) return;
-        document.getElementById('modalDeposito').classList.remove('open');
-    };
-
-    window.guardarDeposito = async function() {
-        const id = document.getElementById('dInformeId').value;
-        try {
-            await db.collection('informes_airbnb').doc(id).update({
-                cuentaId:            document.getElementById('dCuentaId').value || null,
-                estado_conciliacion: document.getElementById('dEstado').value,
-                notas_conciliacion:  document.getElementById('dNotas').value.trim() || null,
-                actualizadoEn:       firebase.firestore.FieldValue.serverTimestamp(),
-                actualizadoPor:      user.uid
-            });
-            showToast('Conciliación actualizada.', 'success');
-            document.getElementById('modalDeposito').classList.remove('open');
-            await cargarTodo();
-        } catch(e) {
-            showToast('Error: ' + e.message, 'error');
-        }
-    };
-
-    // ─── ELIMINAR ─────────────────────────────────────────────
-    window.eliminarInforme = async function(id, periodo) {
-        if (!confirm(`¿Eliminar el informe del período ${periodo}? Esta acción no se puede deshacer.`)) return;
-        try {
-            await db.collection('informes_airbnb').doc(id).delete();
-            showToast('Informe eliminado.', 'warning');
-            await cargarTodo();
-        } catch(e) {
-            showToast('Error: ' + e.message, 'error');
-        }
-    };
-
-    // ─── INIT ─────────────────────────────────────────────────
-    await cargarTodo();
+await cargar();
 })();
 </script>
 </body>
