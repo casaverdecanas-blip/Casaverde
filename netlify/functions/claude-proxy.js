@@ -1,108 +1,168 @@
 // netlify/functions/claude-proxy.js
 //
-// Proxy inteligente v2: Recibe el formato de Anthropic desde informes-airbnb.html,
-// lo traduce al formato de Google Gemini 1.5 Flash en el servidor, y procesa gratis.
+// Proxy v3: traduce el formato Anthropic (con PDF base64) al formato Gemini 1.5 Flash.
+// Procesa documentos PDF reales, no solo texto.
+//
+// Variable de entorno requerida en Netlify:
+//   GEMINI_API_KEY → Settings → Environment variables
 
 exports.handler = async function(event, context) {
 
-    // Solo aceptar POST
     if (event.httpMethod !== 'POST') {
         return {
             statusCode: 405,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ error: 'Método no permitido. Usar POST.' })
+            body: JSON.stringify({ error: 'Método no permitido.' })
         };
     }
 
-    // Verificar la API key de Gemini configurada en GitHub/Netlify
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
         return {
             statusCode: 500,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ error: 'GEMINI_API_KEY no configurada en el servidor.' })
+            body: JSON.stringify({ error: 'GEMINI_API_KEY no configurada en Netlify.' })
         };
     }
 
     try {
-        const incomingBody = JSON.parse(event.body);
-        
-        // --- TRADUCCIÓN DE FORMATO: De Anthropic a Gemini ---
-        // Extraemos el texto que venía en el formato de Claude
-        let userPrompt = "Procesar información de formulario."; // Texto por defecto
-        
-        if (incomingBody.messages && incomingBody.messages.length > 0) {
-            userPrompt = incomingBody.messages[0].content;
-        } else if (incomingBody.prompt) {
-            userPrompt = incomingBody.prompt;
+        const incoming = JSON.parse(event.body);
+
+        // ── EXTRAER PARTES DEL MENSAJE ────────────────────────
+        // El front-end manda:
+        // messages[0].content = [
+        //   { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: '...' } },
+        //   { type: 'text', text: 'prompt...' }
+        // ]
+
+        const message = incoming.messages?.[0];
+        if (!message) {
+            return {
+                statusCode: 400,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ error: 'No se recibieron mensajes.' })
+            };
         }
 
-        // Estructuramos el cuerpo exacto que Gemini 1.5 Flash necesita
-        const geminiRequestBody = {
-            contents: [
-                {
-                    parts: [
-                        { text: userPrompt }
-                    ]
+        const parts = [];
+        const content = message.content;
+
+        if (typeof content === 'string') {
+            parts.push({ text: content });
+
+        } else if (Array.isArray(content)) {
+            for (const part of content) {
+
+                if (part.type === 'text') {
+                    // Texto plano → pasa directo
+                    parts.push({ text: part.text });
+
+                } else if (part.type === 'document' && part.source?.type === 'base64') {
+                    // PDF → formato inlineData que Gemini requiere
+                    parts.push({
+                        inlineData: {
+                            mimeType: part.source.media_type || 'application/pdf',
+                            data:     part.source.data  // base64 puro, sin prefijo data:...
+                        }
+                    });
+
+                } else if (part.type === 'image' && part.source?.type === 'base64') {
+                    parts.push({
+                        inlineData: {
+                            mimeType: part.source.media_type || 'image/jpeg',
+                            data:     part.source.data
+                        }
+                    });
                 }
-            ]
+            }
+        }
+
+        if (parts.length === 0) {
+            return {
+                statusCode: 400,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ error: 'No se pudieron extraer partes del mensaje.' })
+            };
+        }
+
+        // ── BODY PARA GEMINI ──────────────────────────────────
+        const geminiBody = {
+            contents: [{ parts }],
+            generationConfig: {
+                temperature:     0,     // Sin creatividad — extracción exacta de datos
+                maxOutputTokens: 1500
+            }
         };
 
-        // URL oficial de Google AI Studio para el modelo gratuito Gemini 1.5 Flash
+        // ── LLAMAR A GEMINI 1.5 FLASH ─────────────────────────
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-        // Llamada a la API de Google
         const response = await fetch(url, {
-            method: 'POST',
+            method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(geminiRequestBody)
+            body:    JSON.stringify(geminiBody)
         });
 
         const googleData = await response.json();
 
         if (!response.ok) {
+            console.error('Gemini error:', JSON.stringify(googleData));
             return {
                 statusCode: response.status,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify(googleData)
+                headers: {
+                    'Content-Type':                'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                body: JSON.stringify({
+                    error:   'Error de Gemini: ' + (googleData.error?.message || response.status),
+                    details: googleData
+                })
             };
         }
 
-        // --- TRADUCCIÓN DE RESPUESTA: De Gemini a lo que espera el Front-End ---
-        // Tu HTML original espera encontrar la respuesta en data.content[0].text
-        // Adaptamos la respuesta de Google para que simule ser Claude y la web no rompa
-        const textoRespuestaGemini = googleData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        // ── EXTRAER TEXTO DE GEMINI ───────────────────────────
+        const textoRespuesta = googleData.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-        const fakeClaudeResponse = {
-            id: "gemini-converted-" + Date.now(),
-            type: "message",
-            role: "assistant",
-            model: "gemini-1.5-flash",
-            content: [
-                {
-                    type: "text",
-                    text: textoRespuestaGemini
-                }
-            ]
-        };
+        if (!textoRespuesta) {
+            return {
+                statusCode: 500,
+                headers: {
+                    'Content-Type':                'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                body: JSON.stringify({
+                    error:   'Gemini devolvió respuesta vacía.',
+                    details: googleData
+                })
+            };
+        }
 
+        // ── RESPUESTA EN FORMATO ANTHROPIC ────────────────────
+        // El front-end espera data.content[0].text — lo simulamos
         return {
             statusCode: 200,
             headers: {
                 'Content-Type':                'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            body: JSON.stringify(fakeClaudeResponse)
+            body: JSON.stringify({
+                id:      'gemini-' + Date.now(),
+                type:    'message',
+                role:    'assistant',
+                model:   'gemini-1.5-flash',
+                content: [{ type: 'text', text: textoRespuesta }]
+            })
         };
 
     } catch (error) {
+        console.error('claude-proxy error:', error);
         return {
             statusCode: 500,
             headers: {
                 'Content-Type':                'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            body: JSON.stringify({ error: 'Error interno en la conversión a Gemini: ' + error.message })
+            body: JSON.stringify({ error: 'Error interno: ' + error.message })
         };
     }
 };
