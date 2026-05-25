@@ -670,10 +670,15 @@ window.procesarPDF = async function(file) {
         });
     } catch(e){log('❌ '+e.message,'err');return;}
 
-    log('✅ PDF listo. Enviando a Claude...','ok');
+    log('✅ PDF listo. Enviando a Gemini...','ok');
+
+    // Lista de cuentas para que Gemini sugiera la cuenta receptora
+    const cuentasConocidas = cuentas.length
+        ? cuentas.map(c => '- "' + c.nombre + '" (' + c.moneda + ') → id: "' + c.id + '"').join('\n')
+        : '- Sin cuentas registradas aún';
 
     const PROMPT=`Sos un extractor de datos de informes de Airbnb en PDF.
-Extrae TODOS los datos numéricos y respondé ÚNICAMENTE con JSON válido, sin texto adicional ni markdown.
+Extrae TODOS los datos y respondé ÚNICAMENTE con JSON válido, sin texto adicional ni markdown.
 
 Formato exacto:
 {
@@ -687,6 +692,14 @@ Formato exacto:
   "impuesto_airbnb": número,
   "noches_reservadas": número,
   "anfitrion": "nombre del anfitrión",
+  "formas_cobro": [
+    {
+      "nombre_pdf": "texto exacto de la forma de cobro como aparece en el PDF",
+      "monto": número,
+      "moneda": "BRL" o "USD" o "UYU",
+      "cuenta_id_sugerida": "id de la cuenta más probable de la lista, o null"
+    }
+  ],
   "cabanas": [
     {
       "caba_id": 1 o 2 o 3,
@@ -706,14 +719,23 @@ Mapeo de cabañas:
 - "Departamento ideal para familias" → caba_id: 2
 - "Loft en Canasvieiras cerquita de la playa" → caba_id: 3
 
-Si un campo no aparece, usá 0. No inventes datos.`;
+Cuentas registradas en el sistema — para sugerir cuenta_id_sugerida en formas_cobro:
+${cuentasConocidas}
+
+Para cuenta_id_sugerida: buscá coincidencia por nombre del titular entre el PDF y la lista.
+Si el PDF dice "Maria Florencia de Tezanos Pinto" o "Ch 1550" → buscá esa cuenta.
+Si dice "PayPal" → buscá la cuenta PayPal con moneda BRL.
+Si dice "Western Union" o "Mauro Gastaldello" → buscá esa cuenta.
+Si no hay coincidencia clara → usá null.
+
+Si un campo no aparece, usá 0 para números y [] para arrays. No inventes datos.`;
 
     try {
-        const res=await fetch('https://api.anthropic.com/v1/messages',{
+        const res=await fetch('https://casaverdecanas.netlify.app/.netlify/functions/claude-proxy',{
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({
-                model:'claude-sonnet-4-20250514',
+                model:'gemini-1.5-flash',
                 max_tokens:1000,
                 messages:[{
                     role:'user',
@@ -771,6 +793,21 @@ function poblarForm(d) {
         sv(p+'n',c.total_neto||'');   sv(p+'i',c.impuesto_airbnb||'');
         sv(p+'no',c.noches||'');      sv(p+'pn',c.promedio_noches||'');
     });
+    // Autoseleccionar cuenta receptora si Gemini sugirió una
+    if (d.formas_cobro && d.formas_cobro.length > 0) {
+        // Buscar la forma de cobro con mayor monto
+        const principal = d.formas_cobro.reduce((a,b) => (b.monto||0) > (a.monto||0) ? b : a, d.formas_cobro[0]);
+        if (principal.cuenta_id_sugerida) {
+            const sel = document.getElementById('eCuenta');
+            // Verificar que el id existe en el select
+            const opt = Array.from(sel.options).find(o => o.value === principal.cuenta_id_sugerida);
+            if (opt) {
+                sel.value = principal.cuenta_id_sugerida;
+                log('🏦 Cuenta autodetectada: ' + opt.text, 'ok');
+            }
+        }
+    }
+
     const tit=d.tipo==='anual'?`Año ${d.anio}`:`${MESES[d.mes]||''} ${d.anio}`;
     document.getElementById('prevTitulo').textContent=`Datos extraídos — ${tit}`;
     document.getElementById('prevCard').classList.add('visible');
