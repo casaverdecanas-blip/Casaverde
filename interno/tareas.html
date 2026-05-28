@@ -192,6 +192,104 @@
             margin-top: var(--space-2);
         }
 
+        /* ── HISTORIAL DE CUMPLIMIENTOS ────────────────────────– */
+        .historial-box {
+            background: var(--color-info-xlight);
+            border: 1.5px solid rgba(2, 119, 189, 0.15);
+            border-radius: var(--radius-md);
+            padding: var(--space-4);
+            margin-bottom: var(--space-4);
+        }
+
+        .historial-box .section-title {
+            font-size: var(--text-sm);
+            font-weight: 700;
+            color: var(--color-info);
+            margin-bottom: var(--space-3);
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+
+        .historial-box .section-title .material-icons {
+            font-size: 18px;
+        }
+
+        .historial-resumen {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: var(--space-3);
+            margin-bottom: var(--space-4);
+        }
+
+        .historial-stat {
+            background: rgba(2, 119, 189, 0.1);
+            border-radius: var(--radius-sm);
+            padding: var(--space-2) var(--space-3);
+            text-align: center;
+        }
+
+        .historial-stat__valor {
+            font-size: var(--text-lg);
+            font-weight: 800;
+            color: var(--color-info);
+            line-height: 1;
+            margin-bottom: 2px;
+        }
+
+        .historial-stat__label {
+            font-size: var(--text-xs);
+            color: var(--color-text-muted);
+            font-weight: 600;
+        }
+
+        .historial-usuarios {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-2);
+        }
+
+        .historial-usuario-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: var(--radius-sm);
+            padding: var(--space-2) var(--space-3);
+            font-size: var(--text-xs);
+        }
+
+        .historial-usuario-row__nombre {
+            font-weight: 700;
+            color: var(--color-text-primary);
+            flex: 1;
+        }
+
+        .historial-usuario-row__stats {
+            display: flex;
+            gap: var(--space-3);
+            font-size: var(--text-xs);
+            color: var(--color-text-secondary);
+        }
+
+        .historial-usuario-row__stat {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            min-width: 60px;
+        }
+
+        .historial-usuario-row__stat-valor {
+            font-weight: 700;
+            color: var(--color-info);
+            font-size: var(--text-sm);
+        }
+
+        .historial-usuario-row__stat-label {
+            font-size: 10px;
+            color: var(--color-text-muted);
+        }
+
         /* ── TABS ────────────────────────────────────────────── */
         .tabs-bar {
             display: flex;
@@ -320,6 +418,16 @@
             <!-- Descripción -->
             <div id="modalDescBox" style="display:none;" class="mb-4"></div>
 
+            <!-- HISTORIAL DE CUMPLIMIENTOS -->
+            <div id="historialBox" class="historial-box" style="display:none;">
+                <div class="section-title">
+                    <span class="material-icons">assessment</span>
+                    Historial de cumplimientos
+                </div>
+                <div id="historialResumenBox" class="historial-resumen"></div>
+                <div id="historialUsuariosBox" class="historial-usuarios"></div>
+            </div>
+
             <!-- Colaboradores trabajando ahora -->
             <div id="colabsActivosBox" style="display:none;" class="mb-4">
                 <p class="section-title">Trabajando ahora</p>
@@ -363,7 +471,7 @@
     const {
         escapeHtml, formatFecha, formatFechaHora, formatHoras,
         urgenciaTarea, badgePrioridad, showEmpty, showError, showToast,
-        iniciarTarea, pausarTarea, finalizarTarea
+        iniciarTarea, pausarTarea, finalizarTarea, getHistorialTareas
     } = CVC;
 
     const currentUser  = { uid: user.uid, nombre: userData.nombre || user.email };
@@ -813,6 +921,67 @@
             descBox.style.display = 'none';
         }
 
+        // ── HISTORIAL DE CUMPLIMIENTOS ──────────────────────
+        const historialBox = document.getElementById('historialBox');
+        try {
+            const historial = await getHistorialTareas(tarea.id);
+            
+            if (historial.totalVeces > 0) {
+                // Resumen de estadísticas
+                const resumenHTML = `
+                    <div class="historial-stat">
+                        <div class="historial-stat__valor">${historial.totalVeces}</div>
+                        <div class="historial-stat__label">Finalizaciones</div>
+                    </div>
+                    <div class="historial-stat">
+                        <div class="historial-stat__valor">${formatHoras(historial.resumen.totalHoras)}</div>
+                        <div class="historial-stat__label">Horas totales</div>
+                    </div>
+                    <div class="historial-stat">
+                        <div class="historial-stat__valor">R$ ${historial.resumen.totalMonto.toFixed(2)}</div>
+                        <div class="historial-stat__label">Costo total</div>
+                    </div>
+                    <div class="historial-stat">
+                        <div class="historial-stat__valor">${historial.resumen.colaboradoresUnicos}</div>
+                        <div class="historial-stat__label">Usuarios</div>
+                    </div>
+                `;
+                document.getElementById('historialResumenBox').innerHTML = resumenHTML;
+
+                // Listado de usuarios
+                const usuariosHTML = historial.porUsuario.map(u => `
+                    <div class="historial-usuario-row">
+                        <div class="historial-usuario-row__nombre">${escapeHtml(u.nombre)}</div>
+                        <div class="historial-usuario-row__stats">
+                            <div class="historial-usuario-row__stat">
+                                <div class="historial-usuario-row__stat-valor">${u.veces}</div>
+                                <div class="historial-usuario-row__stat-label">Veces</div>
+                            </div>
+                            <div class="historial-usuario-row__stat">
+                                <div class="historial-usuario-row__stat-valor">${formatHoras(u.horasTotal)}</div>
+                                <div class="historial-usuario-row__stat-label">Horas</div>
+                            </div>
+                            <div class="historial-usuario-row__stat">
+                                <div class="historial-usuario-row__stat-valor">R$ ${u.montoTotal.toFixed(2)}</div>
+                                <div class="historial-usuario-row__stat-label">Ganó</div>
+                            </div>
+                            <div class="historial-usuario-row__stat">
+                                <div class="historial-usuario-row__stat-label">Última vez</div>
+                                <div class="historial-usuario-row__stat-valor">${u.ultimaVez ? formatFecha(u.ultimaVez) : '—'}</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                document.getElementById('historialUsuariosBox').innerHTML = usuariosHTML;
+                historialBox.style.display = 'block';
+            } else {
+                historialBox.style.display = 'none';
+            }
+        } catch (e) {
+            console.warn('Error cargando historial:', e);
+            historialBox.style.display = 'none';
+        }
+
         // Colaboradores activos ahora
         const activosBox = document.getElementById('colabsActivosBox');
         if (activos.length) {
@@ -999,90 +1168,12 @@
     };
 
     function mostrarErrorEdicion(msg) {
-        document.getElementById('editErrorText').textContent = msg;
-        document.getElementById('editError').style.display   = 'flex';
+        const el = document.getElementById('editError');
+        el.textContent = msg;
+        el.style.display = 'block';
     }
-
-    window.eliminarTarea = async function() {
-        const id = document.getElementById('editTareaId').value;
-        const t  = tareasCache.find(x => x.id === id);
-        if (!confirm('¿Eliminar la tarea "' + (t?.nombre || id) + '"?\nEsta acción no se puede deshacer.')) return;
-        try {
-            await db.collection('tareas').doc(id).delete();
-            showToast('Tarea eliminada.', 'warning');
-            document.getElementById('modalEditarOverlay').style.display = 'none';
-            await cargarTareas();
-        } catch(e) {
-            showToast('Error: ' + e.message, 'error');
-        }
-    };
-
 
 })();
 </script>
-
-<!-- ── MODAL EDITAR TAREA (admin) ──────────────────────────── -->
-<div class="modal-overlay" id="modalEditarOverlay" style="display:none;" onclick="cerrarModalEditar(event)">
-    <div class="modal" onclick="event.stopPropagation()">
-        <div class="modal__header">
-            <div class="modal__title">
-                <span class="material-icons">edit</span>
-                Editar tarea
-            </div>
-            <button class="modal__close" onclick="cerrarModalEditar()">
-                <span class="material-icons">close</span>
-            </button>
-        </div>
-        <div class="modal__body">
-            <input type="hidden" id="editTareaId">
-            <div class="form-group">
-                <label class="form-label">Nombre</label>
-                <input type="text" id="editNombre" class="form-control">
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Fecha</label>
-                    <input type="date" id="editFecha" class="form-control">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Prioridad</label>
-                    <select id="editPrioridad" class="form-control">
-                        <option value="alta">Alta</option>
-                        <option value="media">Media</option>
-                        <option value="baja">Baja</option>
-                    </select>
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Monto limpieza (R$)</label>
-                    <input type="number" id="editMonto" class="form-control" step="10" min="0">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Recurrencia (días, 0=única)</label>
-                    <input type="number" id="editRecurrencia" class="form-control" min="0">
-                </div>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Descripción / notas</label>
-                <textarea id="editDescripcion" class="form-control" rows="4"></textarea>
-            </div>
-            <div class="alert alert-error" id="editError" style="display:none;">
-                <span class="material-icons">error_outline</span>
-                <span id="editErrorText"></span>
-            </div>
-        </div>
-        <div class="modal__footer">
-            <button class="btn btn-ghost" onclick="cerrarModalEditar()">Cancelar</button>
-            <button class="btn btn-danger btn-sm" id="btnEliminarTarea" onclick="eliminarTarea()">
-                <span class="material-icons">delete</span>
-            </button>
-            <button class="btn btn-primary" id="btnGuardarTarea" onclick="guardarEdicionTarea()">
-                <span class="material-icons">save</span>
-                <span id="btnGuardarTareaText">Guardar</span>
-            </button>
-        </div>
-    </div>
-</div>
 </body>
 </html>
