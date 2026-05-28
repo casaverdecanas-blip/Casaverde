@@ -546,6 +546,112 @@ async function finalizarTarea(tareaId, currentUser) {
 }
 
 
+// ── HISTORIAL DE CUMPLIMIENTOS DE TAREA ──────────────────────
+//
+//  Consulta historial_tareas filtrando por tareaId.
+//  Retorna datos analíticos para evaluar cumplimiento y si la tarea
+//  necesita modificación.
+//
+//  @param tareaId {string} ID de la tarea
+//  @returns {Promise<{
+//     totalVeces: number,
+//     ultimaVez: Date|null,
+//     porUsuario: [{nombre, veces, ultimaVez, horasTotal, montoTotal}, ...],
+//     resumen: {totalHoras, totalMonto, colaboradoresUnicos}
+//  }>}
+//
+async function getHistorialTareas(tareaId) {
+    try {
+        const snap = await db.collection('historial_tareas')
+            .where('tareaId', '==', tareaId)
+            .orderBy('finalizadoEn', 'desc')
+            .get();
+
+        const registros = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        if (registros.length === 0) {
+            return {
+                totalVeces: 0,
+                ultimaVez: null,
+                porUsuario: [],
+                resumen: {
+                    totalHoras: 0,
+                    totalMonto: 0,
+                    colaboradoresUnicos: 0
+                }
+            };
+        }
+
+        // Agrupar por colaborador
+        const porUid = {};
+        let totalHoras = 0;
+        let totalMonto = 0;
+        const colaboradoresUnicos = new Set();
+
+        for (const reg of registros) {
+            const colaboradores = reg.colaboradores || [];
+            for (const col of colaboradores) {
+                colaboradoresUnicos.add(col.uid);
+                if (!porUid[col.uid]) {
+                    porUid[col.uid] = {
+                        nombre: col.nombre,
+                        veces: 0,
+                        horasTotal: 0,
+                        montoTotal: 0,
+                        ultimaVez: null
+                    };
+                }
+                porUid[col.uid].veces += 1;
+                porUid[col.uid].horasTotal += col.horas || 0;
+                porUid[col.uid].montoTotal += col.montoRecibido || 0;
+                
+                // Actualizar última vez
+                const finalizadoEn = reg.finalizadoEn?.toDate 
+                    ? reg.finalizadoEn.toDate() 
+                    : new Date(reg.finalizadoEn);
+                if (!porUid[col.uid].ultimaVez || finalizadoEn > porUid[col.uid].ultimaVez) {
+                    porUid[col.uid].ultimaVez = finalizadoEn;
+                }
+            }
+            totalHoras += reg.totalHoras || 0;
+            totalMonto += reg.monto || 0;
+        }
+
+        // Convertir a array y ordenar por veces (descendente)
+        const porUsuarioArray = Object.values(porUid)
+            .sort((a, b) => b.veces - a.veces);
+
+        // Última finalización global
+        const ultimaVez = registros[0]?.finalizadoEn?.toDate 
+            ? registros[0].finalizadoEn.toDate() 
+            : null;
+
+        return {
+            totalVeces: registros.length,
+            ultimaVez,
+            porUsuario: porUsuarioArray,
+            resumen: {
+                totalHoras: parseFloat(totalHoras.toFixed(2)),
+                totalMonto: parseFloat(totalMonto.toFixed(2)),
+                colaboradoresUnicos: colaboradoresUnicos.size
+            }
+        };
+    } catch (e) {
+        console.warn('getHistorialTareas:', e.message);
+        return {
+            totalVeces: 0,
+            ultimaVez: null,
+            porUsuario: [],
+            resumen: {
+                totalHoras: 0,
+                totalMonto: 0,
+                colaboradoresUnicos: 0
+            }
+        };
+    }
+}
+
+
 // ── URGENCIA DE TAREA ────────────────────────────────────────
 //
 //  ⚫ Gris    — fecha futura (todavía no llegó)
@@ -860,6 +966,7 @@ window.CVC = {
     crearTareaLimpieza,
     sincronizarDisponibilidad,
     iniciarTarea, pausarTarea, finalizarTarea, urgenciaTarea,
+    getHistorialTareas,
     escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
     showLoading, showEmpty, showError, showToast
 };
