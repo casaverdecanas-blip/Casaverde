@@ -1,0 +1,213 @@
+name: Claude Edit via Issue
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  claude-edit:
+    # Solo se activa si el título del Issue empieza con [EDIT]
+    if: startsWith(github.event.issue.title, '[EDIT]')
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install @anthropic-ai/sdk
+
+      - name: Run Claude edit
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          node << 'EOF'
+          const Anthropic = require('@anthropic-ai/sdk');
+          const fs = require('fs');
+          const path = require('path');
+
+          const client = new Anthropic();
+
+          // Leer archivos del proyecto para dar contexto a Claude
+          function readProjectFiles() {
+            const extensions = ['.html', '.js', '.css'];
+            const ignore = ['node_modules', '.git', '.github'];
+            let files = {};
+            
+            function walk(dir) {
+              const items = fs.readdirSync(dir);
+              for (const item of items) {
+                if (ignore.includes(item)) continue;
+                const fullPath = path.join(dir, item);
+                const stat = fs.statSync(fullPath);
+                if (stat.isDirectory()) {
+                  walk(fullPath);
+                } else if (extensions.includes(path.extname(item))) {
+                  // Limitar a 50KB por archivo para no exceder contexto
+                  const content = fs.readFileSync(fullPath, 'utf8');
+                  if (content.length < 51200) {
+                    files[fullPath.replace('./', '')] = content;
+                  }
+                }
+              }
+            }
+            walk('.');
+            return files;
+          }
+
+          async function main() {
+            const issueTitle = process.env.ISSUE_TITLE;
+            const issueBody = process.env.ISSUE_BODY || '';
+            const issueNumber = process.env.ISSUE_NUMBER;
+            
+            console.log(`Processing Issue #${issueNumber}: ${issueTitle}`);
+            
+            const projectFiles = readProjectFiles();
+            const fileList = Object.keys(projectFiles).join('\n');
+            
+            // Construir el contexto con los archivos del proyecto
+            const filesContext = Object.entries(projectFiles)
+              .map(([name, content]) => `=== ${name} ===\n${content}`)
+              .join('\n\n');
+
+            const prompt = `Sos el asistente de desarrollo de Casa Verde Canas, un sistema de gestión de cabañas en Canasvieiras, Florianópolis, Brasil.
+
+El proyecto usa:
+- Firebase Firestore como base de datos
+- HTML5 + JavaScript ES6+ sin frameworks
+- design-system.css como sistema de diseño compartido
+- utils.js para Firebase init, navegación y helpers
+
+ARCHIVOS DEL PROYECTO:
+${filesContext}
+
+---
+
+SOLICITUD DE MODIFICACIÓN (Issue #${issueNumber}):
+Título: ${issueTitle}
+Descripción: ${issueBody}
+
+---
+
+INSTRUCCIONES:
+1. Analizá la solicitud y determiná qué archivos necesitan modificarse
+2. Realizá los cambios necesarios respetando el estilo y la estructura existente
+3. Respondé ÚNICAMENTE con un JSON válido con esta estructura exacta:
+
+{
+  "summary": "Descripción breve de los cambios realizados",
+  "files": [
+    {
+      "path": "ruta/al/archivo.html",
+      "content": "contenido completo del archivo modificado"
+    }
+  ]
+}
+
+No incluyas explicaciones fuera del JSON. Solo el JSON.`;
+
+            const response = await client.messages.create({
+              model: 'claude-sonnet-4-20250514',
+              max_tokens: 8000,
+              messages: [{ role: 'user', content: prompt }]
+            });
+
+            const responseText = response.content[0].text;
+            
+            // Extraer JSON de la respuesta
+            let result;
+            try {
+              // Intentar parsear directo
+              result = JSON.parse(responseText);
+            } catch (e) {
+              // Buscar JSON dentro del texto
+              const match = responseText.match(/\{[\s\S]*\}/);
+              if (match) {
+                result = JSON.parse(match[0]);
+              } else {
+                throw new Error('No se pudo extraer JSON de la respuesta de Claude');
+              }
+            }
+
+            console.log('Summary:', result.summary);
+            console.log('Files to modify:', result.files.map(f => f.path));
+
+            // Escribir los archivos modificados
+            for (const file of result.files) {
+              const dir = path.dirname(file.path);
+              if (dir !== '.') {
+                fs.mkdirSync(dir, { recursive: true });
+              }
+              fs.writeFileSync(file.path, file.content, 'utf8');
+              console.log(`Written: ${file.path}`);
+            }
+
+            // Guardar el summary para el siguiente step
+            fs.writeFileSync('/tmp/edit_summary.txt', result.summary);
+          }
+
+          main().catch(err => {
+            console.error(err);
+            process.exit(1);
+          });
+          EOF
+
+      - name: Create Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          # Configurar git
+          git config user.name "Claude Bot"
+          git config user.email "claude-bot@casaverdecanas.com.br"
+          
+          # Crear rama para este issue
+          BRANCH_NAME="claude-edit/issue-${ISSUE_NUMBER}"
+          git checkout -b "$BRANCH_NAME"
+          
+          # Verificar si hay cambios
+          if git diff --quiet && git diff --staged --quiet; then
+            echo "No hay cambios para commitear"
+            exit 0
+          fi
+          
+          # Agregar y commitear cambios
+          git add -A
+          SUMMARY=$(cat /tmp/edit_summary.txt 2>/dev/null || echo "Cambios automáticos via Claude")
+          git commit -m "✏️ [Claude] ${SUMMARY}
+
+          Solicitado en Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
+          
+          # Push de la rama
+          git push origin "$BRANCH_NAME"
+          
+          # Crear Pull Request
+          gh pr create \
+            --title "✏️ [Claude] ${ISSUE_TITLE}" \
+            --body "## Cambios realizados por Claude
+
+          **Solicitado en:** Issue #${ISSUE_NUMBER}
+          **Resumen:** $(cat /tmp/edit_summary.txt)
+
+          ---
+          > ⚠️ Revisá los cambios antes de hacer merge. Claude puede cometer errores.
+
+          Closes #${ISSUE_NUMBER}" \
+            --base main \
+            --head "$BRANCH_NAME"
