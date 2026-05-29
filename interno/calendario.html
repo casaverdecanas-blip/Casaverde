@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendario · Casa Verde Canas</title>
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .calendar-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-4);
+            margin-bottom: var(--space-4);
+            align-items: center;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            font-size: var(--text-sm);
+            font-weight: 600;
+            color: var(--color-text-secondary);
+        }
+        .legend-dot {
+            width: 14px; height: 14px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .filtros-cabanas {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-2);
+            margin-bottom: var(--space-5);
+        }
+        .filtro-cab {
+            padding: var(--space-1) var(--space-4);
+            border-radius: var(--radius-full);
+            border: 2px solid transparent;
+            font-size: var(--text-sm);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-family: var(--font-body);
+        }
+        .filtro-cab.inactivo {
+            background: var(--color-surface-2) !important;
+            color: var(--color-text-muted) !important;
+            border-color: var(--color-border) !important;
+        }
+
+        /* Popup info evento */
+        .evento-popup {
+            background: var(--color-surface);
+            border-radius: var(--radius-lg);
+            padding: var(--space-4) var(--space-5);
+            box-shadow: var(--shadow-lg);
+            position: fixed;
+            z-index: 2000;
+            min-width: 260px;
+            max-width: 340px;
+            border-top: 4px solid var(--color-primary);
+        }
+        .evento-popup h4 {
+            font-size: var(--text-sm);
+            font-weight: 700;
+            color: var(--color-primary);
+            margin-bottom: var(--space-2);
+        }
+        .evento-popup p {
+            font-size: var(--text-sm);
+            color: var(--color-text-secondary);
+            line-height: 1.7;
+        }
+        .evento-popup .close-popup {
+            position: absolute; top: var(--space-2); right: var(--space-3);
+            background: none; border: none; cursor: pointer;
+            font-size: 20px; color: var(--color-text-muted);
+            font-family: var(--font-body);
+        }
+
+        .fc { font-size: 13px; }
+        .fc .fc-toolbar { flex-wrap: wrap; gap: 8px; }
+        .fc .fc-toolbar-title { font-size: 1.1em; }
+        @media (max-width: 600px) {
+            .fc { font-size: 11px; }
+            .fc .fc-daygrid-day-number { font-size: 11px; padding: 2px 4px; }
+            .fc .fc-col-header-cell-cushion { font-size: 11px; padding: 4px 2px; }
+            .fc .fc-event-title { font-size: 10px; }
+            .fc .fc-toolbar { gap: 4px; }
+            .fc .fc-toolbar-title { font-size: 1em; }
+            .fc .fc-button { padding: 3px 8px; font-size: 11px; }
+        }
+        .fc .fc-button-primary {
+            background: var(--color-primary) !important;
+            border-color: var(--color-primary) !important;
+            font-family: var(--font-body) !important;
+        }
+        .fc .fc-button-primary:not(:disabled):hover {
+            background: var(--color-primary-dark) !important;
+        }
+        .fc .fc-button-primary:not(:disabled).fc-button-active {
+            background: var(--color-primary-dark) !important;
+        }
+        .fc .fc-today-button { text-transform: capitalize !important; }
+        .fc .fc-col-header-cell { font-size: var(--text-xs) !important; font-weight: 700 !important; }
+        .fc .fc-daygrid-day-number { font-size: var(--text-xs) !important; }
+        .fc .fc-event { border-radius: 4px !important; font-size: 11px !important; }
+
+        .precio-box {
+            background: var(--color-primary-light);
+            border-radius: var(--radius-md);
+            padding: var(--space-3) var(--space-4);
+            margin-bottom: var(--space-4);
+            font-size: var(--text-sm);
+            line-height: 2;
+            display: none;
+        }
+        .precio-total { font-size: var(--text-lg); font-weight: 800; color: var(--color-primary); }
+    </style>
+</head>
+<body>
+
+<!-- ── HEADER ──────────────────────────────────────────────── -->
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">cottage</span>
+        Casa Verde Canas
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip">
+            <span class="material-icons">person</span>
+            <span id="userName">—</span>
+        </div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons">logout</span>
+            Salir
+        </button>
+    </div>
+</header>
+
+<!-- ── NAVEGACIÓN ──────────────────────────────────────────── -->
+<nav class="admin-nav" id="appNav"></nav>
+
+<!-- ── CONTENIDO ───────────────────────────────────────────── -->
+<main class="admin-content">
+    <div class="card">
+
+        <!-- Leyenda de cabañas (dinámica) -->
+        <div class="calendar-legend" id="leyenda">
+            <div class="state-loading"><div class="spinner spinner-sm"></div><span>Cargando cabañas...</span></div>
+        </div>
+
+        <!-- Filtros por cabaña -->
+        <div class="filtros-cabanas" id="filtrosCabanas"></div>
+
+        <!-- Sincronización Airbnb -->
+        <div style="display:flex; align-items:center; gap:var(--space-2); margin-bottom:var(--space-3); flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" id="btnSincronizar" onclick="sincronizarAirbnb()">
+                <span class="material-icons">sync</span>
+                Sincronizar Airbnb
+            </button>
+            <span id="syncStatus" style="font-size:var(--text-xs); color:var(--color-text-muted);"></span>
+        </div>
+
+        <!-- Leyenda fija -->
+        <div style="display:flex; gap:var(--space-5); flex-wrap:wrap; margin-bottom:var(--space-5);">
+            <div class="legend-item"><div class="legend-dot" style="background:#95a5a6;"></div> Limpieza pendiente</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--color-success);"></div> Limpieza completada</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--color-danger); opacity:0.5;"></div> Anulada</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#e74c3c;"></div> Airbnb/externo</div>
+        </div>
+
+        <!-- Calendario -->
+        <div id="calendar"></div>
+
+    </div>
+</main>
+
+<!-- ── MODAL: Nueva reserva rápida ─────────────────────────── -->
+<div class="modal-overlay" id="modalOverlay" style="display:none;" onclick="cerrarModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+
+        <div class="modal__header">
+            <div class="modal__title">
+                <span class="material-icons">add_circle</span>
+                Nueva reserva rápida
+            </div>
+            <button class="modal__close" onclick="cerrarModal()">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+
+        <div class="modal__body">
+            <input type="hidden" id="fechaInicio">
+            <input type="hidden" id="fechaFin">
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Check-in</label>
+                    <input type="date" id="checkInDisplay" class="form-control" readonly style="background:var(--color-surface-2);">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Check-out</label>
+                    <input type="date" id="checkOutDisplay" class="form-control" readonly style="background:var(--color-surface-2);">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Cabaña <span class="required">*</span></label>
+                    <select id="cabanaSelect" class="form-control"></select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Estado</label>
+                    <select id="estadoSelect" class="form-control">
+                        <option value="confirmada">Confirmada</option>
+                        <option value="pendiente">Pendiente</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Nombre del cliente <span class="required">*</span></label>
+                <input type="text" id="clienteNombre" class="form-control" placeholder="Nombre completo">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Adultos</label>
+                    <input type="number" id="adultos" class="form-control" value="2" min="1" onchange="calcularEstimado()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Niños</label>
+                    <input type="number" id="ninos" class="form-control" value="0" min="0" onchange="calcularEstimado()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Origen</label>
+                    <select id="origen" class="form-control">
+                        <option value="directa">Directa</option>
+                        <option value="airbnb">Airbnb</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Notas</label>
+                <textarea id="notas" class="form-control" rows="2" placeholder="Observaciones..."></textarea>
+            </div>
+
+            <div class="precio-box" id="precioBox">
+                <div>🌙 Noches: <strong id="pNoches">—</strong></div>
+                <div>🏠 Alojamiento: <strong id="pSubtotal">—</strong></div>
+                <div>🧹 Limpieza: <strong id="pLimpieza">—</strong></div>
+                <div class="precio-total">💰 Total: <span id="pTotal">—</span></div>
+            </div>
+
+            <!-- Alerta de solapamiento -->
+            <div class="alert alert-error" id="alertaSolapamiento" style="display:none;">
+                <span class="material-icons">event_busy</span>
+                <span id="alertaSolapamientoText"></span>
+            </div>
+
+            <div class="alert alert-error" id="errorModal" style="display:none;">
+                <span class="material-icons">error_outline</span>
+                <span id="errorModalText"></span>
+            </div>
+        </div>
+
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+            <button class="btn btn-primary" id="btnGuardar" onclick="crearReservaRapida()">
+                <span class="material-icons">save</span>
+                <span id="btnGuardarText">Guardar reserva</span>
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<!-- Popup info evento -->
+<div id="eventoPopup" class="evento-popup" style="display:none;">
+    <button class="close-popup" onclick="cerrarPopup()">×</button>
+    <h4 id="popupTitulo"></h4>
+    <p id="popupDetalle"></p>
+    <div style="margin-top:var(--space-3); display:flex; gap:var(--space-2); flex-wrap:wrap;">
+        <a id="popupLinkReserva" href="#" class="btn btn-primary btn-sm" style="display:none;">
+            Ver reserva <span class="material-icons">arrow_forward</span>
+        </a>
+        <button id="popupBtnImportar" class="btn btn-secondary btn-sm" style="display:none;" onclick="importarReservaAirbnb()">
+            <span class="material-icons">download</span> Importar reserva
+        </button>
+    </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script src="utils.js"></script>
+<script>
+(async () => {
+    const { user, userData } = await CVC.verificarAuth('admin');
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+    CVC.renderNav('calendario.html');
+
+    const db = CVC.db;
+    const {
+        escapeHtml, calcularPrecio, crearTareaLimpieza,
+        sincronizarDisponibilidad, sincronizarDesdeGCal,
+        verificarDisponibilidadCabana, mensajeConflicto,
+        colorCabana, formatFecha, showToast
+    } = CVC;
+
+    const GOOGLE_API_KEY = 'AIzaSyBnfunjUkUXiRjKCPRotpFHE9tGgn6tV8E';
+
+    let cabanasCache   = [];
+    let calendar       = null;
+    let ultimoPrecio   = null;
+    let filtrosActivos = new Set();
+    let eventoAirbnbActual = null;
+
+    // ── Cargar cabañas ────────────────────────────────────────
+    async function cargarCabanas() {
+        try {
+            const snap = await db.collection('cabanas').get();
+            cabanasCache = snap.docs
+                .map((d, i) => ({ docId: d.id, color: colorCabana(i), ...d.data() }))
+                .filter(c => c.activa === true || c.activa === 'true' || c.activa === undefined)
+                .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+
+            cabanasCache.forEach(c => filtrosActivos.add(c.id));
+
+            const sinCalId = cabanasCache.filter(c => !c.google_calendar_id);
+            if (sinCalId.length > 0) {
+                console.warn('Cabañas sin google_calendar_id: ' + sinCalId.map(c => c.id).join(', '));
+            }
+
+            // Leyenda
+            document.getElementById('leyenda').innerHTML = cabanasCache.map(c =>
+                `<div class="legend-item">
+                    <div class="legend-dot" style="background:${c.color};"></div>
+                    ${escapeHtml(c.nombre?.es || 'Cabaña ' + c.id)}
+                </div>`
+            ).join('');
+
+            // Filtros
+            document.getElementById('filtrosCabanas').innerHTML =
+                cabanasCache.map(c =>
+                    `<button class="filtro-cab" data-caba="${c.id}"
+                        style="border-color:${c.color}; color:${c.color}; background:${c.color}22;"
+                        onclick="toggleFiltro(${c.id}, '${c.color}', this)">
+                        ${escapeHtml(c.nombre?.es || 'Cabaña ' + c.id)}
+                    </button>`
+                ).join('') +
+                `<button class="filtro-cab" data-caba="tareas"
+                    style="border-color:#95a5a6; color:#95a5a6; background:#95a5a622;"
+                    onclick="toggleFiltro('tareas', '#95a5a6', this)">
+                    🧹 Tareas
+                </button>`;
+
+            // Select del modal
+            document.getElementById('cabanaSelect').innerHTML = cabanasCache.map(c =>
+                `<option value="${c.id}">${escapeHtml(c.nombre?.es || 'Cabaña ' + c.id)}</option>`
+            ).join('');
+
+        } catch(e) {
+            console.error('Error cargando cabañas:', e);
+            document.getElementById('leyenda').innerHTML =
+                `<span style="color:var(--color-danger);font-size:12px;">Error cargando cabañas: ${e.message}</span>`;
+        }
+    }
+
+    window.toggleFiltro = function(cabaId, color, btn) {
+        if (filtrosActivos.has(cabaId)) {
+            filtrosActivos.delete(cabaId);
+            btn.classList.add('inactivo');
+        } else {
+            filtrosActivos.add(cabaId);
+            btn.classList.remove('inactivo');
+        }
+        calendar?.refetchEvents();
+    };
+
+    // ── Sincronizar Airbnb ────────────────────────────────────
+    //    Usa CVC.sincronizarDesdeGCal() — función centralizada en utils.js
+    //    NO genera tareas de limpieza. El admin las crea al completar la reserva.
+    async function sincronizarAirbnb() {
+        const btnSync  = document.getElementById('btnSincronizar');
+        const statusEl = document.getElementById('syncStatus');
+
+        if (btnSync) { btnSync.disabled = true; btnSync.textContent = '⏳ Sincronizando...'; }
+
+        try {
+            const { creadas, omitidas, canceladas, error } =
+                await sincronizarDesdeGCal(GOOGLE_API_KEY, cabanasCache);
+
+            if (error) {
+                showToast('⚠ ' + error, 'warning');
+                return;
+            }
+
+            const partes = [];
+            if (creadas > 0)    partes.push(`${creadas} nueva${creadas !== 1 ? 's' : ''} importada${creadas !== 1 ? 's' : ''}`);
+            if (omitidas > 0)   partes.push(`${omitidas} ya existía${omitidas !== 1 ? 'n' : ''}`);
+            if (canceladas > 0) partes.push(`⚠ ${canceladas} cancelada${canceladas !== 1 ? 's' : ''} en Airbnb`);
+            const msg = partes.length ? partes.join(' · ') : 'Sin cambios.';
+
+            showToast(msg, canceladas > 0 ? 'warning' : creadas > 0 ? 'success' : 'info');
+            if (statusEl) statusEl.textContent = 'Última sync: ' + new Date().toLocaleTimeString('es-AR');
+            if (creadas > 0 || canceladas > 0) calendar?.refetchEvents();
+
+        } catch(e) {
+            showToast('Error en sincronización: ' + e.message, 'error');
+            console.error(e);
+        } finally {
+            if (btnSync) {
+                btnSync.disabled = false;
+                btnSync.innerHTML = '<span class="material-icons">sync</span> Sincronizar Airbnb';
+            }
+        }
+    }
+
+    // ── Obtener eventos para el calendario ────────────────────
+    async function obtenerEventos() {
+        const [reservasSnap, tareasSnap] = await Promise.all([
+            db.collection('reservas').get(),
+            db.collection('tareas').where('tipo', '==', 'limpieza').get()
+        ]);
+
+        const eventos = [];
+
+        // Reservas de Firestore
+        reservasSnap.forEach(doc => {
+            const r = doc.data();
+            if (!filtrosActivos.has(r.caba)) return;
+
+            const cabana      = cabanasCache.find(c => c.id == r.caba);
+            const esCancelada = r.estado === 'airbnb_cancelada';
+            const color = esCancelada
+                ? '#e07b00'
+                : r.estado === 'anulada'
+                ? '#e74c3c'
+                : r.estado === 'pendiente'
+                ? (cabana?.color || '#95a5a6') + 'aa'
+                : (cabana?.color || '#95a5a6');
+
+            eventos.push({
+                title: `${esCancelada ? '⚠ ' : r.estado === 'pendiente' ? '⏳ ' : r.estado === 'anulada' ? '❌ ' : ''}${r.nombre} (C${r.caba})`,
+                start:     r.checkIn?.toDate?.(),
+                end:       r.checkOut?.toDate?.(),
+                color,
+                textColor: 'white',
+                extendedProps: {
+                    tipo:        'reserva',
+                    reservaId:   doc.id,
+                    estado:      r.estado,
+                    caba:        r.caba,
+                    nombre:      r.nombre,
+                    huespedes:   r.huespedes,
+                    totalBRL:    r.totalBRL,
+                    origen:      r.origen,
+                    airbnb_id:   r.airbnb_id || null,
+                    esCancelada
+                }
+            });
+        });
+
+        // Tareas de limpieza
+        if (filtrosActivos.has('tareas')) {
+            tareasSnap.forEach(doc => {
+                const t = doc.data();
+                if (!t.fechaInicio) return;
+                eventos.push({
+                    title:    `🧹 C${t.cabana || t.cabaña || '?'} ${t.estado === 'finalizada' ? '✅' : ''}`,
+                    start:    t.fechaInicio,
+                    allDay:   true,
+                    color:    t.estado === 'finalizada' ? 'var(--color-success, #2e7d32)' : '#95a5a6',
+                    textColor: 'white',
+                    extendedProps: {
+                        tipo:       'tarea',
+                        tareaId:    doc.id,
+                        completada: t.estado === 'finalizada',
+                        cabana:     t.cabana || t.cabaña,
+                        monto:      t.monto
+                    }
+                });
+            });
+        }
+
+        return eventos;
+    }
+
+    // ── Inicializar calendario ────────────────────────────────
+    function iniciarCalendario() {
+        calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
+            initialView:       'dayGridMonth',
+            locale:            'es',
+            height:            'auto',
+            contentHeight:     'auto',
+            handleWindowResize: true,
+            stickyHeaderDates: true,
+            headerToolbar: {
+                left:   'prev,next today',
+                center: 'title',
+                right:  'dayGridMonth,listWeek'
+            },
+            selectable:   true,
+            selectMirror: true,
+            select:       (info) => abrirModalNuevaReserva(info.startStr, info.endStr),
+            events:       async () => await obtenerEventos(),
+            eventClick:   (info) => mostrarPopup(info),
+            eventDidMount: (info) => {
+                if (info.event.extendedProps.estado === 'anulada') {
+                    info.el.style.opacity = '0.45';
+                }
+            }
+        });
+        calendar.render();
+    }
+
+    // ── Popup de evento ───────────────────────────────────────
+    function mostrarPopup(info) {
+        cerrarPopup();
+        const ep       = info.event.extendedProps;
+        const el       = document.getElementById('eventoPopup');
+        const linkRes  = document.getElementById('popupLinkReserva');
+        const btnImp   = document.getElementById('popupBtnImportar');
+
+        document.getElementById('popupTitulo').textContent = info.event.title;
+        eventoAirbnbActual = null;
+
+        if (ep.tipo === 'reserva') {
+            const esAirbnbPendiente = ep.origen === 'airbnb' && ep.estado === 'pendiente';
+            const esCancelada       = ep.estado === 'airbnb_cancelada';
+
+            document.getElementById('popupDetalle').innerHTML =
+                (esCancelada
+                    ? '<div style="background:#fff3e0;border:1px solid #e07b00;border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:11px;color:#e07b00;"><strong>⚠️ Esta reserva ya no figura en Airbnb.</strong> Verificar si fue cancelada y anularla si corresponde.</div>'
+                    : '') +
+                (esAirbnbPendiente
+                    ? '<div style="background:#fff3e0;border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:11px;color:#e07b00;">⚠️ Reserva Airbnb sin completar — hacé clic en "Completar" para agregar los datos del huésped</div>'
+                    : '') +
+                `Estado: <strong>${ep.estado}</strong><br>` +
+                `Cabaña: ${ep.caba}<br>` +
+                `Huéspedes: ${ep.huespedes || '—'}<br>` +
+                `Total: R$ ${(ep.totalBRL || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}<br>` +
+                `Origen: ${ep.origen || '—'}`;
+
+            linkRes.href         = `reservas.html?id=${ep.reservaId}`;
+            linkRes.style.display = 'inline-flex';
+            linkRes.textContent   = esCancelada
+                ? '🗑 Ver y anular'
+                : esAirbnbPendiente
+                ? '✏️ Completar reserva'
+                : '→ Ver reserva';
+
+            if (esAirbnbPendiente || esCancelada) {
+                eventoAirbnbActual   = ep;
+                btnImp.style.display = 'inline-flex';
+                btnImp.textContent   = esCancelada ? 'Anular reserva' : 'Completar datos';
+            } else {
+                btnImp.style.display = 'none';
+            }
+
+        } else {
+            document.getElementById('popupDetalle').innerHTML =
+                `Estado: <strong>${ep.completada ? '✅ Completada' : '⏳ Pendiente'}</strong><br>` +
+                `Monto: R$ ${ep.monto || '—'}`;
+            linkRes.style.display = 'none';
+            btnImp.style.display  = 'none';
+        }
+
+        const rect = info.el.getBoundingClientRect();
+        el.style.top  = `${rect.bottom + window.scrollY + 8}px`;
+        el.style.left = `${Math.min(rect.left, window.innerWidth - 360)}px`;
+        el.style.display = 'block';
+    }
+
+    window.cerrarPopup = function() {
+        document.getElementById('eventoPopup').style.display = 'none';
+    };
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.evento-popup') && !e.target.closest('.fc-event')) cerrarPopup();
+    });
+
+    window.importarReservaAirbnb = function() {
+        if (eventoAirbnbActual?.reservaId) {
+            window.location.href = `reservas.html?id=${eventoAirbnbActual.reservaId}`;
+        }
+    };
+
+    // ── Modal nueva reserva rápida ────────────────────────────
+    window.abrirModalNuevaReserva = function(start, end) {
+        document.getElementById('fechaInicio').value     = start;
+        document.getElementById('fechaFin').value        = end;
+        document.getElementById('checkInDisplay').value  = start;
+        document.getElementById('checkOutDisplay').value = end;
+        document.getElementById('clienteNombre').value   = '';
+        document.getElementById('estadoSelect').value    = 'confirmada';
+        document.getElementById('adultos').value         = '2';
+        document.getElementById('ninos').value           = '0';
+        document.getElementById('origen').value          = 'directa';
+        document.getElementById('notas').value           = '';
+        document.getElementById('precioBox').style.display          = 'none';
+        document.getElementById('errorModal').style.display         = 'none';
+        document.getElementById('alertaSolapamiento').style.display = 'none';
+        ultimoPrecio = null;
+        calcularEstimado();
+        verificarSolapamientoLive();
+        document.getElementById('modalOverlay').style.display = 'flex';
+    };
+
+    // Verificación de solapamiento en tiempo real
+    let solapTimer = null;
+    function verificarSolapamientoLive() {
+        clearTimeout(solapTimer);
+        solapTimer = setTimeout(async () => {
+            const cabaId = parseInt(document.getElementById('cabanaSelect').value);
+            const start  = document.getElementById('fechaInicio').value;
+            const end    = document.getElementById('fechaFin').value;
+            const alerta = document.getElementById('alertaSolapamiento');
+            if (!cabaId || !start || !end) { alerta.style.display = 'none'; return; }
+            try {
+                const { disponible, conflicto } = await verificarDisponibilidadCabana(cabaId, start, end);
+                if (!disponible) {
+                    document.getElementById('alertaSolapamientoText').textContent = mensajeConflicto(conflicto);
+                    alerta.style.display = 'flex';
+                } else {
+                    alerta.style.display = 'none';
+                }
+            } catch(e) { alerta.style.display = 'none'; }
+        }, 400);
+    }
+
+    document.getElementById('cabanaSelect').addEventListener('change', () => {
+        calcularEstimado();
+        verificarSolapamientoLive();
+    });
+
+    window.cerrarModal = function(e) {
+        if (e && e.target !== document.getElementById('modalOverlay')) return;
+        document.getElementById('modalOverlay').style.display = 'none';
+    };
+
+    // ── Calcular precio estimado ──────────────────────────────
+    window.calcularEstimado = function() {
+        const cabaId   = parseInt(document.getElementById('cabanaSelect').value);
+        const checkIn  = document.getElementById('fechaInicio').value;
+        const checkOut = document.getElementById('fechaFin').value;
+        const adultos  = parseInt(document.getElementById('adultos').value) || 0;
+        const ninos    = parseInt(document.getElementById('ninos').value)   || 0;
+        if (!checkIn || !checkOut || !cabaId) return;
+
+        const cabana = cabanasCache.find(c => c.id == cabaId);
+        if (!cabana) return;
+
+        ultimoPrecio = calcularPrecio(cabana, checkIn, checkOut, adultos, ninos);
+        document.getElementById('pNoches').textContent   = ultimoPrecio.noches;
+        document.getElementById('pSubtotal').textContent = `R$ ${ultimoPrecio.subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+        document.getElementById('pLimpieza').textContent = `R$ ${ultimoPrecio.limpieza.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+        document.getElementById('pTotal').textContent    = `R$ ${ultimoPrecio.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+        document.getElementById('precioBox').style.display = 'block';
+    };
+
+    // ── Crear reserva rápida ──────────────────────────────────
+    window.crearReservaRapida = async function() {
+        const cabaId  = parseInt(document.getElementById('cabanaSelect').value);
+        const nombre  = document.getElementById('clienteNombre').value.trim();
+        const start   = document.getElementById('fechaInicio').value;
+        const end     = document.getElementById('fechaFin').value;
+        const adultos = parseInt(document.getElementById('adultos').value) || 0;
+        const ninos   = parseInt(document.getElementById('ninos').value)   || 0;
+        const estado  = document.getElementById('estadoSelect').value;
+        const origen  = document.getElementById('origen').value;
+        const notas   = document.getElementById('notas').value.trim();
+
+        document.getElementById('errorModal').style.display         = 'none';
+        document.getElementById('alertaSolapamiento').style.display = 'none';
+
+        if (!nombre)        { mostrarErrorModal('El nombre del cliente es requerido.'); return; }
+        if (!start || !end) { mostrarErrorModal('Las fechas son requeridas.'); return; }
+        if (end <= start)   { mostrarErrorModal('El check-out debe ser posterior al check-in.'); return; }
+
+        const cabana = cabanasCache.find(c => c.id == cabaId);
+        if (!cabana) { mostrarErrorModal('Seleccioná una cabaña válida.'); return; }
+
+        const btn  = document.getElementById('btnGuardar');
+        const text = document.getElementById('btnGuardarText');
+        btn.disabled = true; text.textContent = 'Verificando disponibilidad...';
+
+        try {
+            // Verificar solapamiento antes de guardar
+            if (['confirmada', 'airbnb_activa'].includes(estado)) {
+                const { disponible, conflicto } = await verificarDisponibilidadCabana(cabaId, start, end);
+                if (!disponible) {
+                    document.getElementById('alertaSolapamientoText').textContent = mensajeConflicto(conflicto);
+                    document.getElementById('alertaSolapamiento').style.display = 'flex';
+                    btn.disabled = false; text.textContent = 'Guardar reserva';
+                    return;
+                }
+            }
+
+            text.textContent = 'Guardando...';
+
+            if (!ultimoPrecio) ultimoPrecio = calcularPrecio(cabana, start, end, adultos, ninos);
+
+            const reservaData = {
+                caba:             cabaId,
+                nombre,
+                checkIn:  firebase.firestore.Timestamp.fromDate(new Date(start + 'T12:00:00')),
+                checkOut: firebase.firestore.Timestamp.fromDate(new Date(end   + 'T12:00:00')),
+                adultos, ninos,
+                huespedes:        adultos + ninos,
+                origen, notas, estado,
+                totalBRL:         ultimoPrecio.total,
+                subtotalBRL:      ultimoPrecio.subtotal,
+                costoLimpiezaBRL: ultimoPrecio.limpieza,
+                noches:           ultimoPrecio.noches,
+                creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
+                creadoPor: user.uid
+            };
+
+            const ref = await db.collection('reservas').add(reservaData);
+            await sincronizarDisponibilidad(ref.id, reservaData);
+
+            if (estado === 'confirmada') {
+                await crearTareaLimpieza(ref.id, reservaData, user.uid);
+                showToast('Reserva creada · Calendario bloqueado · Tarea de limpieza generada.', 'success');
+            } else {
+                showToast('Reserva creada como pendiente.', 'success');
+            }
+
+            document.getElementById('modalOverlay').style.display = 'none';
+            calendar.refetchEvents();
+
+        } catch (e) {
+            mostrarErrorModal('Error: ' + e.message);
+        } finally {
+            btn.disabled = false; text.textContent = 'Guardar reserva';
+        }
+    };
+
+    function mostrarErrorModal(msg) {
+        document.getElementById('errorModalText').textContent = msg;
+        document.getElementById('errorModal').style.display   = 'flex';
+        document.getElementById('btnGuardar').disabled        = false;
+        document.getElementById('btnGuardarText').textContent = 'Guardar reserva';
+    }
+
+    // ── Init ──────────────────────────────────────────────────
+    await cargarCabanas();
+    iniciarCalendario();
+
+    // Sincronizar Airbnb al abrir el calendario
+    sincronizarAirbnb();
+
+})();
+</script>
+</body>
+</html>
