@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acceso Contador — Casa Verde Canas</title>
+<link rel="stylesheet" href="design-system.css">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="utils.js"></script>
+<style>
+.tokens-grid { display: grid; gap: 12px; margin-top: 16px; }
+.token-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: start;
+}
+.token-card.vencido { opacity: .55; border-color: var(--error); }
+.token-card.proximo { border-color: var(--warning, #f59e0b); }
+.token-card__label { font-weight: 600; font-size: .95rem; }
+.token-card__meta  { font-size: .82rem; color: var(--text-secondary); margin-top: 2px; }
+.token-card__link  {
+    font-size: .78rem;
+    font-family: monospace;
+    background: var(--surface-alt, #f4f4f4);
+    padding: 6px 10px;
+    border-radius: 6px;
+    word-break: break-all;
+    margin-top: 8px;
+    grid-column: 1 / -1;
+}
+.token-actions { display: flex; gap: 8px; align-items: center; }
+.badge-activo   { background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 99px; font-size: .75rem; font-weight: 600; }
+.badge-vencido  { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 99px; font-size: .75rem; font-weight: 600; }
+.badge-proximo  { background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 99px; font-size: .75rem; font-weight: 600; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="admin-layout">
+  <nav class="admin-nav" id="appNav"></nav>
+  <main class="admin-main">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Acceso Contador</h1>
+        <p class="page-subtitle">Genera links temporales para que la contadora acceda al informe fiscal sin necesidad de cuenta.</p>
+      </div>
+    </div>
+
+    <!-- NUEVO TOKEN -->
+    <div class="card" style="margin-bottom:24px">
+      <div class="card__header">
+        <h2 class="card__title"><span class="material-icons">add_circle</span> Generar nuevo acceso</h2>
+      </div>
+      <div class="card__body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Etiqueta (quién es)</label>
+            <input type="text" id="inpLabel" class="form-input" placeholder="Ej: Contadora Maria — junio 2025">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Vence en</label>
+            <select id="inpDias" class="form-input">
+              <option value="3">3 dias</option>
+              <option value="7" selected>7 dias</option>
+              <option value="14">14 dias</option>
+              <option value="30">30 dias</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="btnGenerar">
+          <span class="material-icons">vpn_key</span> Generar link
+        </button>
+      </div>
+    </div>
+
+    <!-- LINK GENERADO (oculto hasta generar) -->
+    <div class="card" id="cardLinkGenerado" style="display:none;margin-bottom:24px;border:2px solid var(--primary)">
+      <div class="card__header">
+        <h2 class="card__title"><span class="material-icons">check_circle</span> Link generado</h2>
+      </div>
+      <div class="card__body">
+        <p style="margin-bottom:8px;font-weight:600" id="txtLinkEtiqueta"></p>
+        <div class="token-card__link" id="txtLink" style="font-size:.9rem"></div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn btn-secondary" id="btnCopiar">
+            <span class="material-icons">content_copy</span> Copiar link
+          </button>
+          <button class="btn btn-secondary" id="btnWhatsApp">
+            <span class="material-icons">send</span> Enviar por WhatsApp
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOKENS EXISTENTES -->
+    <div class="card">
+      <div class="card__header">
+        <h2 class="card__title"><span class="material-icons">list</span> Accesos existentes</h2>
+        <button class="btn btn-ghost btn-sm" id="btnRefresh">
+          <span class="material-icons">refresh</span>
+        </button>
+      </div>
+      <div class="card__body" id="listaTokens">
+        <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+const BASE_URL = 'https://casaverdecanas.com.br/fiscal-contador.html';
+
+let currentUser = null;
+
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        const auth = await CVC.verificarAuth('admin');
+        currentUser = auth.userData;
+        CVC.renderNav('acceso-contador.html', 'admin');
+        cargarTokens();
+    } catch(e) {
+        console.error(e);
+    }
+});
+
+// ── GENERAR TOKEN ─────────────────────────────────────────────────────────────
+document.getElementById('btnGenerar').addEventListener('click', async function() {
+    const label = document.getElementById('inpLabel').value.trim();
+    const dias  = parseInt(document.getElementById('inpDias').value);
+
+    if (!label) { CVC.showToast('Ingresa una etiqueta para identificar el acceso', 'warning'); return; }
+
+    const btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="material-icons">hourglass_empty</span> Generando...';
+
+    try {
+        const tokenId  = generarTokenId();
+        const ahora    = new Date();
+        const vence    = new Date(ahora.getTime() + dias * 86400000);
+
+        await CVC.db.collection('config').doc('tokens_contador').set({
+            [tokenId]: {
+                label:    label,
+                creado:   firebase.firestore.Timestamp.fromDate(ahora),
+                vence:    firebase.firestore.Timestamp.fromDate(vence),
+                activo:   true,
+                creadoPor: currentUser?.nombre || 'admin'
+            }
+        }, { merge: true });
+
+        const link = BASE_URL + '?token=' + tokenId;
+
+        document.getElementById('txtLinkEtiqueta').textContent = label + ' — vence ' + vence.toLocaleDateString('es-AR');
+        document.getElementById('txtLink').textContent = link;
+        document.getElementById('cardLinkGenerado').style.display = 'block';
+        document.getElementById('cardLinkGenerado').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        document.getElementById('btnCopiar').onclick = function() {
+            navigator.clipboard.writeText(link).then(function() {
+                CVC.showToast('Link copiado', 'success');
+            });
+        };
+
+        document.getElementById('btnWhatsApp').onclick = function() {
+            const msg = 'Hola, te comparto el link para acceder al informe fiscal de Casa Verde Canas:\n' + link + '\n\nVence el ' + vence.toLocaleDateString('es-AR') + '.';
+            window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+        };
+
+        document.getElementById('inpLabel').value = '';
+        CVC.showToast('Acceso generado correctamente', 'success');
+        cargarTokens();
+
+    } catch(e) {
+        console.error(e);
+        CVC.showToast('Error al generar el acceso: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-icons">vpn_key</span> Generar link';
+    }
+});
+
+document.getElementById('btnRefresh').addEventListener('click', cargarTokens);
+
+// ── CARGAR TOKENS ─────────────────────────────────────────────────────────────
+async function cargarTokens() {
+    const contenedor = document.getElementById('listaTokens');
+    CVC.showLoading(contenedor);
+
+    try {
+        const snap = await CVC.db.collection('config').doc('tokens_contador').get();
+        const data = snap.exists ? snap.data() : {};
+        const ahora = new Date();
+
+        const tokens = Object.entries(data)
+            .map(([id, t]) => ({ id, ...t }))
+            .sort((a, b) => {
+                const fa = a.creado?.toDate ? a.creado.toDate() : new Date(a.creado || 0);
+                const fb = b.creado?.toDate ? b.creado.toDate() : new Date(b.creado || 0);
+                return fb - fa;
+            });
+
+        if (tokens.length === 0) {
+            CVC.showEmpty(contenedor, 'Sin accesos generados', 'Genera el primer link con el formulario de arriba.', 'vpn_key');
+            return;
+        }
+
+        contenedor.innerHTML = '<div class="tokens-grid">'
+            + tokens.map(function(t) {
+                const vence    = t.vence?.toDate ? t.vence.toDate() : new Date(t.vence || 0);
+                const creado   = t.creado?.toDate ? t.creado.toDate() : new Date(t.creado || 0);
+                const diasRest = Math.ceil((vence - ahora) / 86400000);
+                const activo   = t.activo !== false;
+                const vencido  = diasRest <= 0;
+                const proximo  = activo && !vencido && diasRest <= 2;
+
+                let estadoBadge = '';
+                let claseCard   = '';
+                if (!activo)      { estadoBadge = '<span class="badge-vencido">Revocado</span>'; claseCard = 'vencido'; }
+                else if (vencido) { estadoBadge = '<span class="badge-vencido">Vencido</span>';  claseCard = 'vencido'; }
+                else if (proximo) { estadoBadge = '<span class="badge-proximo">Vence en ' + diasRest + 'd</span>'; claseCard = 'proximo'; }
+                else              { estadoBadge = '<span class="badge-activo">Activo ' + diasRest + 'd</span>'; }
+
+                const link = BASE_URL + '?token=' + t.id;
+
+                return '<div class="token-card ' + claseCard + '">'
+                    + '<div>'
+                    + '<div class="token-card__label">' + CVC.escapeHtml(t.label || 'Sin etiqueta') + '</div>'
+                    + '<div class="token-card__meta">Creado ' + creado.toLocaleDateString('es-AR')
+                    + ' · Vence ' + vence.toLocaleDateString('es-AR') + '</div>'
+                    + '</div>'
+                    + '<div class="token-actions">' + estadoBadge
+                    + (activo && !vencido
+                        ? '<button class="btn btn-ghost btn-sm" title="Copiar link" onclick="copiarLink(\'' + t.id + '\')">'
+                          + '<span class="material-icons" style="font-size:18px">content_copy</span></button>'
+                        : '')
+                    + (activo && !vencido
+                        ? '<button class="btn btn-ghost btn-sm" title="Revocar acceso" style="color:var(--error)" onclick="revocarToken(\'' + t.id + '\')">'
+                          + '<span class="material-icons" style="font-size:18px">cancel</span></button>'
+                        : '')
+                    + '</div>'
+                    + '<div class="token-card__link">' + CVC.escapeHtml(link) + '</div>'
+                    + '</div>';
+            }).join('')
+            + '</div>';
+
+    } catch(e) {
+        CVC.showError(contenedor, 'Error al cargar accesos', e.message, cargarTokens);
+    }
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function generarTokenId() {
+    const chars  = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let resultado = '';
+    for (let i = 0; i < 24; i++) {
+        resultado += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return resultado;
+}
+
+window.copiarLink = function(tokenId) {
+    const link = BASE_URL + '?token=' + tokenId;
+    navigator.clipboard.writeText(link).then(function() {
+        CVC.showToast('Link copiado', 'success');
+    });
+};
+
+window.revocarToken = async function(tokenId) {
+    if (!confirm('Revocar este acceso? El link dejara de funcionar inmediatamente.')) return;
+    try {
+        await CVC.db.collection('config').doc('tokens_contador').update({
+            [tokenId + '.activo']: false
+        });
+        CVC.showToast('Acceso revocado', 'success');
+        cargarTokens();
+    } catch(e) {
+        CVC.showToast('Error al revocar: ' + e.message, 'error');
+    }
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Informe Fiscal — Casa Verde Canas</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --primary:    #2d6a4f;
+  --primary-lt: #e8f5e9;
+  --accent:     #52b788;
+  --text:       #1a1a2e;
+  --text-sub:   #5c677d;
+  --border:     #dee2e6;
+  --surface:    #ffffff;
+  --bg:         #f8f9fa;
+  --warning:    #f59e0b;
+  --error:      #dc2626;
+  --radius:     10px;
+}
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+/* ─ HEADER ─────────────────────────────────────────────────────────────── */
+.header {
+  background: var(--primary);
+  color: #fff;
+  padding: 20px 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.header__logo { font-size: 1.5rem; font-weight: 700; letter-spacing: -.5px; }
+.header__sub  { font-size: .85rem; opacity: .75; margin-top: 2px; }
+.header__badge {
+  margin-left: auto;
+  background: rgba(255,255,255,.2);
+  border-radius: 99px;
+  padding: 4px 14px;
+  font-size: .78rem;
+  font-weight: 600;
+}
+/* ─ CONTAINER ───────────────────────────────────────────────────────────── */
+.container { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+/* ─ STATES ──────────────────────────────────────────────────────────────── */
+#estadoValidacion {
+  text-align: center;
+  padding: 80px 24px;
+}
+.spinner {
+  width: 40px; height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.estado-error { color: var(--error); }
+.estado-error h2 { font-size: 1.3rem; margin-bottom: 8px; }
+/* ─ SECTION ─────────────────────────────────────────────────────────────── */
+.section { margin-bottom: 32px; }
+.section__title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  border-bottom: 2px solid var(--primary-lt);
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+}
+/* ─ CARD ─────────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+/* ─ KPI GRID ─────────────────────────────────────────────────────────────── */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+}
+.kpi__label { font-size: .78rem; color: var(--text-sub); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.kpi__valor { font-size: 1.6rem; font-weight: 700; margin: 6px 0 2px; color: var(--primary); }
+.kpi__nota  { font-size: .75rem; color: var(--text-sub); }
+/* ─ TABLE ────────────────────────────────────────────────────────────────── */
+.tabla { width: 100%; border-collapse: collapse; font-size: .87rem; }
+.tabla th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-sub);
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--border);
+}
+.tabla td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.tabla tr:last-child td { border-bottom: none; }
+.tabla tr:hover td { background: var(--bg); }
+/* ─ ALERTA ───────────────────────────────────────────────────────────────── */
+.alerta {
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-size: .87rem;
+  margin-bottom: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.alerta-warn { background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; }
+.alerta-info { background: var(--primary-lt); border: 1px solid var(--accent); color: var(--primary); }
+/* ─ SIMULADOR ────────────────────────────────────────────────────────────── */
+.simulador-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--text);
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.simulador-body { display: none; }
+.simulador-body.open { display: block; }
+.slider-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; margin-bottom: 12px; }
+.slider-row label { font-size: .87rem; font-weight: 500; }
+.slider-row input[type=range] { width: 100%; }
+.slider-val { font-weight: 700; font-size: .95rem; min-width: 80px; text-align: right; color: var(--primary); }
+.resultado-sim {
+  background: var(--primary-lt);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-top: 12px;
+}
+.resultado-sim__row { display: flex; justify-content: space-between; font-size: .88rem; margin-bottom: 6px; }
+.resultado-sim__total { font-size: 1.1rem; font-weight: 700; color: var(--primary); border-top: 1px solid var(--accent); padding-top: 8px; margin-top: 4px; display: flex; justify-content: space-between; }
+/* ─ NOTAS CONTADOR ───────────────────────────────────────────────────────── */
+.notas-area { width: 100%; min-height: 100px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); font-family: inherit; font-size: .9rem; resize: vertical; }
+/* ─ ACCIONES ─────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 18px; border-radius: var(--radius);
+  font-weight: 600; font-size: .87rem; cursor: pointer; border: none;
+}
+.btn-primary  { background: var(--primary); color: #fff; }
+.btn-secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
+.btn:hover { opacity: .88; }
+.acciones-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
+/* ─ BADGE ────────────────────────────────────────────────────────────────── */
+.badge { display: inline-block; border-radius: 99px; padding: 2px 8px; font-size: .75rem; font-weight: 600; }
+.badge-deducible   { background: #d1fae5; color: #065f46; }
+.badge-ndeducible  { background: #f3f4f6; color: #6b7280; }
+/* ─ PRINT ────────────────────────────────────────────────────────────────── */
+@media print {
+  .no-print { display: none !important; }
+  .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+@media (max-width: 600px) { .kpi-grid { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header__logo">Casa Verde Canas</div>
+    <div class="header__sub">Informe fiscal para a contabilidade</div>
+  </div>
+  <div class="header__badge" id="badgePeriodo">Carregando...</div>
+</div>
+
+<!-- ESTADO VALIDACION -->
+<div id="estadoValidacion">
+  <div class="spinner"></div>
+  <p style="color:var(--text-sub)">Verificando acesso...</p>
+</div>
+
+<!-- CONTENIDO PRINCIPAL (oculto hasta validar) -->
+<div id="contenidoPrincipal" style="display:none">
+<div class="container">
+
+  <!-- SECCION: IDENTIFICACION -->
+  <div class="section">
+    <div class="section__title">Identificacao do negocio</div>
+    <div class="card">
+      <table class="tabla">
+        <tr><td style="width:200px;font-weight:600;color:var(--text-sub)">Propriedade</td><td>Casa Verde Canas — Garopaba, SC, Brasil</td></tr>
+        <tr><td style="font-weight:600;color:var(--text-sub)">Titulares</td><td>Mauro Saenz / Florencia Saenz (poder notarial)</td></tr>
+        <tr><td style="font-weight:600;color:var(--text-sub)">Atividade</td><td>Locacao de temporada — 3 cabanas</td></tr>
+        <tr><td style="font-weight:600;color:var(--text-sub)">Plataforma</td><td>Airbnb + reservas diretas</td></tr>
+        <tr><td style="font-weight:600;color:var(--text-sub)">Moeda base</td><td>Real Brasileiro (BRL)</td></tr>
+        <tr><td style="font-weight:600;color:var(--text-sub)">Gerado em</td><td id="fechaGeneracion"></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- ALERTAS -->
+  <div class="section" id="seccionAlertas" style="display:none">
+    <div class="section__title">Avisos</div>
+    <div id="listaAlertas"></div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="section">
+    <div class="section__title">Resumo financeiro</div>
+    <div class="kpi-grid" id="kpiGrid">
+      <div class="kpi"><div class="kpi__label">Receitas brutas</div><div class="kpi__valor" id="kpiReceitas">—</div><div class="kpi__nota">ano corrente</div></div>
+      <div class="kpi"><div class="kpi__label">Despesas dedutiveis</div><div class="kpi__valor" id="kpiDespesas">—</div><div class="kpi__nota">registradas</div></div>
+      <div class="kpi"><div class="kpi__label">Base tributavel</div><div class="kpi__valor" id="kpiBase">—</div><div class="kpi__nota">receitas - despesas</div></div>
+      <div class="kpi"><div class="kpi__label">Reservas confirmadas</div><div class="kpi__valor" id="kpiReservas">—</div><div class="kpi__nota">ano corrente</div></div>
+    </div>
+  </div>
+
+  <!-- INGRESOS POR MES -->
+  <div class="section">
+    <div class="section__title">Receitas por mes</div>
+    <div class="card">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th>Mes</th>
+            <th>Reservas</th>
+            <th style="text-align:right">Total BRL</th>
+            <th style="text-align:right">Total USD</th>
+          </tr>
+        </thead>
+        <tbody id="tablaIngresos">
+          <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-sub)">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- GASTOS DEDUCIBLES -->
+  <div class="section">
+    <div class="section__title">Despesas dedutiveis registradas</div>
+    <div class="card">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Descricao</th>
+            <th>Categoria</th>
+            <th style="text-align:right">Valor BRL</th>
+            <th>Deducivel</th>
+          </tr>
+        </thead>
+        <tbody id="tablaGastos">
+          <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-sub)">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TIPOS DE CAMBIO -->
+  <div class="section">
+    <div class="section__title">Taxas de cambio utilizadas</div>
+    <div class="card">
+      <table class="tabla" id="tablaTiposCambio">
+        <tbody>
+          <tr><td colspan="2" style="text-align:center;color:var(--text-sub)">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- PAGOS CARNÊ-LEAO / DARF -->
+  <div class="section">
+    <div class="section__title">Registros fiscais (Carne-Leao / DARF)</div>
+    <div class="card">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th>Competencia</th>
+            <th>Tipo</th>
+            <th style="text-align:right">Valor BRL</th>
+            <th>Status</th>
+            <th>Vencimento</th>
+          </tr>
+        </thead>
+        <tbody id="tablaFiscal">
+          <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-sub)">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SIMULADOR (colapsable) -->
+  <div class="section no-print">
+    <div class="section__title">Simulador fiscal (uso interno)</div>
+    <button class="simulador-toggle" id="btnSimulador">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/></svg>
+      Abrir simulador de IRPF
+    </button>
+    <div class="simulador-body" id="simuladorBody">
+      <div class="card">
+        <div class="slider-row">
+          <label>Receita bruta mensal (R$)</label>
+          <span class="slider-val" id="valReceita">R$ 8.000</span>
+        </div>
+        <input type="range" min="1000" max="30000" step="500" value="8000" id="slReceita" style="width:100%;margin-bottom:16px">
+
+        <div class="slider-row">
+          <label>Despesas dedutiveis mensais (R$)</label>
+          <span class="slider-val" id="valDespesasSim">R$ 2.900</span>
+        </div>
+        <input type="range" min="0" max="15000" step="100" value="2900" id="slDespesas" style="width:100%;margin-bottom:16px">
+
+        <div class="resultado-sim" id="resultadoSim"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NOTAS DEL CONTADOR -->
+  <div class="section">
+    <div class="section__title">Observacoes da contabilidade</div>
+    <div class="card">
+      <div style="margin-bottom:8px;font-size:.85rem;color:var(--text-sub)">
+        Estas observacoes ficam armazenadas junto ao informe e ficam visiveis para o administrador.
+      </div>
+      <textarea class="notas-area" id="txtNotas" placeholder="Adicione aqui observacoes, recomendacoes ou pendencias..."></textarea>
+      <div style="margin-top:8px;font-size:.83rem;color:var(--text-sub)" id="lblFirma">
+        Sera registrado como: <strong id="lblTokenLabel"></strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACCIONES -->
+  <div class="acciones-bar no-print">
+    <button class="btn btn-primary" id="btnGuardarNotas">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      Salvar observacoes
+    </button>
+    <button class="btn btn-secondary" onclick="window.print()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Exportar / Imprimir PDF
+    </button>
+  </div>
+
+  <div style="height:48px"></div>
+</div>
+</div><!-- /contenidoPrincipal -->
+
+<script>
+const FIREBASE_CONFIG = {
+    apiKey:    'AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4',
+    authDomain:'casaverdecanas-199.firebaseapp.com',
+    projectId: 'casaverdecanas-199'
+};
+if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.firestore();
+
+const USD_BRL = 5.30;
+const MESES   = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+let tokenData    = null;
+let tokenIdGlobal = null;
+
+// ── VALIDAR TOKEN ─────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async function() {
+    const params  = new URLSearchParams(window.location.search);
+    const tokenId = params.get('token');
+
+    if (!tokenId) { mostrarError('Link invalido', 'Este link nao contem um token de acesso valido.'); return; }
+
+    try {
+        const snap = await db.collection('config').doc('tokens_contador').get();
+        if (!snap.exists) { mostrarError('Acesso nao encontrado', 'Nao foi possivel verificar seu acesso.'); return; }
+
+        const data = snap.data();
+        const t    = data[tokenId];
+
+        if (!t)               { mostrarError('Token invalido', 'Este link nao e valido ou nao existe.'); return; }
+        if (t.activo === false){ mostrarError('Acesso revogado', 'Este acesso foi revogado pelo administrador.'); return; }
+
+        const vence = t.vence?.toDate ? t.vence.toDate() : new Date(t.vence);
+        if (vence < new Date()) { mostrarError('Acesso expirado', 'Este link expirou em ' + vence.toLocaleDateString('pt-BR') + '. Solicite um novo link ao administrador.'); return; }
+
+        tokenData     = t;
+        tokenIdGlobal = tokenId;
+        document.getElementById('lblTokenLabel').textContent = t.label || tokenId;
+        document.getElementById('badgePeriodo').textContent  = 'Acesso valido ate ' + vence.toLocaleDateString('pt-BR');
+        document.getElementById('fechaGeneracion').textContent = new Date().toLocaleString('pt-BR');
+
+        document.getElementById('estadoValidacion').style.display   = 'none';
+        document.getElementById('contenidoPrincipal').style.display = 'block';
+
+        // Cargar notas previas si existen
+        cargarNotasPrevias(tokenId);
+
+        await Promise.all([cargarIngresos(), cargarGastos(), cargarTiposCambio(), cargarRegistrosFiscales()]);
+
+    } catch(e) {
+        mostrarError('Error de conexao', e.message);
+    }
+});
+
+function mostrarError(titulo, msg) {
+    document.getElementById('estadoValidacion').innerHTML =
+        '<div class="estado-error">'
+        + '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 16px;display:block"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+        + '<h2>' + titulo + '</h2>'
+        + '<p style="color:var(--text-sub);margin-top:6px">' + msg + '</p>'
+        + '</div>';
+}
+
+// ── CARGAR INGRESOS POR MES ───────────────────────────────────────────────────
+async function cargarIngresos() {
+    const tbody    = document.getElementById('tablaIngresos');
+    const anio     = new Date().getFullYear();
+    const desde    = new Date(anio, 0, 1);
+    const hasta    = new Date(anio, 11, 31, 23, 59, 59);
+
+    try {
+        const snap = await db.collection('pagos')
+            .where('fecha', '>=', firebase.firestore.Timestamp.fromDate(desde))
+            .where('fecha', '<=', firebase.firestore.Timestamp.fromDate(hasta))
+            .where('tipo', '==', 'ingreso')
+            .get();
+
+        const porMes = {};
+        let totalAnio = 0;
+        let totalReservas = 0;
+
+        snap.docs.forEach(function(doc) {
+            const d = doc.data();
+            const f = d.fecha?.toDate ? d.fecha.toDate() : new Date(d.fecha);
+            const m = f.getMonth();
+            if (!porMes[m]) porMes[m] = { total: 0, count: 0 };
+            porMes[m].total += d.monto || 0;
+            porMes[m].count++;
+            totalAnio += d.monto || 0;
+            totalReservas++;
+        });
+
+        // KPIs
+        document.getElementById('kpiReceitas').textContent  = 'R$ ' + fmt(totalAnio);
+        document.getElementById('kpiReservas').textContent  = totalReservas;
+
+        if (Object.keys(porMes).length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-sub)">Nenhuma receita registrada neste ano</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = Object.entries(porMes)
+            .sort((a,b) => a[0]-b[0])
+            .map(function([m, d]) {
+                return '<tr>'
+                    + '<td>' + MESES[parseInt(m)] + ' ' + anio + '</td>'
+                    + '<td>' + d.count + '</td>'
+                    + '<td style="text-align:right;font-weight:600">R$ ' + fmt(d.total) + '</td>'
+                    + '<td style="text-align:right;color:var(--text-sub)">U$ ' + fmt(d.total / USD_BRL) + '</td>'
+                    + '</tr>';
+            }).join('')
+            + '<tr style="background:var(--primary-lt)">'
+            + '<td><strong>Total ' + anio + '</strong></td>'
+            + '<td><strong>' + totalReservas + '</strong></td>'
+            + '<td style="text-align:right"><strong>R$ ' + fmt(totalAnio) + '</strong></td>'
+            + '<td style="text-align:right;color:var(--text-sub)"><strong>U$ ' + fmt(totalAnio / USD_BRL) + '</strong></td>'
+            + '</tr>';
+
+    } catch(e) {
+        tbody.innerHTML = '<tr><td colspan="4" style="color:var(--error);padding:16px">' + e.message + '</td></tr>';
+    }
+}
+
+// ── CARGAR GASTOS ─────────────────────────────────────────────────────────────
+async function cargarGastos() {
+    const tbody = document.getElementById('tablaGastos');
+    const anio  = new Date().getFullYear();
+    const desde = new Date(anio, 0, 1);
+    const hasta = new Date(anio, 11, 31, 23, 59, 59);
+
+    try {
+        const snap = await db.collection('gastos')
+            .where('fecha', '>=', firebase.firestore.Timestamp.fromDate(desde))
+            .where('fecha', '<=', firebase.firestore.Timestamp.fromDate(hasta))
+            .get();
+
+        const docs = snap.docs.map(d => d.data());
+        const deducibles    = docs.filter(d => d.deducible);
+        const totalDespesas = docs.reduce((s, d) => s + (d.monto || 0), 0);
+        const totalDeduc    = deducibles.reduce((s, d) => s + (d.monto || 0), 0);
+
+        // KPIs
+        document.getElementById('kpiDespesas').textContent = 'R$ ' + fmt(totalDeduc);
+        const totalReceitas = parseFloat((document.getElementById('kpiReceitas').textContent || '0').replace('R$ ','').replace(/\./g,'').replace(',','.')) || 0;
+        document.getElementById('kpiBase').textContent = 'R$ ' + fmt(Math.max(0, totalReceitas - totalDeduc));
+
+        if (docs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-sub)">Nenhuma despesa registrada</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = docs
+            .sort((a, b) => {
+                const fa = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
+                const fb = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
+                return fb - fa;
+            })
+            .map(function(d) {
+                const f  = d.fecha?.toDate ? d.fecha.toDate() : new Date(d.fecha || 0);
+                const dd = d.deducible;
+                return '<tr>'
+                    + '<td>' + f.toLocaleDateString('pt-BR') + '</td>'
+                    + '<td>' + (d.descripcion || d.concepto || '--') + '</td>'
+                    + '<td>' + (d.categoria || '--') + '</td>'
+                    + '<td style="text-align:right;font-weight:600">R$ ' + fmt(d.monto || 0) + '</td>'
+                    + '<td><span class="badge ' + (dd ? 'badge-deducible' : 'badge-ndeducible') + '">' + (dd ? 'Sim' : 'Nao') + '</span></td>'
+                    + '</tr>';
+            }).join('');
+
+    } catch(e) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:var(--error);padding:16px">' + e.message + '</td></tr>';
+    }
+}
+
+// ── TIPOS DE CAMBIO ───────────────────────────────────────────────────────────
+async function cargarTiposCambio() {
+    const tbody = document.querySelector('#tablaTiposCambio tbody');
+    try {
+        const snap = await db.collection('config').doc('tipos_cambio').get();
+        if (!snap.exists) { tbody.innerHTML = '<tr><td colspan="2">Nao configurado</td></tr>'; return; }
+        const d = snap.data();
+        tbody.innerHTML = Object.entries(d)
+            .map(function([k, v]) {
+                return '<tr><td style="font-weight:600;color:var(--text-sub);width:200px">' + k + '</td><td>' + v + '</td></tr>';
+            }).join('');
+    } catch(e) {
+        tbody.innerHTML = '<tr><td colspan="2" style="color:var(--error)">' + e.message + '</td></tr>';
+    }
+}
+
+// ── REGISTROS FISCALES ────────────────────────────────────────────────────────
+async function cargarRegistrosFiscales() {
+    const tbody = document.getElementById('tablaFiscal');
+    try {
+        const snap = await db.collection('config').doc('fiscal_registros').get();
+        if (!snap.exists || !snap.data()?.registros?.length) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-sub)">Nenhum registro fiscal encontrado</td></tr>';
+            verificarAlertas([]);
+            return;
+        }
+        const registros = snap.data().registros || [];
+        verificarAlertas(registros);
+        tbody.innerHTML = registros
+            .sort((a,b) => (b.competencia || '').localeCompare(a.competencia || ''))
+            .map(function(r) {
+                const pago    = r.pago     ? '<span style="color:#059669;font-weight:600">Pago</span>'    : '<span style="color:var(--error);font-weight:600">Pendente</span>';
+                return '<tr>'
+                    + '<td>' + (r.competencia || '--') + '</td>'
+                    + '<td>' + (r.tipo || '--') + '</td>'
+                    + '<td style="text-align:right;font-weight:600">R$ ' + fmt(r.valor || 0) + '</td>'
+                    + '<td>' + pago + '</td>'
+                    + '<td>' + (r.vencimento || '--') + '</td>'
+                    + '</tr>';
+            }).join('');
+    } catch(e) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:var(--error);padding:16px">' + e.message + '</td></tr>';
+    }
+}
+
+// ── ALERTAS ───────────────────────────────────────────────────────────────────
+function verificarAlertas(registros) {
+    const alertas  = [];
+    const hoy      = new Date();
+    const mesActual = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0');
+
+    const pendientes = registros.filter(r => !r.pago);
+    if (pendientes.length > 0) {
+        alertas.push({ tipo: 'warn', msg: pendientes.length + ' registro(s) fiscal(is) com pagamento pendente.' });
+    }
+
+    const tieneActual = registros.some(r => (r.competencia || '').startsWith(mesActual));
+    if (!tieneActual) {
+        alertas.push({ tipo: 'info', msg: 'Nao ha registro do mes atual (' + mesActual + '). Verificar se e necessario lancar.' });
+    }
+
+    if (alertas.length === 0) return;
+
+    document.getElementById('seccionAlertas').style.display = 'block';
+    document.getElementById('listaAlertas').innerHTML = alertas.map(function(a) {
+        return '<div class="alerta alerta-' + a.tipo + '">'
+            + '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+            + a.msg + '</div>';
+    }).join('');
+}
+
+// ── NOTAS ─────────────────────────────────────────────────────────────────────
+async function cargarNotasPrevias(tokenId) {
+    try {
+        const snap = await db.collection('config').doc('notas_contador').get();
+        if (snap.exists) {
+            const data = snap.data();
+            if (data[tokenId]?.notas) {
+                document.getElementById('txtNotas').value = data[tokenId].notas;
+            }
+        }
+    } catch(e) { /* ignorar */ }
+}
+
+document.getElementById('btnGuardarNotas').addEventListener('click', async function() {
+    const notas = document.getElementById('txtNotas').value.trim();
+    const btn   = this;
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
+    try {
+        await db.collection('config').doc('notas_contador').set({
+            [tokenIdGlobal]: {
+                notas,
+                firma:   tokenData?.label || tokenIdGlobal,
+                fecha:   firebase.firestore.FieldValue.serverTimestamp()
+            }
+        }, { merge: true });
+        btn.textContent = 'Salvo!';
+        setTimeout(function() {
+            btn.disabled = false;
+            btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Salvar observacoes';
+        }, 2000);
+    } catch(e) {
+        alert('Erro ao salvar: ' + e.message);
+        btn.disabled = false;
+    }
+});
+
+// ── SIMULADOR ─────────────────────────────────────────────────────────────────
+document.getElementById('btnSimulador').addEventListener('click', function() {
+    const body = document.getElementById('simuladorBody');
+    body.classList.toggle('open');
+    this.querySelector('svg').style.transform = body.classList.contains('open') ? 'rotate(90deg)' : '';
+});
+
+function calcularIRPF(base) {
+    // Tabela IRPF 2026 (Lei 15.270/2025)
+    if (base <= 5000)  return 0;
+    if (base <= 7350)  return 0; // desconto gradativo — aprox isento
+    if (base <= 10028) return base * 0.075 - 428.95;
+    if (base <= 13628) return base * 0.15  - 1220.99;
+    if (base <= 27500) return base * 0.225 - 2248.10;
+    return base * 0.275 - 3623.10;
+}
+
+function atualizarSimulador() {
+    const receita  = parseInt(document.getElementById('slReceita').value);
+    const despesas = parseInt(document.getElementById('slDespesas').value);
+    const base     = Math.max(0, receita - despesas);
+    const imposto  = Math.max(0, calcularIRPF(base));
+    const liquido  = receita - imposto;
+
+    document.getElementById('valReceita').textContent   = 'R$ ' + fmt(receita);
+    document.getElementById('valDespesasSim').textContent = 'R$ ' + fmt(despesas);
+
+    document.getElementById('resultadoSim').innerHTML =
+        '<div class="resultado-sim__row"><span>Receita bruta</span><span>R$ ' + fmt(receita) + '</span></div>'
+        + '<div class="resultado-sim__row"><span>(-) Despesas dedutiveis</span><span>R$ ' + fmt(despesas) + '</span></div>'
+        + '<div class="resultado-sim__row"><span>Base tributavel</span><span>R$ ' + fmt(base) + '</span></div>'
+        + '<div class="resultado-sim__row"><span>IRPF estimado</span><span>R$ ' + fmt(imposto) + '</span></div>'
+        + '<div class="resultado-sim__total"><span>Rendimento liquido estimado</span><span>R$ ' + fmt(liquido) + '</span></div>'
+        + '<div style="font-size:.75rem;color:var(--text-sub);margin-top:8px">Simulacao aproximada. Confirme com a contabilidade.</div>';
+}
+
+document.getElementById('slReceita').addEventListener('input', atualizarSimulador);
+document.getElementById('slDespesas').addEventListener('input', atualizarSimulador);
+atualizarSimulador();
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function fmt(n) {
+    return parseFloat(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+</script>
+</body>
+</html>
