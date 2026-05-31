@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cargar Pendientes · Casa Verde Canas</title>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, Arial, sans-serif; background: #f0f4f0; min-height: 100vh; }
+
+.header {
+  background: #2d6a4f; color: white; padding: 18px 20px;
+  display: flex; align-items: center; gap: 12px;
+}
+.header h1 { font-size: 1.1rem; font-weight: 700; }
+.header .sub { font-size: .78rem; opacity: .75; }
+
+.container { max-width: 700px; margin: 0 auto; padding: 20px 16px; }
+
+/* Login */
+.login-card {
+  background: white; border-radius: 14px; padding: 28px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.08); margin-bottom: 20px;
+}
+.login-card h2 { font-size: 1rem; color: #2d6a4f; margin-bottom: 16px; }
+input[type=email], input[type=password] {
+  width: 100%; padding: 13px 14px; border: 1.5px solid #ddd;
+  border-radius: 9px; font-size: .95rem; margin-bottom: 10px;
+  -webkit-appearance: none;
+}
+input:focus { outline: none; border-color: #2d6a4f; }
+.btn-green {
+  width: 100%; padding: 15px; background: #2d6a4f; color: white;
+  border: none; border-radius: 9px; font-size: 1rem; font-weight: 700;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-green:disabled { background: #9dc4b5; cursor: not-allowed; }
+.btn-green:active { background: #1e4d39; }
+
+/* Estado */
+.estado {
+  padding: 13px 16px; border-radius: 9px; font-size: .88rem;
+  font-weight: 600; margin-top: 12px; display: none;
+}
+.estado.ok    { background: #d1fae5; color: #065f46; }
+.estado.error { background: #fee2e2; color: #991b1b; }
+.estado.info  { background: #e0f2fe; color: #075985; }
+
+/* Lista de pendientes a cargar */
+.section-title {
+  font-size: .75rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .07em; color: #6b7280; margin: 20px 0 10px;
+}
+
+.pend-card {
+  background: white; border-radius: 12px; padding: 14px 16px;
+  margin-bottom: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  border-left: 4px solid #52b788;
+  display: flex; align-items: flex-start; gap: 12px;
+}
+.pend-card.urgente { border-left-color: #dc2626; }
+.pend-card.check {
+  opacity: .5;
+  border-left-color: #9ca3af;
+}
+
+.pend-card input[type=checkbox] {
+  width: 20px; height: 20px; margin-top: 1px; flex-shrink: 0;
+  accent-color: #2d6a4f; cursor: pointer;
+}
+
+.pend-body { flex: 1; min-width: 0; }
+.pend-texto { font-size: .92rem; font-weight: 600; color: #1a1a2e; line-height: 1.4; }
+.pend-texto.tachado { text-decoration: line-through; color: #9ca3af; }
+
+.pend-meta {
+  margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+}
+
+select.asignar {
+  padding: 5px 10px; border: 1.5px solid #ddd; border-radius: 99px;
+  font-size: .78rem; font-weight: 600; color: #374151;
+  background: #f9fafb; -webkit-appearance: none; cursor: pointer;
+}
+select.asignar:focus { outline: none; border-color: #2d6a4f; }
+
+.badge-urgente {
+  background: #fee2e2; color: #dc2626;
+  padding: 3px 10px; border-radius: 99px; font-size: .72rem; font-weight: 700;
+}
+.badge-vis-admin {
+  background: #fef3c7; color: #92400e;
+  padding: 3px 10px; border-radius: 99px; font-size: .72rem; font-weight: 700;
+}
+
+/* Botón cargar */
+.btn-cargar {
+  width: 100%; padding: 18px; background: #2d6a4f; color: white;
+  border: none; border-radius: 12px; font-size: 1.05rem; font-weight: 800;
+  cursor: pointer; margin-top: 16px;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  box-shadow: 0 4px 12px rgba(45,106,79,.3);
+}
+.btn-cargar:disabled { background: #9dc4b5; box-shadow: none; cursor: not-allowed; }
+.btn-cargar:active { background: #1e4d39; }
+
+.resumen {
+  background: white; border-radius: 12px; padding: 16px;
+  font-size: .85rem; color: #374151; line-height: 1.9;
+  margin-top: 12px; display: none;
+}
+.resumen strong { color: #2d6a4f; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header h1" style="font-size:1.1rem;font-weight:700">🌿 Casa Verde Canas</div>
+    <div class="sub">Cargador de pendientes desde foto</div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Login -->
+  <div class="login-card" id="loginBox">
+    <h2>🔐 Iniciar sesión como admin</h2>
+    <input type="email"    id="email" placeholder="Email de admin">
+    <input type="password" id="pass"  placeholder="Contraseña">
+    <button class="btn-green" onclick="login()">Entrar</button>
+    <div class="estado" id="estadoLogin"></div>
+  </div>
+
+  <!-- Lista a cargar -->
+  <div id="contenidoPrincipal" style="display:none">
+
+    <div class="section-title">✏️ Revisá y asigná antes de cargar</div>
+    <p style="font-size:.82rem;color:#6b7280;margin-bottom:12px">
+      Desmarcá los que ya están resueltos. Asigná responsable a cada uno. Los marcados como "HOY" se cargarán como urgentes.
+    </p>
+
+    <div id="listaPendientes"></div>
+
+    <button class="btn-cargar" id="btnCargar" onclick="cargarTodos()">
+      📥 Cargar pendientes seleccionados en el sistema
+    </button>
+
+    <div class="estado" id="estadoCarga"></div>
+    <div class="resumen" id="resumen"></div>
+  </div>
+
+</div>
+
+<script>
+firebase.initializeApp({
+  apiKey:    'AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4',
+  authDomain:'casaverdecanas-199.firebaseapp.com',
+  projectId: 'casaverdecanas-199'
+});
+const db   = firebase.firestore();
+const auth = firebase.auth();
+
+// ── USUARIOS DEL SISTEMA (se cargan desde Firestore) ──────────────────────────
+let usuarios = [{ uid: 'todos', nombre: 'Sin asignar' }];
+
+// ── PENDIENTES DE LA FOTO ──────────────────────────────────────────────────────
+const PENDIENTES = [
+  // URGENTE HOY
+  { texto: 'Tirar escombros', urgente: true,  visibilidad: 'todos' },
+
+  // MATERIALES (agrupados como un solo pendiente de compra)
+  { texto: 'Comprar materiales: fibrocemento, flotador, pontas, tacos 6mm, varilla 3/16, tornillos WC, tapa', urgente: false, visibilidad: 'todos' },
+
+  // TRABAJOS
+  { texto: 'Cambio de aceite',                                urgente: false, visibilidad: 'todos' },
+  { texto: 'Terraza — liberar y limpiar',                    urgente: false, visibilidad: 'todos' },
+  { texto: 'Ducha cabaña frente — revisar/reparar',          urgente: false, visibilidad: 'todos' },
+  { texto: 'Balcón nostro — revisar',                        urgente: false, visibilidad: 'todos' },
+  { texto: 'Losas piscina',                                  urgente: false, visibilidad: 'todos' },
+  { texto: 'Fluxómetro baño frente — instalar/revisar',      urgente: false, visibilidad: 'todos' },
+  { texto: 'Flotador baño frente — instalar/revisar',        urgente: false, visibilidad: 'todos' },
+  { texto: 'Luz cocina cabaña 2 — revisar',                  urgente: false, visibilidad: 'todos' },
+  { texto: 'Tapa WC delante — instalar',                     urgente: false, visibilidad: 'todos' },
+];
+
+function mostrar(elId, msg, tipo) {
+  var el = document.getElementById(elId);
+  el.textContent = msg; el.className = 'estado ' + tipo; el.style.display = 'block';
+}
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+async function login() {
+  var email = document.getElementById('email').value.trim();
+  var pass  = document.getElementById('pass').value;
+  if (!email || !pass) { mostrar('estadoLogin','Completá email y contraseña.','error'); return; }
+  mostrar('estadoLogin','Iniciando sesión...','info');
+  try {
+    await auth.signInWithEmailAndPassword(email, pass);
+    // Verificar que sea admin
+    var snap = await db.collection('usuarios').doc(auth.currentUser.uid).get();
+    if (!snap.exists || snap.data().rol !== 'admin') {
+      await auth.signOut();
+      mostrar('estadoLogin','Solo admins pueden usar esta página.','error');
+      return;
+    }
+    // Cargar usuarios del sistema para poder asignar
+    await cargarUsuarios();
+    document.getElementById('loginBox').style.display = 'none';
+    document.getElementById('contenidoPrincipal').style.display = 'block';
+    renderLista();
+  } catch(e) {
+    mostrar('estadoLogin','Error: ' + e.message,'error');
+  }
+}
+
+async function cargarUsuarios() {
+  try {
+    var snap = await db.collection('usuarios').where('activo','!=',false).get();
+    usuarios = [{ uid: '', nombre: 'Sin asignar' }];
+    snap.docs.forEach(function(d) {
+      var u = d.data();
+      usuarios.push({ uid: d.id, nombre: u.nombre || u.email || d.id });
+    });
+  } catch(e) { /* usar solo "sin asignar" */ }
+}
+
+// ── RENDER LISTA ──────────────────────────────────────────────────────────────
+function renderLista() {
+  var container = document.getElementById('listaPendientes');
+  container.innerHTML = PENDIENTES.map(function(p, i) {
+    var opciones = usuarios.map(function(u) {
+      return '<option value="' + u.uid + '">' + u.nombre + '</option>';
+    }).join('');
+
+    return '<div class="pend-card' + (p.urgente ? ' urgente' : '') + '" id="card-' + i + '">'
+      + '<input type="checkbox" id="chk-' + i + '" checked onchange="toggleCard(' + i + ')">'
+      + '<div class="pend-body">'
+      + '<div class="pend-texto" id="txt-' + i + '">' + p.texto + '</div>'
+      + '<div class="pend-meta">'
+      + (p.urgente ? '<span class="badge-urgente">🔴 URGENTE / HOY</span>' : '')
+      + '<select class="asignar" id="asig-' + i + '">' + opciones + '</select>'
+      + '<select class="asignar" id="vis-' + i + '" style="background:#fffbeb">'
+      + '<option value="todos">👥 Todos</option>'
+      + '<option value="admin">🔒 Solo admin</option>'
+      + '</select>'
+      + '</div></div></div>';
+  }).join('');
+}
+
+function toggleCard(i) {
+  var chk  = document.getElementById('chk-' + i);
+  var card = document.getElementById('card-' + i);
+  var txt  = document.getElementById('txt-' + i);
+  if (chk.checked) {
+    card.classList.remove('check');
+    txt.classList.remove('tachado');
+  } else {
+    card.classList.add('check');
+    txt.classList.add('tachado');
+  }
+}
+
+// ── CARGAR EN FIRESTORE ───────────────────────────────────────────────────────
+async function cargarTodos() {
+  var btn = document.getElementById('btnCargar');
+  btn.disabled = true;
+  btn.textContent = '⏳ Cargando...';
+  mostrar('estadoCarga', 'Guardando pendientes en Firestore...', 'info');
+
+  var creados = 0;
+  var omitidos = 0;
+  var errores = [];
+
+  for (var i = 0; i < PENDIENTES.length; i++) {
+    var chk = document.getElementById('chk-' + i);
+    if (!chk.checked) { omitidos++; continue; }
+
+    var asigUid  = document.getElementById('asig-' + i).value;
+    var visib    = document.getElementById('vis-' + i).value;
+    var asigNom  = '';
+    if (asigUid) {
+      var u = usuarios.find(function(x) { return x.uid === asigUid; });
+      asigNom = u ? u.nombre : '';
+    }
+
+    try {
+      await db.collection('pendientes').add({
+        texto:        PENDIENTES[i].texto,
+        visibilidad:  visib,
+        realizado:    false,
+        autorId:      auth.currentUser.uid,
+        autorNombre:  'Admin',
+        asignadoA:    asigUid  || null,
+        asignadoNom:  asigNom  || null,
+        urgente:      PENDIENTES[i].urgente || false,
+        creadoEn:     firebase.firestore.FieldValue.serverTimestamp(),
+        realizadoPor: null,
+        realizadoEn:  null,
+        origen:       'foto'
+      });
+      creados++;
+    } catch(e) {
+      errores.push(PENDIENTES[i].texto + ': ' + e.message);
+    }
+  }
+
+  var msg = '✅ ' + creados + ' pendientes cargados.';
+  if (omitidos > 0) msg += '  ' + omitidos + ' omitidos.';
+  if (errores.length) msg += '  ⚠️ Errores: ' + errores.join(' / ');
+
+  mostrar('estadoCarga', msg, errores.length ? 'error' : 'ok');
+
+  // Resumen
+  var res = document.getElementById('resumen');
+  res.style.display = 'block';
+  res.innerHTML = '<strong>Resumen de carga:</strong><br>'
+    + '✅ Cargados: ' + creados + '<br>'
+    + '⏭️ Omitidos (desmarcados): ' + omitidos + '<br>'
+    + (errores.length ? '❌ Errores: ' + errores.length + '<br>' : '')
+    + '<br>Ya podés ir a <strong>Operaciones → Pendientes</strong> para verlos.';
+
+  btn.textContent = '✅ ' + creados + ' pendientes cargados';
+}
+</script>
+</body>
+</html>

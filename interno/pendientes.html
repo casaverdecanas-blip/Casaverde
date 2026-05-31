@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pendientes · Casa Verde Canas</title>
+<link rel="stylesheet" href="design-system.css">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<style>
+/* ── SEMÁFORO ──────────────────────────────────────────────────────────────── */
+.semaforo-bar {
+  display: flex; gap: 6px; align-items: center; margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+.sem-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 99px; border: 2px solid transparent;
+  font-size: var(--text-xs); font-weight: 700; cursor: pointer;
+  font-family: var(--font-body); transition: all var(--transition-fast);
+  background: var(--color-surface-2); color: var(--color-text-muted);
+}
+.sem-btn:hover { border-color: currentColor; }
+.sem-btn.active { border-color: currentColor; background: white; }
+.sem-btn .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.dot-rojo    { background: #dc2626; }
+.dot-amarillo{ background: #f59e0b; }
+.dot-verde   { background: #16a34a; }
+.dot-gris    { background: #9ca3af; }
+
+/* ── FILTROS ───────────────────────────────────────────────────────────────── */
+.filtros-wrap {
+  display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: var(--space-4);
+  align-items: center;
+}
+.filtro-chip {
+  padding: 7px 14px; border-radius: 99px; border: 1.5px solid var(--color-border);
+  font-size: var(--text-xs); font-weight: 700; cursor: pointer;
+  background: var(--color-surface); color: var(--color-text-muted);
+  font-family: var(--font-body); transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+.filtro-chip.active {
+  background: var(--color-primary); color: white; border-color: var(--color-primary);
+}
+.filtro-chip:hover:not(.active) { border-color: var(--color-primary); color: var(--color-primary); }
+
+/* ── ITEM PENDIENTE ────────────────────────────────────────────────────────── */
+.pend-list { display: flex; flex-direction: column; gap: 8px; }
+
+.pend-item {
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-light);
+  border-left: 5px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  display: flex; align-items: flex-start; gap: var(--space-3);
+  transition: box-shadow var(--transition-fast);
+}
+.pend-item:hover { box-shadow: var(--shadow-sm); }
+.pend-item.realizado { opacity: .5; }
+.pend-item.realizado .pend-texto { text-decoration: line-through; color: var(--color-text-muted); }
+
+/* Colores semáforo en borde */
+.pend-item.sem-rojo    { border-left-color: #dc2626; background: #fff8f8; }
+.pend-item.sem-amarillo{ border-left-color: #f59e0b; }
+.pend-item.sem-verde   { border-left-color: #16a34a; }
+.pend-item.sem-gris    { border-left-color: #9ca3af; }
+
+/* Checkbox */
+.pend-check {
+  width: 22px; height: 22px; flex-shrink: 0;
+  border: 2px solid var(--color-border); border-radius: 6px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition-fast); margin-top: 2px;
+}
+.pend-check:hover { border-color: var(--color-primary); background: var(--color-primary-xlight); }
+.pend-check.checked { background: var(--color-success); border-color: var(--color-success); }
+.pend-check.checked::after { content:'✓'; color:white; font-size:13px; font-weight:800; }
+
+.pend-body { flex: 1; min-width: 0; }
+.pend-texto { font-size: var(--text-sm); font-weight: 600; color: var(--color-text-primary); line-height: 1.4; margin-bottom: 4px; }
+
+.pend-meta {
+  display: flex; flex-wrap: wrap; gap: 5px; align-items: center;
+  font-size: var(--text-xs);
+}
+
+/* Badges */
+.badge-sem {
+  padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 700;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.badge-sem.rojo    { background:#fee2e2; color:#dc2626; }
+.badge-sem.amarillo{ background:#fef3c7; color:#d97706; }
+.badge-sem.verde   { background:#dcfce7; color:#16a34a; }
+.badge-sem.gris    { background:#f3f4f6; color:#6b7280; }
+
+.badge-vis {
+  padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 700;
+}
+.badge-vis.todos  { background: var(--color-success-bg); color: var(--color-success); }
+.badge-vis.admin  { background: #fef3c7; color: #92400e; }
+.badge-vis.usuario{ background: #ede9fe; color: #7c3aed; }
+
+.badge-asig {
+  padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 600;
+  background: #e0f2fe; color: #075985;
+  display: inline-flex; align-items: center; gap: 3px;
+}
+
+/* Acciones */
+.pend-acciones {
+  display: flex; gap: 4px; align-items: flex-start; flex-shrink: 0;
+}
+
+/* ── TABS PRINCIPAL ────────────────────────────────────────────────────────── */
+.main-tabs {
+  display: flex; border-bottom: 2px solid var(--color-border);
+  margin-bottom: var(--space-5); gap: 0; overflow-x: auto;
+}
+.main-tab {
+  padding: var(--space-3) var(--space-5); border: none;
+  border-bottom: 3px solid transparent; margin-bottom: -2px;
+  background: none; font-family: var(--font-body);
+  font-size: var(--text-sm); font-weight: 600;
+  color: var(--color-text-muted); cursor: pointer; white-space: nowrap;
+  display: flex; align-items: center; gap: 6px;
+  transition: all var(--transition-fast);
+}
+.main-tab:hover { color: var(--color-primary); }
+.main-tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+.main-tab .cnt {
+  background: var(--color-border); color: var(--color-text-muted);
+  border-radius: 99px; padding: 1px 7px; font-size: var(--text-xs); font-weight: 700;
+}
+.main-tab.active .cnt { background: var(--color-primary); color: white; }
+
+/* ── FORM NUEVO ────────────────────────────────────────────────────────────── */
+.nuevo-form {
+  display: flex; gap: var(--space-3); align-items: flex-end;
+  background: var(--color-surface-2); border-radius: var(--radius-md);
+  padding: var(--space-4); margin-bottom: var(--space-4); flex-wrap: wrap;
+}
+.nuevo-form .form-group { margin: 0; }
+.nuevo-form .form-group.grow { flex: 1; min-width: 200px; }
+
+/* ── VISTA POR USUARIO ─────────────────────────────────────────────────────── */
+.usuario-section {
+  border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+  margin-bottom: var(--space-4); overflow: hidden;
+}
+.usuario-section__header {
+  background: var(--color-primary-xlight); padding: var(--space-3) var(--space-4);
+  display: flex; align-items: center; gap: var(--space-2);
+  font-weight: 700; font-size: var(--text-sm); color: var(--color-primary-dark);
+  border-bottom: 1px solid var(--color-border-light);
+}
+.usuario-section__body { padding: var(--space-3); }
+
+/* ── MODAL ─────────────────────────────────────────────────────────────────── */
+.sem-selector { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.sem-opt {
+  padding: 7px 14px; border-radius: 99px; border: 2px solid transparent;
+  font-size: var(--text-xs); font-weight: 700; cursor: pointer;
+  font-family: var(--font-body); display: flex; align-items: center; gap: 6px;
+  background: var(--color-surface-2);
+}
+.sem-opt.selected { border-color: currentColor; }
+.sem-opt.r { color: #dc2626; } .sem-opt.r.selected { background: #fee2e2; }
+.sem-opt.a { color: #d97706; } .sem-opt.a.selected { background: #fef3c7; }
+.sem-opt.v { color: #16a34a; } .sem-opt.v.selected { background: #dcfce7; }
+.sem-opt.g { color: #6b7280; } .sem-opt.g.selected { background: #f3f4f6; }
+
+@media (max-width: 600px) {
+  .nuevo-form { flex-direction: column; }
+  .nuevo-form .form-group.grow { width: 100%; }
+  .filtros-wrap { gap: 6px; }
+}
+</style>
+</head>
+<body>
+
+<header class="admin-header">
+  <div class="admin-header__brand">
+    <span class="material-icons">cottage</span>
+    Casa Verde Canas
+  </div>
+  <div class="admin-header__actions">
+    <div class="user-chip">
+      <span class="material-icons">person</span>
+      <span id="userName">—</span>
+    </div>
+    <button class="btn-logout" onclick="CVC.cerrarSesion()">
+      <span class="material-icons">logout</span> Salir
+    </button>
+  </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+
+  <!-- Tabs principales -->
+  <div class="main-tabs">
+    <button class="main-tab active" onclick="mostrarTab('general',this)">
+      <span class="material-icons" style="font-size:15px">list</span>
+      General <span class="cnt" id="cntGeneral">0</span>
+    </button>
+    <button class="main-tab" onclick="mostrarTab('por-usuario',this)">
+      <span class="material-icons" style="font-size:15px">people</span>
+      Por persona <span class="cnt" id="cntPorUsuario">0</span>
+    </button>
+    <button class="main-tab" onclick="mostrarTab('historial',this)">
+      <span class="material-icons" style="font-size:15px">history</span>
+      Realizados <span class="cnt" id="cntHistorial">0</span>
+    </button>
+  </div>
+
+  <!-- ══ TAB: GENERAL ══════════════════════════════════════════════════════ -->
+  <div id="tab-general">
+
+    <!-- Form nuevo -->
+    <div class="nuevo-form">
+      <div class="form-group grow">
+        <label class="form-label">Nuevo pendiente</label>
+        <input type="text" id="nuevoPendiente" class="form-control"
+          placeholder="Describí el pendiente..."
+          onkeydown="if(event.key==='Enter') agregarPendiente()">
+      </div>
+      <div class="form-group" id="fgAsignar" style="min-width:150px">
+        <label class="form-label">Asignar a</label>
+        <select id="nuevoAsignar" class="form-control"></select>
+      </div>
+      <div class="form-group" id="fgVisibilidad" style="min-width:130px">
+        <label class="form-label">Visibilidad</label>
+        <select id="nuevaVisibilidad" class="form-control">
+          <option value="todos">👥 Todos</option>
+          <option value="admin">🔒 Solo admin</option>
+        </select>
+      </div>
+      <div class="form-group" style="min-width:100px">
+        <label class="form-label">Semáforo</label>
+        <select id="nuevoSemaforo" class="form-control">
+          <option value="gris">⚫ Sin prioridad</option>
+          <option value="rojo">🔴 Urgente</option>
+          <option value="amarillo">🟡 Atención</option>
+          <option value="verde">🟢 Normal</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="agregarPendiente()" style="height:40px;white-space:nowrap">
+        <span class="material-icons">add</span> Agregar
+      </button>
+    </div>
+
+    <!-- Filtros semáforo -->
+    <div class="semaforo-bar" id="semaforoBar">
+      <span style="font-size:var(--text-xs);font-weight:700;color:var(--color-text-muted)">Filtrar:</span>
+      <button class="sem-btn active" onclick="filtrarSem('todos',this)">
+        <span class="dot" style="background:#374151"></span> Todos
+      </button>
+      <button class="sem-btn" onclick="filtrarSem('rojo',this)" style="color:#dc2626">
+        <span class="dot dot-rojo"></span> Urgente
+      </button>
+      <button class="sem-btn" onclick="filtrarSem('amarillo',this)" style="color:#d97706">
+        <span class="dot dot-amarillo"></span> Atención
+      </button>
+      <button class="sem-btn" onclick="filtrarSem('verde',this)" style="color:#16a34a">
+        <span class="dot dot-verde"></span> Normal
+      </button>
+      <button class="sem-btn" onclick="filtrarSem('gris',this)" style="color:#6b7280">
+        <span class="dot dot-gris"></span> Sin prioridad
+      </button>
+    </div>
+
+    <!-- Filtros visibilidad (solo admin) -->
+    <div class="filtros-wrap" id="filtrosVis" style="display:none">
+      <button class="filtro-chip active" onclick="filtrarVis('todos',this)">👁 Todos los pendientes</button>
+      <button class="filtro-chip" onclick="filtrarVis('visibles-todos',this)">👥 Visibles a todos</button>
+      <button class="filtro-chip" onclick="filtrarVis('solo-admin',this)">🔒 Solo admin</button>
+      <button class="filtro-chip" onclick="filtrarVis('asignados',this)">📌 Asignados</button>
+      <button class="filtro-chip" onclick="filtrarVis('sin-asignar',this)">⬜ Sin asignar</button>
+    </div>
+
+    <div id="listaGeneral" class="pend-list">
+      <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: POR PERSONA ══════════════════════════════════════════════════ -->
+  <div id="tab-por-usuario" style="display:none">
+    <div id="listaPorUsuario">
+      <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: HISTORIAL ════════════════════════════════════════════════════ -->
+  <div id="tab-historial" style="display:none">
+
+    <!-- Filtros historial -->
+    <div class="filtros-wrap" style="margin-bottom:var(--space-3)">
+      <button class="filtro-chip active" onclick="filtrarHist('todos',this)">Todos</button>
+      <button class="filtro-chip" id="filtroHistMio" onclick="filtrarHist('mios',this)">Realizados por mí</button>
+    </div>
+
+    <div id="listaHistorial" class="pend-list">
+      <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ── MODAL EDITAR / VER DETALLE ─────────────────────────────────────────── -->
+<div class="modal-overlay" id="modalOverlay" style="display:none" onclick="cerrarModal(event)">
+  <div class="modal modal--lg" onclick="event.stopPropagation()">
+    <div class="modal__header">
+      <div class="modal__title" id="modalTitulo">
+        <span class="material-icons">edit</span> Editar pendiente
+      </div>
+      <button class="modal__close" onclick="cerrarModal()">
+        <span class="material-icons">close</span>
+      </button>
+    </div>
+    <div class="modal__body">
+      <input type="hidden" id="editId">
+
+      <div class="form-group">
+        <label class="form-label">Descripción *</label>
+        <textarea id="editTexto" class="form-control" rows="3"></textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group" id="editFgAsignar">
+          <label class="form-label">Asignar a</label>
+          <select id="editAsignar" class="form-control"></select>
+        </div>
+        <div class="form-group" id="editFgVis">
+          <label class="form-label">Visibilidad</label>
+          <select id="editVisibilidad" class="form-control">
+            <option value="todos">👥 Todos</option>
+            <option value="admin">🔒 Solo admin</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Semáforo de prioridad</label>
+        <div class="sem-selector" id="editSemSelector">
+          <button class="sem-opt g" data-val="gris"    onclick="selSem(this)"><span>⚫</span> Sin prioridad</button>
+          <button class="sem-opt r" data-val="rojo"    onclick="selSem(this)"><span>🔴</span> Urgente</button>
+          <button class="sem-opt a" data-val="amarillo" onclick="selSem(this)"><span>🟡</span> Atención</button>
+          <button class="sem-opt v" data-val="verde"   onclick="selSem(this)"><span>🟢</span> Normal</button>
+        </div>
+        <input type="hidden" id="editSemaforo" value="gris">
+      </div>
+
+      <!-- Detalle de quién creó / asignó -->
+      <div id="editDetalle" style="background:var(--color-surface-2);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);font-size:var(--text-xs);color:var(--color-text-muted);line-height:2;display:none"></div>
+
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarEdicion()">
+        <span class="material-icons">save</span> Guardar
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(async function() {
+
+const { user, userData } = await CVC.verificarAuth(['admin','user']);
+document.getElementById('userName').textContent = userData.nombre || user.email;
+CVC.renderNav('pendientes.html', userData.rol);
+
+const db      = CVC.db;
+const esAdmin = userData.rol === 'admin';
+const yo      = { uid: user.uid, nombre: userData.nombre || user.email };
+const { escapeHtml, showEmpty, showError, showToast, formatFecha } = CVC;
+
+// Si no es admin, ocultar campos de visibilidad
+if (!esAdmin) {
+  ['fgVisibilidad','filtrosVis'].forEach(id => { var el = document.getElementById(id); if(el) el.style.display='none'; });
+}
+
+// ── USUARIOS ─────────────────────────────────────────────────────────────────
+let usuarios = [];
+async function cargarUsuarios() {
+  try {
+    var snap = await db.collection('usuarios').get();
+    usuarios = [{ uid:'', nombre:'Sin asignar' }];
+    snap.docs.forEach(d => {
+      var u = d.data();
+      if (u.activo !== false) usuarios.push({ uid: d.id, nombre: u.nombre || u.email || d.id });
+    });
+    poblarSelects();
+  } catch(e) { usuarios = [{ uid:'', nombre:'Sin asignar' }]; poblarSelects(); }
+}
+
+function poblarSelects() {
+  var opts = usuarios.map(u => `<option value="${u.uid}">${escapeHtml(u.nombre)}</option>`).join('');
+  ['nuevoAsignar','editAsignar'].forEach(id => {
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = opts;
+  });
+}
+
+// ── DATOS ─────────────────────────────────────────────────────────────────────
+let cache         = [];
+let filtroSem     = 'todos';
+let filtroVis     = 'todos';
+let filtroHist    = 'todos';
+let tabActual     = 'general';
+
+async function cargar() {
+  try {
+    var snap = await db.collection('pendientes').orderBy('creadoEn','desc').get();
+    cache = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(p => esAdmin || p.visibilidad !== 'admin');
+  } catch(e) { showToast('Error cargando pendientes: ' + e.message, 'error'); return; }
+  actualizarContadores();
+  if (tabActual === 'general')     renderGeneral();
+  if (tabActual === 'por-usuario') renderPorUsuario();
+  if (tabActual === 'historial')   renderHistorial();
+}
+
+function actualizarContadores() {
+  var activos   = cache.filter(p => !p.realizado).length;
+  var hist      = cache.filter(p => p.realizado).length;
+  document.getElementById('cntGeneral').textContent    = activos;
+  document.getElementById('cntPorUsuario').textContent = activos;
+  document.getElementById('cntHistorial').textContent  = hist;
+}
+
+// ── TABS ──────────────────────────────────────────────────────────────────────
+window.mostrarTab = function(id, btn) {
+  ['general','por-usuario','historial'].forEach(t =>
+    document.getElementById('tab-' + t).style.display = t === id ? 'block' : 'none'
+  );
+  document.querySelectorAll('.main-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  tabActual = id;
+  if (id === 'general')     renderGeneral();
+  if (id === 'por-usuario') renderPorUsuario();
+  if (id === 'historial')   renderHistorial();
+};
+
+// ── FILTROS ───────────────────────────────────────────────────────────────────
+window.filtrarSem = function(val, btn) {
+  filtroSem = val;
+  document.querySelectorAll('.sem-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderGeneral();
+};
+
+window.filtrarVis = function(val, btn) {
+  filtroVis = val;
+  document.querySelectorAll('#filtrosVis .filtro-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderGeneral();
+};
+
+window.filtrarHist = function(val, btn) {
+  filtroHist = val;
+  document.querySelectorAll('.filtro-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderHistorial();
+};
+
+function aplicarFiltros(lista) {
+  return lista.filter(p => {
+    if (filtroSem !== 'todos' && (p.semaforo || 'gris') !== filtroSem) return false;
+    if (esAdmin && filtroVis === 'visibles-todos' && p.visibilidad !== 'todos') return false;
+    if (esAdmin && filtroVis === 'solo-admin'   && p.visibilidad !== 'admin')   return false;
+    if (esAdmin && filtroVis === 'asignados'    && !p.asignadoA) return false;
+    if (esAdmin && filtroVis === 'sin-asignar'  && p.asignadoA) return false;
+    return true;
+  });
+}
+
+// ── RENDER GENERAL ────────────────────────────────────────────────────────────
+function renderGeneral() {
+  if (esAdmin) document.getElementById('filtrosVis').style.display = 'flex';
+  var activos = cache.filter(p => !p.realizado);
+  var filtrados = aplicarFiltros(activos);
+  // Ordenar: rojo primero
+  var orden = { rojo:1, amarillo:2, verde:3, gris:4 };
+  filtrados.sort((a,b) => (orden[a.semaforo||'gris']||4) - (orden[b.semaforo||'gris']||4));
+  var cont = document.getElementById('listaGeneral');
+  if (!filtrados.length) {
+    showEmpty(cont, 'Sin pendientes', 'No hay pendientes con ese filtro.', 'task_alt');
+    return;
+  }
+  cont.innerHTML = filtrados.map(p => renderItem(p, false)).join('');
+}
+
+// ── RENDER POR USUARIO ────────────────────────────────────────────────────────
+function renderPorUsuario() {
+  var activos = cache.filter(p => !p.realizado);
+  var cont    = document.getElementById('listaPorUsuario');
+
+  // Agrupar
+  var grupos  = {};
+  var sinAsig = [];
+
+  activos.forEach(p => {
+    if (p.asignadoA) {
+      if (!grupos[p.asignadoA]) grupos[p.asignadoA] = { nombre: p.asignadoNom || p.asignadoA, items: [] };
+      grupos[p.asignadoA].items.push(p);
+    } else {
+      sinAsig.push(p);
+    }
+  });
+
+  var html = '';
+
+  // Cada usuario con pendientes asignados
+  Object.values(grupos).forEach(g => {
+    var orden = { rojo:1, amarillo:2, verde:3, gris:4 };
+    g.items.sort((a,b) => (orden[a.semaforo||'gris']||4) - (orden[b.semaforo||'gris']||4));
+    html += `
+      <div class="usuario-section">
+        <div class="usuario-section__header">
+          <span class="material-icons" style="font-size:18px">person</span>
+          ${escapeHtml(g.nombre)}
+          <span style="margin-left:auto;background:var(--color-primary);color:white;border-radius:99px;padding:1px 10px;font-size:11px;">${g.items.length}</span>
+        </div>
+        <div class="usuario-section__body pend-list">
+          ${g.items.map(p => renderItem(p, false)).join('')}
+        </div>
+      </div>`;
+  });
+
+  // Sin asignar
+  if (sinAsig.length) {
+    var orden2 = { rojo:1, amarillo:2, verde:3, gris:4 };
+    sinAsig.sort((a,b) => (orden2[a.semaforo||'gris']||4) - (orden2[b.semaforo||'gris']||4));
+    html += `
+      <div class="usuario-section">
+        <div class="usuario-section__header" style="background:#f3f4f6;color:#6b7280">
+          <span class="material-icons" style="font-size:18px">person_outline</span>
+          Sin asignar
+          <span style="margin-left:auto;background:#9ca3af;color:white;border-radius:99px;padding:1px 10px;font-size:11px;">${sinAsig.length}</span>
+        </div>
+        <div class="usuario-section__body pend-list">
+          ${sinAsig.map(p => renderItem(p, false)).join('')}
+        </div>
+      </div>`;
+  }
+
+  if (!html) { showEmpty(cont, 'Sin pendientes', '', 'task_alt'); return; }
+  cont.innerHTML = html;
+}
+
+// ── RENDER HISTORIAL ──────────────────────────────────────────────────────────
+function renderHistorial() {
+  var hist = cache.filter(p => p.realizado);
+  if (filtroHist === 'mios') hist = hist.filter(p => p.realizadoUid === user.uid);
+  var cont = document.getElementById('listaHistorial');
+  if (!hist.length) { showEmpty(cont, 'Sin realizados', '', 'history'); return; }
+  cont.innerHTML = hist.map(p => renderItem(p, true)).join('');
+}
+
+// ── RENDER ITEM ───────────────────────────────────────────────────────────────
+function renderItem(p, esHistorial) {
+  var sem    = p.semaforo || 'gris';
+  var emojis = { rojo:'🔴', amarillo:'🟡', verde:'🟢', gris:'⚫' };
+  var labels = { rojo:'Urgente', amarillo:'Atención', verde:'Normal', gris:'Sin prioridad' };
+
+  var badgeSem = `<span class="badge-sem ${sem}">${emojis[sem]} ${labels[sem]}</span>`;
+
+  var badgeVis = '';
+  if (esAdmin) {
+    var visLabel = { todos:'👥 Todos', admin:'🔒 Admin', usuario:'👤 Usuario' };
+    var visClass = p.visibilidad === 'admin' ? 'admin' : p.visibilidad === 'usuario' ? 'usuario' : 'todos';
+    badgeVis = `<span class="badge-vis ${visClass}">${visLabel[p.visibilidad] || '👥 Todos'}</span>`;
+  }
+
+  var badgeAsig = p.asignadoNom
+    ? `<span class="badge-asig"><span class="material-icons" style="font-size:11px">person</span>${escapeHtml(p.asignadoNom)}</span>`
+    : '';
+
+  var fechaCreado = p.creadoEn?.toDate ? p.creadoEn.toDate().toLocaleDateString('es-AR') : '—';
+
+  var metaRealizado = '';
+  if (esHistorial && p.realizadoPor) {
+    metaRealizado = `<span style="color:var(--color-success)">✓ ${escapeHtml(p.realizadoPor)} · ${p.realizadoEn?.toDate ? p.realizadoEn.toDate().toLocaleDateString('es-AR') : '—'}</span>`;
+  }
+
+  var puedeModificar = esAdmin || (!p.realizadoPor || p.realizadoUid === user.uid);
+
+  var btnCheck = puedeModificar
+    ? `<div class="pend-check ${p.realizado ? 'checked' : ''}" onclick="toggleRealizado('${p.id}',${!p.realizado})" title="${p.realizado ? 'Marcar pendiente' : 'Marcar realizado'}"></div>`
+    : `<div class="pend-check ${p.realizado ? 'checked' : ''}" style="cursor:default"></div>`;
+
+  var btnEditar = (esAdmin || p.autorId === user.uid) && !p.realizado
+    ? `<button class="btn btn-ghost btn-sm" onclick="abrirEditar('${p.id}')" title="Editar"><span class="material-icons">edit</span></button>`
+    : '';
+  var btnEliminar = esAdmin
+    ? `<button class="btn btn-danger btn-sm" onclick="eliminar('${p.id}')" title="Eliminar"><span class="material-icons">delete</span></button>`
+    : '';
+
+  return `
+  <div class="pend-item ${p.realizado ? 'realizado' : ''} sem-${sem}" id="pi-${p.id}">
+    ${btnCheck}
+    <div class="pend-body">
+      <div class="pend-texto">${escapeHtml(p.texto)}</div>
+      <div class="pend-meta">
+        ${badgeSem}
+        ${badgeVis}
+        ${badgeAsig}
+        <span style="color:var(--color-text-muted)">📅 ${fechaCreado}</span>
+        <span style="color:var(--color-text-muted)">👤 ${escapeHtml(p.autorNombre || '—')}</span>
+        ${metaRealizado}
+      </div>
+    </div>
+    <div class="pend-acciones">
+      ${btnEditar}
+      ${btnEliminar}
+    </div>
+  </div>`;
+}
+
+// ── AGREGAR ───────────────────────────────────────────────────────────────────
+window.agregarPendiente = async function() {
+  var texto = document.getElementById('nuevoPendiente').value.trim();
+  if (!texto) { showToast('Escribí el pendiente.', 'error'); return; }
+
+  var asigUid = document.getElementById('nuevoAsignar').value;
+  var asigNom = '';
+  if (asigUid) {
+    var u = usuarios.find(x => x.uid === asigUid);
+    asigNom = u ? u.nombre : '';
+  }
+
+  var visib = esAdmin ? document.getElementById('nuevaVisibilidad').value : 'todos';
+  var sem   = document.getElementById('nuevoSemaforo').value;
+
+  try {
+    await db.collection('pendientes').add({
+      texto,
+      visibilidad:  visib,
+      semaforo:     sem,
+      realizado:    false,
+      autorId:      user.uid,
+      autorNombre:  yo.nombre,
+      asignadoA:    asigUid || null,
+      asignadoNom:  asigNom || null,
+      creadoEn:     firebase.firestore.FieldValue.serverTimestamp(),
+      realizadoPor: null,
+      realizadoEn:  null,
+      realizadoUid: null
+    });
+    document.getElementById('nuevoPendiente').value = '';
+    document.getElementById('nuevoSemaforo').value  = 'gris';
+    showToast('Pendiente agregado.', 'success');
+    await cargar();
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+};
+
+// ── TOGGLE REALIZADO ──────────────────────────────────────────────────────────
+window.toggleRealizado = async function(id, realizado) {
+  try {
+    await db.collection('pendientes').doc(id).update({
+      realizado,
+      realizadoPor: realizado ? yo.nombre : null,
+      realizadoUid: realizado ? user.uid  : null,
+      realizadoEn:  realizado ? firebase.firestore.FieldValue.serverTimestamp() : null
+    });
+    showToast(realizado ? '✅ Realizado.' : '↩️ Marcado pendiente.', 'success');
+    await cargar();
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+};
+
+// ── EDITAR ────────────────────────────────────────────────────────────────────
+window.abrirEditar = function(id) {
+  var p = cache.find(x => x.id === id);
+  if (!p) return;
+
+  document.getElementById('editId').value          = id;
+  document.getElementById('editTexto').value        = p.texto || '';
+  document.getElementById('editVisibilidad').value  = p.visibilidad || 'todos';
+
+  // Semáforo
+  var semVal = p.semaforo || 'gris';
+  document.getElementById('editSemaforo').value = semVal;
+  document.querySelectorAll('.sem-opt').forEach(b => {
+    b.classList.toggle('selected', b.dataset.val === semVal);
+  });
+
+  // Asignado
+  var selAsig = document.getElementById('editAsignar');
+  selAsig.value = p.asignadoA || '';
+
+  // Ocultar campos de admin si no es admin
+  document.getElementById('editFgVis').style.display    = esAdmin ? '' : 'none';
+  document.getElementById('editFgAsignar').style.display = esAdmin ? '' : 'none';
+
+  // Detalle
+  var det = document.getElementById('editDetalle');
+  det.style.display = 'block';
+  det.innerHTML =
+    `<strong>Creado por:</strong> ${escapeHtml(p.autorNombre||'—')}<br>` +
+    `<strong>Fecha:</strong> ${p.creadoEn?.toDate ? p.creadoEn.toDate().toLocaleDateString('es-AR') : '—'}<br>` +
+    (p.asignadoNom ? `<strong>Asignado a:</strong> ${escapeHtml(p.asignadoNom)}<br>` : '');
+
+  document.getElementById('modalOverlay').style.display = 'flex';
+};
+
+window.selSem = function(btn) {
+  document.querySelectorAll('.sem-opt').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('editSemaforo').value = btn.dataset.val;
+};
+
+window.guardarEdicion = async function() {
+  var id    = document.getElementById('editId').value;
+  var texto = document.getElementById('editTexto').value.trim();
+  if (!texto) { showToast('El texto no puede estar vacío.', 'error'); return; }
+
+  var asigUid = document.getElementById('editAsignar').value;
+  var asigNom = '';
+  if (asigUid) {
+    var u = usuarios.find(x => x.uid === asigUid);
+    asigNom = u ? u.nombre : '';
+  }
+
+  var updates = {
+    texto,
+    semaforo:     document.getElementById('editSemaforo').value,
+    actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  if (esAdmin) {
+    updates.visibilidad = document.getElementById('editVisibilidad').value;
+    updates.asignadoA   = asigUid || null;
+    updates.asignadoNom = asigNom || null;
+  }
+
+  try {
+    await db.collection('pendientes').doc(id).update(updates);
+    showToast('Guardado.', 'success');
+    cerrarModal();
+    await cargar();
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+};
+
+// ── ELIMINAR ──────────────────────────────────────────────────────────────────
+window.eliminar = async function(id) {
+  var p = cache.find(x => x.id === id);
+  if (!confirm('¿Eliminar "' + (p?.texto || 'este pendiente') + '"?')) return;
+  try {
+    await db.collection('pendientes').doc(id).delete();
+    showToast('Eliminado.', 'warning');
+    await cargar();
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+};
+
+// ── MODAL ─────────────────────────────────────────────────────────────────────
+window.cerrarModal = function(e) {
+  if (e && e.target !== document.getElementById('modalOverlay')) return;
+  document.getElementById('modalOverlay').style.display = 'none';
+};
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+await cargarUsuarios();
+await cargar();
+
+})();
+</script>
+</body>
+</html>

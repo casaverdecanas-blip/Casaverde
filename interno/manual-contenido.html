@@ -1,0 +1,648 @@
+<!-- ═══════════════════════════════════════════════════════════════════════
+     MANUAL CASA VERDE CANAS — Contenido para guardar en config/manual
+     Este HTML va dentro del div#manualContent. No incluye <html> ni <body>.
+     Versión 4.2 — Mayo 2026
+══════════════════════════════════════════════════════════════════════════ -->
+
+<!-- ── 1. DASHBOARD ──────────────────────────────────────────────────── -->
+<details class="manual-modulo" open>
+<summary>
+  <div class="manual-modulo__icon"><span class="material-icons">dashboard</span></div>
+  <span>Dashboard — Inicio del panel</span>
+  <span class="rol-admin">Solo admin</span>
+  <span class="material-icons manual-modulo__chevron">expand_more</span>
+</summary>
+<div class="manual-body">
+  <p class="manual-intro">
+    El Dashboard es la primera pantalla que ves al ingresar al panel. Concentra toda la información crítica del día: reservas activas, tareas urgentes, posición bancaria y alertas del sistema. Se actualiza automáticamente y sincroniza Airbnb al abrirse.
+  </p>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">info</span> Qué muestra el Dashboard</summary>
+    <div class="manual-sub__body">
+      <table class="manual-tabla">
+        <thead><tr><th>Sección</th><th>Qué muestra</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Alertas</strong></td><td>Problemas que requieren atención inmediata: tareas atrasadas, limpieza sin asignar, honorarios vencidos, presupuestos sin respuesta, obligaciones fiscales.</td></tr>
+          <tr><td><strong>KPIs</strong></td><td>Reservas activas, pendientes de confirmación, tareas urgentes, clientes totales, ingresos del mes en BRL.</td></tr>
+          <tr><td><strong>Posición bancaria</strong></td><td>Saldo consolidado de todas las cuentas en BRL, desglosado por país. Click en cada cuenta lleva a sus movimientos.</td></tr>
+          <tr><td><strong>Próximos check-ins</strong></td><td>Reservas confirmadas con fecha de entrada próxima.</td></tr>
+          <tr><td><strong>Tareas pendientes</strong></td><td>Las 6 más urgentes, con semáforo de color y días de atraso.</td></tr>
+          <tr><td><strong>Pendientes de confirmación</strong></td><td>Reservas en estado "pendiente" que aún no tienen pago registrado.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">sync</span> Sincronización automática de Airbnb</summary>
+    <div class="manual-sub__body">
+      <p>Al abrir el Dashboard, el sistema sincroniza automáticamente los calendarios de Google Calendar de las 3 cabañas. También podés hacerlo manualmente con el botón "Sincronizar Airbnb".</p>
+      <div class="flujo">
+        <div class="flujo-paso"><div class="flujo-num">1</div><div class="flujo-paso__text"><strong>Airbnb actualiza el calendario iCal</strong><em>Ocurre automáticamente cuando se confirma o cancela una reserva en Airbnb</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">2</div><div class="flujo-paso__text"><strong>Google Calendar importa el iCal</strong><em>Cada cabaña tiene un Google Calendar ID configurado en Config → Cabañas</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">3</div><div class="flujo-paso__text"><strong>El sistema lee los eventos via Google Calendar API</strong><em>Lee eventos de los próximos 12 meses. Filtra automáticamente los bloqueos "Not available"</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">4</div><div class="flujo-paso__text"><strong>Se crean reservas nuevas con estado airbnb_activa</strong><em>Solo las que no existen todavía. Las ya importadas se omiten</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">5</div><div class="flujo-paso__text"><strong>Se detectan cancelaciones</strong><em>Si un evento desaparece del calendario → la reserva pasa a airbnb_cancelada y se libera el calendario</em></div></div>
+      </div>
+      <div class="info-box warning">
+        <span class="material-icons">warning</span>
+        <span><strong>Importante:</strong> Las tareas de limpieza NO se generan automáticamente al importar. El admin las crea manualmente al completar los datos de la reserva Airbnb.</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">build</span> Mantenimiento del sistema</summary>
+    <div class="manual-sub__body">
+      <p>En la parte inferior del Dashboard, colapsado, hay una sección de Mantenimiento con dos herramientas:</p>
+      <ul style="margin:8px 0; padding-left:20px; line-height:2">
+        <li><strong>Manual del sistema</strong> — acceso directo a esta página.</li>
+        <li><strong>Sincronizar disponibilidad</strong> — reconstruye la colección pública <code>disponibilidad</code> desde cero. Usarlo solo si el calendario público muestra fechas incorrectas.</li>
+      </ul>
+    </div>
+  </details>
+</div>
+</details>
+
+<!-- ── 2. RESERVAS ────────────────────────────────────────────────────── -->
+<details class="manual-modulo">
+<summary>
+  <div class="manual-modulo__icon"><span class="material-icons">event</span></div>
+  <span>Reservas</span>
+  <span class="rol-admin">Solo admin</span>
+  <span class="material-icons manual-modulo__chevron">expand_more</span>
+</summary>
+<div class="manual-body">
+  <p class="manual-intro">
+    Gestión completa del ciclo de vida de cada reserva: desde la consulta inicial hasta el checkout. Existen dos tipos: reservas directas (contacto propio) y reservas de Airbnb (importadas del calendario).
+  </p>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">circle</span> Estados de una reserva</summary>
+    <div class="manual-sub__body">
+      <table class="manual-tabla">
+        <thead><tr><th>Estado</th><th>Significado</th><th>¿Bloquea calendario?</th></tr></thead>
+        <tbody>
+          <tr><td><strong>pendiente</strong></td><td>Creada sin pago confirmado. El huésped preguntó pero aún no reservó.</td><td>No</td></tr>
+          <tr><td><strong>confirmada</strong></td><td>Pago registrado. Reserva firme.</td><td>Sí ✅</td></tr>
+          <tr><td><strong>airbnb_activa</strong></td><td>Importada de Airbnb via Google Calendar.</td><td>Sí ✅</td></tr>
+          <tr><td><strong>airbnb_cancelada</strong></td><td>Cancelada por el huésped en Airbnb.</td><td>No</td></tr>
+          <tr><td><strong>finalizada</strong></td><td>El huésped ya se fue. Ciclo completo.</td><td>No</td></tr>
+          <tr><td><strong>anulada</strong></td><td>Cancelada manualmente.</td><td>No</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">home</span> Flujo: Reserva directa paso a paso</summary>
+    <div class="manual-sub__body">
+      <div class="flujo">
+        <div class="flujo-paso"><div class="flujo-num">1</div><div class="flujo-paso__text"><strong>Huésped consulta disponibilidad</strong><em>Por WhatsApp, email o el formulario del sitio público</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">2</div><div class="flujo-paso__text"><strong>Admin crea un presupuesto</strong><em>Menú Reservas → Presupuestos → Nueva. El precio se calcula automáticamente según tarifas y temporada</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">3</div><div class="flujo-paso__text"><strong>Huésped acepta y paga la seña</strong><em>Admin registra el pago en Finanzas → Ingresos/Egresos</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">4</div><div class="flujo-paso__text"><strong>Admin confirma la reserva</strong><em>Estado cambia a "confirmada" → bloquea el calendario público automáticamente</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">5</div><div class="flujo-paso__text"><strong>Admin crea la tarea de limpieza</strong><em>Desde el detalle de la reserva, botón "Generar tarea de limpieza". Incluye datos del huésped saliente y entrante</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">6</div><div class="flujo-paso__text"><strong>Huésped llega y se va</strong><em>El admin puede registrar notas, hora de llegada</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">7</div><div class="flujo-paso__text"><strong>Admin marca como finalizada</strong><em>El calendario se libera automáticamente para futuras reservas</em></div></div>
+      </div>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">airplanemode_active</span> Flujo: Reserva Airbnb paso a paso</summary>
+    <div class="manual-sub__body">
+      <div class="flujo">
+        <div class="flujo-paso"><div class="flujo-num">1</div><div class="flujo-paso__text"><strong>Airbnb confirma la reserva y el pago</strong><em>El huésped paga directamente en la plataforma</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">2</div><div class="flujo-paso__text"><strong>Google Calendar se actualiza automáticamente</strong><em>Airbnb publica el evento en el calendario sincronizado</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">3</div><div class="flujo-paso__text"><strong>El sistema importa la reserva</strong><em>Al sincronizar (automático al abrir el Dashboard), aparece con estado airbnb_activa y bloquea el calendario</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">4</div><div class="flujo-paso__text"><strong>Admin completa los datos del huésped</strong><em>Abre la reserva y carga: nombre, contacto, cantidad de personas, mascotas, necesidades especiales, hora de llegada</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">5</div><div class="flujo-paso__text"><strong>Admin genera la tarea de limpieza</strong><em>Con los datos completos del huésped, el sistema genera la tarea con toda la información para el equipo</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">6</div><div class="flujo-paso__text"><strong>Airbnb liquida mensualmente</strong><em>Admin sube el PDF del informe en Finanzas → Informes Airbnb para registrar el ingreso real</em></div></div>
+      </div>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">calculate</span> Presupuestos — cómo calcular el precio</summary>
+    <div class="manual-sub__body">
+      <p>Al crear un presupuesto o una reserva directa, el precio se calcula automáticamente. Los factores son:</p>
+      <ul style="margin:8px 0; padding-left:20px; line-height:2">
+        <li><strong>Tarifa base por noche</strong> — configurada en cada cabaña</li>
+        <li><strong>Tarifas especiales de temporada</strong> — períodos con precio diferente (ej: enero, carnaval, semana santa)</li>
+        <li><strong>Cargo por persona extra</strong> — sobre la capacidad base configurada</li>
+        <li><strong>Cargo de limpieza</strong> — fijo por estadía, independiente de las noches</li>
+      </ul>
+      <div class="info-box tip">
+        <span class="material-icons">lightbulb</span>
+        <span>Si hay un período de temporada que cubre parte de las fechas, el sistema aplica el precio especial solo a esas noches y el precio base al resto.</span>
+      </div>
+    </div>
+  </details>
+</div>
+</details>
+
+<!-- ── 3. TAREAS ──────────────────────────────────────────────────────── -->
+<details class="manual-modulo">
+<summary>
+  <div class="manual-modulo__icon"><span class="material-icons">checklist</span></div>
+  <span>Tareas operativas</span>
+  <span class="rol-todos">Admin + Colaborador</span>
+  <span class="material-icons manual-modulo__chevron">expand_more</span>
+</summary>
+<div class="manual-body">
+  <p class="manual-intro">
+    Las tareas son el motor operativo del sistema. Registran limpieza, mantenimiento y cualquier trabajo del equipo, con cronómetro incorporado y distribución automática de honorarios según horas trabajadas. Hay dos vistas: <strong>tareas.html</strong> (vista operativa para todos) y <strong>tareas-admin.html</strong> (gestión y estadísticas, solo admin).
+  </p>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">traffic</span> El semáforo de urgencia</summary>
+    <div class="manual-sub__body">
+      <table class="manual-tabla">
+        <thead><tr><th>Color</th><th>Condición</th><th>Qué hacer</th></tr></thead>
+        <tbody>
+          <tr><td>⚫ Gris</td><td>La fecha de inicio es futura</td><td>Programada, no requiere acción ahora</td></tr>
+          <tr><td>🟢 Verde</td><td>La tarea es para hoy o está en curso</td><td>Normal — atender en el momento indicado</td></tr>
+          <tr><td>🟡 Amarillo</td><td>Atrasada dentro del primer ciclo de recurrencia</td><td>Atención — completar pronto</td></tr>
+          <tr><td>🔴 Rojo</td><td>Superó el ciclo de recurrencia o lleva más de 10 días sin completar</td><td>Urgente — aparece en las alertas del Dashboard</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">play_arrow</span> Ciclo de vida de una tarea — paso a paso</summary>
+    <div class="manual-sub__body">
+      <div class="flujo">
+        <div class="flujo-paso"><div class="flujo-num">1</div><div class="flujo-paso__text"><strong>Tarea creada — estado: pendiente</strong><em>Por el admin en tareas-admin.html, o automáticamente al confirmar una reserva (limpieza)</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">2</div><div class="flujo-paso__text"><strong>Colaborador abre la tarea y toca "Iniciar"</strong><em>Se registra el timestamp de inicio en la subcolección de sesiones. La tarea pasa a "en curso"</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">3</div><div class="flujo-paso__text"><strong>El cronómetro corre en pantalla</strong><em>Solo visible para el colaborador activo en esa tarea. Muestra hh:mm:ss desde que inició</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">4</div><div class="flujo-paso__text"><strong>Si hay interrupción → "Pausar"</strong><em>Se cierra la sesión activa. Se puede retomar con "Iniciar" nuevamente, abriendo una nueva sesión</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">5</div><div class="flujo-paso__text"><strong>Admin o colaborador toca "Finalizar"</strong><em>Se cierran todas las sesiones abiertas. El sistema suma todas las sesiones de cada colaborador</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">6</div><div class="flujo-paso__text"><strong>Cálculo automático de honorarios</strong><em>Si la tarea tiene monto asignado, se distribuye proporcionalmente según horas de cada colaborador</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">7</div><div class="flujo-paso__text"><strong>Registro en historial_tareas</strong><em>Queda un registro permanente con todos los participantes, horas y montos. La tarea desaparece de la lista activa</em></div></div>
+      </div>
+      <div class="info-box tip">
+        <span class="material-icons">lightbulb</span>
+        <span><strong>Regla de sesiones:</strong> Las sesiones de menos de 5 minutos no acumulan horas. Las sesiones abiertas por más de 8 horas se cierran automáticamente por inactividad.</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">cleaning_services</span> Tareas de limpieza — cómo funcionan</summary>
+    <div class="manual-sub__body">
+      <p>Las tareas de limpieza son el tipo más importante. Siempre aparecen al tope de la lista. Se generan desde el detalle de una reserva (no automáticamente) y contienen:</p>
+      <ul style="margin:8px 0; padding-left:20px; line-height:2">
+        <li>Nombre y datos del huésped que <strong>sale</strong> (cabaña, fecha, hora, notas)</li>
+        <li>Nombre y datos del huésped que <strong>entra</strong> (si hay reserva siguiente registrada)</li>
+        <li>Alertas especiales: mascotas 🐾, niños pequeños 👶</li>
+        <li>Monto de limpieza para distribución de honorarios</li>
+      </ul>
+      <div class="info-box warning">
+        <span class="material-icons">warning</span>
+        <span>Si el Dashboard muestra "Sin tarea de limpieza" para un check-in en menos de 48hs, es porque falta generarla. Entrá a la reserva y tocá "Generar tarea de limpieza".</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">bar_chart</span> Admin Tareas — gestión y estadísticas</summary>
+    <div class="manual-sub__body">
+      <p>La página <strong>tareas-admin.html</strong> tiene 4 pestañas:</p>
+      <table class="manual-tabla">
+        <thead><tr><th>Pestaña</th><th>Qué tiene</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Lista y gestión</strong></td><td>Todas las tareas activas ordenadas por urgencia. Botón "Nueva tarea" para crear manualmente. Botón editar en cada tarea.</td></tr>
+          <tr><td><strong>Estadísticas</strong></td><td>Desempeño por colaborador: tareas realizadas, horas totales, monto cobrado, promedio por tarea. Filtro por mes.</td></tr>
+          <tr><td><strong>Historial por tarea</strong></td><td>Seleccionás una tarea y ves todos sus registros históricos, quién participó cada vez y cuántas horas.</td></tr>
+          <tr><td><strong>Notificaciones</strong></td><td>Configurar alertas por email via EmailJS para tareas atrasadas.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+</div>
+</details>
+
+<!-- ── 4. PENDIENTES ──────────────────────────────────────────────────── -->
+<details class="manual-modulo">
+<summary>
+  <div class="manual-modulo__icon"><span class="material-icons">pending_actions</span></div>
+  <span>Pendientes</span>
+  <span class="rol-todos">Admin + Colaborador</span>
+  <span class="material-icons manual-modulo__chevron">expand_more</span>
+</summary>
+<div class="manual-body">
+  <p class="manual-intro">
+    Los pendientes son ítems simples sin estructura de trabajo: compras a hacer, gestiones, recordatorios. A diferencia de las tareas, no tienen cronómetro ni honorarios — son simplemente cosas que hay que resolver y marcar como hechas.
+  </p>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">compare_arrows</span> Diferencias entre Pendientes y Tareas</summary>
+    <div class="manual-sub__body">
+      <table class="manual-tabla">
+        <thead><tr><th>Característica</th><th>Pendientes</th><th>Tareas</th></tr></thead>
+        <tbody>
+          <tr><td>¿Tienen cronómetro?</td><td>No</td><td>Sí</td></tr>
+          <tr><td>¿Generan honorarios?</td><td>No</td><td>Sí (si tienen monto)</td></tr>
+          <tr><td>¿Tienen fecha programada?</td><td>No</td><td>Sí</td></tr>
+          <tr><td>¿Quién puede crear?</td><td>Admin y colaboradores</td><td>Solo admin (o automático)</td></tr>
+          <tr><td>¿Tienen visibilidad?</td><td>Sí: "todos" o "solo admin"</td><td>Todos la ven</td></tr>
+          <tr><td>Uso típico</td><td>Comprar detergente, llamar al plomero</td><td>Limpiar cabaña, podar jardín</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">add_circle</span> Cómo agregar un pendiente</summary>
+    <div class="manual-sub__body">
+      <ol style="margin:8px 0; padding-left:20px; line-height:2.2">
+        <li>Ir a Operaciones → Pendientes.</li>
+        <li>Escribir el texto en el campo "Nuevo pendiente".</li>
+        <li>Si sos admin, elegir visibilidad: <strong>"Todos"</strong> (lo ven todos) o <strong>"Solo admin"</strong> (solo lo ven los admins).</li>
+        <li>Tocar "Agregar" o presionar Enter.</li>
+      </ol>
+      <div class="info-box tip">
+        <span class="material-icons">lightbulb</span>
+        <span>Los colaboradores siempre crean pendientes con visibilidad "Todos". No pueden ver ni modificar los pendientes marcados como "Solo admin".</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">check_circle</span> Marcar como realizado y editar</summary>
+    <div class="manual-sub__body">
+      <ul style="margin:8px 0; padding-left:20px; line-height:2">
+        <li>Tocar el <strong>checkbox</strong> a la izquierda del pendiente para marcarlo como realizado. Queda tachado y registra quién lo hizo y cuándo.</li>
+        <li>Para <strong>editar</strong> el texto, tocar el ícono de lápiz (solo en pendientes no realizados).</li>
+        <li>Para <strong>eliminar</strong>, tocar el ícono de basura (solo admin).</li>
+        <li>La pestaña <strong>"Realizados"</strong> guarda el historial de todos los completados.</li>
+      </ul>
+    </div>
+  </details>
+</div>
+</details>
+
+<!-- ── 5. CABAÑAS (Config) ────────────────────────────────────────────── -->
+<details class="manual-modulo">
+<summary>
+  <div class="manual-modulo__icon"><span class="material-icons">cottage</span></div>
+  <span>Cabañas — Configuración del sitio público</span>
+  <span class="rol-admin">Solo admin</span>
+  <span class="material-icons manual-modulo__chevron">expand_more</span>
+</summary>
+<div class="manual-body">
+  <p class="manual-intro">
+    La página de configuración de cabañas (Config → Cabañas) controla todo lo que aparece en el sitio público: nombre, fotos, descripciones en tres idiomas, tarifas y conexión con Airbnb via Google Calendar. Cualquier cambio acá se refleja en el sitio público inmediatamente.
+  </p>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">photo_camera</span> Cómo cargar fotos</summary>
+    <div class="manual-sub__body">
+      <p>Las fotos se suben directamente desde la página de configuración de la cabaña:</p>
+      <ol style="margin:8px 0; padding-left:20px; line-height:2.2">
+        <li>Ir a Config → Cabañas y abrir la cabaña a editar.</li>
+        <li>En la sección de fotos, tocar <strong>"Subir foto"</strong>. Se abre el selector de archivos.</li>
+        <li>Seleccionar la imagen (formatos: JPG, PNG, WebP).</li>
+        <li>La foto se sube a Firebase Storage y se agrega a la galería de la cabaña.</li>
+        <li>Se pueden reordenar arrastrando. La primera foto es la foto principal.</li>
+        <li>Tocar el ícono de basura para eliminar una foto de la galería.</li>
+      </ol>
+      <div class="info-box tip">
+        <span class="material-icons">lightbulb</span>
+        <span>Formato recomendado: horizontal, mínimo 1200px de ancho. Las fotos se comprimen automáticamente para el sitio público.</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">translate</span> Descripciones en tres idiomas (ES / PT / EN)</summary>
+    <div class="manual-sub__body">
+      <p>El sitio público es multilingüe. Cada cabaña tiene nombre y descripción en español, portugués e inglés:</p>
+      <table class="manual-tabla">
+        <thead><tr><th>Campo</th><th>Cuándo aparece</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Nombre ES</strong></td><td>Cuando el visitante navega en español (idioma por defecto)</td></tr>
+          <tr><td><strong>Nombre PT</strong></td><td>Cuando el visitante selecciona portugués (Brasil)</td></tr>
+          <tr><td><strong>Nombre EN</strong></td><td>Cuando el visitante selecciona inglés</td></tr>
+          <tr><td><strong>Descripción corta</strong></td><td>Aparece en la tarjeta de listado de cabañas</td></tr>
+          <tr><td><strong>Descripción larga</strong></td><td>Aparece en el detalle de la cabaña, con toda la información</td></tr>
+          <tr><td><strong>Amenidades</strong></td><td>Lista de comodidades (WiFi, pileta, parrilla, etc.) — también traducidas</td></tr>
+        </tbody>
+      </table>
+      <div class="info-box tip">
+        <span class="material-icons">lightbulb</span>
+        <span>Si un idioma queda vacío, el sitio cae al español como respaldo. Siempre completar al menos ES y PT, ya que la mayoría de visitantes son argentinos o brasileños.</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">payments</span> Tarifas — cómo actualizar precios</summary>
+    <div class="manual-sub__body">
+      <p>Cada cabaña tiene su estructura de tarifas independiente:</p>
+      <table class="manual-tabla">
+        <thead><tr><th>Campo</th><th>Descripción</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Precio base / noche</strong></td><td>Tarifa estándar por noche fuera de temporada</td></tr>
+          <tr><td><strong>Capacidad base</strong></td><td>Personas incluidas en el precio base (generalmente 2)</td></tr>
+          <tr><td><strong>Precio por persona extra</strong></td><td>Cargo adicional por persona sobre la capacidad base</td></tr>
+          <tr><td><strong>Precio de limpieza</strong></td><td>Cargo fijo único por estadía, no por noche</td></tr>
+          <tr><td><strong>Tarifas de temporada</strong></td><td>Períodos específicos con precio especial: definir "desde", "hasta", "precio noche" y "precio persona extra" para esas fechas</td></tr>
+        </tbody>
+      </table>
+      <div class="info-box warning">
+        <span class="material-icons">warning</span>
+        <span>Cuando actualices tarifas de temporada, verificá que los períodos no se superpongan. El sistema usa el primero que coincide con la fecha.</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">calendar_month</span> Calendario de ocupación — Google Calendar ID</summary>
+    <div class="manual-sub__body">
+      <p>Cada cabaña tiene un campo <strong>Google Calendar ID</strong> que conecta el sistema con Airbnb:</p>
+      <ol style="margin:8px 0; padding-left:20px; line-height:2.2">
+        <li>En Airbnb, ir a Calendario de la cabaña → Exportar → copiar el link iCal.</li>
+        <li>Crear un Google Calendar nuevo y configurarlo para importar ese iCal (se actualiza automáticamente).</li>
+        <li>Copiar el ID del Google Calendar (formato: <code>xxx@import.calendar.google.com</code>).</li>
+        <li>Pegarlo en el campo "Google Calendar ID" de la cabaña en Config → Cabañas.</li>
+      </ol>
+      <div class="info-box tip">
+        <span class="material-icons">lightbulb</span>
+        <span>Una vez configurado, el sistema lee ese calendario cada vez que se sincroniza Airbnb. Sin este ID, la cabaña no se sincroniza automáticamente.</span>
+      </div>
+    </div>
+  </details>
+</div>
+</details>
+
+<!-- ── 6. FINANZAS ────────────────────────────────────────────────────── -->
+<details class="manual-modulo">
+<summary>
+  <div class="manual-modulo__icon"><span class="material-icons">payments</span></div>
+  <span>Finanzas</span>
+  <span class="rol-admin">Solo admin</span>
+  <span class="material-icons manual-modulo__chevron">expand_more</span>
+</summary>
+<div class="manual-body">
+  <p class="manual-intro">
+    El módulo financiero cubre ingresos, egresos, cuentas bancarias, movimientos de extractos y la importación de informes Airbnb via IA. Todo en BRL como moneda base, con soporte para USD y UYU.
+  </p>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">trending_up</span> Ingresos / Egresos — cómo registrar</summary>
+    <div class="manual-sub__body">
+      <p>En <strong>Finanzas → Ingresos / Egresos</strong> se registran manualmente:</p>
+      <table class="manual-tabla">
+        <thead><tr><th>Tipo</th><th>Cuándo registrarlo</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Ingreso de reserva</strong></td><td>Cuando el huésped paga la seña o el saldo. Se vincula a la reserva correspondiente.</td></tr>
+          <tr><td><strong>Gasto operativo</strong></td><td>Compras, servicios, mantenimiento. Puede marcarse como deducible (para el IRPF).</td></tr>
+          <tr><td><strong>Honorarios</strong></td><td>Los genera el sistema automáticamente al finalizar una tarea con monto. También se pueden registrar manualmente.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">summarize</span> Informes Airbnb — cómo importar el PDF</summary>
+    <div class="manual-sub__body">
+      <p>Airbnb liquida mensualmente. El proceso para registrar ese ingreso:</p>
+      <div class="flujo">
+        <div class="flujo-paso"><div class="flujo-num">1</div><div class="flujo-paso__text"><strong>Descargar el PDF de liquidación desde Airbnb</strong><em>Panel de Airbnb → Pagos → Historial de pagos → Descargar</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">2</div><div class="flujo-paso__text"><strong>Subir el PDF en Finanzas → Informes Airbnb</strong><em>Botón "Subir PDF". El sistema lo procesa con IA (Claude API)</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">3</div><div class="flujo-paso__text"><strong>La IA extrae todos los campos</strong><em>Período, ingreso bruto, comisión Airbnb, neto, impuestos, desglose por cabaña</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">4</div><div class="flujo-paso__text"><strong>Admin revisa y corrige si hay diferencias</strong><em>Los campos son editables antes de guardar</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">5</div><div class="flujo-paso__text"><strong>Admin asigna la cuenta receptora y guarda</strong><em>¿A qué cuenta bancaria llegará el depósito de Airbnb?</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">6</div><div class="flujo-paso__text"><strong>Conciliación cuando llega el depósito</strong><em>En Movimientos, vincular el depósito bancario con el informe → estado pasa a "conciliado"</em></div></div>
+      </div>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">account_balance</span> Cuentas bancarias — cómo configurar</summary>
+    <div class="manual-sub__body">
+      <p>En <strong>Finanzas → Cuentas</strong> se registran las cuentas bancarias:</p>
+      <ul style="margin:8px 0; padding-left:20px; line-height:2">
+        <li>Nombre, banco, moneda (BRL / USD / UYU / ARS), país.</li>
+        <li>Tipo de cambio respecto al BRL (para consolidar el saldo total).</li>
+        <li>Saldo actual — se actualiza al importar extractos.</li>
+      </ul>
+      <p>El widget del Dashboard muestra el <strong>saldo consolidado en BRL</strong> de todas las cuentas activas.</p>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">receipt_long</span> Movimientos — cómo importar extractos bancarios</summary>
+    <div class="manual-sub__body">
+      <div class="flujo">
+        <div class="flujo-paso"><div class="flujo-num">1</div><div class="flujo-paso__text"><strong>Descargar el extracto del banco</strong><em>Formato texto o CSV según el banco (BTG, Itaú, Santander, etc.)</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">2</div><div class="flujo-paso__text"><strong>Ir a Finanzas → Cuentas → "Importar extracto"</strong><em>Pegar el texto del extracto en el campo correspondiente</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">3</div><div class="flujo-paso__text"><strong>Preview con detección de duplicados</strong><em>El sistema marca en amarillo los movimientos que ya existen para evitar dobles entradas</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">4</div><div class="flujo-paso__text"><strong>Admin confirma y guarda</strong><em>Los movimientos quedan en Finanzas → Movimientos para categorizar</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">5</div><div class="flujo-paso__text"><strong>Categorizar cada movimiento</strong><em>Asignar categoría (Ingresos Airbnb, Limpieza, Servicios, etc.) para el análisis financiero</em></div></div>
+      </div>
+      <div class="info-box tip">
+        <span class="material-icons">lightbulb</span>
+        <span>Los movimientos sin categoría disparan una alerta en el Dashboard. Categorizarlos mejora los reportes de balance mensual.</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">label</span> Categorías — cómo organizar los gastos</summary>
+    <div class="manual-sub__body">
+      <p>En <strong>Finanzas → Categorías</strong> se definen las categorías de ingresos y egresos. Las categorías marcadas como <strong>"deducible IRPF"</strong> se usan automáticamente en el módulo Fiscal para calcular la base tributaria.</p>
+    </div>
+  </details>
+</div>
+</details>
+
+<!-- ── 7. FISCAL ──────────────────────────────────────────────────────── -->
+<details class="manual-modulo">
+<summary>
+  <div class="manual-modulo__icon"><span class="material-icons">receipt</span></div>
+  <span>Módulo Fiscal</span>
+  <span class="rol-admin">Solo admin</span>
+  <span class="material-icons manual-modulo__chevron">expand_more</span>
+</summary>
+<div class="manual-body">
+  <p class="manual-intro">
+    El módulo fiscal ayuda a gestionar las obligaciones tributarias como locador de temporada en Brasil. Calcula estimaciones de Carnê-Leão / DARF, gestiona el acceso temporal para la contadora y genera el informe fiscal completo.
+  </p>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">calculate</span> Panel fiscal — qué hace cada pestaña</summary>
+    <div class="manual-sub__body">
+      <table class="manual-tabla">
+        <thead><tr><th>Pestaña</th><th>Función</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Ingresos y gastos</strong></td><td>Tabla mensual de ingresos del año y lista de gastos deducibles. Botón para registrar nuevos gastos con flag "deducible IRPF".</td></tr>
+          <tr><td><strong>Cálculo IRPF</strong></td><td>Seleccionás el mes, el sistema lee los datos reales y calcula la base tributaria y el impuesto estimado según la tabla IRPF 2026. Muestra la fecha de vencimiento del Carnê-Leão.</td></tr>
+          <tr><td><strong>Calendario fiscal</strong></td><td>Los 12 meses del año con estado: sin registrar, pendiente, pagado, vencido. Click en cualquier mes para registrar el pago del DARF.</td></tr>
+          <tr><td><strong>Simulador</strong></td><td>Sliders para probar distintos escenarios de ingresos y gastos sin afectar los datos reales.</td></tr>
+          <tr><td><strong>Tipos de cambio</strong></td><td>Actualizar USD/BRL, USD/UYU, UYU/BRL. Se usan en todos los reportes multimoneda.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">vpn_key</span> Acceso para la contadora — cómo generar el link</summary>
+    <div class="manual-sub__body">
+      <div class="flujo">
+        <div class="flujo-paso"><div class="flujo-num">1</div><div class="flujo-paso__text"><strong>Ir a Fiscal → Acceso contador</strong></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">2</div><div class="flujo-paso__text"><strong>Escribir una etiqueta identificatoria</strong><em>Ej: "Contadora María — junio 2026"</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">3</div><div class="flujo-paso__text"><strong>Elegir cuántos días dura el acceso</strong><em>Opciones: 3, 7, 14 o 30 días</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">4</div><div class="flujo-paso__text"><strong>Tocar "Generar link"</strong><em>Se crea un token único de 24 caracteres guardado en Firestore</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">5</div><div class="flujo-paso__text"><strong>Copiar y enviar por WhatsApp</strong><em>El link tiene acceso sin login — la contadora abre directamente el informe fiscal en portugués</em></div></div>
+        <span class="flujo-flecha">↓</span>
+        <div class="flujo-paso"><div class="flujo-num">6</div><div class="flujo-paso__text"><strong>Revocar si es necesario</strong><em>Desde la misma página, botón "Revocar" en el token activo. El link deja de funcionar inmediatamente</em></div></div>
+      </div>
+    </div>
+  </details>
+</div>
+</details>
+
+<!-- ── 8. CALENDARIO ──────────────────────────────────────────────────── -->
+<details class="manual-modulo">
+<summary>
+  <div class="manual-modulo__icon"><span class="material-icons">calendar_month</span></div>
+  <span>Calendario de ocupación</span>
+  <span class="rol-admin">Solo admin</span>
+  <span class="material-icons manual-modulo__chevron">expand_more</span>
+</summary>
+<div class="manual-body">
+  <p class="manual-intro">
+    El Calendario muestra la ocupación mensual de las 3 cabañas en forma visual. Permite ver de un vistazo qué días están bloqueados, qué reservas coinciden y sincronizar Airbnb manualmente.
+  </p>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">palette</span> Qué representa cada color</summary>
+    <div class="manual-sub__body">
+      <table class="manual-tabla">
+        <thead><tr><th>Color</th><th>Significado</th></tr></thead>
+        <tbody>
+          <tr><td>🟩 Verde / color de cabaña</td><td>Reserva confirmada (propia)</td></tr>
+          <tr><td>🟦 Azul / trama diferente</td><td>Reserva Airbnb activa</td></tr>
+          <tr><td>⬜ Blanco</td><td>Días libres — disponibles para reservar</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:8px">Al hacer click en un día ocupado se abre el detalle de la reserva. Al hacer click en un día libre se puede iniciar una nueva reserva.</p>
+    </div>
+  </details>
+</div>
+</details>
+
+<!-- ── 9. USUARIOS ────────────────────────────────────────────────────── -->
+<details class="manual-modulo">
+<summary>
+  <div class="manual-modulo__icon"><span class="material-icons">manage_accounts</span></div>
+  <span>Usuarios y accesos</span>
+  <span class="rol-admin">Solo admin</span>
+  <span class="material-icons manual-modulo__chevron">expand_more</span>
+</summary>
+<div class="manual-body">
+  <p class="manual-intro">
+    En Config → Usuarios se gestionan todos los accesos al panel. Hay dos roles: <strong>admin</strong> (acceso completo) y <strong>user</strong> (solo tareas y mis cobros).
+  </p>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">person_add</span> Crear un usuario nuevo</summary>
+    <div class="manual-sub__body">
+      <ol style="margin:8px 0; padding-left:20px; line-height:2.2">
+        <li>Ir a Config → Usuarios → "Nuevo usuario".</li>
+        <li>Ingresar nombre, email y elegir rol (admin o colaborador).</li>
+        <li>El sistema crea la cuenta en Firebase Auth y envía el email de bienvenida con la contraseña temporal.</li>
+        <li>El colaborador debe cambiar la contraseña al primer ingreso.</li>
+      </ol>
+      <div class="info-box warning">
+        <span class="material-icons">warning</span>
+        <span>Para <strong>desactivar</strong> un usuario, usar el toggle "Activo" en la lista. No eliminar — desactivar mantiene el historial de sus tareas y sesiones.</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">shield</span> Qué puede hacer cada rol</summary>
+    <div class="manual-sub__body">
+      <table class="manual-tabla">
+        <thead><tr><th>Función</th><th>Admin</th><th>Colaborador</th></tr></thead>
+        <tbody>
+          <tr><td>Ver y trabajar tareas</td><td>✅</td><td>✅</td></tr>
+          <tr><td>Ver mis honorarios</td><td>✅</td><td>✅</td></tr>
+          <tr><td>Crear / editar tareas</td><td>✅</td><td>❌</td></tr>
+          <tr><td>Ver pendientes "todos"</td><td>✅</td><td>✅</td></tr>
+          <tr><td>Ver pendientes "solo admin"</td><td>✅</td><td>❌</td></tr>
+          <tr><td>Reservas, finanzas, fiscal</td><td>✅</td><td>❌</td></tr>
+          <tr><td>Configuración de cabañas</td><td>✅</td><td>❌</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+</div>
+</details>
+
+<!-- ── 10. CLIENTES ───────────────────────────────────────────────────── -->
+<details class="manual-modulo">
+<summary>
+  <div class="manual-modulo__icon"><span class="material-icons">people</span></div>
+  <span>Clientes</span>
+  <span class="rol-admin">Solo admin</span>
+  <span class="material-icons manual-modulo__chevron">expand_more</span>
+</summary>
+<div class="manual-body">
+  <p class="manual-intro">
+    El directorio de clientes guarda el historial de huéspedes. Se crea automáticamente al confirmar una reserva directa, o se puede crear manualmente. Permite ver todas las reservas anteriores de un huésped y agregar notas.
+  </p>
+  <details class="manual-sub">
+    <summary><span class="material-icons" style="font-size:16px">history</span> Historial por cliente</summary>
+    <div class="manual-sub__body">
+      <p>Desde la ficha de cada cliente se ve: todas las reservas anteriores (fechas, cabaña, monto), estadísticas de estancia (noches totales, gasto total) y notas libres. Útil para identificar clientes recurrentes o con requerimientos especiales.</p>
+    </div>
+  </details>
+</div>
+</details>
+
+<!-- ── FOOTER ─────────────────────────────────────────────────────────── -->
+<div style="text-align:center; padding:var(--space-6) 0; color:var(--color-text-muted); font-size:var(--text-xs); border-top:1px solid var(--color-border); margin-top:var(--space-4)">
+  Casa Verde Canas · Manual del Sistema v4.2 · Mayo 2026<br>
+  Para dudas o profundización sobre alguna función, contactar al administrador.
+</div>
