@@ -1,0 +1,1691 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finanzas · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        input[type="number"].form-control {
+            appearance: auto;
+            -webkit-appearance: auto;
+        }
+        .balance-header {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: var(--space-3);
+            margin-bottom: var(--space-5);
+        }
+        .balance-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-4);
+            position: relative;
+            overflow: hidden;
+        }
+        .balance-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+        }
+        .balance-card.ingreso::before  { background: var(--color-success); }
+        .balance-card.egreso::before   { background: var(--color-danger); }
+        .balance-card.honorario::before{ background: var(--color-warning); }
+        .balance-card.neto::before     { background: var(--color-primary); }
+        .balance-card.neto {
+            background: var(--color-primary-xlight);
+            border-color: var(--color-primary-light);
+        }
+        .balance-card__label {
+            font-size: var(--text-xs);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: var(--color-text-muted);
+            margin-bottom: var(--space-2);
+            display: flex;
+            align-items: center;
+            gap: var(--space-1);
+        }
+        .balance-card__label .material-icons { font-size: 14px; }
+        .balance-card__monto {
+            font-size: var(--text-xl);
+            font-weight: 800;
+            font-family: var(--font-mono);
+            color: var(--color-text-primary);
+            line-height: 1.1;
+        }
+        .balance-card.ingreso  .balance-card__monto { color: var(--color-success); }
+        .balance-card.egreso   .balance-card__monto { color: var(--color-danger); }
+        .balance-card.honorario .balance-card__monto{ color: var(--color-warning); }
+        .balance-card__sub {
+            font-size: var(--text-xs);
+            color: var(--color-text-muted);
+            margin-top: var(--space-1);
+        }
+        .fila-monto  { font-family: var(--font-mono); font-weight: 700; }
+        .fila-ingreso{ color: var(--color-success); }
+        .fila-egreso { color: var(--color-danger); }
+        .saldo-box {
+            background: var(--color-warning-bg);
+            border: 1.5px solid rgba(224,123,0,.2);
+            border-radius: var(--radius-md);
+            padding: var(--space-4);
+            margin-bottom: var(--space-4);
+            font-size: var(--text-sm);
+            line-height: 2;
+            display: none;
+        }
+        .saldo-pendiente {
+            font-size: var(--text-xl);
+            font-weight: 800;
+            color: var(--color-warning);
+        }
+        .colab-section { margin-bottom: var(--space-6); }
+        .colab-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: var(--space-3);
+            padding-bottom: var(--space-3);
+            margin-bottom: var(--space-3);
+            border-bottom: 1px solid var(--color-border);
+        }
+        .colab-header strong { font-size: var(--text-md); }
+        .colab-stats {
+            display: flex;
+            gap: var(--space-4);
+            font-size: var(--text-sm);
+            font-weight: 600;
+        }
+        .text-deuda { color: var(--color-danger); }
+        .text-ok    { color: var(--color-success); }
+        .honorario-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-3) 0;
+            border-bottom: 1px solid var(--color-border-light);
+            flex-wrap: wrap;
+            gap: var(--space-3);
+        }
+        .honorario-row:last-child { border-bottom: none; }
+        .mi-balance {
+            background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary-mid));
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
+            color: white;
+            margin-bottom: var(--space-5);
+            text-align: center;
+        }
+        .mi-balance__label  { font-size: var(--text-sm); opacity: .8; margin-bottom: var(--space-2); }
+        .mi-balance__monto  { font-size: var(--text-3xl); font-weight: 800; font-family: var(--font-mono); }
+        .mi-balance__sub    { font-size: var(--text-xs); opacity: .7; margin-top: var(--space-2); }
+        .filtro-mes {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            margin-bottom: var(--space-4);
+            flex-wrap: wrap;
+        }
+        .filtro-mes label {
+            font-size: var(--text-sm);
+            font-weight: 600;
+            color: var(--color-text-secondary);
+        }
+        .filtro-mes select {
+            font-size: var(--text-sm);
+            padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+        }
+        /* ── Circuito radio buttons ── */
+        .circuito-radio {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: var(--space-4);
+        }
+        .circuito-radio label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            padding: 7px 14px;
+            border: 0.5px solid var(--color-border);
+            border-radius: var(--radius-md);
+            background: var(--color-surface-2);
+            transition: all 0.15s;
+        }
+        .circuito-radio label:has(input:checked) {
+            border-color: var(--color-primary);
+            background: var(--color-primary-xlight);
+        }
+        /* ── Comprobante inline ── */
+        .comp-zone {
+            border: 1.5px dashed var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 14px;
+            text-align: center;
+            cursor: pointer;
+            position: relative;
+            background: var(--color-surface-2);
+        }
+        .comp-zone input[type=file] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">cottage</span>
+        Casa Verde Canas
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip">
+            <span class="material-icons">person</span>
+            <span id="userName">—</span>
+        </div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons">logout</span>
+            Salir
+        </button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+
+    <div id="balanceHeader" class="balance-header" style="display:none;"></div>
+
+    <div id="miBalanceBox" style="display:none;">
+        <div class="mi-balance">
+            <div class="mi-balance__label">Mis honorarios pendientes de cobro</div>
+            <div class="mi-balance__monto" id="miBalanceMonto">R$ 0</div>
+            <div class="mi-balance__sub"   id="miBalanceSub">—</div>
+        </div>
+    </div>
+
+    <div class="filtro-mes" id="filtroMes" style="display:none;">
+        <label>
+            <span class="material-icons" style="font-size:16px;vertical-align:middle;">filter_list</span>
+            Mes:
+        </label>
+        <select id="selectMes" onchange="aplicarFiltroMes()"></select>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs-bar" style="margin-bottom:var(--space-5);">
+        <button class="tab-btn active" data-tab="ingresos" id="tabBtnIngresos">
+            <span class="material-icons" style="font-size:15px;">trending_up</span> Ingresos
+        </button>
+        <button class="tab-btn" data-tab="egresos" id="tabBtnEgresos">
+            <span class="material-icons" style="font-size:15px;">trending_down</span> Egresos
+        </button>
+        <button class="tab-btn" data-tab="honorarios" id="tabBtnHonorarios">
+            <span class="material-icons" style="font-size:15px;">engineering</span> Honorarios
+        </button>
+        <button class="tab-btn" data-tab="retiros" id="tabBtnRetiros">
+            <span class="material-icons" style="font-size:15px;">person</span> Retiros y personal
+        </button>
+    </div>
+
+    <!-- Tab: Ingresos -->
+    <div id="tabIngresos">
+        <div class="card">
+            <div class="card__header">
+                <h2 class="card__title">
+                    <span class="material-icons">trending_up</span>
+                    Ingresos — cobros a huéspedes
+                </h2>
+                <button class="btn btn-primary" onclick="abrirModalIngreso()">
+                    <span class="material-icons">add</span> Registrar ingreso
+                </button>
+            </div>
+            <div id="ingresosContainer">
+                <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Egresos -->
+    <div id="tabEgresos" style="display:none;">
+        <div class="card">
+            <div class="card__header">
+                <h2 class="card__title">
+                    <span class="material-icons">trending_down</span>
+                    Egresos — gastos operativos
+                </h2>
+                <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;">
+                    <button class="btn btn-secondary" onclick="abrirImportarFactura()">
+                        <span class="material-icons">document_scanner</span> Importar factura IA
+                    </button>
+                    <button class="btn btn-primary" onclick="abrirModalEgreso()">
+                        <span class="material-icons">add</span> Registrar gasto
+                    </button>
+                </div>
+            </div>
+            <div id="egresosContainer">
+                <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Honorarios -->
+    <div id="tabHonorarios" style="display:none;">
+        <div class="card">
+            <div class="card__header">
+                <h2 class="card__title">
+                    <span class="material-icons">engineering</span>
+                    Honorarios a colaboradores
+                </h2>
+                <button class="btn btn-primary" id="btnNuevoHonorario"
+                    onclick="abrirModalHonorario()" style="display:none;">
+                    <span class="material-icons">add</span> Nuevo honorario
+                </button>
+            </div>
+            <div id="honorariosContainer">
+                <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Retiros y personal -->
+    <div id="tabRetiros" style="display:none;">
+        <div class="card" style="margin-bottom:var(--space-4);">
+            <div class="card__header">
+                <h2 class="card__title">
+                    <span class="material-icons">add_circle_outline</span>
+                    Registrar retiro personal
+                </h2>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Persona <span class="required">*</span></label>
+                    <select id="rUsuario" class="form-control">
+                        <option value="">— Seleccionar —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Fecha</label>
+                    <input type="date" id="rFecha" class="form-control">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Monto <span class="required">*</span></label>
+                    <input type="number" id="rMonto" class="form-control" step="0.01" min="0.01" placeholder="0,00">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Moneda</label>
+                    <select id="rMoneda" class="form-control">
+                        <option value="BRL">BRL (R$)</option>
+                        <option value="UYU">UYU ($U)</option>
+                        <option value="USD">USD (US$)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Concepto <span class="required">*</span></label>
+                <input type="text" id="rConcepto" class="form-control"
+                    placeholder="Ej: Gastos personales semana, compras supermercado...">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Tipo de fondo</label>
+                    <select id="rTipoFondo" class="form-control">
+                        <option value="propio">Fondos propios</option>
+                        <option value="uy">Fondos desde Uruguay</option>
+                        <option value="prestamo">Préstamo / familiar</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Destino</label>
+                    <select id="rDestino" class="form-control">
+                        <option value="uso_personal">Uso personal</option>
+                        <option value="prestamo_externo">Préstamo a tercero</option>
+                        <option value="ahorro">Ahorro</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Comprobante (opcional)</label>
+                <div class="comp-zone">
+                    <input type="file" id="rComprobanteInput" accept="image/*" capture="environment"
+                        onchange="previsualizarComprobanteRetiro(this)">
+                    <span class="material-icons" style="font-size:22px;color:var(--color-text-muted);display:block;margin-bottom:2px;">photo_camera</span>
+                    <div style="font-size:12px;color:var(--color-text-secondary);">Foto de ticket / recibo (opcional)</div>
+                </div>
+                <div id="rComprobantePreview" style="display:none;margin-top:6px;text-align:center;">
+                    <img id="rComprobanteImg" style="max-width:100%;max-height:120px;border-radius:var(--radius-md);border:1px solid var(--color-border);">
+                </div>
+            </div>
+            <div style="margin-top:var(--space-3);">
+                <button class="btn btn-primary" id="rBtnGuardar" onclick="guardarRetiro()">
+                    <span class="material-icons">save</span>
+                    <span id="rBtnText">Registrar retiro</span>
+                </button>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card__header">
+                <h2 class="card__title">
+                    <span class="material-icons">history</span>
+                    Historial de retiros
+                </h2>
+                <button class="btn btn-ghost btn-sm" onclick="cargarRetiros()">
+                    <span class="material-icons">refresh</span>
+                </button>
+            </div>
+            <div id="retirosContainer">
+                <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+
+<!-- ── MODAL: Registrar ingreso ───────────────────────────────── -->
+<div class="modal-overlay" id="modalIngreso" style="display:none;" onclick="cerrarModalIngreso(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <div class="modal__title">
+                <span class="material-icons">trending_up</span>
+                Registrar ingreso
+            </div>
+            <button class="modal__close" onclick="cerrarModalIngreso()">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+            <div class="form-group">
+                <label class="form-label">Reserva <span class="required">*</span></label>
+                <select id="iReserva" class="form-control" onchange="actualizarSaldo()">
+                    <option value="">— Seleccionar reserva —</option>
+                </select>
+            </div>
+            <div class="saldo-box" id="saldoBox">
+                <div>Total reserva: <strong id="saldoTotal">—</strong></div>
+                <div>Ya pagado: <strong id="saldoPagado">—</strong></div>
+                <div>Pendiente: <span class="saldo-pendiente" id="saldoPendiente">—</span></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Monto <span class="required">*</span></label>
+                    <input type="number" id="iMonto" class="form-control" step="0.01" min="0.01">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Moneda</label>
+                    <select id="iMoneda" class="form-control">
+                        <option value="BRL">BRL (R$)</option>
+                        <option value="USD">USD (US$)</option>
+                        <option value="ARS">ARS ($)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Método</label>
+                    <select id="iMetodo" class="form-control">
+                        <option value="pix">PIX</option>
+                        <option value="transferencia">Transferencia</option>
+                        <option value="efectivo">Efectivo</option>
+                        <option value="tarjeta">Tarjeta</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Tipo</label>
+                    <select id="iTipo" class="form-control">
+                        <option value="seña">Seña</option>
+                        <option value="parcial">Parcial</option>
+                        <option value="total">Total</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Observaciones</label>
+                <input type="text" id="iObs" class="form-control" placeholder="Opcional">
+            </div>
+            <div class="alert alert-error" id="iError" style="display:none;">
+                <span class="material-icons">error_outline</span>
+                <span id="iErrorText"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModalIngreso()">Cancelar</button>
+            <button class="btn btn-primary" id="iBtnGuardar" onclick="guardarIngreso()">
+                <span class="material-icons">save</span>
+                <span id="iBtnText">Guardar</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ── MODAL: Registrar gasto (EXTENDIDO v4.3) ──────────────── -->
+<div class="modal-overlay" id="modalEgreso" style="display:none;" onclick="cerrarModalEgreso(event)">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:620px;">
+        <div class="modal__header">
+            <div class="modal__title">
+                <span class="material-icons">trending_down</span>
+                Registrar gasto
+            </div>
+            <button class="modal__close" onclick="cerrarModalEgreso()">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+
+            <div class="form-group">
+                <label class="form-label">Tipo de gasto <span class="required">*</span></label>
+                <div class="circuito-radio">
+                    <label>
+                        <input type="radio" name="eCircuito" value="fiscal" checked onchange="actualizarCamposCircuito()">
+                        <span class="material-icons" style="font-size:15px;color:#1D9E75;">receipt_long</span>
+                        Fiscal Casa Verde
+                    </label>
+                    <label>
+                        <input type="radio" name="eCircuito" value="personal" onchange="actualizarCamposCircuito()">
+                        <span class="material-icons" style="font-size:15px;color:#378ADD;">person</span>
+                        Retiro personal
+                    </label>
+                    <label>
+                        <input type="radio" name="eCircuito" value="mixto" onchange="actualizarCamposCircuito()">
+                        <span class="material-icons" style="font-size:15px;color:#EF9F27;">call_split</span>
+                        Mixto
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Concepto <span class="required">*</span></label>
+                <input type="text" id="eConcepto" class="form-control"
+                    placeholder="Ej: Gas octubre, reparación calefón...">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Categoría <span class="required">*</span></label>
+                    <select id="eCategoria" class="form-control">
+                        <option value="limpieza">Limpieza / insumos</option>
+                        <option value="mantenimiento">Mantenimiento</option>
+                        <option value="servicios">Servicios</option>
+                        <option value="jardineria">Jardinería</option>
+                        <option value="administrativo">Administrativo</option>
+                        <option value="alimentacion">Alimentación</option>
+                        <option value="transporte">Transporte</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Fecha <span class="required">*</span></label>
+                    <input type="date" id="eFecha" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Monto <span class="required">*</span></label>
+                    <input type="number" id="eMonto" class="form-control" step="0.01" min="0.01"
+                        oninput="actualizarMontoMixto()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Moneda</label>
+                    <select id="eMoneda" class="form-control">
+                        <option value="BRL">BRL (R$)</option>
+                        <option value="USD">USD (US$)</option>
+                        <option value="UYU">UYU ($U)</option>
+                        <option value="ARS">ARS ($)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Responsable</label>
+                    <select id="eResponsable" class="form-control">
+                        <option value="">— Quién pagó —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Cuenta de origen</label>
+                    <select id="eCuentaOrigen" class="form-control">
+                        <option value="">— Cuenta usada —</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Tipo de fondo</label>
+                    <select id="eTipoFondo" class="form-control">
+                        <option value="casa_verde">Fondos de Casa Verde</option>
+                        <option value="propio">Fondos propios</option>
+                        <option value="uy">Fondos desde Uruguay</option>
+                        <option value="prestamo">Préstamo / familiar</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Método de pago</label>
+                    <select id="eMetodo" class="form-control">
+                        <option value="pix">PIX</option>
+                        <option value="efectivo">Efectivo</option>
+                        <option value="transferencia">Transferencia</option>
+                        <option value="tarjeta">Tarjeta</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Campos solo fiscal/mixto -->
+            <div id="camposFiscal">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Proveedor</label>
+                        <input type="text" id="eProveedor" class="form-control" placeholder="Nombre del proveedor">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">¿Deducible IRPF?</label>
+                        <select id="eDeducible" class="form-control">
+                            <option value="true">Sí, deducible</option>
+                            <option value="false">No deducible</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">N° factura / referencia</label>
+                    <input type="text" id="eReferencia" class="form-control" placeholder="Opcional">
+                </div>
+            </div>
+
+            <!-- Slider mixto -->
+            <div id="camposMixto" style="display:none;background:var(--color-surface-2);border-radius:var(--radius-md);padding:12px 14px;border:1px solid var(--color-border);margin-bottom:var(--space-3);">
+                <p style="font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;">
+                    ¿Qué porcentaje es imputable a Casa Verde?
+                </p>
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <input type="range" id="ePctFiscal" min="0" max="100" value="50" style="flex:1;"
+                        oninput="actualizarMontoMixto()">
+                    <span id="ePctFiscalLabel" style="font-size:14px;font-weight:700;min-width:36px;text-align:right;">50%</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:12px;">
+                    <div style="color:#1D9E75;">Fiscal: <strong id="eMontoFiscalLabel">—</strong></div>
+                    <div style="color:#378ADD;">Personal: <strong id="eMontoPersonalLabel">—</strong></div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Notas</label>
+                <input type="text" id="eNotas" class="form-control" placeholder="Opcional">
+            </div>
+
+            <div class="form-group" id="camposNotasPersonales" style="display:none;">
+                <label class="form-label">Notas personales</label>
+                <input type="text" id="eNotasPersonales" class="form-control"
+                    placeholder="Solo visible para admin — no aparece en vista de contadora">
+            </div>
+
+            <!-- Comprobante -->
+            <div class="form-group">
+                <label class="form-label">Comprobante (foto de factura / recibo)</label>
+                <div class="comp-zone">
+                    <input type="file" id="eComprobanteInput" accept="image/*" capture="environment"
+                        onchange="previsualizarComprobante(this)">
+                    <span class="material-icons" style="font-size:28px;color:var(--color-text-muted);display:block;margin-bottom:4px;">photo_camera</span>
+                    <div style="font-size:12px;color:var(--color-text-secondary);">Tocar para sacar foto o elegir imagen</div>
+                    <div style="font-size:11px;color:var(--color-text-muted);margin-top:2px;">Se comprime automáticamente · JPG · máx 10 MB original</div>
+                </div>
+                <div id="eComprobantePreview" style="display:none;margin-top:8px;text-align:center;">
+                    <img id="eComprobanteImg" style="max-width:100%;max-height:160px;border-radius:var(--radius-md);border:1px solid var(--color-border);">
+                    <div style="font-size:11px;color:#1D9E75;margin-top:4px;">
+                        <span class="material-icons" style="font-size:12px;vertical-align:-2px;">check_circle</span>
+                        Imagen lista para guardar
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert alert-error" id="eError" style="display:none;">
+                <span class="material-icons">error_outline</span>
+                <span id="eErrorText"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModalEgreso()">Cancelar</button>
+            <button class="btn btn-primary" id="eBtnGuardar" onclick="guardarEgreso()">
+                <span class="material-icons">save</span>
+                <span id="eBtnText">Guardar</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ── MODAL: Honorario manual ────────────────────────────────── -->
+<div class="modal-overlay" id="modalHonorario" style="display:none;" onclick="cerrarModalHonorario(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <div class="modal__title">
+                <span class="material-icons">engineering</span>
+                Registrar honorario
+            </div>
+            <button class="modal__close" onclick="cerrarModalHonorario()">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+            <div class="form-group">
+                <label class="form-label">Colaborador <span class="required">*</span></label>
+                <select id="hColaborador" class="form-control"></select>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Monto <span class="required">*</span></label>
+                    <input type="number" id="hMonto" class="form-control" step="0.01" min="0.01">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Horas</label>
+                    <input type="number" id="hHoras" class="form-control" step="0.25" min="0">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Concepto <span class="required">*</span></label>
+                <input type="text" id="hConcepto" class="form-control" placeholder="Descripción del trabajo">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Estado</label>
+                <select id="hEstado" class="form-control">
+                    <option value="pendiente">Pendiente de pago</option>
+                    <option value="pagado">Pagado</option>
+                </select>
+            </div>
+            <div class="alert alert-error" id="hError" style="display:none;">
+                <span class="material-icons">error_outline</span>
+                <span id="hErrorText"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModalHonorario()">Cancelar</button>
+            <button class="btn btn-primary" id="hBtnGuardar" onclick="guardarHonorario()">
+                <span class="material-icons">save</span>
+                <span id="hBtnText">Guardar honorario</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ── MODAL: Importar factura con IA ─────────────────────────── -->
+<div class="modal-overlay" id="modalFactura" style="display:none;" onclick="cerrarModalFactura(event)">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:640px;">
+        <div class="modal__header">
+            <div class="modal__title">
+                <span class="material-icons">document_scanner</span>
+                Importar factura — IA
+            </div>
+            <button class="modal__close" onclick="cerrarModalFactura()">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+            <p style="font-size:var(--text-xs);color:var(--color-text-muted);margin-bottom:var(--space-4)">
+                Tomá una foto de la factura o seleccioná una imagen. La IA extrae los datos automáticamente.
+            </p>
+            <div id="fUpZone" style="border:2px dashed var(--color-primary-light);border-radius:var(--radius-md);padding:var(--space-6);text-align:center;cursor:pointer;background:var(--color-primary-xlight);position:relative;margin-bottom:var(--space-4);">
+                <input type="file" id="fImgInput" accept="image/*" capture="environment"
+                    style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;"
+                    onchange="procesarFactura(this.files[0])">
+                <span class="material-icons" style="font-size:36px;color:var(--color-primary);margin-bottom:8px;display:block;">photo_camera</span>
+                <div style="font-size:var(--text-sm);font-weight:700;color:var(--color-primary-dark)">Sacar foto o seleccionar imagen</div>
+                <div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-top:4px">JPG, PNG · se redimensiona automáticamente antes de enviar</div>
+            </div>
+            <div id="fImgPreview" style="display:none;margin-bottom:var(--space-4);text-align:center;">
+                <img id="fImgEl" style="max-width:100%;max-height:200px;border-radius:var(--radius-md);border:1px solid var(--color-border);">
+            </div>
+            <div id="fLogBox" style="background:#0f172a;color:#e2e8f0;border-radius:var(--radius-md);padding:var(--space-3);font-family:var(--font-mono);font-size:11px;line-height:1.8;margin-bottom:var(--space-4);display:none;max-height:120px;overflow-y:auto;"></div>
+            <div id="fCampos" style="display:none;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Proveedor</label>
+                        <input type="text" id="fProveedor" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Fecha</label>
+                        <input type="date" id="fFecha" class="form-control">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Monto</label>
+                        <input type="number" id="fMonto" class="form-control" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Moneda</label>
+                        <select id="fMoneda" class="form-control">
+                            <option value="BRL">BRL</option>
+                            <option value="USD">USD</option>
+                            <option value="UYU">UYU</option>
+                            <option value="ARS">ARS</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Categoría</label>
+                        <select id="fCategoria" class="form-control">
+                            <option value="limpieza">Limpieza / insumos</option>
+                            <option value="mantenimiento">Mantenimiento</option>
+                            <option value="servicios">Servicios</option>
+                            <option value="jardineria">Jardinería</option>
+                            <option value="administrativo">Administrativo</option>
+                            <option value="otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Método de pago</label>
+                        <select id="fMetodo" class="form-control">
+                            <option value="pix">PIX</option>
+                            <option value="efectivo">Efectivo</option>
+                            <option value="transferencia">Transferencia</option>
+                            <option value="tarjeta">Tarjeta</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom:var(--space-3);">
+                    <label class="form-label">Concepto</label>
+                    <input type="text" id="fConcepto" class="form-control" placeholder="Descripción del gasto">
+                </div>
+                <div class="form-group" style="margin-bottom:var(--space-3);">
+                    <label class="form-label">Nº factura / referencia</label>
+                    <input type="text" id="fReferencia" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Ítems detectados</label>
+                    <textarea id="fItems" class="form-control" rows="3" style="font-size:11px;"></textarea>
+                </div>
+            </div>
+            <div class="alert alert-error" id="fError" style="display:none;">
+                <span class="material-icons">error_outline</span>
+                <span id="fErrorText"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModalFactura()">Cancelar</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('fImgInput').click()">
+                <span class="material-icons">photo_camera</span> Nueva foto
+            </button>
+            <button class="btn btn-primary" id="fBtnGuardar" onclick="guardarDesdeFactura()" style="display:none;">
+                <span class="material-icons">save</span>
+                <span id="fBtnTxt">Guardar gasto</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+
+<!-- Firebase + Storage + utils -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+<script src="utils.js"></script>
+<script>
+(async () => {
+    const { user, userData } = await CVC.verificarAuth(['admin', 'user']);
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+
+    const db      = CVC.db;
+    const esAdmin = userData.rol === 'admin';
+    const { escapeHtml, formatFecha, formatHoras, showEmpty, showError, showToast,
+            subirComprobante, abrirComprobante } = CVC;
+
+    CVC.renderNav('pagos.html', userData.rol);
+
+    // ── Visibilidad por rol ───────────────────────────────────
+    if (esAdmin) {
+        document.getElementById('balanceHeader').style.display    = 'grid';
+        document.getElementById('filtroMes').style.display        = 'flex';
+        document.getElementById('btnNuevoHonorario').style.display = 'inline-flex';
+        cargarRetiros();
+    } else {
+        document.getElementById('tabBtnIngresos').style.display   = 'none';
+        document.getElementById('tabBtnEgresos').style.display    = 'none';
+        document.getElementById('tabBtnRetiros').style.display    = 'none';
+        document.getElementById('tabIngresos').style.display      = 'none';
+        document.getElementById('tabBtnHonorarios').classList.add('active');
+        document.getElementById('tabBtnIngresos').classList.remove('active');
+        document.getElementById('tabHonorarios').style.display    = 'block';
+        document.getElementById('miBalanceBox').style.display     = 'block';
+    }
+
+    // ── Estado local ──────────────────────────────────────────
+    let reservasCache     = [];
+    let ingresosCache     = [];
+    let egresosCache      = [];
+    let honorariosCache   = [];
+    let presupuestosCache = [];
+    let retirosCache      = [];
+    let usuariosCache     = [];
+    let cuentasCache      = [];
+    let mesFiltro         = null;
+    let _eComprobanteFile = null;
+
+    const fmt     = n => 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const CATS    = { limpieza:'Limpieza', mantenimiento:'Mantenimiento', servicios:'Servicios',
+                      jardineria:'Jardinería', administrativo:'Administrativo',
+                      alimentacion:'Alimentación', transporte:'Transporte', otro:'Otro' };
+
+    // ── Tabs ──────────────────────────────────────────────────
+    document.querySelectorAll('.tab-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            document.getElementById('tabIngresos').style.display   = btn.dataset.tab === 'ingresos'   ? 'block' : 'none';
+            document.getElementById('tabEgresos').style.display    = btn.dataset.tab === 'egresos'    ? 'block' : 'none';
+            document.getElementById('tabHonorarios').style.display = btn.dataset.tab === 'honorarios' ? 'block' : 'none';
+            document.getElementById('tabRetiros').style.display    = btn.dataset.tab === 'retiros'    ? 'block' : 'none';
+            if (btn.dataset.tab === 'retiros') { poblarSelectRetiro(); cargarRetiros(); }
+        });
+    });
+
+    // ── Filtro de mes ─────────────────────────────────────────
+    function poblarSelectMes() {
+        const meses = new Set();
+        const agregarFechas = function(arr) {
+            arr.forEach(function(p) {
+                const f = p.creadoEn && p.creadoEn.toDate ? p.creadoEn.toDate() : (p.fecha ? new Date(p.fecha) : null);
+                if (f) meses.add(f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0'));
+            });
+        };
+        agregarFechas(ingresosCache);
+        agregarFechas(egresosCache);
+        agregarFechas(honorariosCache);
+        const sel = document.getElementById('selectMes');
+        sel.innerHTML = '<option value="">Todos los meses</option>'
+            + [...meses].sort().reverse().map(function(m) {
+                const parts = m.split('-');
+                return '<option value="' + m + '">'
+                    + new Date(parts[0], parts[1] - 1).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
+                    + '</option>';
+            }).join('');
+    }
+
+    window.aplicarFiltroMes = function() {
+        mesFiltro = document.getElementById('selectMes').value || null;
+        renderIngresos(); renderEgresos(); renderBalance();
+    };
+
+    function enMes(item) {
+        if (!mesFiltro) return true;
+        const f = item.creadoEn && item.creadoEn.toDate ? item.creadoEn.toDate() : (item.fecha ? new Date(item.fecha) : null);
+        if (!f) return false;
+        return f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') === mesFiltro;
+    }
+
+    // ── Carga de datos ────────────────────────────────────────
+    async function cargarTodo() {
+        try {
+            if (esAdmin) {
+                const [resS, ingS, egS, honS, presS, cuentS] = await Promise.all([
+                    db.collection('reservas').get(),
+                    db.collection('pagos').get(),
+                    db.collection('gastos').get(),
+                    db.collection('honorarios').get(),
+                    db.collection('presupuestos').get(),
+                    db.collection('cuentas').get()
+                ]);
+                const sortDesc = function(a, b) {
+                    return (b.creadoEn && b.creadoEn.toDate ? b.creadoEn.toDate().getTime() : 0)
+                         - (a.creadoEn && a.creadoEn.toDate ? a.creadoEn.toDate().getTime() : 0);
+                };
+                reservasCache = resS.docs.map(function(d) { return { id: d.id, ...d.data() }; })
+                    .filter(function(r) { return ['confirmada','pendiente','finalizada'].includes(r.estado); })
+                    .sort(function(a, b) {
+                        return (b.checkIn && b.checkIn.toDate ? b.checkIn.toDate().getTime() : 0)
+                             - (a.checkIn && a.checkIn.toDate ? a.checkIn.toDate().getTime() : 0);
+                    });
+                presupuestosCache = presS.docs.map(function(d) { return { id: d.id, ...d.data() }; });
+                ingresosCache     = ingS.docs.map(function(d) { return { id: d.id, ...d.data() }; }).sort(sortDesc);
+                egresosCache      = egS.docs.map(function(d) { return { id: d.id, ...d.data() }; }).sort(sortDesc);
+                honorariosCache   = honS.docs.map(function(d) { return { id: d.id, ...d.data() }; })
+                    .filter(function(h) { return h.estado !== 'pagado'; }).sort(sortDesc);
+                cuentasCache      = cuentS.docs.map(function(d) { return { id: d.id, ...d.data() }; });
+                poblarSelectMes();
+                renderBalance(); renderIngresos(); renderEgresos(); renderHonorarios();
+                poblarSelectIngreso();
+            } else {
+                const honS = await db.collection('honorarios')
+                    .where('uid', '==', user.uid).get();
+                honorariosCache = honS.docs.map(function(d) { return { id: d.id, ...d.data() }; })
+                    .filter(function(h) { return h.estado !== 'pagado'; });
+                renderMiBalance(); renderHonorarios();
+            }
+        } catch(e) {
+            showError('#ingresosContainer', 'Error al cargar', e.message, cargarTodo);
+        }
+    }
+
+    // ── Render: Balance ───────────────────────────────────────
+    function renderBalance() {
+        const ing = ingresosCache.filter(enMes);
+        const egr = egresosCache.filter(function(g) { return enMes(g) && (g.circuito || 'fiscal') === 'fiscal'; });
+        const hon = honorariosCache.filter(enMes);
+        const tIng = ing.reduce(function(a, p) { return a + (p.monto || 0); }, 0);
+        const tEgr = egr.reduce(function(a, g) { return a + (g.monto || 0); }, 0);
+        const tHon = hon.reduce(function(a, h) { return a + (h.monto || 0); }, 0);
+        const neto = tIng - tEgr - tHon;
+        document.getElementById('balanceHeader').innerHTML =
+            '<div class="balance-card ingreso"><div class="balance-card__label"><span class="material-icons">trending_up</span> Ingresos</div><div class="balance-card__monto">' + fmt(tIng) + '</div><div class="balance-card__sub">' + ing.length + ' cobros</div></div>' +
+            '<div class="balance-card egreso"><div class="balance-card__label"><span class="material-icons">trending_down</span> Egresos fiscales</div><div class="balance-card__monto">' + fmt(tEgr) + '</div><div class="balance-card__sub">' + egr.length + ' gastos</div></div>' +
+            '<div class="balance-card honorario"><div class="balance-card__label"><span class="material-icons">engineering</span> Honorarios pend.</div><div class="balance-card__monto">' + fmt(tHon) + '</div><div class="balance-card__sub">' + hon.length + ' pendientes</div></div>' +
+            '<div class="balance-card neto"><div class="balance-card__label"><span class="material-icons">account_balance</span> Balance neto</div><div class="balance-card__monto" style="color:' + (neto >= 0 ? 'var(--color-success)' : 'var(--color-danger)') + '">' + (neto < 0 ? '−' : '') + fmt(Math.abs(neto)) + '</div><div class="balance-card__sub">Ing − Egr − Hon</div></div>';
+    }
+
+    function renderMiBalance() {
+        const pend  = honorariosCache.filter(function(h) { return h.estado !== 'pagado'; });
+        const total = pend.reduce(function(a, h) { return a + (h.monto || 0); }, 0);
+        const hs    = honorariosCache.reduce(function(a, h) { return a + (h.horas || 0); }, 0);
+        document.getElementById('miBalanceMonto').textContent = fmt(total);
+        document.getElementById('miBalanceSub').textContent   =
+            pend.length + ' tareas pendientes · ' + formatHoras(hs) + ' acumuladas';
+    }
+
+    // ── Render: Ingresos ──────────────────────────────────────
+    function renderIngresos() {
+        const container = document.getElementById('ingresosContainer');
+        const lista     = ingresosCache.filter(enMes);
+        if (!lista.length) { showEmpty(container, 'Sin ingresos', 'No hay cobros en este período.', 'trending_up'); return; }
+        const sumaBRL = lista.filter(function(p) { return p.moneda === 'BRL'; }).reduce(function(a, p) { return a + (p.monto || 0); }, 0);
+        const rows = lista.map(function(p) {
+            const res = reservasCache.find(function(r) { return r.id === p.reservaId; });
+            return '<tr>' +
+                '<td>' + escapeHtml(p.fecha || (p.creadoEn && p.creadoEn.toDate ? p.creadoEn.toDate().toLocaleDateString('es-AR') : '—')) + '</td>' +
+                '<td><strong>' + escapeHtml(p.clienteNombre || (res ? res.nombre : '—')) + '</strong></td>' +
+                '<td>' + escapeHtml(p.tipo || '—') + '</td>' +
+                '<td class="fila-monto fila-ingreso">' + (p.moneda !== 'BRL' ? p.moneda + ' ' : 'R$ ') + (p.monto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td>' +
+                '<td>' + escapeHtml(p.metodo || '—') + '</td>' +
+                '<td class="text-muted text-xs">' + escapeHtml(p.observaciones || '—') + '</td>' +
+                '<td><button class="btn btn-danger btn-sm" onclick="eliminarIngreso(\'' + p.id + '\')"><span class="material-icons">delete</span></button></td>' +
+                '</tr>';
+        }).join('');
+        container.innerHTML = '<div class="table-container"><table class="table table-responsive"><thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Monto</th><th>Método</th><th>Obs.</th><th></th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr style="background:var(--color-success-bg);"><td colspan="3" style="font-weight:700;padding:var(--space-3) var(--space-4);">TOTAL</td><td class="fila-monto fila-ingreso" style="padding:var(--space-3) var(--space-4);">R$ ' + sumaBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td><td colspan="3"></td></tr></tfoot></table></div>';
+    }
+
+    // ── Render: Egresos ───────────────────────────────────────
+    function renderEgresos() {
+        const container = document.getElementById('egresosContainer');
+        const lista     = egresosCache.filter(enMes);
+        if (!lista.length) { showEmpty(container, 'Sin gastos', 'No hay gastos en este período.', 'trending_down'); return; }
+        const sumaBRL = lista.filter(function(g) { return g.moneda === 'BRL' && (g.circuito || 'fiscal') === 'fiscal'; })
+            .reduce(function(a, g) { return a + (g.monto || 0); }, 0);
+        const rows = lista.map(function(g) {
+            const sim = g.moneda === 'USD' ? 'US$' : g.moneda === 'UYU' ? '$U' : g.moneda === 'ARS' ? '$' : 'R$';
+            const circuito = g.circuito || 'fiscal';
+            const circBadge = circuito === 'personal'
+                ? '<span style="font-size:10px;background:#E6F1FB;color:#185FA5;padding:2px 6px;border-radius:3px;">personal</span>'
+                : circuito === 'mixto'
+                ? '<span style="font-size:10px;background:#FAEEDA;color:#854F0B;padding:2px 6px;border-radius:3px;">mixto</span>'
+                : '';
+            const compBtn = g.comprobanteUrl
+                ? '<button class="btn btn-ghost btn-sm" onclick="abrirComprobante(\'' + g.comprobanteUrl + '\')" title="Ver comprobante"><span class="material-icons" style="font-size:16px;">attach_file</span></button>'
+                : '';
+            return '<tr>' +
+                '<td>' + escapeHtml(g.fecha || '—') + '</td>' +
+                '<td><strong>' + escapeHtml(g.concepto || '—') + '</strong> ' + circBadge + '</td>' +
+                '<td>' + escapeHtml(CATS[g.categoria] || g.categoria || '—') + '</td>' +
+                '<td class="fila-monto fila-egreso">' + sim + ' ' + (g.monto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td>' +
+                '<td>' + escapeHtml(g.metodo || '—') + '</td>' +
+                '<td class="text-muted text-xs">' + escapeHtml(g.responsableNom || g.proveedor || '—') + '</td>' +
+                '<td style="white-space:nowrap;">' + compBtn + '<button class="btn btn-danger btn-sm" onclick="eliminarEgreso(\'' + g.id + '\')"><span class="material-icons">delete</span></button></td>' +
+                '</tr>';
+        }).join('');
+        container.innerHTML = '<div class="table-container"><table class="table table-responsive"><thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Monto</th><th>Método</th><th>Resp./Proveedor</th><th></th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr style="background:var(--color-danger-bg);"><td colspan="3" style="font-weight:700;padding:var(--space-3) var(--space-4);">TOTAL FISCAL</td><td class="fila-monto fila-egreso" style="padding:var(--space-3) var(--space-4);">R$ ' + sumaBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td><td colspan="3"></td></tr></tfoot></table></div>';
+    }
+
+    // ── Render: Honorarios ────────────────────────────────────
+    function renderHonorarios() {
+        const container = document.getElementById('honorariosContainer');
+        if (!honorariosCache.length) { showEmpty(container, 'Sin honorarios', 'No hay honorarios pendientes.', 'engineering'); return; }
+        const porColab = {};
+        honorariosCache.forEach(function(h) {
+            const uid = h.uid || h.colaboradorId || 'sin_uid';
+            const nom = h.nombre || h.colaboradorNombre || 'Sin nombre';
+            if (!porColab[uid]) porColab[uid] = { nombre: nom, items: [], total: 0, horas: 0 };
+            porColab[uid].items.push(h);
+            porColab[uid].total += h.monto || 0;
+            porColab[uid].horas += h.horas || 0;
+        });
+        container.innerHTML = Object.values(porColab).map(function(c) {
+            const rows = c.items.map(function(h) {
+                return '<div class="honorario-row">' +
+                    '<div><div style="font-size:var(--text-sm);font-weight:600;">' + escapeHtml(h.concepto || h.tareaNombre || '—') + '</div>' +
+                    '<div style="font-size:var(--text-xs);color:var(--color-text-muted);">' + formatHoras(h.horas) + ' · ' + (h.creadoEn && h.creadoEn.toDate ? h.creadoEn.toDate().toLocaleDateString('es-AR') : '—') + '</div></div>' +
+                    '<div style="display:flex;align-items:center;gap:var(--space-2);">' +
+                    '<span class="fila-monto text-deuda">R$ ' + (h.monto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</span>' +
+                    (esAdmin ? '<button class="btn btn-primary btn-sm" onclick="marcarHonorarioPagado(\'' + h.id + '\',\'' + escapeHtml(c.nombre) + '\',' + (h.monto || 0) + ')"><span class="material-icons">check</span></button>' : '') +
+                    '</div></div>';
+            }).join('');
+            return '<div class="colab-section"><div class="colab-header"><strong>' + escapeHtml(c.nombre) + '</strong>' +
+                '<div class="colab-stats"><span class="text-deuda">R$ ' + c.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</span>' +
+                '<span style="color:var(--color-text-muted);">' + formatHoras(c.horas) + '</span></div></div>' + rows + '</div>';
+        }).join('');
+    }
+
+    // ── Render: Retiros ───────────────────────────────────────
+    function renderRetiros() {
+        const container = document.getElementById('retirosContainer');
+        if (!retirosCache.length) { showEmpty(container, 'Sin retiros', 'No hay retiros personales registrados.', 'person'); return; }
+        const balancePorPersona = {};
+        retirosCache.forEach(function(r) {
+            const nom = r.usuarioNom || 'Sin asignar';
+            if (!balancePorPersona[nom]) balancePorPersona[nom] = { total: 0, cant: 0 };
+            balancePorPersona[nom].total += r.monto || 0;
+            balancePorPersona[nom].cant  += 1;
+        });
+        const balanceHtml = Object.entries(balancePorPersona).map(function(entry) {
+            return '<div class="stat-chip"><div class="stat-chip__val">R$ ' +
+                Math.round(entry[1].total).toLocaleString('pt-BR') + '</div>' +
+                '<div class="stat-chip__label">' + escapeHtml(entry[0]) + ' (' + entry[1].cant + ')</div></div>';
+        }).join('');
+        const rows = retirosCache.map(function(r) {
+            const mon = r.moneda === 'UYU' ? '$U ' : r.moneda === 'USD' ? 'US$ ' : 'R$ ';
+            const tieneComp = !!r.comprobanteUrl;
+            const compBtn = tieneComp
+                ? '<button class="btn btn-ghost btn-sm" onclick="abrirComprobante(\'' + r.comprobanteUrl + '\')"><span class="material-icons" style="font-size:16px;">attach_file</span></button>'
+                : '<span style="font-size:11px;color:var(--color-text-muted);">sin foto</span>';
+            const reclasif = r.reclasificado
+                ? '<span style="font-size:11px;background:#E1F5EE;color:#0F6E56;padding:2px 7px;border-radius:3px;">Reclasificado ' + (r.pctReclasif || 0) + '%</span>'
+                : '';
+            return '<tr><td>' + escapeHtml(r.fecha || '—') + '</td>' +
+                '<td><strong>' + escapeHtml(r.usuarioNom || '—') + '</strong></td>' +
+                '<td>' + escapeHtml(r.concepto || '—') + '</td>' +
+                '<td style="text-align:right;font-family:var(--font-mono);">' + mon + (r.monto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td>' +
+                '<td>' + escapeHtml(r.tipoFondo || '—') + '</td>' +
+                '<td>' + compBtn + '</td>' +
+                '<td>' + reclasif + '</td></tr>';
+        }).join('');
+        container.innerHTML =
+            '<div class="stats-row" style="margin-bottom:var(--space-3);">' + balanceHtml + '</div>' +
+            '<div class="table-container"><table class="table table-responsive"><thead><tr>' +
+            '<th>Fecha</th><th>Persona</th><th>Concepto</th><th>Monto</th><th>Fondo</th><th>Comprobante</th><th></th>' +
+            '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+    }
+
+    // ── Cargar retiros ────────────────────────────────────────
+    async function cargarRetiros() {
+        try {
+            const snap = await db.collection('retiros').orderBy('fecha', 'desc').limit(200).get();
+            retirosCache = snap.docs.map(function(d) { return { id: d.id, ...d.data() }; });
+            renderRetiros();
+        } catch(e) {
+            console.warn('cargarRetiros:', e.message);
+        }
+    }
+
+    // ── Poblar select de retiros ──────────────────────────────
+    async function poblarSelectRetiro() {
+        try {
+            const snap = await db.collection('usuarios').orderBy('nombre').get();
+            const sel  = document.getElementById('rUsuario');
+            if (!sel) return;
+            sel.innerHTML = '<option value="">— Seleccionar —</option>' +
+                snap.docs.map(function(d) {
+                    const u = d.data();
+                    return '<option value="' + d.id + '" data-nom="' + escapeHtml(u.nombre) + '">' + escapeHtml(u.nombre) + '</option>';
+                }).join('');
+            const rFecha = document.getElementById('rFecha');
+            if (rFecha && !rFecha.value) rFecha.value = new Date().toISOString().split('T')[0];
+        } catch(e) { console.warn('poblarSelectRetiro:', e.message); }
+    }
+
+    // ── Poblar select de ingreso ──────────────────────────────
+    function poblarSelectIngreso() {
+        const sel = document.getElementById('iReserva');
+        sel.innerHTML = '<option value="">— Seleccionar reserva —</option>' +
+            reservasCache.map(function(r) {
+                return '<option value="' + r.id + '">' + escapeHtml(r.nombre || '—') + ' · ' +
+                    (r.checkIn && r.checkIn.toDate ? r.checkIn.toDate().toLocaleDateString('es-AR') : '—') +
+                    ' · Cab.' + (r.caba || '?') + '</option>';
+            }).join('');
+    }
+
+    // ── Poblar selects de egreso (responsable + cuenta) ───────
+    async function poblarSelectsEgreso() {
+        try {
+            const [usuSnap, cuentSnap] = await Promise.all([
+                db.collection('usuarios').orderBy('nombre').get(),
+                db.collection('cuentas').get()
+            ]);
+            const selResp   = document.getElementById('eResponsable');
+            const selCuenta = document.getElementById('eCuentaOrigen');
+            selResp.innerHTML = '<option value="">— Quién pagó —</option>' +
+                usuSnap.docs.map(function(d) {
+                    const u = d.data();
+                    return '<option value="' + d.id + '" data-nom="' + escapeHtml(u.nombre) + '">' + escapeHtml(u.nombre) + '</option>';
+                }).join('');
+            selCuenta.innerHTML = '<option value="">— Cuenta usada —</option>' +
+                cuentSnap.docs.map(function(d) {
+                    const c = d.data();
+                    return '<option value="' + d.id + '" data-nom="' + escapeHtml(c.nombre) + '">' + escapeHtml(c.nombre) + ' (' + (c.moneda || 'BRL') + ')</option>';
+                }).join('');
+        } catch(e) { console.warn('poblarSelectsEgreso:', e.message); }
+    }
+
+    // ── Campos según circuito ─────────────────────────────────
+    window.actualizarCamposCircuito = function() {
+        const circuito = document.querySelector('input[name="eCircuito"]:checked') ? document.querySelector('input[name="eCircuito"]:checked').value : 'fiscal';
+        document.getElementById('camposFiscal').style.display          = (circuito === 'fiscal' || circuito === 'mixto') ? '' : 'none';
+        document.getElementById('camposMixto').style.display           = circuito === 'mixto' ? '' : 'none';
+        document.getElementById('camposNotasPersonales').style.display  = (circuito === 'personal' || circuito === 'mixto') ? '' : 'none';
+    };
+
+    window.actualizarMontoMixto = function() {
+        const monto = parseFloat(document.getElementById('eMonto').value) || 0;
+        const pct   = parseInt(document.getElementById('ePctFiscal').value || '50');
+        document.getElementById('ePctFiscalLabel').textContent     = pct + '%';
+        document.getElementById('eMontoFiscalLabel').textContent   = 'R$ ' + (monto * pct / 100).toFixed(2).replace('.', ',');
+        document.getElementById('eMontoPersonalLabel').textContent = 'R$ ' + (monto * (100 - pct) / 100).toFixed(2).replace('.', ',');
+    };
+
+    // ── Comprobante preview ───────────────────────────────────
+    window.previsualizarComprobante = function(input) {
+        const file = input.files[0];
+        if (!file) return;
+        _eComprobanteFile = file;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('eComprobanteImg').src = e.target.result;
+            document.getElementById('eComprobantePreview').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    };
+
+    window.previsualizarComprobanteRetiro = function(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('rComprobanteImg').src = e.target.result;
+            document.getElementById('rComprobantePreview').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // ── Modal: Ingreso ────────────────────────────────────────
+    window.abrirModalIngreso = function() {
+        document.getElementById('iReserva').value  = '';
+        document.getElementById('iMonto').value    = '';
+        document.getElementById('iMoneda').value   = 'BRL';
+        document.getElementById('iMetodo').value   = 'pix';
+        document.getElementById('iTipo').value     = 'seña';
+        document.getElementById('iObs').value      = '';
+        document.getElementById('saldoBox').style.display = 'none';
+        document.getElementById('iError').style.display   = 'none';
+        document.getElementById('modalIngreso').style.display = 'flex';
+    };
+    window.cerrarModalIngreso = function(e) {
+        if (e && e.target !== document.getElementById('modalIngreso')) return;
+        document.getElementById('modalIngreso').style.display = 'none';
+    };
+    window.actualizarSaldo = function() {
+        const reservaId = document.getElementById('iReserva').value;
+        const r = reservasCache.find(function(x) { return x.id === reservaId; });
+        if (!r) { document.getElementById('saldoBox').style.display = 'none'; return; }
+        const totalBRL  = r.totalBRL || 0;
+        const pagadoBRL = r.pagadoBRL || 0;
+        const saldo     = totalBRL - pagadoBRL;
+        document.getElementById('saldoTotal').textContent    = fmt(totalBRL);
+        document.getElementById('saldoPagado').textContent   = fmt(pagadoBRL);
+        document.getElementById('saldoPendiente').textContent = fmt(saldo);
+        document.getElementById('saldoBox').style.display = 'block';
+    };
+    window.guardarIngreso = async function() {
+        const reservaId     = document.getElementById('iReserva').value;
+        const clienteNombre = reservasCache.find(function(r) { return r.id === reservaId; })?.nombre || '';
+        const monto         = parseFloat(document.getElementById('iMonto').value);
+        const monedaPago    = document.getElementById('iMoneda').value;
+        document.getElementById('iError').style.display = 'none';
+        if (!reservaId) { mostrarErrorIngreso('Seleccioná una reserva.'); return; }
+        if (!monto || monto <= 0) { mostrarErrorIngreso('Ingresá un monto válido.'); return; }
+        const btn  = document.getElementById('iBtnGuardar');
+        const text = document.getElementById('iBtnText');
+        btn.disabled = true; text.textContent = 'Guardando...';
+        try {
+            await db.collection('pagos').add({
+                reservaId, clienteNombre, monto, moneda: monedaPago,
+                metodo: document.getElementById('iMetodo').value,
+                tipo:   document.getElementById('iTipo').value,
+                observaciones: document.getElementById('iObs').value.trim(),
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                creadoPor: user.uid
+            });
+            if (reservaId && monedaPago === 'BRL') {
+                await db.collection('reservas').doc(reservaId).update({
+                    pagadoBRL: firebase.firestore.FieldValue.increment(monto)
+                });
+            }
+            showToast('Ingreso registrado.', 'success');
+            document.getElementById('modalIngreso').style.display = 'none';
+            await cargarTodo();
+        } catch(e) { mostrarErrorIngreso('Error: ' + e.message); }
+        finally { btn.disabled = false; text.textContent = 'Guardar'; }
+    };
+    window.eliminarIngreso = async function(id) {
+        if (!confirm('¿Eliminar este ingreso? Esta acción no se puede deshacer.')) return;
+        try {
+            await db.collection('pagos').doc(id).delete();
+            showToast('Ingreso eliminado.', 'warning');
+            await cargarTodo();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    // ── Modal: Egreso (EXTENDIDO) ─────────────────────────────
+    window.abrirModalEgreso = function() {
+        document.getElementById('eConcepto').value      = '';
+        document.getElementById('eProveedor').value     = '';
+        document.getElementById('eNotas').value         = '';
+        document.getElementById('eMonto').value         = '';
+        document.getElementById('eCategoria').value     = 'limpieza';
+        document.getElementById('eMoneda').value        = 'BRL';
+        document.getElementById('eMetodo').value        = 'pix';
+        document.getElementById('eFecha').value         = new Date().toISOString().split('T')[0];
+        document.getElementById('eReferencia').value    = '';
+        document.getElementById('eDeducible').value     = 'true';
+        document.getElementById('eTipoFondo').value     = 'casa_verde';
+        document.getElementById('eResponsable').value   = '';
+        document.getElementById('eCuentaOrigen').value  = '';
+        document.getElementById('eNotasPersonales').value = '';
+        const radioFiscal = document.querySelector('input[name="eCircuito"][value="fiscal"]');
+        if (radioFiscal) radioFiscal.checked = true;
+        actualizarCamposCircuito();
+        _eComprobanteFile = null;
+        document.getElementById('eComprobanteInput').value = '';
+        document.getElementById('eComprobantePreview').style.display = 'none';
+        document.getElementById('eError').style.display = 'none';
+        document.getElementById('modalEgreso').style.display = 'flex';
+        poblarSelectsEgreso();
+    };
+    window.cerrarModalEgreso = function(e) {
+        if (e && e.target !== document.getElementById('modalEgreso')) return;
+        document.getElementById('modalEgreso').style.display = 'none';
+    };
+
+    window.guardarEgreso = async function() {
+        const concepto  = document.getElementById('eConcepto').value.trim();
+        const monto     = parseFloat(document.getElementById('eMonto').value);
+        const fecha     = document.getElementById('eFecha').value;
+        const circuito  = document.querySelector('input[name="eCircuito"]:checked') ?
+            document.querySelector('input[name="eCircuito"]:checked').value : 'fiscal';
+        document.getElementById('eError').style.display = 'none';
+        if (!concepto)            { mostrarErrorEgreso('Ingresá un concepto.'); return; }
+        if (!monto || monto <= 0) { mostrarErrorEgreso('Ingresá un monto válido.'); return; }
+        if (!fecha)               { mostrarErrorEgreso('Seleccioná una fecha.'); return; }
+        const btn  = document.getElementById('eBtnGuardar');
+        const text = document.getElementById('eBtnText');
+        btn.disabled = true; text.textContent = 'Guardando...';
+        try {
+            const pctFiscal    = circuito === 'mixto' ? parseInt(document.getElementById('ePctFiscal').value || '50') : (circuito === 'fiscal' ? 100 : 0);
+            const montoFiscal  = parseFloat((monto * pctFiscal / 100).toFixed(2));
+            const montoPersonal = parseFloat((monto - montoFiscal).toFixed(2));
+            const selResp = document.getElementById('eResponsable');
+            const responsableId  = selResp.value || '';
+            const responsableNom = selResp.options[selResp.selectedIndex] ? (selResp.options[selResp.selectedIndex].dataset.nom || '') : '';
+            const selCuenta = document.getElementById('eCuentaOrigen');
+            const cuentaOrigenId  = selCuenta.value || '';
+            const cuentaOrigenNom = selCuenta.options[selCuenta.selectedIndex] ? (selCuenta.options[selCuenta.selectedIndex].dataset.nom || '') : '';
+            const docData = {
+                concepto, monto, moneda: document.getElementById('eMoneda').value,
+                categoria:   document.getElementById('eCategoria').value,
+                metodo:      document.getElementById('eMetodo').value,
+                proveedor:   document.getElementById('eProveedor').value.trim(),
+                notas:       document.getElementById('eNotas').value.trim(),
+                fecha, circuito, responsableId, responsableNom, cuentaOrigenId, cuentaOrigenNom,
+                tipoFondo:   document.getElementById('eTipoFondo').value,
+                deducible:   circuito === 'fiscal' ? document.getElementById('eDeducible').value === 'true' : false,
+                referenciaComprobante: document.getElementById('eReferencia').value.trim(),
+                pctFiscal, montoFiscal, montoPersonal,
+                notasPersonales: document.getElementById('eNotasPersonales').value.trim(),
+                comprobanteUrl: null, origen: 'manual',
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                creadoPor: user.uid
+            };
+            const docRef = await db.collection('gastos').add(docData);
+            if (_eComprobanteFile) {
+                text.textContent = 'Subiendo foto...';
+                try {
+                    const url = await subirComprobante(_eComprobanteFile, 'gastos', docRef.id);
+                    await docRef.update({ comprobanteUrl: url });
+                } catch(se) { console.warn('Storage:', se.message); }
+            }
+            if (circuito === 'mixto' && montoPersonal > 0) {
+                await db.collection('retiros').add({
+                    usuarioId: responsableId, usuarioNom: responsableNom,
+                    monto: montoPersonal, moneda: docData.moneda, fecha,
+                    cuentaOrigenId, cuentaOrigenNom,
+                    concepto: concepto + ' (parte personal)', destino: 'uso_personal',
+                    tipoFondo: docData.tipoFondo, comprobanteUrl: null,
+                    gastoFiscalId: docRef.id, reclasificado: false, pctReclasif: pctFiscal,
+                    creadoEn: firebase.firestore.FieldValue.serverTimestamp(), creadoPor: user.uid
+                });
+            }
+            showToast('Gasto registrado.', 'success');
+            document.getElementById('modalEgreso').style.display = 'none';
+            _eComprobanteFile = null;
+            await cargarTodo();
+        } catch(e) { mostrarErrorEgreso('Error: ' + e.message); }
+        finally { btn.disabled = false; text.textContent = 'Guardar'; }
+    };
+
+    window.eliminarEgreso = async function(id) {
+        if (!confirm('¿Eliminar este gasto? Esta acción no se puede deshacer.')) return;
+        try {
+            await db.collection('gastos').doc(id).delete();
+            showToast('Gasto eliminado.', 'warning');
+            await cargarTodo();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    // ── Guardar retiro ────────────────────────────────────────
+    window.guardarRetiro = async function() {
+        const usuarioEl = document.getElementById('rUsuario');
+        const monto     = parseFloat(document.getElementById('rMonto').value);
+        const concepto  = document.getElementById('rConcepto').value.trim();
+        const fecha     = document.getElementById('rFecha').value || new Date().toISOString().split('T')[0];
+        if (!usuarioEl.value) { showToast('Seleccioná una persona.', 'error'); return; }
+        if (!monto || monto <= 0) { showToast('Ingresá un monto válido.', 'error'); return; }
+        if (!concepto) { showToast('Ingresá un concepto.', 'error'); return; }
+        const btn  = document.getElementById('rBtnGuardar');
+        const text = document.getElementById('rBtnText');
+        btn.disabled = true; text.textContent = 'Guardando...';
+        try {
+            const docData = {
+                usuarioId:      usuarioEl.value,
+                usuarioNom:     usuarioEl.options[usuarioEl.selectedIndex] ? (usuarioEl.options[usuarioEl.selectedIndex].dataset.nom || '') : '',
+                monto, moneda:  document.getElementById('rMoneda').value,
+                fecha, concepto,
+                destino:    document.getElementById('rDestino').value,
+                tipoFondo:  document.getElementById('rTipoFondo').value,
+                cuentaOrigenId: '', cuentaOrigenNom: '',
+                comprobanteUrl: null, reclasificado: false,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp(), creadoPor: user.uid
+            };
+            const docRef = await db.collection('retiros').add(docData);
+            const rFileInput = document.getElementById('rComprobanteInput');
+            if (rFileInput && rFileInput.files[0]) {
+                text.textContent = 'Subiendo foto...';
+                try {
+                    const url = await subirComprobante(rFileInput.files[0], 'retiros', docRef.id);
+                    await docRef.update({ comprobanteUrl: url });
+                } catch(se) { console.warn('Storage retiro:', se.message); }
+            }
+            showToast('Retiro registrado.', 'success');
+            document.getElementById('rMonto').value   = '';
+            document.getElementById('rConcepto').value = '';
+            document.getElementById('rComprobanteInput').value = '';
+            document.getElementById('rComprobantePreview').style.display = 'none';
+            await cargarRetiros();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+        finally { btn.disabled = false; text.textContent = 'Registrar retiro'; }
+    };
+
+    // ── Modal: Honorario ──────────────────────────────────────
+    window.abrirModalHonorario = async function() {
+        try {
+            const snap = await db.collection('usuarios').where('activo','==',true).orderBy('nombre').get();
+            document.getElementById('hColaborador').innerHTML =
+                '<option value="">— Seleccionar colaborador —</option>' +
+                snap.docs.filter(function(d) { return d.data().rol === 'user'; }).map(function(d) {
+                    return '<option value="' + d.id + '">' + escapeHtml(d.data().nombre) + '</option>';
+                }).join('');
+        } catch(e) {}
+        document.getElementById('hMonto').value   = '';
+        document.getElementById('hHoras').value   = '';
+        document.getElementById('hConcepto').value = '';
+        document.getElementById('hEstado').value  = 'pendiente';
+        document.getElementById('hError').style.display = 'none';
+        document.getElementById('modalHonorario').style.display = 'flex';
+    };
+    window.cerrarModalHonorario = function(e) {
+        if (e && e.target !== document.getElementById('modalHonorario')) return;
+        document.getElementById('modalHonorario').style.display = 'none';
+    };
+    window.guardarHonorario = async function() {
+        const uid      = document.getElementById('hColaborador').value;
+        const monto    = parseFloat(document.getElementById('hMonto').value);
+        const concepto = document.getElementById('hConcepto').value.trim();
+        const estado   = document.getElementById('hEstado').value;
+        document.getElementById('hError').style.display = 'none';
+        if (!uid)                     { mostrarErrorHonorario('Seleccioná un colaborador.'); return; }
+        if (!monto || monto <= 0)     { mostrarErrorHonorario('Ingresá un monto válido.'); return; }
+        if (!concepto)                { mostrarErrorHonorario('Ingresá un concepto.'); return; }
+        const btn  = document.getElementById('hBtnGuardar');
+        const text = document.getElementById('hBtnText');
+        btn.disabled = true; text.textContent = 'Guardando...';
+        try {
+            const nombre = document.getElementById('hColaborador').options[document.getElementById('hColaborador').selectedIndex]?.text || '';
+            await db.collection('honorarios').add({
+                uid, nombre, monto, horas: parseFloat(document.getElementById('hHoras').value) || 0,
+                concepto, estado, moneda: 'BRL',
+                fechaPago:  estado === 'pagado' ? firebase.firestore.FieldValue.serverTimestamp() : null,
+                pagadoPor:  estado === 'pagado' ? user.uid : null,
+                creadoEn:   firebase.firestore.FieldValue.serverTimestamp(), creadoPor: user.uid
+            });
+            showToast('Honorario registrado.', 'success');
+            document.getElementById('modalHonorario').style.display = 'none';
+            await cargarTodo();
+        } catch(e) { mostrarErrorHonorario('Error: ' + e.message); }
+        finally { btn.disabled = false; text.textContent = 'Guardar honorario'; }
+    };
+    window.marcarHonorarioPagado = async function(id, nombre, monto) {
+        if (!confirm('¿Marcar como pagado el honorario de ' + nombre + ' (R$ ' + monto.toFixed(2) + ')?')) return;
+        try {
+            await db.collection('honorarios').doc(id).update({
+                estado: 'pagado', fechaPago: firebase.firestore.FieldValue.serverTimestamp(), pagadoPor: user.uid
+            });
+            showToast('Honorario marcado como pagado.', 'success');
+            await cargarTodo();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    // ── Helpers de error ──────────────────────────────────────
+    function mostrarErrorIngreso(msg) {
+        document.getElementById('iErrorText').textContent = msg;
+        document.getElementById('iError').style.display  = 'flex';
+    }
+    function mostrarErrorEgreso(msg) {
+        document.getElementById('eErrorText').textContent = msg;
+        document.getElementById('eError').style.display   = 'flex';
+    }
+    function mostrarErrorHonorario(msg) {
+        document.getElementById('hErrorText').textContent = msg;
+        document.getElementById('hError').style.display   = 'flex';
+    }
+
+    // ── Importar factura con IA ───────────────────────────────
+    window.abrirImportarFactura = function() {
+        document.getElementById('fUpZone').style.display     = 'block';
+        document.getElementById('fImgPreview').style.display = 'none';
+        document.getElementById('fLogBox').style.display     = 'none';
+        document.getElementById('fLogBox').innerHTML         = '';
+        document.getElementById('fCampos').style.display     = 'none';
+        document.getElementById('fBtnGuardar').style.display = 'none';
+        document.getElementById('fError').style.display      = 'none';
+        document.getElementById('fImgInput').value           = '';
+        document.getElementById('modalFactura').style.display = 'flex';
+    };
+    window.cerrarModalFactura = function(e) {
+        if (e && e.target !== document.getElementById('modalFactura')) return;
+        document.getElementById('modalFactura').style.display = 'none';
+    };
+
+    function fLog(msg, tipo) {
+        tipo = tipo || 'info';
+        const b   = document.getElementById('fLogBox');
+        b.style.display = 'block';
+        const col = { ok:'#4ade80', info:'#93c5fd', warn:'#fbbf24', err:'#f87171' }[tipo] || '#93c5fd';
+        b.innerHTML += '<span style="color:' + col + '">' + msg + '</span>\n';
+        b.scrollTop  = b.scrollHeight;
+    }
+
+    async function redimensionarImagen(file, maxPx, quality) {
+        return new Promise(function(resolve, reject) {
+            var img = new Image();
+            var url = URL.createObjectURL(file);
+            img.onload = function() {
+                URL.revokeObjectURL(url);
+                var w = img.width, h = img.height;
+                if (w > maxPx || h > maxPx) {
+                    if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
+                    else       { w = Math.round(w * maxPx / h); h = maxPx; }
+                }
+                var canvas = document.createElement('canvas');
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                canvas.toBlob(function(blob) { resolve(blob); }, 'image/jpeg', quality || 0.82);
+            };
+            img.onerror = function() { reject(new Error('No se pudo cargar la imagen')); };
+            img.src = url;
+        });
+    }
+
+    window.procesarFactura = async function(file) {
+        if (!file) return;
+        document.getElementById('fUpZone').style.display     = 'none';
+        document.getElementById('fLogBox').innerHTML         = '';
+        document.getElementById('fLogBox').classList.add('visible');
+        document.getElementById('fCampos').style.display     = 'none';
+        document.getElementById('fBtnGuardar').style.display = 'none';
+
+        fLog('📄 ' + file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)', 'info');
+        fLog('🔄 Procesando imagen...', 'info');
+
+        try {
+            var blob = await redimensionarImagen(file, 1400, 0.82);
+            document.getElementById('fImgEl').src = URL.createObjectURL(blob);
+            document.getElementById('fImgPreview').style.display = 'block';
+
+            var b64 = await new Promise(function(res, rej) {
+                var r = new FileReader();
+                r.onload  = function() { res(r.result.split(',')[1]); };
+                r.onerror = function() { rej(new Error('Error leyendo archivo')); };
+                r.readAsDataURL(blob);
+            });
+
+            fLog('✅ Imagen lista. Enviando a IA...', 'ok');
+
+            var PROMPT = 'Sos un extractor de datos de facturas y recibos de compra.\n' +
+                'Extraé los datos del comprobante y respondé ÚNICAMENTE con JSON válido, sin texto adicional:\n' +
+                '{"proveedor":"","fecha":"YYYY-MM-DD","monto_total":0,"moneda":"BRL","concepto":"","numero_factura":"","categoria_sugerida":"","metodo_pago_sugerido":"","items":""}';
+
+            var response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 1000,
+                    messages: [{
+                        role: 'user',
+                        content: [
+                            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
+                            { type: 'text', text: PROMPT }
+                        ]
+                    }]
+                })
+            });
+
+            var data = await response.json();
+            var raw  = data.content && data.content[0] ? data.content[0].text : '';
+            fLog('Interpretando...', 'ok');
+
+            var ext;
+            try { ext = JSON.parse(raw.replace(/```json|```/g, '').trim()); }
+            catch(e) {
+                fLog('❌ Error en JSON: ' + e.message, 'err');
+                document.getElementById('fCampos').style.display     = 'block';
+                document.getElementById('fBtnGuardar').style.display = 'inline-flex';
+                return;
+            }
+            fLog('✅ Datos extraídos. Revisalos antes de guardar.', 'ok');
+            poblarCamposFactura(ext);
+        } catch(e) {
+            fLog('❌ Error: ' + e.message, 'err');
+            document.getElementById('fCampos').style.display     = 'block';
+            document.getElementById('fBtnGuardar').style.display = 'inline-flex';
+        }
+    };
+
+    function poblarCamposFactura(d) {
+        if (d.proveedor)         document.getElementById('fProveedor').value  = d.proveedor;
+        if (d.fecha)             document.getElementById('fFecha').value      = d.fecha;
+        if (d.monto_total)       document.getElementById('fMonto').value      = d.monto_total;
+        if (d.moneda)            document.getElementById('fMoneda').value     = d.moneda;
+        if (d.categoria_sugerida) document.getElementById('fCategoria').value = d.categoria_sugerida;
+        if (d.metodo_pago_sugerido && d.metodo_pago_sugerido !== 'desconocido')
+            document.getElementById('fMetodo').value = d.metodo_pago_sugerido;
+        if (d.concepto)        document.getElementById('fConcepto').value   = d.concepto;
+        if (d.numero_factura)  document.getElementById('fReferencia').value = d.numero_factura;
+        if (d.items)           document.getElementById('fItems').value      = d.items;
+        document.getElementById('fCampos').style.display     = 'block';
+        document.getElementById('fBtnGuardar').style.display = 'inline-flex';
+    }
+
+    window.guardarDesdeFactura = async function() {
+        const concepto = document.getElementById('fConcepto').value.trim() || document.getElementById('fProveedor').value.trim();
+        const monto    = parseFloat(document.getElementById('fMonto').value);
+        const fecha    = document.getElementById('fFecha').value || new Date().toISOString().split('T')[0];
+        if (!concepto)            { mostrarErrorFactura('Ingresá un concepto o proveedor.'); return; }
+        if (!monto || monto <= 0) { mostrarErrorFactura('Ingresá un monto válido.'); return; }
+        const btn = document.getElementById('fBtnGuardar');
+        const txt = document.getElementById('fBtnTxt');
+        btn.disabled = true; txt.textContent = 'Guardando...';
+        try {
+            const ref   = document.getElementById('fReferencia').value.trim();
+            const items = document.getElementById('fItems').value.trim();
+            await db.collection('gastos').add({
+                concepto, monto, fecha,
+                categoria:  document.getElementById('fCategoria').value,
+                moneda:     document.getElementById('fMoneda').value,
+                metodo:     document.getElementById('fMetodo').value,
+                proveedor:  document.getElementById('fProveedor').value.trim(),
+                notas:      [ref ? 'Factura: ' + ref : '', items].filter(Boolean).join(' | '),
+                circuito:   'fiscal', deducible: true,
+                referenciaComprobante: ref,
+                origen:     'factura_ia',
+                creadoEn:   firebase.firestore.FieldValue.serverTimestamp(),
+                creadoPor:  user.uid
+            });
+            showToast('Gasto registrado desde factura.', 'success');
+            document.getElementById('modalFactura').style.display = 'none';
+            await cargarTodo();
+        } catch(e) {
+            mostrarErrorFactura('Error: ' + e.message);
+            btn.disabled = false; txt.textContent = 'Guardar gasto';
+        }
+    };
+
+    function mostrarErrorFactura(msg) {
+        document.getElementById('fErrorText').textContent = msg;
+        document.getElementById('fError').style.display   = 'flex';
+    }
+
+    // ── Init ──────────────────────────────────────────────────
+    await cargarTodo();
+
+})();
+</script>
+
+</body>
+</html>
