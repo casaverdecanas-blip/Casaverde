@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Depurar Historial · Casa Verde Canas</title>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,Arial,sans-serif;background:#f0f4f0;color:#1a1a2e}
+.header{background:#2d6a4f;color:white;padding:18px 20px}
+.header h1{font-size:1.1rem;font-weight:700}
+.header p{font-size:.78rem;opacity:.75;margin-top:2px}
+.container{max-width:860px;margin:0 auto;padding:20px 16px}
+.card{background:white;border-radius:14px;padding:24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.07)}
+.card h2{font-size:.95rem;font-weight:700;color:#2d6a4f;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+input[type=email],input[type=password]{width:100%;padding:12px 14px;border:1.5px solid #ddd;border-radius:9px;font-size:.9rem;margin-bottom:10px}
+input:focus{outline:none;border-color:#2d6a4f}
+.btn{width:100%;padding:14px;border:none;border-radius:9px;font-size:.95rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px}
+.btn-green{background:#2d6a4f;color:white}
+.btn-green:disabled{background:#9dc4b5;cursor:not-allowed}
+.btn-blue{background:#1e40af;color:white}
+.btn-blue:disabled{background:#93c5fd;cursor:not-allowed}
+.btn-orange{background:#d97706;color:white}
+.btn-orange:disabled{background:#fcd34d;cursor:not-allowed}
+.btn-red{background:#dc2626;color:white}
+.btn-red:disabled{background:#fca5a5;cursor:not-allowed}
+.estado{padding:12px 14px;border-radius:9px;font-size:.85rem;font-weight:600;margin-top:10px;display:none}
+.ok{background:#d1fae5;color:#065f46}.error{background:#fee2e2;color:#991b1b}.info{background:#e0f2fe;color:#075985}.warn{background:#fef3c7;color:#92400e}
+table{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:12px}
+th{text-align:left;padding:8px 10px;border-bottom:2px solid #e5e7eb;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;font-weight:700}
+td{padding:9px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+tr:hover td{background:#f9fafb}
+.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:.72rem;font-weight:700}
+.badge-warn{background:#fef3c7;color:#92400e}
+.badge-ok{background:#d1fae5;color:#065f46}
+.badge-error{background:#fee2e2;color:#dc2626}
+.badge-info{background:#e0f2fe;color:#075985}
+.progress{background:#e5e7eb;border-radius:99px;height:8px;margin:8px 0}
+.progress-bar{background:#2d6a4f;height:8px;border-radius:99px;transition:width .3s}
+.uid-cell{font-family:monospace;font-size:.72rem;color:#6b7280;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fix-row select{width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:.82rem}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🔧 Depurador de historial de tareas</h1>
+  <p>Detecta y corrige UIDs faltantes o nombres inconsistentes en historial_tareas</p>
+</div>
+
+<div class="container">
+
+  <!-- LOGIN -->
+  <div class="card" id="loginCard">
+    <h2>🔐 Acceso admin</h2>
+    <input type="email"    id="email" placeholder="Email admin">
+    <input type="password" id="pass"  placeholder="Contraseña">
+    <button class="btn btn-green" onclick="login()">Entrar</button>
+    <div class="estado" id="estadoLogin"></div>
+  </div>
+
+  <!-- PANEL PRINCIPAL -->
+  <div id="panel" style="display:none">
+
+    <!-- PASO 1: Analizar -->
+    <div class="card">
+      <h2>📊 Paso 1 — Analizar base de datos</h2>
+      <p style="font-size:.85rem;color:#6b7280;margin-bottom:14px">
+        Lee todos los registros de <code>historial_tareas</code> y detecta colaboradores
+        con uid vacío, nulo o que no coinciden con ningún usuario registrado.
+      </p>
+      <button class="btn btn-blue" id="btnAnalizar" onclick="analizar()">🔍 Analizar historial_tareas</button>
+      <div class="estado" id="estadoAnalisis"></div>
+      <div id="resultadoAnalisis"></div>
+    </div>
+
+    <!-- PASO 2: Mapeo de nombres → usuarios -->
+    <div class="card" id="cardMapeo" style="display:none">
+      <h2>🗺️ Paso 2 — Mapear nombres a usuarios reales</h2>
+      <p style="font-size:.85rem;color:#6b7280;margin-bottom:14px">
+        Para cada nombre problemático, seleccioná el usuario correcto de Firestore.
+        Esto reescribirá el <code>uid</code> y el <code>nombre</code> en todos los registros afectados.
+      </p>
+      <div id="tablaMapeo"></div>
+    </div>
+
+    <!-- PASO 3: Aplicar correcciones -->
+    <div class="card" id="cardAplicar" style="display:none">
+      <h2>🔧 Paso 3 — Aplicar correcciones</h2>
+      <p style="font-size:.85rem;color:#6b7280;margin-bottom:14px">
+        Reescribirá el array <code>colaboradores[]</code> en cada documento afectado
+        con los UIDs y nombres correctos. <strong>Esta acción no se puede deshacer.</strong>
+      </p>
+      <div id="resumenPrevio" style="margin-bottom:12px"></div>
+      <button class="btn btn-orange" id="btnAplicar" onclick="aplicarCorrecciones()" disabled>
+        ✏️ Aplicar correcciones al historial
+      </button>
+      <div class="progress" id="progressBar" style="display:none">
+        <div class="progress-bar" id="progressFill" style="width:0%"></div>
+      </div>
+      <div class="estado" id="estadoAplicar"></div>
+    </div>
+
+    <!-- PASO 4: Verificar resultado -->
+    <div class="card" id="cardVerificar" style="display:none">
+      <h2>✅ Paso 4 — Verificar resultado</h2>
+      <button class="btn btn-green" onclick="verificar()">🔍 Verificar que quedó limpio</button>
+      <div class="estado" id="estadoVerificar"></div>
+      <div id="resultadoVerificar"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// Firebase inicializado por utils.js
+const db   = CVC.db;
+const auth = CVC.auth;
+
+let usuarios        = [];   // { uid, nombre, email }
+let historialDocs   = [];   // todos los docs de historial_tareas
+let problemasMap    = {};   // { claveUnica: { uid, nombre, docIds[], contexto } }
+let mapeoCorrecciones = {}; // { claveUnica: { nuevoUid, nuevoNombre } }
+
+function mostrar(id, msg, tipo) {
+  var el = document.getElementById(id);
+  el.textContent = msg; el.className = 'estado ' + tipo; el.style.display = 'block';
+}
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+async function login() {
+  var email = document.getElementById('email').value.trim();
+  var pass  = document.getElementById('pass').value;
+  if (!email || !pass) { mostrar('estadoLogin','Completá los campos.','error'); return; }
+  mostrar('estadoLogin','Iniciando sesión...','info');
+  try {
+    // 1. Login Firebase Auth
+    await auth.signInWithEmailAndPassword(email, pass);
+  } catch(e) {
+    mostrar('estadoLogin','Error de login: '+e.message,'error');
+    return;
+  }
+  try {
+    // 2. Verificar que sea admin
+    var snap = await db.collection('usuarios').doc(auth.currentUser.uid).get();
+    if (!snap.exists || snap.data().rol !== 'admin') {
+      await auth.signOut();
+      mostrar('estadoLogin','Solo admins pueden usar esta herramienta.','error');
+      return;
+    }
+    // 3. Cargar lista de usuarios (sin filtros para evitar índices)
+    usuarios = [{ uid: auth.currentUser.uid, nombre: snap.data().nombre || snap.data().email || 'Admin' }];
+    try {
+      var uSnap = await db.collection('usuarios').get();
+      usuarios = uSnap.docs.map(function(d) { return { uid: d.id, nombre: d.data().nombre || d.data().email || d.id }; });
+    } catch(e2) {
+      // Si falla la lista completa, continuar solo con el admin actual
+      console.warn('No se pudo cargar lista de usuarios:', e2.message);
+    }
+    // 4. Mostrar panel
+    document.getElementById('loginCard').style.display = 'none';
+    document.getElementById('panel').style.display = 'block';
+    mostrar('estadoLogin','✅ OK','ok');
+  } catch(e) {
+    mostrar('estadoLogin','Error al verificar acceso: '+e.message,'error');
+  }
+}
+
+// ── ANÁLISIS ──────────────────────────────────────────────────────────────────
+async function analizar() {
+  var btn = document.getElementById('btnAnalizar');
+  btn.disabled = true; btn.textContent = '⏳ Analizando...';
+  mostrar('estadoAnalisis','Leyendo historial_tareas...','info');
+
+  try {
+    var snap = await db.collection('historial_tareas').get();
+    historialDocs = snap.docs.map(d => ({ _id: d.id, _ref: d.ref, ...d.data() }));
+    mostrar('estadoAnalisis', '📦 ' + historialDocs.length + ' registros encontrados. Analizando...', 'info');
+
+    // Detectar problemas
+    problemasMap = {};
+    var totalColabs = 0;
+    var totalProblemas = 0;
+
+    historialDocs.forEach(doc => {
+      var colabs = doc.colaboradores || [];
+      colabs.forEach(col => {
+        totalColabs++;
+        var uid    = col.uid   || '';
+        var nombre = col.nombre || '';
+        var clave  = uid || ('__nouid__' + nombre);
+
+        // ¿Es un usuario válido en la colección usuarios?
+        var usuarioReal = uid ? usuarios.find(u => u.uid === uid) : null;
+
+        var esProblema = !uid || !usuarioReal;
+
+        if (esProblema) {
+          if (!problemasMap[clave]) {
+            problemasMap[clave] = {
+              uid,
+              nombre,
+              docIds: [],
+              esEmail: nombre.includes('@'),
+              usuarioSugerido: null
+            };
+            // Intentar autodetectar por nombre o email
+            var match = usuarios.find(u =>
+              (u.nombre && u.nombre.toLowerCase() === nombre.toLowerCase()) ||
+              (u.email  && u.email.toLowerCase()  === nombre.toLowerCase()) ||
+              (u.nombre && nombre.toLowerCase().includes(u.nombre.toLowerCase()))
+            );
+            if (match) problemasMap[clave].usuarioSugerido = match;
+            totalProblemas++;
+          }
+          problemasMap[clave].docIds.push(doc._id);
+        }
+      });
+    });
+
+    // Render tabla de problemas
+    var claves = Object.keys(problemasMap);
+    var contenedor = document.getElementById('resultadoAnalisis');
+
+    // También mostrar resumen de usuarios únicos encontrados
+    var todosUids = {};
+    historialDocs.forEach(doc => {
+      (doc.colaboradores||[]).forEach(col => {
+        var k = col.uid || ('__' + col.nombre);
+        if (!todosUids[k]) todosUids[k] = { uid: col.uid||'', nombre: col.nombre||'', count: 0 };
+        todosUids[k].count++;
+      });
+    });
+
+    var resumenHtml = `
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-bottom:16px;font-size:.85rem">
+        <strong>📊 Resumen:</strong><br>
+        • Documentos analizados: <strong>${historialDocs.length}</strong><br>
+        • Colaboradores únicos encontrados: <strong>${Object.keys(todosUids).length}</strong><br>
+        • Con problemas (UID vacío o no registrado): <strong style="color:${claves.length>0?'#dc2626':'#16a34a'}">${claves.length}</strong>
+      </div>
+      <strong style="font-size:.82rem;color:#6b7280">TODOS LOS COLABORADORES EN EL HISTORIAL:</strong>
+      <table>
+        <thead><tr><th>Nombre guardado</th><th>UID guardado</th><th>¿Existe en usuarios?</th><th>Registros</th></tr></thead>
+        <tbody>
+          ${Object.values(todosUids).map(u => {
+            var existe = u.uid ? usuarios.find(x => x.uid === u.uid) : null;
+            var badge  = existe
+              ? `<span class="badge badge-ok">✅ ${existe.nombre||existe.email}</span>`
+              : u.uid
+                ? `<span class="badge badge-error">❌ UID no registrado</span>`
+                : `<span class="badge badge-warn">⚠️ Sin UID</span>`;
+            return `<tr>
+              <td><strong>${u.nombre||'—'}</strong></td>
+              <td class="uid-cell">${u.uid||'<em style="color:#dc2626">vacío</em>'}</td>
+              <td>${badge}</td>
+              <td>${u.count}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+
+    contenedor.innerHTML = resumenHtml;
+
+    if (claves.length === 0) {
+      mostrar('estadoAnalisis', '✅ No hay problemas de consistencia. Todos los UIDs están correctamente asignados.', 'ok');
+      btn.textContent = '✅ Analizado — sin problemas';
+      return;
+    }
+
+    mostrar('estadoAnalisis', '⚠️ Se encontraron ' + claves.length + ' colaboradores con UID problemático. Completá el mapeo abajo.', 'warn');
+
+    // Mostrar card de mapeo
+    document.getElementById('cardMapeo').style.display = 'block';
+    renderMapeo(claves);
+
+  } catch(e) {
+    mostrar('estadoAnalisis','Error: '+e.message,'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔍 Re-analizar';
+  }
+}
+
+// ── RENDER MAPEO ──────────────────────────────────────────────────────────────
+function renderMapeo(claves) {
+  var optsUsuarios = ['<option value="">— Ignorar / no cambiar —</option>']
+    .concat(usuarios.map(u => `<option value="${u.uid}">${u.nombre||u.email||u.uid}</option>`))
+    .join('');
+
+  var rows = claves.map(clave => {
+    var p     = problemasMap[clave];
+    var sugUid = p.usuarioSugerido ? p.usuarioSugerido.uid : '';
+    var docCount = [...new Set(p.docIds)].length;
+
+    return `<tr class="fix-row">
+      <td>
+        <strong>${p.nombre||'<em>Sin nombre</em>'}</strong><br>
+        <span style="font-size:.72rem;color:#6b7280">
+          UID actual: ${p.uid||'<em>vacío</em>'}<br>
+          Afecta ${docCount} registro(s)
+        </span>
+      </td>
+      <td>
+        <select id="map-${clave.replace(/[^a-zA-Z0-9]/g,'_')}" onchange="actualizarMapeo('${clave}',this.value)">
+          ${optsUsuarios}
+        </select>
+      </td>
+      <td>
+        ${p.usuarioSugerido
+          ? `<span class="badge badge-info">💡 Sugerido: ${p.usuarioSugerido.nombre||p.usuarioSugerido.email}</span>`
+          : '<span class="badge badge-warn">Sin sugerencia</span>'}
+      </td>
+    </tr>`;
+  });
+
+  document.getElementById('tablaMapeo').innerHTML = `
+    <table>
+      <thead><tr><th>Nombre problemático</th><th>Asignar al usuario</th><th>Sugerencia</th></tr></thead>
+      <tbody>${rows.join('')}</tbody>
+    </table>
+    <button class="btn btn-orange" style="margin-top:16px" onclick="prepararAplicar()">
+      ➡️ Continuar con correcciones
+    </button>`;
+
+  // Preseleccionar sugeridos
+  claves.forEach(clave => {
+    var p  = problemasMap[clave];
+    if (p.usuarioSugerido) {
+      var selId = 'map-' + clave.replace(/[^a-zA-Z0-9]/g,'_');
+      var sel = document.getElementById(selId);
+      if (sel) { sel.value = p.usuarioSugerido.uid; actualizarMapeo(clave, p.usuarioSugerido.uid); }
+    }
+  });
+}
+
+function actualizarMapeo(clave, nuevoUid) {
+  if (!nuevoUid) { delete mapeoCorrecciones[clave]; return; }
+  var u = usuarios.find(x => x.uid === nuevoUid);
+  if (u) mapeoCorrecciones[clave] = { nuevoUid, nuevoNombre: u.nombre || u.email || nuevoUid };
+}
+
+// ── PREPARAR APLICAR ──────────────────────────────────────────────────────────
+function prepararAplicar() {
+  var keys = Object.keys(mapeoCorrecciones);
+  if (keys.length === 0) {
+    alert('No hay correcciones seleccionadas. Asigná al menos un usuario.');
+    return;
+  }
+
+  var resumen = keys.map(clave => {
+    var p = problemasMap[clave];
+    var c = mapeoCorrecciones[clave];
+    var docCount = [...new Set(p.docIds)].length;
+    return `<tr>
+      <td>${p.nombre||'—'}</td>
+      <td>→</td>
+      <td><strong>${c.nuevoNombre}</strong></td>
+      <td>${c.nuevoUid.slice(0,10)}...</td>
+      <td>${docCount} registros</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('resumenPrevio').innerHTML = `
+    <table>
+      <thead><tr><th>Nombre actual</th><th></th><th>Nuevo nombre</th><th>Nuevo UID</th><th>Afecta</th></tr></thead>
+      <tbody>${resumen}</tbody>
+    </table>`;
+
+  document.getElementById('cardAplicar').style.display = 'block';
+  document.getElementById('btnAplicar').disabled = false;
+  document.getElementById('cardAplicar').scrollIntoView({ behavior:'smooth', block:'center' });
+}
+
+// ── APLICAR CORRECCIONES ──────────────────────────────────────────────────────
+async function aplicarCorrecciones() {
+  var btn = document.getElementById('btnAplicar');
+  btn.disabled = true; btn.textContent = '⏳ Aplicando...';
+
+  var progressBar  = document.getElementById('progressBar');
+  var progressFill = document.getElementById('progressFill');
+  progressBar.style.display = 'block';
+
+  mostrar('estadoAplicar', 'Aplicando correcciones...', 'info');
+
+  // Construir mapa rápido: por cada doc, saber qué corregir
+  var docsCambios = {}; // docId → lista de { claveOriginal, nuevoUid, nuevoNombre }
+  Object.keys(mapeoCorrecciones).forEach(clave => {
+    var p = problemasMap[clave];
+    var c = mapeoCorrecciones[clave];
+    p.docIds.forEach(docId => {
+      if (!docsCambios[docId]) docsCambios[docId] = [];
+      docsCambios[docId].push({ claveOriginal: clave, uid: p.uid, nombre: p.nombre, nuevoUid: c.nuevoUid, nuevoNombre: c.nuevoNombre });
+    });
+  });
+
+  var docIds    = Object.keys(docsCambios);
+  var total     = docIds.length;
+  var procesados = 0;
+  var errores   = [];
+
+  for (var docId of docIds) {
+    var doc = historialDocs.find(d => d._id === docId);
+    if (!doc) { procesados++; continue; }
+
+    var cambios    = docsCambios[docId];
+    var colabs     = JSON.parse(JSON.stringify(doc.colaboradores || []));
+    var modificado = false;
+
+    colabs = colabs.map(col => {
+      var clave = col.uid || ('__nouid__' + col.nombre);
+      var cambio = cambios.find(c =>
+        (col.uid && col.uid === c.uid) ||
+        (!col.uid && col.nombre === c.nombre)
+      );
+      if (cambio) {
+        modificado = true;
+        return { ...col, uid: cambio.nuevoUid, nombre: cambio.nuevoNombre };
+      }
+      return col;
+    });
+
+    // También actualizar finalizadoPor si corresponde
+    var updData = { colaboradores: colabs };
+
+    try {
+      await doc._ref.update(updData);
+    } catch(e) {
+      errores.push(docId + ': ' + e.message);
+    }
+
+    procesados++;
+    var pct = Math.round((procesados / total) * 100);
+    progressFill.style.width = pct + '%';
+  }
+
+  if (errores.length === 0) {
+    mostrar('estadoAplicar', '✅ ' + procesados + ' documentos actualizados correctamente.', 'ok');
+  } else {
+    mostrar('estadoAplicar', '⚠️ ' + (procesados - errores.length) + ' OK, ' + errores.length + ' errores: ' + errores.slice(0,3).join(' / '), 'warn');
+  }
+
+  btn.textContent = '✅ Correcciones aplicadas';
+  document.getElementById('cardVerificar').style.display = 'block';
+  document.getElementById('cardVerificar').scrollIntoView({ behavior:'smooth', block:'center' });
+
+  // Recargar historial local
+  var snap = await db.collection('historial_tareas').get();
+  historialDocs = snap.docs.map(d => ({ _id: d.id, _ref: d.ref, ...d.data() }));
+}
+
+// ── VERIFICAR ─────────────────────────────────────────────────────────────────
+async function verificar() {
+  mostrar('estadoVerificar','Verificando...','info');
+  try {
+    var snap = await db.collection('historial_tareas').get();
+    var docs  = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+
+    var problemas = [];
+    docs.forEach(doc => {
+      (doc.colaboradores||[]).forEach(col => {
+        var existe = col.uid ? usuarios.find(u => u.uid === col.uid) : null;
+        if (!col.uid || !existe) {
+          problemas.push({ docId: doc._id, nombre: col.nombre, uid: col.uid });
+        }
+      });
+    });
+
+    var cont = document.getElementById('resultadoVerificar');
+    if (problemas.length === 0) {
+      mostrar('estadoVerificar','✅ Base de datos limpia. No quedan problemas de consistencia.','ok');
+      cont.innerHTML = '<div style="background:#d1fae5;border-radius:9px;padding:14px;color:#065f46;font-weight:600;font-size:.9rem;margin-top:10px">🎉 Todos los colaboradores en historial_tareas tienen UIDs válidos y coinciden con usuarios registrados. Las estadísticas de tareas ya deberían mostrarse correctamente.</div>';
+    } else {
+      mostrar('estadoVerificar','⚠️ Quedan ' + problemas.length + ' entradas problemáticas.','warn');
+      cont.innerHTML = '<table><thead><tr><th>Doc ID</th><th>Nombre</th><th>UID</th></tr></thead><tbody>'
+        + problemas.map(p => `<tr><td class="uid-cell">${p.docId}</td><td>${p.nombre||'—'}</td><td class="uid-cell">${p.uid||'vacío'}</td></tr>`).join('')
+        + '</tbody></table>';
+    }
+  } catch(e) {
+    mostrar('estadoVerificar','Error: '+e.message,'error');
+  }
+}
+</script>
+</body>
+</html>
