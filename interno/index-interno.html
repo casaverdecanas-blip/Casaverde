@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Casa Verde Canas</title>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<style>
+body{margin:0;background:#1e4d39;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px}
+.dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.5);display:inline-block;margin:0 4px;animation:b .8s infinite}
+.dot:nth-child(2){animation-delay:.2s}
+.dot:nth-child(3){animation-delay:.4s}
+@keyframes b{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}
+p{color:rgba(255,255,255,.6);font-family:Arial,sans-serif;font-size:.85rem;margin:0}
+</style>
+</head>
+<body>
+<div><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+<p id="msg">Verificando sesión...</p>
+<script>
+// Init Firebase directamente — sin utils.js para evitar conflictos
+firebase.initializeApp({
+  apiKey:    'AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4',
+  authDomain:'casaverdecanas-199.firebaseapp.com',
+  projectId: 'casaverdecanas-199'
+});
+
+var db   = firebase.firestore();
+var msg  = document.getElementById('msg');
+
+// Timeout de seguridad: si Firebase no responde en 8s → login
+var timer = setTimeout(function() {
+  window.location.replace('index.html');
+}, 8000);
+
+firebase.auth().onAuthStateChanged(function(user) {
+  if (!user) {
+    // Sin sesión → login
+    clearTimeout(timer);
+    window.location.replace('index.html');
+    return;
+  }
+
+  // Hay sesión — verificar en Firestore
+  msg.textContent = 'Cargando...';
+  db.collection('usuarios').doc(user.uid).get()
+    .then(function(doc) {
+      clearTimeout(timer);
+      if (!doc.exists || doc.data().activo === false) {
+        firebase.auth().signOut().then(function() {
+          window.location.replace('index.html');
+        });
+        return;
+      }
+      // Redirigir según rol
+      if (doc.data().rol === 'admin') {
+        window.location.replace('dashboard.html');
+      } else {
+        window.location.replace('tareas.html');
+      }
+    })
+    .catch(function(e) {
+      clearTimeout(timer);
+      // Si Firestore falla pero hay sesión, ir al dashboard igual
+      window.location.replace('dashboard.html');
+    });
+});
+</script>
+</body>
+</html>
