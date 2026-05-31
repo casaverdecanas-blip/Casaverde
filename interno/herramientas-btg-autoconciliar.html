@@ -1,0 +1,419 @@
+<!-- ══════════════════════════════════════════════════════════════════════
+     AUTO-CONCILIAR — Pestaña nueva para herramientas-btg.html
+     
+     INSTALACIÓN — 3 pasos:
+     
+     1. BOTÓN: Pegar dentro de <div class="btg-tabs">, después del botón
+        "Conciliar" y antes del de "Categorizar":
+        
+        <button class="btg-tab" onclick="mostrarTab('autoconciliar', this)">
+            <span class="material-icons" style="font-size:16px;">compare_arrows</span>
+            Auto-conciliar
+            <span class="tab-badge" id="badge-autoconciliar">—</span>
+        </button>
+     
+     2. PANEL HTML: Pegar este archivo ANTES del comentario
+        <!-- PESTAÑA 3 — CATEGORIZAR -->
+     
+     3. SCRIPT: El bloque <script> al final de este archivo va DENTRO
+        del <script> existente, antes del comentario
+        // PESTAÑA 3 — CATEGORIZAR
+        (solo el contenido, sin las etiquetas <script>)
+     
+     4. SYNC CUENTAS: Al final de la función cargarCuentas() agregar:
+        _acSyncCuentas();
+     
+     5. utils.js: Agregar el contenido de utils-conciliacion-COMPLETO.js
+        antes de window.CVC = { y agregar las 4 funciones al objeto CVC
+     ══════════════════════════════════════════════════════════════════════ -->
+
+
+<!-- ══════════════════════════════════════════════════════════
+     PANEL HTML — Auto-conciliar
+     ══════════════════════════════════════════════════════════ -->
+<div class="btg-panel" id="panel-autoconciliar">
+
+    <p class="toolbar-desc">
+        Cargá un extracto bancario y el sistema lo compara automáticamente contra los registros del sistema.
+        Solo verás los movimientos que necesitan tu atención.
+    </p>
+
+    <!-- Toolbar -->
+    <div class="cuenta-selector" style="margin-bottom:var(--space-3);">
+        <span class="material-icons" style="color:var(--color-text-muted);">account_balance</span>
+        <label>Cuenta:</label>
+        <select class="form-control" id="acCuentaId" style="max-width:280px;"></select>
+        <select class="form-control" id="acFormato" style="max-width:160px;">
+            <option value="dd/mm/yyyy">dd/mm/yyyy</option>
+            <option value="yyyy-mm-dd">yyyy-mm-dd</option>
+            <option value="mm/dd/yyyy">mm/dd/yyyy</option>
+        </select>
+    </div>
+
+    <!-- Paso 1: Ingresar extracto -->
+    <div id="ac-paso-texto">
+        <div class="form-group">
+            <label class="form-label">Texto del extracto bancario</label>
+            <textarea class="extracto-input" id="acExtractoTexto"
+                placeholder="Pegá aquí el texto del extracto BTG..."
+                style="min-height:140px;"></textarea>
+        </div>
+        <div class="alert alert-error" id="acParseError" style="display:none;">
+            <span class="material-icons">error_outline</span>
+            <span id="acParseErrorMsg">Error</span>
+        </div>
+        <div style="margin-top:var(--space-3);">
+            <button class="btn btn-primary" id="acBtnProcesar">
+                <span class="material-icons">auto_fix_high</span>
+                Procesar y conciliar
+            </button>
+        </div>
+    </div>
+
+    <!-- Barra de progreso -->
+    <div class="prog-wrap" id="acProgreso" style="display:none;">
+        <div class="prog-bar"><div class="prog-fill" id="acProgresoFill" style="width:0%"></div></div>
+        <div class="prog-label" id="acProgresoLabel">Procesando...</div>
+    </div>
+
+    <!-- Paso 2: Resultado -->
+    <div id="ac-paso-resultado" style="display:none;">
+
+        <!-- KPIs -->
+        <div class="stats-row" id="acStats" style="margin-bottom:var(--space-3);"></div>
+
+        <!-- Alerta OK: todo conciliado -->
+        <div class="alert alert-success" id="acAlertaOk" style="display:none;">
+            <span class="material-icons">check_circle</span>
+            <span id="acAlertaOkMsg"></span>
+        </div>
+
+        <!-- Tabla de revisión: solo B y C -->
+        <div id="acRevisionWrap" style="display:none;">
+            <p style="font-size:var(--text-sm); font-weight:500; margin-bottom:var(--space-2);">
+                Movimientos que necesitan tu atención
+            </p>
+            <div class="table-scroll">
+                <table class="preview-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Descripción banco</th>
+                            <th style="text-align:right;">Monto</th>
+                            <th>Estado</th>
+                            <th>Candidato en sistema</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="acRevisionBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Colapsable: auto-conciliados (auditoría) -->
+        <details style="margin-top:var(--space-4);">
+            <summary style="font-size:var(--text-sm); color:var(--color-text-muted); cursor:pointer; padding:var(--space-2) 0;">
+                Ver movimientos auto-conciliados (<span id="acCountAuto">0</span>)
+            </summary>
+            <div class="table-scroll" style="margin-top:var(--space-2);">
+                <table class="preview-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Descripción banco</th>
+                            <th style="text-align:right;">Monto</th>
+                            <th>Registro vinculado</th>
+                            <th>Razón del match</th>
+                        </tr>
+                    </thead>
+                    <tbody id="acAutoBody"></tbody>
+                </table>
+            </div>
+        </details>
+
+        <!-- Botones finales -->
+        <div style="display:flex; gap:var(--space-2); margin-top:var(--space-4); flex-wrap:wrap;">
+            <button class="btn btn-primary" id="acBtnConfirmar" style="display:none;">
+                <span class="material-icons">save</span>
+                <span id="acBtnConfirmarText">Confirmar y guardar</span>
+            </button>
+            <button class="btn btn-secondary" onclick="acReiniciar()">
+                <span class="material-icons">refresh</span>
+                Nuevo extracto
+            </button>
+        </div>
+
+    </div><!-- /ac-paso-resultado -->
+
+</div><!-- /panel-autoconciliar -->
+
+
+<!-- ══════════════════════════════════════════════════════════
+     BLOQUE JS — Pegar dentro del <script> existente,
+     ANTES del comentario // PESTAÑA 3 — CATEGORIZAR
+     (solo el contenido, sin las etiquetas <script>)
+     ══════════════════════════════════════════════════════════ -->
+<script>
+// ══════════════════════════════════════════════════════════════
+// PESTAÑA AUTO-CONCILIAR
+// ══════════════════════════════════════════════════════════════
+
+let _acMovimientos = [];
+let _acDecisiones  = {};   // { idx: 'confirmar' | 'ignorar' }
+
+// Sincronizar select de cuentas con cuentasCache
+// Llamar al final de cargarCuentas()
+function _acSyncCuentas() {
+    const sel = document.getElementById('acCuentaId');
+    if (!sel || !cuentasCache.length) return;
+    sel.innerHTML = '<option value="">— Seleccionar cuenta —</option>' +
+        cuentasCache.map(c =>
+            `<option value="${c.id}">${escapeHtml(c.nombre)} (${c.moneda || 'BRL'})</option>`
+        ).join('');
+    // Heredar cuenta seleccionada en la pestaña Importar
+    const importSel = document.getElementById('importCuentaId');
+    if (importSel?.value) sel.value = importSel.value;
+}
+
+// ── PROCESAR ──────────────────────────────────────────────────
+
+document.getElementById('acBtnProcesar').addEventListener('click', async function() {
+    const texto    = document.getElementById('acExtractoTexto').value.trim();
+    const cuentaId = document.getElementById('acCuentaId').value;
+    const formato  = document.getElementById('acFormato').value;
+    const errEl    = document.getElementById('acParseError');
+    errEl.style.display = 'none';
+
+    if (!cuentaId) {
+        document.getElementById('acParseErrorMsg').textContent = 'Seleccioná una cuenta primero.';
+        errEl.style.display = 'flex'; return;
+    }
+    if (!texto) {
+        document.getElementById('acParseErrorMsg').textContent = 'Pegá el texto del extracto primero.';
+        errEl.style.display = 'flex'; return;
+    }
+
+    document.getElementById('ac-paso-texto').style.display     = 'none';
+    document.getElementById('acProgreso').style.display         = 'block';
+    document.getElementById('ac-paso-resultado').style.display  = 'none';
+
+    function setProgAc(pct, label) {
+        document.getElementById('acProgresoFill').style.width   = pct + '%';
+        document.getElementById('acProgresoLabel').textContent  = label;
+    }
+
+    try {
+        setProgAc(15, 'Parseando extracto...');
+        const parseados = parsearTexto(texto, formato);
+        if (!parseados.length) {
+            document.getElementById('acParseErrorMsg').textContent =
+                'No se detectaron líneas válidas. Verificá el formato de fecha.';
+            document.getElementById('acProgreso').style.display    = 'none';
+            document.getElementById('ac-paso-texto').style.display = 'block';
+            errEl.style.display = 'flex';
+            return;
+        }
+
+        setProgAc(35, 'Detectando duplicados contra Firestore...');
+        let conDuplicados;
+        try {
+            conDuplicados = await conciliarMovimientos(parseados, cuentaId);
+        } catch(e) {
+            conDuplicados = parseados.map(m => ({ ...m, estado: 'nuevo' }));
+        }
+
+        setProgAc(65, 'Comparando contra registros del sistema...');
+        const conMatch = await CVC.conciliarContraRegistros(conDuplicados, cuentaId);
+
+        setProgAc(95, 'Preparando resultados...');
+        _acMovimientos = conMatch;
+        _acDecisiones  = {};
+
+        await new Promise(r => setTimeout(r, 300));
+        document.getElementById('acProgreso').style.display        = 'none';
+        document.getElementById('ac-paso-resultado').style.display = 'block';
+        _acRenderResultado();
+
+    } catch(e) {
+        document.getElementById('acParseErrorMsg').textContent = 'Error: ' + e.message;
+        document.getElementById('acProgreso').style.display    = 'none';
+        document.getElementById('ac-paso-texto').style.display = 'block';
+        errEl.style.display = 'flex';
+    }
+});
+
+// ── RENDER ────────────────────────────────────────────────────
+
+function _acRenderResultado() {
+    const cuenta = cuentasCache.find(c => c.id === document.getElementById('acCuentaId').value);
+    const moneda = cuenta?.moneda || 'BRL';
+
+    const nivA = _acMovimientos.filter(m => m.matchResultado?.nivel === 'A');
+    const nivB = _acMovimientos.filter(m => m.matchResultado?.nivel === 'B');
+    const nivC = _acMovimientos.filter(m => m.matchResultado?.nivel === 'C');
+    const dups = _acMovimientos.filter(m => m.estado === 'duplicado');
+    const necesitanAtencion = nivB.length + nivC.length;
+
+    document.getElementById('acStats').innerHTML = `
+        <div class="stat-chip"><div class="stat-chip__val green">${nivA.length}</div><div class="stat-chip__label">Auto-conciliados</div></div>
+        <div class="stat-chip"><div class="stat-chip__val amber">${nivB.length}</div><div class="stat-chip__label">Para confirmar</div></div>
+        <div class="stat-chip"><div class="stat-chip__val red">${nivC.length}</div><div class="stat-chip__label">Sin correlativo</div></div>
+        <div class="stat-chip"><div class="stat-chip__val" style="color:var(--color-text-muted);">${dups.length}</div><div class="stat-chip__label">Ya importados</div></div>
+    `;
+
+    document.getElementById('acCountAuto').textContent = nivA.length;
+
+    if (necesitanAtencion === 0) {
+        document.getElementById('acAlertaOk').style.display   = 'flex';
+        document.getElementById('acAlertaOkMsg').textContent  =
+            `Todo en orden — ${nivA.length} movimiento(s) auto-conciliados, ninguno requiere revisión.`;
+        document.getElementById('acRevisionWrap').style.display = 'none';
+    } else {
+        document.getElementById('acAlertaOk').style.display    = 'none';
+        document.getElementById('acRevisionWrap').style.display = 'block';
+    }
+
+    // ── Tabla de revisión (B y C) ─────────────────────────────
+    const paraRevisar = [...nivB, ...nivC];
+    document.getElementById('acRevisionBody').innerHTML = paraRevisar.map(m => {
+        const idx      = _acMovimientos.indexOf(m);
+        const match    = m.matchResultado;
+        const esB      = match.nivel === 'B';
+        const decision = _acDecisiones[idx];
+        const montoFmt = (m.monto >= 0 ? '+' : '') + fmtMonto(m.monto, moneda);
+        const montoClass = m.monto >= 0 ? 'val-pos' : 'val-neg';
+
+        let candidatoHtml = '—';
+        if (esB && match.registro) {
+            const reg = match.registro;
+            const montoReg = Math.abs(reg.monto || reg.total_neto || 0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+            candidatoHtml = `<div style="font-size:11px; line-height:1.5;">
+                <div style="font-weight:500;">${escapeHtml(reg.clienteNombre || reg.concepto || reg.anfitrion || '—')}</div>
+                <div style="color:var(--color-text-muted);">${escapeHtml(reg._coleccion)} · R$ ${montoReg}</div>
+                <div style="color:var(--color-text-muted); font-size:10px; margin-top:2px;">${escapeHtml(match.razon)}</div>
+            </div>`;
+        } else if (!esB) {
+            candidatoHtml = `<span style="font-size:11px; color:var(--color-text-muted);">Ningún registro coincide<br><span style="font-size:10px;">${escapeHtml(match.razon)}</span></span>`;
+        }
+
+        const nivelBadge = esB
+            ? `<span class="est-posible" style="font-size:11px;">Sugerido</span>`
+            : `<span style="font-size:11px; background:#FCEBEB; color:#A32D2D; padding:2px 8px; border-radius:4px;">Sin registro</span>`;
+
+        const accionHtml = esB
+            ? `<div style="display:flex; gap:4px;">
+                <button class="btn btn-sm ${decision === 'confirmar' ? 'btn-primary' : 'btn-secondary'}"
+                    onclick="_acDecision(${idx}, 'confirmar')" title="Confirmar match">
+                    <span class="material-icons" style="font-size:14px;">check</span>
+                </button>
+                <button class="btn btn-sm ${decision === 'ignorar' ? 'btn-danger' : 'btn-ghost'}"
+                    onclick="_acDecision(${idx}, 'ignorar')" title="Descartar sugerencia">
+                    <span class="material-icons" style="font-size:14px;">close</span>
+                </button>
+               </div>`
+            : `<button class="btn btn-sm btn-secondary" onclick="_acCopiarDatos(${idx})" title="Copiar datos para registrar manualmente">
+                <span class="material-icons" style="font-size:14px;">content_copy</span>
+                Copiar
+               </button>`;
+
+        return `<tr id="acrow-${idx}">
+            <td style="white-space:nowrap; font-family:var(--font-mono); font-size:11px;">${m.fecha}</td>
+            <td style="max-width:220px; word-break:break-word; font-size:11px;">${escapeHtml(m.descripcion)}</td>
+            <td class="${montoClass}" style="text-align:right; white-space:nowrap; font-family:var(--font-mono); font-size:11px;">${montoFmt}</td>
+            <td>${nivelBadge}</td>
+            <td>${candidatoHtml}</td>
+            <td style="white-space:nowrap;">${accionHtml}</td>
+        </tr>`;
+    }).join('') || `<tr><td colspan="6" style="text-align:center; padding:var(--space-4); color:var(--color-text-muted);">Sin movimientos para revisar</td></tr>`;
+
+    // ── Tabla colapsada: auto-conciliados ─────────────────────
+    document.getElementById('acAutoBody').innerHTML = nivA.map(m => {
+        const match    = m.matchResultado;
+        const reg      = match.registro;
+        const montoFmt = (m.monto >= 0 ? '+' : '') + fmtMonto(m.monto, moneda);
+        const regDesc  = reg ? escapeHtml(reg.clienteNombre || reg.concepto || reg.anfitrion || reg._coleccion || '—') : '—';
+        return `<tr>
+            <td style="font-family:var(--font-mono); font-size:11px;">${m.fecha}</td>
+            <td style="font-size:11px;">${escapeHtml(m.descripcion)}</td>
+            <td class="val-pos" style="text-align:right; font-family:var(--font-mono); font-size:11px;">${montoFmt}</td>
+            <td style="font-size:11px;">${regDesc}</td>
+            <td style="font-size:10px; color:var(--color-text-muted);">${escapeHtml(match.razon)}</td>
+        </tr>`;
+    }).join('') || `<tr><td colspan="5" style="text-align:center; padding:var(--space-3); color:var(--color-text-muted);">Ninguno</td></tr>`;
+
+    // ── Botón guardar ─────────────────────────────────────────
+    const hayParaGuardar = nivA.length > 0 ||
+        Object.values(_acDecisiones).some(d => d === 'confirmar');
+    document.getElementById('acBtnConfirmar').style.display = hayParaGuardar ? 'inline-flex' : 'none';
+
+    actualizarBadge('autoconciliar', necesitanAtencion > 0 ? necesitanAtencion : (nivA.length ? '✓' : '—'));
+}
+
+// ── DECISIÓN NIVEL B ──────────────────────────────────────────
+
+window._acDecision = function(idx, decision) {
+    _acDecisiones[idx] = decision;
+    _acRenderResultado();
+};
+
+// ── COPIAR DATOS NIVEL C ──────────────────────────────────────
+
+window._acCopiarDatos = function(idx) {
+    const m = _acMovimientos[idx];
+    if (!m) return;
+    const texto = `Fecha: ${m.fecha}\nMonto: ${m.monto}\nDescripción: ${m.descripcion}`;
+    navigator.clipboard?.writeText(texto).catch(() => {});
+    showToast('Datos copiados — registrá el movimiento en Ingresos/Egresos', 'info');
+};
+
+// ── CONFIRMAR Y GUARDAR ───────────────────────────────────────
+
+document.getElementById('acBtnConfirmar').addEventListener('click', async function() {
+    const btn = document.getElementById('acBtnConfirmar');
+    const txt = document.getElementById('acBtnConfirmarText');
+    btn.disabled = true; txt.textContent = 'Guardando...';
+
+    try {
+        const aSalvar = _acMovimientos.filter((m, i) => {
+            const nivel = m.matchResultado?.nivel;
+            if (nivel === 'A') return true;
+            if (nivel === 'B' && _acDecisiones[i] === 'confirmar') return true;
+            return false;
+        });
+
+        let guardados = 0;
+        for (const m of aSalvar) {
+            if (!m._firestoreId) continue;  // solo movimientos ya importados en Firestore
+            await CVC.guardarConciliacion(m._firestoreId, m.matchResultado, user.uid);
+            guardados++;
+        }
+
+        showToast(guardados > 0
+            ? `${guardados} movimiento(s) conciliados y guardados.`
+            : 'Nada que guardar — los movimientos aún no están importados en Firestore.',
+            guardados > 0 ? 'success' : 'warning');
+
+    } catch(e) {
+        showToast('Error al guardar: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false; txt.textContent = 'Confirmar y guardar';
+    }
+});
+
+// ── REINICIAR ─────────────────────────────────────────────────
+
+window.acReiniciar = function() {
+    _acMovimientos = [];
+    _acDecisiones  = {};
+    document.getElementById('acExtractoTexto').value           = '';
+    document.getElementById('ac-paso-texto').style.display     = 'block';
+    document.getElementById('ac-paso-resultado').style.display = 'none';
+    document.getElementById('acProgreso').style.display        = 'none';
+    document.getElementById('acParseError').style.display      = 'none';
+    actualizarBadge('autoconciliar', '—');
+};
+
+// ══════════════════════════════════════════════════════════════
+// FIN PESTAÑA AUTO-CONCILIAR
+// ══════════════════════════════════════════════════════════════
+</script>
