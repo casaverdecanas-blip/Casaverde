@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+<style>
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .acceso-card { cursor: pointer; border: none; font-family: inherit; width: 100%; text-align: center; position: relative; }
+    .acceso-help {
+        position: absolute; top: 6px; right: 6px;
+        width: 18px; height: 18px; border-radius: 50%;
+        background: rgba(0,0,0,0.08); border: 1px solid rgba(0,0,0,0.12);
+        color: var(--color-text-muted); font-size: 11px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; line-height: 1; z-index: 2;
+        transition: background .15s, color .15s;
+        text-decoration: none;
+    }
+    .acceso-help:hover { background: var(--color-primary); color: white; border-color: var(--color-primary); }
+
+    /* ── ALERTAS PROACTIVAS ──────────────────────────────────── */
+    .alertas-panel { display: none; margin-bottom: var(--space-5); }
+    .alertas-panel.visible { display: block; }
+    .alertas-titulo {
+        display: flex; align-items: center; gap: var(--space-2);
+        font-size: var(--text-xs); font-weight: 800;
+        text-transform: uppercase; letter-spacing: .07em;
+        color: var(--color-text-muted); margin-bottom: var(--space-3);
+    }
+    .alerta-item {
+        display: flex; align-items: flex-start; gap: var(--space-3);
+        padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+        margin-bottom: var(--space-2); font-size: var(--text-sm);
+        border-left: 3px solid; text-decoration: none; color: inherit;
+        transition: opacity var(--transition-fast);
+    }
+    .alerta-item:hover { opacity: .85; }
+    .alerta-item.critico  { background: var(--color-danger-bg);  border-color: var(--color-danger);  color: var(--color-danger);  }
+    .alerta-item.atencion { background: var(--color-warning-bg); border-color: var(--color-warning); color: var(--color-warning); }
+    .alerta-item.info     { background: var(--color-info-bg);    border-color: var(--color-info);    color: var(--color-info);    }
+    .alerta-item__icon  { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .alerta-item__body  { flex: 1; }
+    .alerta-item__title { font-weight: 700; line-height: 1.3; }
+    .alerta-item__desc  { font-size: var(--text-xs); opacity: .8; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ──────────────────────────────────────────────── -->
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">cottage</span>
+        Casa Verde Canas
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip">
+            <span class="material-icons">person</span>
+            <span id="userName">—</span>
+        </div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons">logout</span>
+            Salir
+        </button>
+    </div>
+</header>
+
+<!-- ── NAVEGACIÓN ──────────────────────────────────────────── -->
+<nav class="admin-nav" id="appNav"></nav>
+
+<!-- ── CONTENIDO ───────────────────────────────────────────── -->
+<main class="admin-content">
+
+    <!-- ── ALERTAS PROACTIVAS ─────────────────────────────────── -->
+    <div class="alertas-panel" id="alertasPanel">
+        <div class="alertas-titulo">
+            <span class="material-icons" style="font-size:14px;">notification_important</span>
+            Requiere atención
+        </div>
+        <div id="alertasList"></div>
+    </div>
+
+    <!-- KPIs -->
+    <p class="section-title">Resumen general</p>
+    <div class="kpi-grid" id="kpiGrid">
+        <div class="state-loading" style="grid-column:1/-1;">
+            <div class="spinner"></div>
+            <span>Cargando datos...</span>
+        </div>
+    </div>
+
+    <!-- Widget posición consolidada de cuentas -->
+    <div id="widgetCuentas" style="display:none; margin-bottom:var(--space-5);">
+        <p class="section-title" style="margin-bottom:var(--space-3);">
+            Posición bancaria
+            <a href="cuentas.html" style="font-size:var(--text-xs); font-weight:400; color:var(--color-primary); margin-left:8px;">Ver detalle →</a>
+        </p>
+        <div style="background:linear-gradient(135deg, var(--color-primary-dark), var(--color-primary-mid));
+            border-radius:var(--radius-lg); padding:var(--space-5) var(--space-6); color:white;
+            display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--space-4);">
+            <div>
+                <div style="font-size:var(--text-xs); opacity:.7; margin-bottom:4px;">Total consolidado en BRL</div>
+                <div id="wcTotal" style="font-size:var(--text-3xl); font-weight:800; font-family:var(--font-mono);">—</div>
+            </div>
+            <div id="wcDetalle" style="display:flex; gap:var(--space-5); flex-wrap:wrap;"></div>
+        </div>
+        <div id="wcCuentas" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+            gap:var(--space-3); margin-top:var(--space-3);"></div>
+    </div>
+
+    <!-- Accesos rápidos -->
+    <p class="section-title">Accesos rápidos</p>
+    <div class="accesos-grid">
+        <a href="presupuestos.html?nuevo=1" class="acceso-card">
+            <span class="material-icons">calculate</span>Nuevo presupuesto
+            <span class="acceso-help" onclick="event.preventDefault();event.stopPropagation();CVC.mostrarAyuda('presupuestos.html')" title="¿Qué es esto?">?</span>
+        </a>
+        <a href="pagos.html" class="acceso-card">
+            <span class="material-icons">payments</span>Finanzas
+            <span class="acceso-help" onclick="event.preventDefault();event.stopPropagation();CVC.mostrarAyuda('pagos.html')" title="¿Qué es esto?">?</span>
+        </a>
+        <a href="cuentas.html" class="acceso-card">
+            <span class="material-icons">account_balance</span>Cuentas
+            <span class="acceso-help" onclick="event.preventDefault();event.stopPropagation();CVC.mostrarAyuda('cuentas.html')" title="¿Qué es esto?">?</span>
+        </a>
+        <a href="clientes.html?nuevo=1" class="acceso-card">
+            <span class="material-icons">person_add</span>Nuevo cliente
+            <span class="acceso-help" onclick="event.preventDefault();event.stopPropagation();CVC.mostrarAyuda('clientes.html')" title="¿Qué es esto?">?</span>
+        </a>
+        <a href="cabanas-admin.html" class="acceso-card">
+            <span class="material-icons">cottage</span>Cabañas
+            <span class="acceso-help" onclick="event.preventDefault();event.stopPropagation();CVC.mostrarAyuda('cabanas-admin.html')" title="¿Qué es esto?">?</span>
+        </a>
+        <a href="calendario.html" class="acceso-card">
+            <span class="material-icons">calendar_month</span>Calendario
+            <span class="acceso-help" onclick="event.preventDefault();event.stopPropagation();CVC.mostrarAyuda('calendario.html')" title="¿Qué es esto?">?</span>
+        </a>
+        <a href="tareas.html" class="acceso-card">
+            <span class="material-icons">checklist</span>Tareas
+            <span class="acceso-help" onclick="event.preventDefault();event.stopPropagation();CVC.mostrarAyuda('tareas.html')" title="¿Qué es esto?">?</span>
+        </a>
+        <a href="manual-sistema.html" class="acceso-card">
+            <span class="material-icons">menu_book</span>Manual
+            <span class="acceso-help" onclick="event.preventDefault();event.stopPropagation();CVC.mostrarAyuda('manual-sistema.html')" title="¿Qué es esto?">?</span>
+        </a>
+        <button class="acceso-card" id="btnSyncAirbnb" onclick="sincronizarAirbnb()">
+            <span class="material-icons">sync</span>Sincronizar Airbnb
+        </button>
+    </div>
+    <div id="syncResultado" style="display:none; margin-top:var(--space-2); padding:var(--space-3) var(--space-4); border-radius:var(--radius-md); font-size:var(--text-sm);"></div>
+
+    <!-- Dos columnas -->
+    <div class="grid-2">
+
+        <!-- Próximos check-ins -->
+        <div class="card">
+            <div class="card__header">
+                <h2 class="card__title">
+                    <span class="material-icons">login</span>
+                    Próximos check-ins
+                </h2>
+                <a href="reservas.html" class="action-link">Ver todas <span class="material-icons" style="font-size:14px;">arrow_forward</span></a>
+            </div>
+            <div id="proximosCheckins">
+                <div class="state-loading"><div class="spinner spinner-sm"></div><span>Cargando...</span></div>
+            </div>
+        </div>
+
+        <!-- Tareas pendientes -->
+        <div class="card">
+            <div class="card__header">
+                <h2 class="card__title">
+                    <span class="material-icons">checklist</span>
+                    Tareas pendientes
+                </h2>
+                <a href="tareas.html" class="action-link">Ver todas <span class="material-icons" style="font-size:14px;">arrow_forward</span></a>
+            </div>
+            <div id="tareasPendientes">
+                <div class="state-loading"><div class="spinner spinner-sm"></div><span>Cargando...</span></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Reservas pendientes de confirmación -->
+    <div class="card">
+        <div class="card__header">
+            <h2 class="card__title">
+                <span class="material-icons">pending_actions</span>
+                Pendientes de confirmación
+            </h2>
+            <a href="reservas.html?filtro=pendiente" class="action-link">Ver todas <span class="material-icons" style="font-size:14px;">arrow_forward</span></a>
+        </div>
+        <div id="reservasPendientes">
+            <div class="state-loading"><div class="spinner spinner-sm"></div><span>Cargando...</span></div>
+        </div>
+    </div>
+
+    <!-- ── MANTENIMIENTO ─────────────────────────────────────── -->
+    <details style="margin-top:var(--space-6);">
+        <summary style="cursor:pointer; display:flex; align-items:center; gap:var(--space-2);
+            font-size:var(--text-sm); font-weight:700; color:var(--color-text-muted);
+            text-transform:uppercase; letter-spacing:.07em; padding:var(--space-3) 0;
+            border-top:1px solid var(--color-border); user-select:none; list-style:none;">
+            <span class="material-icons" style="font-size:16px;">build</span>
+            Mantenimiento del sistema
+            <span style="margin-left:auto; font-size:var(--text-xs); font-weight:400;">Solo admin</span>
+        </summary>
+        <div style="margin-top:var(--space-4); display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:var(--space-3);">
+
+            <div class="card" style="border-left:3px solid var(--color-primary);">
+                <div style="font-size:var(--text-sm); font-weight:700; margin-bottom:4px;">Manual del sistema</div>
+                <div style="font-size:var(--text-xs); color:var(--color-text-muted); margin-bottom:var(--space-3);">Documentación del sistema. Accesible para colaboradores y editable por el admin.</div>
+                <a href="manual-sistema.html" class="btn btn-primary btn-sm">
+                    <span class="material-icons">menu_book</span> Abrir manual
+                </a>
+            </div>
+
+            <div class="card" style="border-left:3px solid var(--color-info);">
+                <div style="font-size:var(--text-sm); font-weight:700; margin-bottom:4px;">Sincronizar disponibilidad</div>
+                <div style="font-size:var(--text-xs); color:var(--color-text-muted); margin-bottom:var(--space-3);">Reconstruye la colección pública desde cero. Usar solo ante inconsistencias en el calendario público.</div>
+                <button class="btn btn-secondary btn-sm" onclick="sincronizarDisponibilidadFull()">
+                    <span class="material-icons">sync</span> Ejecutar
+                </button>
+                <div id="syncDispResult" style="margin-top:8px; font-size:var(--text-xs); color:var(--color-text-muted);"></div>
+            </div>
+
+        </div>
+    </details>
+
+</main>
+
+<!-- Firebase + utils -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async () => {
+    // ── Auth ──────────────────────────────────────────────────
+    const { user, userData } = await CVC.verificarAuth('admin');
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+    CVC.renderNav('dashboard.html');
+    CVC.initAyuda('dashboard.html');
+
+    const db = CVC.db;
+    const { escapeHtml, badgeEstado, badgePrioridad, formatFecha, urgenciaTarea, showEmpty, showError } = CVC;
+
+    const GOOGLE_API_KEY = 'AIzaSyBnfunjUkUXiRjKCPRotpFHE9tGgn6tV8E';
+
+    const urgenciaClass = { gris: 'badge-neutral', verde: 'badge-confirmada', amarillo: 'badge-pendiente', rojo: 'badge-alta' };
+
+    // ── Cargar datos en paralelo ──────────────────────────────
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    let reservas = [], tareas = [], totalCabanas = 0, totalClientes = 0, ingresosMes = 0;
+
+    try {
+        const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+
+        const [reservasSnap, tareasSnap, cabanasSnap, clientesSnap, pagosSnap] = await Promise.all([
+            db.collection('reservas').get(),
+            db.collection('tareas').get(),
+            db.collection('cabanas').get(),
+            db.collection('clientes').get(),
+            db.collection('pagos').get()
+        ]);
+
+        reservas       = reservasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        tareas         = tareasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        totalCabanas   = cabanasSnap.size;
+        totalClientes  = clientesSnap.size;
+
+        pagosSnap.docs.forEach(d => {
+            const p = d.data();
+            const fecha = p.creadoEn?.toDate?.();
+            if (fecha && fecha >= inicioMes && p.moneda === 'BRL') ingresosMes += p.monto || 0;
+        });
+
+    } catch (e) {
+        console.error('Error cargando datos:', e);
+        showError('#kpiGrid', 'Error al cargar datos', 'Verificá tu conexión e intentá de nuevo.', () => location.reload());
+        return;
+    }
+
+    // ── KPIs ──────────────────────────────────────────────────
+    const reservasActivas  = reservas.filter(r => r.estado === 'confirmada' || r.estado === 'pendiente');
+    const reservasPendConf = reservas.filter(r => r.estado === 'pendiente');
+    const tareasPend       = tareas.filter(t => t.estado !== 'finalizada' && t.activa !== false);
+    const tareasUrgentes   = tareasPend.filter(t => {
+        const u = urgenciaTarea(t);
+        return u.color === 'rojo' || u.color === 'amarillo';
+    });
+
+    document.getElementById('kpiGrid').innerHTML = `
+        <div class="kpi-card">
+            <span class="material-icons kpi-icon">event</span>
+            <div class="kpi-number">${reservasActivas.length}</div>
+            <div class="kpi-label">Reservas activas</div>
+        </div>
+        <div class="kpi-card warning">
+            <span class="material-icons kpi-icon">pending_actions</span>
+            <div class="kpi-number">${reservasPendConf.length}</div>
+            <div class="kpi-label">Pendientes confirmación</div>
+        </div>
+        <div class="kpi-card info">
+            <span class="material-icons kpi-icon">checklist</span>
+            <div class="kpi-number">${tareasPend.length}</div>
+            <div class="kpi-label">Tareas pendientes</div>
+        </div>
+        <div class="kpi-card danger">
+            <span class="material-icons kpi-icon">warning</span>
+            <div class="kpi-number">${tareasUrgentes.length}</div>
+            <div class="kpi-label">Tareas urgentes</div>
+        </div>
+        <div class="kpi-card">
+            <span class="material-icons kpi-icon">people</span>
+            <div class="kpi-number">${totalClientes}</div>
+            <div class="kpi-label">Clientes</div>
+        </div>
+        <div class="kpi-card success">
+            <span class="material-icons kpi-icon">payments</span>
+            <div class="kpi-number">R$&nbsp;${ingresosMes.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</div>
+            <div class="kpi-label">Ingresos este mes</div>
+        </div>
+    `;
+
+    // ── Próximos check-ins ────────────────────────────────────
+    const proximos = reservas
+        .filter(r => {
+            const ci = r.checkIn?.toDate?.();
+            return ci && ci >= hoy && (r.estado === 'confirmada' || r.estado === 'pendiente');
+        })
+        .sort((a, b) => a.checkIn.toDate() - b.checkIn.toDate())
+        .slice(0, 6);
+
+    const checkinEl = document.getElementById('proximosCheckins');
+    if (!proximos.length) {
+        showEmpty(checkinEl, 'Sin próximos check-ins', 'No hay reservas próximas confirmadas.', 'event_available');
+    } else {
+        checkinEl.innerHTML = `<div class="item-list">${proximos.map(r => `
+            <div class="item-row">
+                <div class="item-row__main">
+                    <div class="item-row__title">${escapeHtml(r.nombre)}</div>
+                    <div class="item-row__sub">Cabaña ${r.caba} · ${r.huespedes || r.adultos || '?'} huéspedes</div>
+                </div>
+                <div class="item-row__side">
+                    <div class="item-row__date">${formatFecha(r.checkIn)}</div>
+                    ${badgeEstado(r.estado)}
+                </div>
+            </div>
+        `).join('')}</div>`;
+    }
+
+    // ── Tareas pendientes ─────────────────────────────────────
+    const tareasEl  = document.getElementById('tareasPendientes');
+    const tareasVis = tareasPend
+        .sort((a, b) => (a.fechaInicio || '') > (b.fechaInicio || '') ? 1 : -1)
+        .slice(0, 6);
+
+    if (!tareasVis.length) {
+        showEmpty(tareasEl, '¡Todo al día!', 'No hay tareas pendientes.', 'task_alt');
+    } else {
+        tareasEl.innerHTML = `<div class="item-list">${tareasVis.map(t => {
+            const u = urgenciaTarea(t);
+            return `
+            <div class="item-row">
+                <div class="item-row__main">
+                    <div class="item-row__title">${escapeHtml(t.nombre)}</div>
+                    <div class="item-row__sub">${t.fechaInicio || 'Sin fecha'}</div>
+                </div>
+                <div class="item-row__side">
+                    <span class="badge ${urgenciaClass[u.color] || 'badge-neutral'}">${u.label}</span>
+                    ${badgePrioridad(t.prioridad)}
+                </div>
+            </div>`;
+        }).join('')}</div>`;
+    }
+
+    // ── Reservas pendientes de confirmación ───────────────────
+    const pendEl = document.getElementById('reservasPendientes');
+    if (!reservasPendConf.length) {
+        showEmpty(pendEl, 'Todo confirmado', 'No hay reservas pendientes de confirmación.', 'check_circle');
+    } else {
+        const rows = reservasPendConf
+            .sort((a, b) => (a.checkIn?.toDate?.() || 0) - (b.checkIn?.toDate?.() || 0))
+            .map(r => `
+            <tr>
+                <td data-label="Cliente">${escapeHtml(r.nombre)}</td>
+                <td data-label="Cabaña">Cabaña ${r.caba}</td>
+                <td data-label="Check-in">${formatFecha(r.checkIn)}</td>
+                <td data-label="Check-out">${formatFecha(r.checkOut)}</td>
+                <td data-label="Origen">${escapeHtml(r.origen || '—')}</td>
+                <td data-label="">
+                    <a href="reservas.html?id=${r.id}" class="btn btn-secondary btn-sm">
+                        Ver <span class="material-icons">arrow_forward</span>
+                    </a>
+                </td>
+            </tr>`).join('');
+
+        pendEl.innerHTML = `
+            <div class="table-container">
+                <table class="table table-responsive">
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Cabaña</th>
+                            <th>Check-in</th>
+                            <th>Check-out</th>
+                            <th>Origen</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
+    }
+
+    // ── Sincronizar Airbnb ────────────────────────────────────
+    //    Usa CVC.sincronizarDesdeGCal() — función centralizada en utils.js
+    //    NO genera tareas de limpieza. El admin las crea al completar la reserva.
+    window.sincronizarAirbnb = async function() {
+        const btn = document.getElementById('btnSyncAirbnb');
+        const res = document.getElementById('syncResultado');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite">sync</span>Sincronizando...';
+        res.style.display = 'none';
+
+        try {
+            const cabanasSnap = await db.collection('cabanas').get();
+            const cabanas = cabanasSnap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .filter(c => c.google_calendar_id && c.google_calendar_id.includes('@'));
+
+            const { creadas, omitidas, canceladas, error } =
+                await CVC.sincronizarDesdeGCal(GOOGLE_API_KEY, cabanas);
+
+            if (error) {
+                mostrarSyncResult('warning', '⚠ ' + error);
+                return;
+            }
+
+            const partes = [];
+            if (creadas > 0)    partes.push(creadas + ' nueva' + (creadas !== 1 ? 's' : '') + ' importada' + (creadas !== 1 ? 's' : ''));
+            if (canceladas > 0) partes.push('⚠ ' + canceladas + ' cancelada' + (canceladas !== 1 ? 's' : '') + ' en Airbnb');
+            if (!partes.length) partes.push('Sin cambios — todo actualizado');
+
+            mostrarSyncResult(canceladas > 0 ? 'warning' : creadas > 0 ? 'success' : 'info', partes.join(' · '));
+
+        } catch(e) {
+            mostrarSyncResult('error', 'Error: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-icons">sync</span>Sincronizar Airbnb';
+        }
+    };
+
+    function mostrarSyncResult(tipo, msg) {
+        const el = document.getElementById('syncResultado');
+        const colores = {
+            success: { bg: 'var(--color-success-bg)', color: 'var(--color-success)',   icon: 'check_circle' },
+            warning: { bg: '#fff3e0',                  color: '#e07b00',                icon: 'warning'      },
+            error:   { bg: 'var(--color-danger-bg)',   color: 'var(--color-danger)',    icon: 'error'        },
+            info:    { bg: 'var(--color-surface-2)',   color: 'var(--color-text-muted)', icon: 'info'        }
+        };
+        const s = colores[tipo] || colores.info;
+        el.style.background = s.bg;
+        el.style.color      = s.color;
+        el.style.border     = '1px solid ' + s.color + '33';
+        el.innerHTML = '<span class="material-icons" style="font-size:16px;vertical-align:middle;margin-right:6px">'
+            + s.icon + '</span>' + msg;
+        el.style.display = 'block';
+    }
+
+    // ── Sincronizar disponibilidad completa (mantenimiento) ───
+    window.sincronizarDisponibilidadFull = async function() {
+        const resultEl = document.getElementById('syncDispResult');
+        resultEl.textContent = '⏳ Sincronizando...';
+        try {
+            const snap = await db.collection('reservas').get();
+            const reservas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            let actualizadas = 0;
+            for (const r of reservas) {
+                await CVC.sincronizarDisponibilidad(r.id, r);
+                actualizadas++;
+            }
+            resultEl.textContent = '✅ ' + actualizadas + ' reservas procesadas';
+        } catch(e) {
+            resultEl.textContent = '❌ Error: ' + e.message;
+        }
+    };
+
+    // ── Widget posición bancaria ──────────────────────────────
+    async function cargarWidgetCuentas() {
+        try {
+            const snap    = await db.collection('cuentas').get();
+            const cuentas = snap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .filter(c => c.activa !== false)
+                .sort((a, b) => (a.orden || 99) - (b.orden || 99));
+
+            if (!cuentas.length) return;
+
+            const SIMBOLO    = { BRL: 'R$', USD: 'US$', UYU: '$U', ARS: '$' };
+            const PAIS_EMOJI = { BR: '🇧🇷', UY: '🇺🇾', AR: '🇦🇷' };
+
+            let totalBRL = 0;
+            const paises = {};
+
+            cuentas.forEach(c => {
+                const saldo = c.saldoActual || 0;
+                const tc    = c.tipoCambio  || 1;
+                const equiv = saldo * tc;
+                totalBRL += equiv;
+                const p = c.pais || 'BR';
+                paises[p] = (paises[p] || 0) + equiv;
+            });
+
+            document.getElementById('wcTotal').textContent =
+                'R$ ' + totalBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+
+            document.getElementById('wcDetalle').innerHTML = Object.entries(paises)
+                .map(([p, v]) => `
+                    <div style="text-align:right;">
+                        <div style="font-size:var(--text-xs); opacity:.7;">${PAIS_EMOJI[p] || ''} ${p}</div>
+                        <div style="font-weight:700; font-family:var(--font-mono);">
+                            R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                        </div>
+                    </div>`).join('');
+
+            document.getElementById('wcCuentas').innerHTML = cuentas.map(c => {
+                const sim   = SIMBOLO[c.moneda] || '';
+                const saldo = c.saldoActual || 0;
+                const neg   = saldo < 0;
+                return `
+                <a href="movimientos.html?cuenta=${c.id}"
+                    style="border:1.5px solid var(--color-border); border-radius:var(--radius-md);
+                    padding:var(--space-3) var(--space-4); text-decoration:none; display:block;
+                    background:var(--color-surface); transition:box-shadow var(--transition-fast);"
+                    onmouseover="this.style.boxShadow='var(--shadow-md)'"
+                    onmouseout="this.style.boxShadow='none'">
+                    <div style="font-size:var(--text-xs); color:var(--color-text-muted);">
+                        ${PAIS_EMOJI[c.pais] || ''} ${escapeHtml(c.banco || c.moneda)}
+                    </div>
+                    <div style="font-weight:600; font-size:var(--text-sm); margin:2px 0;">
+                        ${escapeHtml(c.nombre)}
+                    </div>
+                    <div style="font-family:var(--font-mono); font-weight:800;
+                        color:${neg ? 'var(--color-danger)' : 'var(--color-primary-dark)'};">
+                        ${sim} ${saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </div>
+                </a>`;
+            }).join('');
+
+            document.getElementById('widgetCuentas').style.display = 'block';
+        } catch(e) {
+            console.warn('Widget cuentas:', e.message);
+        }
+    }
+
+    // ── Alertas proactivas ────────────────────────────────────
+    async function cargarAlertas() {
+        const alertas = [];
+
+        const hoy48  = new Date(hoy); hoy48.setHours(hoy48.getHours() + 48);
+        const hace14 = new Date(hoy); hace14.setDate(hace14.getDate() - 14);
+
+        // 1. Check-ins en < 48hs sin tarea de limpieza
+        const proximas48 = reservas.filter(r => {
+            if (!['confirmada', 'airbnb_activa'].includes(r.estado)) return false;
+            const ci = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
+            return ci >= hoy && ci <= hoy48;
+        });
+
+        for (const r of proximas48) {
+            const tieneTask = tareas.some(t =>
+                t.reservaId === r.id && t.tipo === 'limpieza' && t.estado !== 'finalizada'
+            );
+            if (!tieneTask) {
+                const ci = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
+                const diffH = Math.round((ci - hoy) / 3600000);
+                alertas.push({
+                    nivel: 'critico',
+                    icon:  'cleaning_services',
+                    title: 'Sin tarea de limpieza — ' + escapeHtml(r.nombre || 'Reserva Airbnb'),
+                    desc:  'Check-in en ' + (diffH < 24 ? diffH + 'hs' : 'mañana') + ' · Cabaña ' + r.caba,
+                    href:  'tareas.html'
+                });
+            }
+        }
+
+        // 2. Tareas con urgencia roja
+        const tareasRojas = tareas.filter(t => {
+            if (t.estado === 'finalizada' || t.activa === false) return false;
+            return urgenciaTarea(t).color === 'rojo';
+        });
+        if (tareasRojas.length) {
+            alertas.push({
+                nivel: 'critico',
+                icon:  'warning',
+                title: tareasRojas.length + ' tarea' + (tareasRojas.length > 1 ? 's' : '') + ' con atraso crítico',
+                desc:  tareasRojas.map(t => t.nombre).slice(0, 3).join(' · ') + (tareasRojas.length > 3 ? ' y más...' : ''),
+                href:  'tareas.html'
+            });
+        }
+
+        // 3. Honorarios pendientes > 14 días
+        try {
+            const honSnap = await db.collection('honorarios')
+                .where('estado', '==', 'pendiente').get();
+            const viejos = honSnap.docs.filter(d => {
+                const f = d.data().creadoEn?.toDate?.();
+                return f && f < hace14;
+            });
+            if (viejos.length) {
+                const total = viejos.reduce((s, d) => s + (d.data().monto || 0), 0);
+                alertas.push({
+                    nivel: 'atencion',
+                    icon:  'payments',
+                    title: viejos.length + ' honorario' + (viejos.length > 1 ? 's' : '') + ' pendiente' + (viejos.length > 1 ? 's' : '') + ' (+14 días)',
+                    desc:  'Total: R$ ' + total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+                    href:  'pagos.html'
+                });
+            }
+        } catch(e) { /* silencioso */ }
+
+        // 4. Presupuestos sin respuesta > 3 días
+        try {
+            const hace3 = new Date(hoy); hace3.setDate(hace3.getDate() - 3);
+            const presSnap = await db.collection('presupuestos')
+                .where('estado', '==', 'pendiente').get();
+            const sinRespuesta = presSnap.docs.filter(d => {
+                const f = d.data().creadoEn?.toDate?.();
+                return f && f < hace3;
+            });
+            if (sinRespuesta.length) {
+                alertas.push({
+                    nivel: 'atencion',
+                    icon:  'request_quote',
+                    title: sinRespuesta.length + ' presupuesto' + (sinRespuesta.length > 1 ? 's' : '') + ' sin respuesta +3 días',
+                    desc:  'Revisá si el cliente necesita seguimiento',
+                    href:  'presupuestos.html'
+                });
+            }
+        } catch(e) { /* silencioso */ }
+
+        // 5. Movimientos sin categoría
+        try {
+            const movSnap = await db.collection('movimientos')
+                .where('categoriaId', '==', null).limit(1).get();
+            if (!movSnap.empty) {
+                alertas.push({
+                    nivel: 'info',
+                    icon:  'label_off',
+                    title: 'Movimientos BTG sin categorizar',
+                    desc:  'Usá Herramientas BTG → Categorizar para enriquecerlos',
+                    href:  'herramientas-btg.html'
+                });
+            }
+        } catch(e) { /* silencioso */ }
+
+        if (!alertas.length) return;
+
+        document.getElementById('alertasList').innerHTML = alertas.map(a => `
+            <a href="${a.href}" class="alerta-item ${a.nivel}">
+                <span class="material-icons alerta-item__icon">${a.icon}</span>
+                <div class="alerta-item__body">
+                    <div class="alerta-item__title">${a.title}</div>
+                    ${a.desc ? '<div class="alerta-item__desc">' + escapeHtml(a.desc) + '</div>' : ''}
+                </div>
+                <span class="material-icons" style="font-size:16px; opacity:.5; flex-shrink:0;">arrow_forward</span>
+            </a>`).join('');
+
+        document.getElementById('alertasPanel').classList.add('visible');
+    }
+
+    cargarAlertas();
+    cargarWidgetCuentas();
+
+    // Sincronizar Airbnb: solo cuando el usuario lo pide manualmente
+    // (quitado del auto-inicio para no bloquear la carga del dashboard)
+
+})();
+</script>
+</body>
+</html>
