@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+<style>
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+
+/* ── LAYOUT ─────────────────────────────────────────── */
+.db-section { margin-bottom: var(--space-5); animation: fadeIn .3s ease; }
+.db-section-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: var(--space-3); gap: var(--space-2);
+}
+.db-section-title {
+    font-size: var(--text-xs); font-weight: 800;
+    text-transform: uppercase; letter-spacing: .07em;
+    color: var(--color-text-muted);
+    display: flex; align-items: center; gap: var(--space-2);
+}
+.db-section-title .material-icons { font-size: 15px; }
+.action-link {
+    font-size: var(--text-xs); color: var(--color-primary);
+    text-decoration: none; display: flex; align-items: center; gap: 3px;
+    font-weight: 600; white-space: nowrap;
+    padding: 4px 8px; border-radius: var(--radius-sm);
+    transition: background .15s;
+}
+.action-link:hover { background: var(--color-primary-xlight); }
+
+/* ── KPI CARDS ──────────────────────────────────────── */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--space-3);
+}
+.kpi-card {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    background: var(--color-surface);
+    cursor: pointer; text-decoration: none; color: inherit;
+    display: block; position: relative; overflow: hidden;
+    transition: box-shadow .15s, transform .15s;
+}
+.kpi-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.kpi-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+}
+.kpi-card.reservas::before   { background: var(--color-primary); }
+.kpi-card.pendientes::before { background: var(--color-warning); }
+.kpi-card.tareas::before     { background: #378ADD; }
+.kpi-card.urgentes::before   { background: var(--color-danger); }
+.kpi-card.clientes::before   { background: #1D9E75; }
+.kpi-card.ingresos::before   { background: var(--color-success); }
+.kpi-icon {
+    font-size: 22px; color: var(--color-text-muted);
+    margin-bottom: var(--space-2); display: block;
+}
+.kpi-number {
+    font-size: 28px; font-weight: 800;
+    font-family: var(--font-mono); line-height: 1;
+    margin-bottom: 4px;
+}
+.kpi-label {
+    font-size: 11px; color: var(--color-text-muted);
+    font-weight: 600; text-transform: uppercase; letter-spacing: .05em;
+}
+.kpi-sub { font-size: 11px; color: var(--color-text-muted); margin-top: 3px; }
+.kpi-card.reservas   .kpi-number { color: var(--color-primary); }
+.kpi-card.pendientes .kpi-number { color: var(--color-warning); }
+.kpi-card.tareas     .kpi-number { color: #185FA5; }
+.kpi-card.urgentes   .kpi-number { color: var(--color-danger); }
+.kpi-card.clientes   .kpi-number { color: #0F6E56; }
+.kpi-card.ingresos   .kpi-number { color: var(--color-success); }
+.kpi-help {
+    position: absolute; top: 7px; right: 7px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: rgba(0,0,0,0.07); border: 1px solid rgba(0,0,0,0.1);
+    color: var(--color-text-muted); font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 2; transition: background .15s, color .15s;
+}
+.kpi-help:hover { background: var(--color-primary); color: white; border-color: var(--color-primary); }
+
+/* ── ACCESOS RÁPIDOS — NAV ESTILO ───────────────────── */
+.accesos-nav {
+    display: flex; flex-wrap: wrap; gap: var(--space-2);
+    padding: var(--space-3) 0;
+}
+.acceso-grupo {
+    position: relative; display: inline-block;
+}
+.acceso-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: var(--radius-md);
+    background: var(--color-surface); border: 1px solid var(--color-border);
+    font-size: 13px; font-weight: 600; color: var(--color-text-primary);
+    cursor: pointer; text-decoration: none; white-space: nowrap;
+    transition: background .15s, box-shadow .15s;
+    font-family: inherit;
+}
+.acceso-btn:hover { background: var(--color-primary-xlight); border-color: var(--color-primary-light); }
+.acceso-btn .material-icons { font-size: 17px; color: var(--color-primary); }
+.acceso-btn .arr { font-size: 14px; color: var(--color-text-muted); }
+.acceso-dropdown {
+    display: none; position: fixed;
+    background: var(--color-surface); border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+    min-width: 200px; z-index: 500; padding: 6px 0;
+}
+.acceso-dropdown.open { display: block; }
+.acceso-sub {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 14px; font-size: 13px; color: var(--color-text-primary);
+    text-decoration: none; cursor: pointer;
+    transition: background .12s;
+    position: relative;
+}
+.acceso-sub:hover { background: var(--color-surface-2); }
+.acceso-sub .material-icons { font-size: 16px; color: var(--color-text-muted); }
+.acceso-sub-help {
+    margin-left: auto; width: 16px; height: 16px; border-radius: 50%;
+    background: rgba(0,0,0,0.07); border: 1px solid rgba(0,0,0,0.1);
+    color: var(--color-text-muted); font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: background .12s, color .12s;
+}
+.acceso-sub-help:hover { background: var(--color-primary); color: white; }
+.acceso-sep { height: 1px; background: var(--color-border); margin: 4px 0; }
+
+/* ── ALERTAS ────────────────────────────────────────── */
+.alertas-panel { display: none; margin-bottom: var(--space-4); }
+.alertas-panel.visible { display: block; }
+.alerta-item {
+    display: flex; align-items: flex-start; gap: var(--space-3);
+    padding: 10px var(--space-4); border-radius: var(--radius-md);
+    margin-bottom: var(--space-2); font-size: 13px;
+    border-left: 3px solid; text-decoration: none; color: inherit;
+    transition: opacity .15s;
+}
+.alerta-item:hover { opacity: .85; }
+.alerta-item.critico  { background: var(--color-danger-bg);  border-color: var(--color-danger);  }
+.alerta-item.atencion { background: var(--color-warning-bg); border-color: var(--color-warning); }
+.alerta-item.info     { background: var(--color-surface-2);  border-color: var(--color-border);  }
+.alerta-item__title   { font-weight: 700; margin-bottom: 2px; }
+.alerta-item__desc    { font-size: 12px; opacity: .8; }
+.alerta-item__icon    { flex-shrink: 0; font-size: 18px; margin-top: 1px; }
+
+/* ── LISTAS COMPACTAS ───────────────────────────────── */
+.compact-list { border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; }
+.compact-row {
+    display: flex; align-items: center; gap: var(--space-3);
+    padding: 10px var(--space-4); border-bottom: 1px solid var(--color-border-light);
+    font-size: 13px; text-decoration: none; color: inherit;
+    transition: background .12s;
+}
+.compact-row:last-child { border-bottom: none; }
+.compact-row:hover { background: var(--color-surface-2); }
+.compact-row__icon { font-size: 16px; color: var(--color-text-muted); flex-shrink: 0; }
+.compact-row__main { flex: 1; min-width: 0; }
+.compact-row__title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compact-row__sub   { font-size: 11px; color: var(--color-text-muted); }
+.compact-row__side  { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.compact-empty {
+    display: flex; align-items: center; gap: var(--space-2);
+    padding: 10px var(--space-4); font-size: 12px; color: var(--color-text-muted);
+    border: 1px solid var(--color-border); border-radius: var(--radius-md);
+}
+
+/* ── URGENCIA COLORES ───────────────────────────────── */
+.urg-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.urg-rojo    { background: var(--color-danger); }
+.urg-amarillo{ background: var(--color-warning); }
+.urg-verde   { background: var(--color-success); }
+.urg-gris    { background: var(--color-border); }
+
+/* ── PENDIENTES ─────────────────────────────────────── */
+.pend-row {
+    display: flex; align-items: center; gap: var(--space-3);
+    padding: 10px var(--space-4); border-bottom: 1px solid var(--color-border-light);
+    font-size: 13px;
+}
+.pend-row:last-child { border-bottom: none; }
+.pend-badge {
+    font-size: 10px; padding: 2px 7px; border-radius: 20px;
+    font-weight: 700; white-space: nowrap; flex-shrink: 0;
+}
+.pend-badge.alta   { background: var(--color-danger-bg);  color: var(--color-danger); }
+.pend-badge.media  { background: var(--color-warning-bg); color: #9B5400; }
+.pend-badge.baja   { background: var(--color-surface-2);  color: var(--color-text-muted); }
+
+/* ── CONFIRMACIÓN PENDIENTE — BANNER ────────────────── */
+.conf-banner {
+    background: linear-gradient(135deg, #FFF3E0, #FFF8F0);
+    border: 1.5px solid var(--color-warning);
+    border-radius: var(--radius-md);
+    padding: 8px var(--space-4); margin-bottom: 6px;
+    display: flex; align-items: center; gap: var(--space-3);
+    font-size: 13px; text-decoration: none; color: inherit;
+    transition: box-shadow .15s;
+}
+.conf-banner:hover { box-shadow: var(--shadow-md); }
+.conf-banner__warn { font-size: 15px; color: var(--color-warning); flex-shrink: 0; }
+.conf-banner__text { flex: 1; }
+.conf-banner__title { font-weight: 700; color: #9B5400; }
+.conf-banner__sub   { font-size: 11px; color: var(--color-text-muted); }
+
+/* ── PRESUPUESTO SIN SEÑA ───────────────────────────── */
+.pres-row {
+    display: flex; align-items: center; gap: var(--space-3);
+    padding: 9px var(--space-4); border-bottom: 1px solid var(--color-border-light);
+    font-size: 13px;
+}
+.pres-row:last-child { border-bottom: none; }
+.pres-dias {
+    font-size: 10px; padding: 2px 7px; border-radius: 20px; font-weight: 700;
+    background: var(--color-surface-2); color: var(--color-text-muted);
+}
+.pres-dias.urgente { background: var(--color-danger-bg); color: var(--color-danger); }
+
+/* ── WIDGET CUENTAS ─────────────────────────────────── */
+.cuentas-widget-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(170px,1fr));
+    gap: var(--space-3);
+}
+.cuenta-mini {
+    border: 1.5px solid var(--color-border); border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4); background: var(--color-surface);
+    text-decoration: none; color: inherit; display: block;
+    transition: box-shadow .15s;
+}
+.cuenta-mini:hover { box-shadow: var(--shadow-md); }
+.cuenta-mini__banco { font-size: 10px; color: var(--color-text-muted); margin-bottom: 2px; }
+.cuenta-mini__nombre { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.cuenta-mini__saldo  { font-family: var(--font-mono); font-weight: 800; font-size: 16px; }
+
+/* ── ACCESO-CARD (legacy para syncAirbnb) ───────────── */
+.acceso-card { cursor: pointer; border: none; font-family: inherit; width: 100%; text-align: center; position: relative; }
+.acceso-help {
+    position: absolute; top: 6px; right: 6px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: rgba(0,0,0,0.08); border: 1px solid rgba(0,0,0,0.12);
+    color: var(--color-text-muted); font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: background .15s, color .15s;
+    text-decoration: none;
+}
+.acceso-help:hover { background: var(--color-primary); color: white; }
+
+/* ── RESPONSIVE ─────────────────────────────────────── */
+@media (max-width: 600px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .kpi-number { font-size: 22px; }
+}
+@media (min-width: 900px) {
+    .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">cottage</span>
+        Casa Verde Canas
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip">
+            <span class="material-icons">person</span>
+            <span id="userName">—</span>
+        </div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons">logout</span>
+            Salir
+        </button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+
+    <!-- ══ 1. ALERTAS ══════════════════════════════════════════ -->
+    <div class="alertas-panel" id="alertasPanel">
+        <div class="db-section-title" style="margin-bottom:var(--space-2);">
+            <span class="material-icons" style="color:var(--color-danger);">warning_amber</span>
+            Requieren atención
+        </div>
+        <div id="alertasList"></div>
+    </div>
+
+    <!-- ══ 2. KPIs ════════════════════════════════════════════ -->
+    <div class="db-section">
+        <div class="kpi-grid" id="kpiGrid">
+            <div class="state-loading" style="grid-column:1/-1;">
+                <div class="spinner"></div><span>Cargando...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ 3. ACCESOS — MENÚ COMPLETO ═════════════════════════ -->
+    <div class="db-section">
+        <div class="db-section-title" style="margin-bottom:var(--space-3);">
+            <span class="material-icons">apps</span>
+            Accesos rápidos
+        </div>
+        <div class="accesos-nav" id="accesosNav"></div>
+    </div>
+
+    <!-- ══ 4. PRÓXIMOS CHECK-INS ══════════════════════════════ -->
+    <div class="db-section" id="seccionCheckins">
+        <div class="db-section-head">
+            <div class="db-section-title">
+                <span class="material-icons">login</span>
+                Próximos check-ins
+            </div>
+            <a href="reservas.html" class="action-link">
+                Ver todas <span class="material-icons" style="font-size:14px;">arrow_forward</span>
+            </a>
+        </div>
+        <div id="proximosCheckins">
+            <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+        </div>
+    </div>
+
+    <!-- ══ 5. PENDIENTES ══════════════════════════════════════ -->
+    <div class="db-section" id="seccionPendientes">
+        <div class="db-section-head">
+            <div class="db-section-title">
+                <span class="material-icons">playlist_add_check</span>
+                Pendientes
+            </div>
+            <a href="pendientes.html" class="action-link">
+                Ver todos <span class="material-icons" style="font-size:14px;">arrow_forward</span>
+            </a>
+        </div>
+        <div id="pendientesContainer">
+            <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+        </div>
+    </div>
+
+    <!-- ══ 6. TAREAS URGENTES ══════════════════════════════════ -->
+    <div class="db-section" id="seccionTareas">
+        <div class="db-section-head">
+            <div class="db-section-title">
+                <span class="material-icons" style="color:var(--color-danger);">priority_high</span>
+                Tareas urgentes
+            </div>
+            <a href="tareas.html" class="btn btn-secondary btn-sm">
+                <span class="material-icons">checklist</span>
+                Ver todas las tareas
+            </a>
+        </div>
+        <div id="tareasUrgentesContainer">
+            <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+        </div>
+    </div>
+
+    <!-- ══ 7. RESERVAS QUE REQUIEREN CONFIRMACIÓN ══════════════ -->
+    <div class="db-section" id="seccionReservasPend">
+        <div class="db-section-head">
+            <div class="db-section-title">
+                <span class="material-icons" style="color:var(--color-warning);">mark_email_unread</span>
+                Reservas sin confirmar
+            </div>
+            <a href="reservas.html?filtro=pendiente" class="action-link">
+                Ver todas <span class="material-icons" style="font-size:14px;">arrow_forward</span>
+            </a>
+        </div>
+        <div id="reservasPendientesContainer"></div>
+    </div>
+
+    <!-- ══ 8. PRESUPUESTOS SIN SEÑA ════════════════════════════ -->
+    <div class="db-section" id="seccionPresupuestos">
+        <div class="db-section-head">
+            <div class="db-section-title">
+                <span class="material-icons">request_quote</span>
+                Presupuestos sin seña — últimos 30 días
+            </div>
+            <a href="presupuestos.html" class="action-link">
+                Ver todos <span class="material-icons" style="font-size:14px;">arrow_forward</span>
+            </a>
+        </div>
+        <div id="presupuestosContainer">
+            <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+        </div>
+    </div>
+
+    <!-- ══ 9. INFORMACIÓN BANCARIA ═════════════════════════════ -->
+    <div class="db-section" id="seccionCuentas" style="display:none;">
+        <div class="db-section-head">
+            <div class="db-section-title">
+                <span class="material-icons">account_balance</span>
+                Posición bancaria
+            </div>
+            <a href="panel-financiero.html" class="action-link">
+                Panel financiero <span class="material-icons" style="font-size:14px;">arrow_forward</span>
+            </a>
+        </div>
+        <div style="font-size:12px;color:var(--color-text-muted);margin-bottom:var(--space-2);">
+            Saldo consolidado:
+            <strong id="wcTotal" style="font-family:var(--font-mono);color:var(--color-primary-dark);margin-left:6px;font-size:15px;">—</strong>
+        </div>
+        <div class="cuentas-widget-grid" id="wcCuentas"></div>
+
+        <!-- Sincronizar Airbnb — acción secundaria al final -->
+        <div style="margin-top:var(--space-4);padding-top:var(--space-4);border-top:1px solid var(--color-border);">
+            <div class="db-section-title" style="margin-bottom:var(--space-2);">
+                <span class="material-icons">sync</span>
+                Sincronización Airbnb
+            </div>
+            <div style="display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;">
+                <button class="btn btn-secondary btn-sm" id="btnSyncAirbnb" onclick="sincronizarAirbnb()">
+                    <span class="material-icons">sync</span>
+                    Sincronizar Airbnb
+                </button>
+                <div id="syncResultado" style="display:none;font-size:12px;padding:5px 10px;border-radius:var(--radius-sm);"></div>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async () => {
+    const { user, userData } = await CVC.verificarAuth(['admin','user']);
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+    const esAdmin = userData.rol === 'admin';
+
+    CVC.renderNav('dashboard.html', userData.rol);
+    CVC.initAyuda('dashboard.html');
+
+    const db = CVC.db;
+    const { escapeHtml, formatFecha, badgeEstado, badgePrioridad,
+            urgenciaTarea, showEmpty, showError, showToast } = CVC;
+
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+
+    const urgenciaClass = { rojo:'badge-alta', amarillo:'badge-pendiente', verde:'badge-en_curso', gris:'badge-neutral' };
+
+    // ── ACCESOS RÁPIDOS — estructura de menú ─────────────────
+    const ACCESOS = [
+        {
+            label: 'Reservas', icon: 'event', page: 'reservas.html',
+            items: [
+                { label:'Reservas', icon:'event', href:'reservas.html' },
+                { label:'Presupuestos', icon:'request_quote', href:'presupuestos.html' },
+                { label:'Clientes', icon:'people', href:'clientes.html' },
+                { label:'Calendario', icon:'calendar_month', href:'calendario.html' },
+            ]
+        },
+        {
+            label: 'Finanzas', icon: 'payments', page: 'panel-financiero.html',
+            items: [
+                { label:'Panel financiero', icon:'monitoring', href:'panel-financiero.html' },
+                { sep: true },
+                { label:'Ingresos / Egresos', icon:'payments', href:'pagos.html' },
+                { label:'Informes Airbnb', icon:'summarize', href:'informes-airbnb.html' },
+                { sep: true },
+                { label:'Cuentas', icon:'account_balance', href:'cuentas.html' },
+                { label:'Movimientos', icon:'receipt_long', href:'movimientos.html' },
+                { label:'BTG / Conciliación', icon:'compare_arrows', href:'herramientas-btg.html' },
+                { label:'Categorías', icon:'label', href:'categorias.html' },
+            ]
+        },
+        {
+            label: 'Operaciones', icon: 'checklist', page: 'tareas.html',
+            items: [
+                { label:'Tareas', icon:'checklist', href:'tareas.html' },
+                { label:'Gestión tareas', icon:'admin_panel_settings', href:'tareas-admin.html' },
+                { label:'Pendientes', icon:'playlist_add_check', href:'pendientes.html' },
+            ]
+        },
+        {
+            label: 'Fiscal', icon: 'receipt', page: 'fiscal.html',
+            items: [
+                { label:'Panel fiscal', icon:'receipt', href:'fiscal.html' },
+                { label:'Acceso contador', icon:'person_outline', href:'acceso-contador.html' },
+            ]
+        },
+        {
+            label: 'Config.', icon: 'settings', page: 'cabanas-admin.html',
+            items: [
+                { label:'Cabañas', icon:'cottage', href:'cabanas-admin.html' },
+                { label:'Usuarios', icon:'manage_accounts', href:'usuarios.html' },
+                { sep: true },
+                { label:'Manual', icon:'menu_book', href:'manual-sistema.html' },
+            ]
+        },
+    ];
+
+    function renderAccesos() {
+        const nav = document.getElementById('accesosNav');
+        nav.innerHTML = ACCESOS.map((grupo, gi) => {
+            const subItems = grupo.items.map(item => {
+                if (item.sep) return '<div class="acceso-sep"></div>';
+                return '<a href="' + item.href + '" class="acceso-sub">' +
+                    '<span class="material-icons">' + item.icon + '</span>' +
+                    escapeHtml(item.label) +
+                    (CVC.AYUDA_ITEMS && CVC.AYUDA_ITEMS[item.href]
+                        ? '<span class="acceso-sub-help" onclick="event.preventDefault();event.stopPropagation();CVC.mostrarAyuda(\'' + item.href + '\')">?</span>'
+                        : '') +
+                '</a>';
+            }).join('');
+            return '<div class="acceso-grupo" id="accGrupo' + gi + '">' +
+                '<button class="acceso-btn" onclick="toggleAcceso(event,' + gi + ')">' +
+                    '<span class="material-icons">' + grupo.icon + '</span>' +
+                    escapeHtml(grupo.label) +
+                    '<span class="material-icons arr">expand_more</span>' +
+                '</button>' +
+                '<div class="acceso-dropdown" id="accDrop' + gi + '">' + subItems + '</div>' +
+            '</div>';
+        }).join('');
+        document.addEventListener('click', function() {
+            document.querySelectorAll('.acceso-dropdown.open')
+                .forEach(d => d.classList.remove('open'));
+        });
+    }
+
+    window.toggleAcceso = function(e, gi) {
+        e.stopPropagation();
+        const drop = document.getElementById('accDrop' + gi);
+        const btn  = document.getElementById('accGrupo' + gi).querySelector('.acceso-btn');
+        const rect = btn.getBoundingClientRect();
+        const estaAbierto = drop.classList.contains('open');
+        document.querySelectorAll('.acceso-dropdown.open').forEach(d => d.classList.remove('open'));
+        if (!estaAbierto) {
+            drop.style.top  = (rect.bottom + 4) + 'px';
+            drop.style.left = rect.left + 'px';
+            drop.classList.add('open');
+            // Ajustar si sale de pantalla
+            const dr = drop.getBoundingClientRect();
+            if (dr.right > window.innerWidth - 8) {
+                drop.style.left = (rect.right - dr.width) + 'px';
+            }
+        }
+    };
+    renderAccesos();
+
+    // ── CARGA PRINCIPAL ───────────────────────────────────────
+    let reservas = [], tareas = [], pendientes = [];
+
+    try {
+        const [resSnap, tarSnap, presSnap, pendSnap] = await Promise.all([
+            db.collection('reservas').get().catch(() => ({ docs:[] })),
+            db.collection('tareas').get().catch(() => ({ docs:[] })),
+            db.collection('presupuestos').get().catch(() => ({ docs:[] })),
+            esAdmin ? db.collection('pendientes').get().catch(() => ({ docs:[] })) : Promise.resolve({ docs:[] }),
+        ]);
+
+        reservas   = resSnap.docs.map(d => ({ id:d.id,...d.data() }));
+        tareas     = tarSnap.docs.map(d => ({ id:d.id,...d.data() }));
+        pendientes = pendSnap.docs.map(d => ({ id:d.id,...d.data() }));
+
+        const presupuestos = presSnap.docs.map(d => ({ id:d.id,...d.data() }));
+
+        renderKPIs(reservas, tareas, pendientes);
+        renderCheckins(reservas);
+        renderPendientes(pendientes);
+        renderTareasUrgentes(tareas);
+        renderReservasPendientes(reservas);
+        renderPresupuestos(presupuestos);
+        cargarAlertas(reservas, tareas);
+        if (esAdmin) cargarWidgetCuentas();
+
+    } catch(e) {
+        showError('#kpiGrid', 'Error al cargar', e.message, () => location.reload());
+    }
+
+    // ── KPIs ──────────────────────────────────────────────────
+    function renderKPIs(reservas, tareas, pendientes) {
+        const resActivas  = reservas.filter(r => ['confirmada','airbnb_activa','pendiente'].includes(r.estado));
+        const resPend     = reservas.filter(r => r.estado === 'pendiente');
+        const tarPend     = tareas.filter(t => t.estado !== 'finalizada' && t.activa !== false);
+        const tarUrg      = tarPend.filter(t => urgenciaTarea(t).color === 'rojo');
+        const pendPend    = pendientes.filter(p => !p.completado);
+
+        const mesActual   = new Date().toISOString().slice(0,7);
+        // Ingresos del mes desde reservas confirmadas (estimado por totalBRL)
+        const ingMes      = reservas
+            .filter(r => r.estado === 'confirmada' && r.checkIn &&
+                (r.checkIn.toDate ? r.checkIn.toDate() : new Date(r.checkIn)).toISOString().slice(0,7) === mesActual)
+            .reduce((s,r) => s + (r.totalBRL || r.pagadoBRL || 0), 0);
+
+        const kpiData = [
+            { cls:'reservas',   icon:'event',          num: resActivas.length,  label:'Reservas activas', sub: resPend.length > 0 ? resPend.length + ' sin confirmar' : 'Todas confirmadas', href:'reservas.html',
+              ayuda:'Reservas activas incluye confirmadas, pendientes y de Airbnb. Las pendientes requieren tu confirmación.' },
+            { cls:'pendientes', icon:'playlist_add_check', num: pendPend.length, label:'Pendientes', sub:'Sin completar', href:'pendientes.html',
+              ayuda:'Cantidad de items pendientes sin marcar como completados.' },
+            { cls:'tareas',     icon:'checklist',      num: tarPend.length,     label:'Tareas activas', sub: tarUrg.length > 0 ? tarUrg.length + ' urgentes' : 'Sin urgencias', href:'tareas.html',
+              ayuda:'Tareas activas (pendientes + en curso). El contador de urgentes son las que superaron su fecha esperada.' },
+            { cls:'urgentes',   icon:'priority_high',  num: tarUrg.length,      label:'Tareas urgentes', sub:'Con atraso crítico', href:'tareas.html',
+              ayuda:'Tareas cuya fecha de inicio ya pasó y superaron el ciclo de recurrencia. Requieren atención inmediata.' },
+            { cls:'ingresos',   icon:'payments',       num: 'R$ ' + Math.round(ingMes / 1000) + 'k', label:'Ingresos del mes', sub:'Reservas confirmadas', href:'panel-financiero.html',
+              ayuda:'Estimado basado en el total de reservas confirmadas con check-in en el mes actual. Para el balance real usá el Panel Financiero.' },
+        ];
+
+        document.getElementById('kpiGrid').innerHTML = kpiData.map(k =>
+            '<a href="' + k.href + '" class="kpi-card ' + k.cls + '">' +
+                '<span class="kpi-help" onclick="event.preventDefault();event.stopPropagation();' +
+                    'CVC.mostrarAyuda(\'' + k.href + '\')" title="¿Cómo se calcula esto?">?</span>' +
+                '<span class="material-icons kpi-icon">' + k.icon + '</span>' +
+                '<div class="kpi-number">' + k.num + '</div>' +
+                '<div class="kpi-label">' + k.label + '</div>' +
+                '<div class="kpi-sub">' + k.sub + '</div>' +
+            '</a>'
+        ).join('');
+    }
+
+    // ── PRÓXIMOS CHECK-INS ────────────────────────────────────
+    function renderCheckins(reservas) {
+        const el = document.getElementById('proximosCheckins');
+        const en7 = new Date(hoy); en7.setDate(en7.getDate() + 7);
+        const proximos = reservas
+            .filter(r => {
+                if (!['confirmada','airbnb_activa'].includes(r.estado)) return false;
+                const ci = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
+                return ci >= hoy && ci <= en7;
+            })
+            .sort((a,b) => {
+                const da = a.checkIn?.toDate ? a.checkIn.toDate() : new Date(a.checkIn);
+                const db_ = b.checkIn?.toDate ? b.checkIn.toDate() : new Date(b.checkIn);
+                return da - db_;
+            });
+
+        if (!proximos.length) {
+            el.innerHTML = '<div class="compact-empty">' +
+                '<span class="material-icons" style="font-size:16px;color:var(--color-success);">event_available</span>' +
+                'Sin check-ins en los próximos 7 días</div>';
+            return;
+        }
+        el.innerHTML = '<div class="compact-list">' +
+            proximos.map(r => {
+                const ci    = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
+                const dias  = Math.round((ci - hoy) / 86400000);
+                const label = dias === 0 ? 'Hoy' : dias === 1 ? 'Mañana' : 'en ' + dias + 'd';
+                const color = dias === 0 ? 'var(--color-danger)' : dias <= 2 ? 'var(--color-warning)' : 'var(--color-text-muted)';
+                return '<a href="reservas.html?id=' + r.id + '" class="compact-row">' +
+                    '<span class="material-icons compact-row__icon">login</span>' +
+                    '<div class="compact-row__main">' +
+                        '<div class="compact-row__title">' + escapeHtml(r.nombre||'—') + '</div>' +
+                        '<div class="compact-row__sub">Cabaña ' + (r.caba||'?') + ' · ' + (r.huespedes||r.adultos||'?') + ' huéspedes</div>' +
+                    '</div>' +
+                    '<div class="compact-row__side">' +
+                        '<span style="font-size:12px;font-weight:700;color:' + color + ';">' + label + '</span>' +
+                        badgeEstado(r.estado) +
+                    '</div>' +
+                '</a>';
+            }).join('') + '</div>';
+    }
+
+    // ── PENDIENTES ────────────────────────────────────────────
+    function renderPendientes(pendientes) {
+        const el = document.getElementById('pendientesContainer');
+        const activos = pendientes
+            .filter(p => !p.completado)
+            .sort((a,b) => {
+                const ord = { alta:0, media:1, baja:2 };
+                return (ord[a.prioridad]||1) - (ord[b.prioridad]||1);
+            })
+            .slice(0, 8);
+
+        if (!activos.length) {
+            el.innerHTML = '<div class="compact-empty">' +
+                '<span class="material-icons" style="font-size:16px;color:var(--color-success);">task_alt</span>' +
+                '¡Todo al día! Sin pendientes activos</div>';
+            return;
+        }
+        el.innerHTML = '<div class="compact-list">' +
+            activos.map(p =>
+                '<div class="pend-row">' +
+                    '<div class="urg-dot ' + (p.prioridad === 'alta' ? 'urg-rojo' : p.prioridad === 'media' ? 'urg-amarillo' : 'urg-gris') + '"></div>' +
+                    '<div style="flex:1;min-width:0;">' +
+                        '<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(p.titulo||p.nombre||'—') + '</div>' +
+                        (p.asignadoA ? '<div style="font-size:11px;color:var(--color-text-muted);">' + escapeHtml(p.asignadoA) + '</div>' : '') +
+                    '</div>' +
+                    '<span class="pend-badge ' + (p.prioridad||'baja') + '">' + (p.prioridad||'—') + '</span>' +
+                '</div>'
+            ).join('') + '</div>';
+    }
+
+    // ── TAREAS URGENTES ───────────────────────────────────────
+    function renderTareasUrgentes(tareas) {
+        const el = document.getElementById('tareasUrgentesContainer');
+        const activas = tareas.filter(t => t.estado !== 'finalizada' && t.activa !== false);
+        const urgentes = activas
+            .map(t => ({ ...t, urg: urgenciaTarea(t) }))
+            .filter(t => t.urg.color === 'rojo' || t.urg.color === 'amarillo')
+            .sort((a,b) => {
+                const ord = { rojo:0, amarillo:1 };
+                return (ord[a.urg.color]||2) - (ord[b.urg.color]||2);
+            })
+            .slice(0, 8);
+
+        if (!urgentes.length) {
+            el.innerHTML = '<div class="compact-empty">' +
+                '<span class="material-icons" style="font-size:16px;color:var(--color-success);">check_circle</span>' +
+                'Sin tareas urgentes — todo en plazo</div>';
+            return;
+        }
+        el.innerHTML = '<div class="compact-list">' +
+            urgentes.map(t =>
+                '<a href="tareas.html?id=' + t.id + '" class="compact-row">' +
+                    '<div class="urg-dot ' + (t.urg.color === 'rojo' ? 'urg-rojo' : 'urg-amarillo') + '"></div>' +
+                    '<div class="compact-row__main">' +
+                        '<div class="compact-row__title">' + escapeHtml(t.nombre||'—') + '</div>' +
+                        '<div class="compact-row__sub">' + (t.fechaInicio||'Sin fecha') + '</div>' +
+                    '</div>' +
+                    '<div class="compact-row__side">' +
+                        '<span style="font-size:11px;font-weight:700;color:' +
+                            (t.urg.color === 'rojo' ? 'var(--color-danger)' : '#9B5400') + ';">' +
+                            t.urg.label +
+                        '</span>' +
+                        badgePrioridad(t.prioridad) +
+                    '</div>' +
+                '</a>'
+            ).join('') + '</div>';
+    }
+
+    // ── RESERVAS SIN CONFIRMAR ────────────────────────────────
+    function renderReservasPendientes(reservas) {
+        const el = document.getElementById('reservasPendientesContainer');
+        const pendConf = reservas
+            .filter(r => r.estado === 'pendiente')
+            .sort((a,b) => {
+                const da = a.checkIn?.toDate ? a.checkIn.toDate() : new Date(a.checkIn||0);
+                const db_ = b.checkIn?.toDate ? b.checkIn.toDate() : new Date(b.checkIn||0);
+                return da - db_;
+            });
+
+        if (!pendConf.length) {
+            el.innerHTML = '<div class="compact-empty">' +
+                '<span class="material-icons" style="font-size:16px;color:var(--color-success);">verified</span>' +
+                'Todas las reservas están confirmadas</div>';
+            return;
+        }
+        el.innerHTML = pendConf.map(r =>
+            '<a href="reservas.html?id=' + r.id + '" class="conf-banner">' +
+                '<span class="material-icons conf-banner__warn">warning_amber</span>' +
+                '<div class="conf-banner__text">' +
+                    '<div class="conf-banner__title">⚡ Confirmar — ' + escapeHtml(r.nombre||'Sin nombre') + '</div>' +
+                    '<div class="conf-banner__sub">' +
+                        'Cabaña ' + (r.caba||'?') +
+                        ' · Check-in ' + formatFecha(r.checkIn) +
+                        ' · ' + (r.origen||'directa') +
+                    '</div>' +
+                '</div>' +
+                '<span class="material-icons" style="font-size:18px;color:var(--color-text-muted);">arrow_forward</span>' +
+            '</a>'
+        ).join('');
+    }
+
+    // ── PRESUPUESTOS SIN SEÑA ─────────────────────────────────
+    function renderPresupuestos(presupuestos) {
+        const el = document.getElementById('presupuestosContainer');
+        const hace30 = new Date(hoy); hace30.setDate(hace30.getDate() - 30);
+        const sinSena = presupuestos
+            .filter(p => {
+                if (p.estado === 'confirmado' || p.pagadoBRL > 0) return false;
+                const f = p.creadoEn?.toDate ? p.creadoEn.toDate() : new Date(p.creadoEn||0);
+                return f >= hace30;
+            })
+            .sort((a,b) => {
+                const fa = a.creadoEn?.toDate ? a.creadoEn.toDate() : new Date(a.creadoEn||0);
+                const fb = b.creadoEn?.toDate ? b.creadoEn.toDate() : new Date(b.creadoEn||0);
+                return fb - fa;
+            });
+
+        if (!sinSena.length) {
+            el.innerHTML = '<div class="compact-empty">' +
+                '<span class="material-icons" style="font-size:16px;color:var(--color-success);">request_quote</span>' +
+                'Sin presupuestos pendientes en los últimos 30 días</div>';
+            return;
+        }
+        el.innerHTML = '<div class="compact-list">' +
+            sinSena.map(p => {
+                const f    = p.creadoEn?.toDate ? p.creadoEn.toDate() : new Date(p.creadoEn||0);
+                const dias = Math.round((hoy - f) / 86400000);
+                return '<a href="presupuestos.html?id=' + p.id + '" class="pres-row">' +
+                    '<span class="material-icons" style="font-size:16px;color:var(--color-text-muted);flex-shrink:0;">request_quote</span>' +
+                    '<div style="flex:1;min-width:0;">' +
+                        '<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+                            escapeHtml(p.nombre||p.clienteNombre||'Sin nombre') +
+                        '</div>' +
+                        '<div style="font-size:11px;color:var(--color-text-muted);">' +
+                            'Cabaña ' + (p.caba||'?') +
+                            (p.totalBRL ? ' · R$ ' + p.totalBRL.toLocaleString('pt-BR',{minimumFractionDigits:0}) : '') +
+                        '</div>' +
+                    '</div>' +
+                    '<span class="pres-dias ' + (dias > 7 ? 'urgente' : '') + '">' + dias + 'd</span>' +
+                    '<span class="material-icons" style="font-size:16px;color:var(--color-text-muted);">arrow_forward</span>' +
+                '</a>';
+            }).join('') + '</div>';
+    }
+
+    // ── WIDGET CUENTAS ────────────────────────────────────────
+    async function cargarWidgetCuentas() {
+        try {
+            const snap    = await db.collection('cuentas').get();
+            const cuentas = snap.docs.map(d => ({ id:d.id,...d.data() }))
+                .filter(c => c.activa !== false)
+                .sort((a,b) => (a.orden||99) - (b.orden||99));
+            if (!cuentas.length) return;
+
+            const SIMBOLO = { BRL:'R$', USD:'US$', UYU:'$U', ARS:'$' };
+            const EMOJI   = { BR:'🇧🇷', UY:'🇺🇾', AR:'🇦🇷' };
+            let totalBRL  = 0;
+            cuentas.forEach(c => { totalBRL += (c.saldoActual||0) * (c.tipoCambio||1); });
+            document.getElementById('wcTotal').textContent =
+                'R$ ' + totalBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+
+            document.getElementById('wcCuentas').innerHTML = cuentas.map(c => {
+                const sim  = SIMBOLO[c.moneda] || '';
+                const neg  = (c.saldoActual||0) < 0;
+                return '<a href="movimientos.html?cuenta=' + c.id + '" class="cuenta-mini">' +
+                    '<div class="cuenta-mini__banco">' + (EMOJI[c.pais]||'') + ' ' + escapeHtml(c.banco||c.moneda||'') + '</div>' +
+                    '<div class="cuenta-mini__nombre">' + escapeHtml(c.nombre) + '</div>' +
+                    '<div class="cuenta-mini__saldo" style="color:' + (neg ? 'var(--color-danger)' : 'var(--color-primary-dark)') + ';">' +
+                        sim + ' ' + (c.saldoActual||0).toLocaleString('pt-BR',{minimumFractionDigits:2}) +
+                    '</div>' +
+                '</a>';
+            }).join('');
+
+            document.getElementById('seccionCuentas').style.display = 'block';
+        } catch(e) { console.warn('Widget cuentas:', e.message); }
+    }
+
+    // ── ALERTAS PROACTIVAS ────────────────────────────────────
+    async function cargarAlertas(reservas, tareas) {
+        const alertas = [];
+        const hoy48   = new Date(hoy); hoy48.setHours(hoy48.getHours() + 48);
+        const hace14  = new Date(hoy); hace14.setDate(hace14.getDate() - 14);
+
+        // Check-ins en <48h sin limpieza
+        const prox48 = reservas.filter(r => {
+            if (!['confirmada','airbnb_activa'].includes(r.estado)) return false;
+            const ci = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
+            return ci >= hoy && ci <= hoy48;
+        });
+        for (const r of prox48) {
+            const tieneTask = tareas.some(t =>
+                t.reservaId === r.id && t.tipo === 'limpieza' && t.estado !== 'finalizada');
+            if (!tieneTask) {
+                const ci   = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
+                const difH = Math.round((ci - hoy) / 3600000);
+                alertas.push({ nivel:'critico', icon:'cleaning_services',
+                    title:'Sin tarea de limpieza — ' + escapeHtml(r.nombre||'Reserva'),
+                    desc:'Check-in en ' + (difH < 24 ? difH + 'hs' : 'mañana') + ' · Cabaña ' + r.caba,
+                    href:'tareas.html' });
+            }
+        }
+
+        // Tareas rojas
+        const tarRojas = tareas.filter(t =>
+            t.estado !== 'finalizada' && t.activa !== false && urgenciaTarea(t).color === 'rojo');
+        if (tarRojas.length) {
+            alertas.push({ nivel:'critico', icon:'warning',
+                title: tarRojas.length + ' tarea' + (tarRojas.length > 1 ? 's' : '') + ' con atraso crítico',
+                desc: tarRojas.slice(0,3).map(t => t.nombre).join(' · ') + (tarRojas.length > 3 ? ' y más...' : ''),
+                href:'tareas.html' });
+        }
+
+        // Honorarios viejos
+        try {
+            const honSnap = await db.collection('honorarios').where('estado','==','pendiente').get();
+            const viejos  = honSnap.docs.filter(d => { const f = d.data().creadoEn?.toDate?.(); return f && f < hace14; });
+            if (viejos.length) {
+                const total = viejos.reduce((s,d) => s + (d.data().monto||0), 0);
+                alertas.push({ nivel:'atencion', icon:'payments',
+                    title: viejos.length + ' honorario' + (viejos.length > 1 ? 's' : '') + ' pendiente' + (viejos.length > 1 ? 's' : '') + ' (+14 días)',
+                    desc: 'Total: R$ ' + total.toLocaleString('pt-BR',{minimumFractionDigits:2}),
+                    href:'pagos.html' });
+            }
+        } catch(e) {}
+
+        // Movimientos sin categorizar
+        try {
+            const movSnap = await db.collection('movimientos').where('categoriaId','==',null).limit(1).get();
+            if (!movSnap.empty) {
+                alertas.push({ nivel:'info', icon:'label_off',
+                    title:'Movimientos BTG sin categorizar',
+                    desc:'Usá Herramientas BTG → Categorizar',
+                    href:'herramientas-btg.html' });
+            }
+        } catch(e) {}
+
+        if (!alertas.length) return;
+        document.getElementById('alertasList').innerHTML = alertas.map(a =>
+            '<a href="' + a.href + '" class="alerta-item ' + a.nivel + '">' +
+                '<span class="material-icons alerta-item__icon">' + a.icon + '</span>' +
+                '<div>' +
+                    '<div class="alerta-item__title">' + a.title + '</div>' +
+                    (a.desc ? '<div class="alerta-item__desc">' + escapeHtml(a.desc) + '</div>' : '') +
+                '</div>' +
+                '<span class="material-icons" style="font-size:16px;opacity:.5;margin-left:auto;flex-shrink:0;">arrow_forward</span>' +
+            '</a>'
+        ).join('');
+        document.getElementById('alertasPanel').classList.add('visible');
+    }
+
+    // ── SYNC AIRBNB ───────────────────────────────────────────
+    // Clave de Google Calendar leída desde Firestore — nunca en el código fuente
+    let GOOGLE_API_KEY = '';
+    try {
+        const cfgSnap = await db.collection('config').doc('integraciones').get();
+        GOOGLE_API_KEY = cfgSnap.exists ? (cfgSnap.data().googleApiKey || '') : '';
+    } catch(e) { console.warn('No se pudo cargar config/integraciones:', e.message); }
+    window.sincronizarAirbnb = async function() {
+        const btn = document.getElementById('btnSyncAirbnb');
+        const res = document.getElementById('syncResultado');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite">sync</span>Sincronizando...';
+        res.style.display = 'none';
+        try {
+            const snap    = await db.collection('cabanas').get();
+            const cabanas = snap.docs.map(d => ({ id:d.id,...d.data() }))
+                .filter(c => c.google_calendar_id && c.google_calendar_id.includes('@'));
+            const { creadas, canceladas, error } = await CVC.sincronizarDesdeGCal(GOOGLE_API_KEY, cabanas);
+            if (error) { mostrarSyncResult('warning','⚠ ' + error); return; }
+            const partes = [];
+            if (creadas > 0)    partes.push(creadas + ' nueva' + (creadas !== 1 ? 's' : ''));
+            if (canceladas > 0) partes.push('⚠ ' + canceladas + ' cancelada' + (canceladas !== 1 ? 's' : ''));
+            if (!partes.length) partes.push('Sin cambios — todo actualizado');
+            mostrarSyncResult(canceladas > 0 ? 'warning' : creadas > 0 ? 'success' : 'info', partes.join(' · '));
+        } catch(e) {
+            mostrarSyncResult('error','Error: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-icons">sync</span>Sincronizar Airbnb';
+        }
+    };
+
+    function mostrarSyncResult(tipo, msg) {
+        const el = document.getElementById('syncResultado');
+        const m  = { success:['var(--color-success-bg)','var(--color-success)','check_circle'],
+                     warning:['#fff3e0','#e07b00','warning'],
+                     error:  ['var(--color-danger-bg)','var(--color-danger)','error'],
+                     info:   ['var(--color-surface-2)','var(--color-text-muted)','info'] }[tipo] || [];
+        el.style.background = m[0]; el.style.color = m[1]; el.style.border = '1px solid ' + m[1] + '33';
+        el.innerHTML = '<span class="material-icons" style="font-size:15px;vertical-align:middle;margin-right:5px;">' + m[2] + '</span>' + msg;
+        el.style.display = 'block';
+    }
+
+})();
+</script>
+</body>
+</html>
