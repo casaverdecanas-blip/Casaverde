@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual del Sistema · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        /* ── Layout manual ───────────────────────────────────── */
+        .manual-layout {
+            display: grid;
+            grid-template-columns: 220px 1fr;
+            gap: var(--space-6);
+            align-items: start;
+        }
+        @media (max-width: 768px) {
+            .manual-layout { grid-template-columns: 1fr; }
+            .manual-toc    { display: none; }
+        }
+        .manual-toc {
+            position: sticky; top: 80px;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-4);
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
+        .manual-toc__title {
+            font-size: 11px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .06em;
+            color: var(--color-text-muted); margin-bottom: var(--space-3);
+        }
+        .toc-link {
+            display: block; font-size: 13px; color: var(--color-text-secondary);
+            text-decoration: none; padding: 4px 0;
+            border-left: 2px solid transparent;
+            padding-left: 8px; margin-bottom: 2px;
+            transition: color .15s, border-color .15s;
+        }
+        .toc-link:hover { color: var(--color-primary); border-color: var(--color-primary); }
+        .toc-link.sub   { padding-left: 18px; font-size: 12px; opacity: .8; }
+
+        /* ── Contenido del manual ────────────────────────────── */
+        .manual-content h1 { font-size: 22px; font-weight: 700; margin: 0 0 var(--space-4); }
+        .manual-content h2 {
+            font-size: 17px; font-weight: 700;
+            margin: var(--space-6) 0 var(--space-3);
+            padding-bottom: var(--space-2);
+            border-bottom: 2px solid var(--color-primary);
+            color: var(--color-primary-dark);
+        }
+        .manual-content h3 {
+            font-size: 14px; font-weight: 700;
+            margin: var(--space-4) 0 var(--space-2);
+            color: var(--color-text-primary);
+        }
+        .manual-content p  { font-size: 14px; line-height: 1.7; margin-bottom: var(--space-3); color: var(--color-text-secondary); }
+        .manual-content ul, .manual-content ol { padding-left: 22px; margin-bottom: var(--space-3); }
+        .manual-content li { font-size: 14px; line-height: 1.7; color: var(--color-text-secondary); margin-bottom: 4px; }
+        .manual-content strong { color: var(--color-text-primary); font-weight: 700; }
+        .manual-content code {
+            background: var(--color-surface-2); border: 1px solid var(--color-border);
+            border-radius: 3px; padding: 1px 5px;
+            font-family: var(--font-mono); font-size: 12px;
+        }
+        .manual-content pre {
+            background: var(--color-surface-2); border: 1px solid var(--color-border);
+            border-radius: var(--radius-md); padding: var(--space-4);
+            overflow-x: auto; margin-bottom: var(--space-3);
+        }
+        .manual-content pre code { background: none; border: none; padding: 0; font-size: 12px; line-height: 1.7; }
+        .manual-content table { width: 100%; border-collapse: collapse; margin-bottom: var(--space-4); font-size: 13px; }
+        .manual-content th { background: var(--color-primary-xlight); color: var(--color-primary-dark); padding: 8px 12px; text-align: left; font-weight: 700; }
+        .manual-content td { padding: 8px 12px; border-bottom: 1px solid var(--color-border); color: var(--color-text-secondary); }
+        .manual-content tr:hover td { background: var(--color-surface-2); }
+        .manual-content blockquote {
+            border-left: 3px solid var(--color-primary);
+            padding: var(--space-3) var(--space-4);
+            background: var(--color-primary-xlight);
+            border-radius: 0 var(--radius-md) var(--radius-md) 0;
+            margin-bottom: var(--space-3);
+            font-size: 13px; color: var(--color-primary-dark);
+        }
+        .manual-content hr { border: none; border-top: 1px solid var(--color-border); margin: var(--space-5) 0; }
+
+        /* ── Barra de admin ──────────────────────────────────── */
+        .editor-bar {
+            display: none;
+            align-items: center; gap: var(--space-2); flex-wrap: wrap;
+            background: var(--color-primary-dark);
+            padding: var(--space-2) var(--space-4);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-4);
+        }
+        .editor-bar__label {
+            font-size: 12px; color: rgba(255,255,255,.7);
+            font-weight: 600; margin-right: var(--space-2);
+        }
+        .editor-bar .btn { font-size: 12px; }
+
+        /* ── Upload zone ─────────────────────────────────────── */
+        .upload-zone {
+            border: 2px dashed var(--color-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-5);
+            text-align: center;
+            cursor: pointer;
+            position: relative;
+            background: var(--color-surface-2);
+            transition: border-color .15s, background .15s;
+            margin-bottom: var(--space-3);
+        }
+        .upload-zone:hover, .upload-zone.drag-over {
+            border-color: var(--color-primary);
+            background: var(--color-primary-xlight);
+        }
+        .upload-zone input {
+            position: absolute; inset: 0; opacity: 0;
+            cursor: pointer; width: 100%; height: 100%;
+        }
+        .upload-zone .material-icons { font-size: 32px; color: var(--color-text-muted); display: block; margin-bottom: 8px; }
+        .upload-status {
+            display: none; padding: var(--space-3) var(--space-4);
+            border-radius: var(--radius-md); font-size: 13px;
+            margin-bottom: var(--space-3);
+        }
+        .upload-status.ok      { background: var(--color-success-bg); color: var(--color-success); }
+        .upload-status.error   { background: var(--color-danger-bg);  color: var(--color-danger);  }
+        .upload-status.loading { background: var(--color-surface-2);  color: var(--color-text-muted); }
+
+        /* ── Meta info ───────────────────────────────────────── */
+        .manual-meta {
+            display: flex; gap: var(--space-4); flex-wrap: wrap;
+            font-size: 12px; color: var(--color-text-muted);
+            padding: var(--space-3) var(--space-4);
+            background: var(--color-surface-2);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-5);
+            align-items: center;
+        }
+        .manual-meta span { display: flex; align-items: center; gap: 4px; }
+        .manual-meta .material-icons { font-size: 14px; }
+
+        /* ── TOC fab móvil ───────────────────────────────────── */
+        .toc-fab {
+            display: none; position: fixed; bottom: 70px; left: 20px;
+            width: 44px; height: 44px; border-radius: 50%;
+            background: var(--color-primary); color: white;
+            border: none; cursor: pointer; z-index: 999;
+            align-items: center; justify-content: center;
+            box-shadow: var(--shadow-lg);
+        }
+        @media (max-width: 768px) { .toc-fab { display: flex; } }
+        .toc-modal-overlay {
+            display: none; position: fixed; inset: 0; z-index: 5000;
+            background: rgba(0,0,0,.5); align-items: flex-end; justify-content: stretch;
+        }
+        .toc-modal-overlay.open { display: flex; }
+        .toc-modal-panel {
+            background: var(--color-surface); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+            padding: var(--space-5); width: 100%; max-height: 70vh; overflow-y: auto;
+        }
+        .toc-modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: var(--space-4); font-weight: 700;
+        }
+        .toc-modal-header button { background: none; border: none; cursor: pointer; padding: 4px; }
+    </style>
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">cottage</span>
+        Casa Verde Canas
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip">
+            <span class="material-icons">person</span>
+            <span id="userName">—</span>
+        </div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons">logout</span>
+            Salir
+        </button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+
+    <!-- Barra de admin -->
+    <div class="editor-bar" id="editorBar">
+        <span class="editor-bar__label">
+            <span class="material-icons" style="font-size:14px;vertical-align:-2px;">admin_panel_settings</span>
+            Admin:
+        </span>
+        <button class="btn btn-sm" id="btnSubirArchivo"
+            style="background:rgba(255,255,255,.15);color:white;border:1px solid rgba(255,255,255,.3);"
+            onclick="abrirModalSubir()">
+            <span class="material-icons">upload_file</span>
+            Subir archivo .md / .html
+        </button>
+        <button class="btn btn-sm" id="btnEditar"
+            style="background:rgba(255,255,255,.15);color:white;border:1px solid rgba(255,255,255,.3);"
+            onclick="abrirEditorTexto()">
+            <span class="material-icons">edit</span>
+            Editar HTML directo
+        </button>
+        <span id="metaVersionBar" style="font-size:11px;color:rgba(255,255,255,.6);margin-left:auto;"></span>
+    </div>
+
+    <div class="manual-layout">
+
+        <!-- Índice lateral -->
+        <nav class="manual-toc" id="manualToc">
+            <div class="manual-toc__title">Contenido</div>
+            <div id="tocLinks">
+                <div class="state-loading" style="padding:8px 0;">
+                    <div class="spinner spinner-sm"></div>
+                </div>
+            </div>
+        </nav>
+
+        <div>
+            <!-- Meta info -->
+            <div class="manual-meta" id="manualMeta" style="display:none;"></div>
+
+            <!-- Editor HTML directo (oculto por defecto) -->
+            <div id="editorWrap" style="display:none;margin-bottom:var(--space-4);">
+                <textarea id="editorTextarea"
+                    style="width:100%;min-height:400px;font-family:var(--font-mono);font-size:12px;
+                    padding:var(--space-3);border:1px solid var(--color-border);border-radius:var(--radius-md);
+                    background:var(--color-surface-2);color:var(--color-text-primary);resize:vertical;"
+                    placeholder="Pegá HTML o Markdown aquí..."></textarea>
+                <div style="display:flex;gap:var(--space-2);margin-top:var(--space-2);">
+                    <button class="btn btn-primary btn-sm" onclick="guardarDesdeEditor()">
+                        <span class="material-icons">save</span>
+                        <span id="btnGuardarText">Guardar versión</span>
+                    </button>
+                    <button class="btn btn-ghost btn-sm" onclick="cerrarEditorTexto()">Cancelar</button>
+                </div>
+            </div>
+
+            <!-- Contenido renderizado -->
+            <div class="manual-content" id="manualContent">
+                <div class="state-loading">
+                    <div class="spinner"></div><span>Cargando manual...</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</main>
+
+<!-- Botón flotante TOC (móvil) -->
+<button class="toc-fab" id="tocFab" onclick="abrirTocModal()">
+    <span class="material-icons">toc</span>
+</button>
+
+<!-- Modal TOC móvil -->
+<div class="toc-modal-overlay" id="tocModalOverlay" onclick="cerrarTocModal(event)">
+    <div class="toc-modal-panel" onclick="event.stopPropagation()">
+        <div class="toc-modal-header">
+            <strong>📋 Índice</strong>
+            <button onclick="cerrarTocModal()">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        <div id="tocModalLinks"></div>
+    </div>
+</div>
+
+<!-- Modal: subir archivo -->
+<div class="modal-overlay" id="modalSubir" style="display:none;" onclick="cerrarModalSubir(event)">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:500px;">
+        <div class="modal__header">
+            <div class="modal__title">
+                <span class="material-icons">upload_file</span>
+                Subir nuevo manual
+            </div>
+            <button class="modal__close" onclick="cerrarModalSubir()">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+            <p style="font-size:13px;color:var(--color-text-secondary);margin-bottom:var(--space-4);">
+                Subí el archivo <strong>.md</strong> o <strong>.html</strong> generado por Claude.
+                El sistema lo convierte, lo guarda como nueva versión del manual, y <strong>actualiza automáticamente
+                los textos de ayuda (?) de todas las secciones</strong> extrayendo el contenido correspondiente.
+            </p>
+
+            <div class="upload-zone" id="uploadZone">
+                <input type="file" id="archivoInput" accept=".md,.html,.txt"
+                    onchange="procesarArchivo(this.files[0])">
+                <span class="material-icons">description</span>
+                <div style="font-size:14px;font-weight:600;color:var(--color-text-primary);">
+                    Tocar para seleccionar archivo
+                </div>
+                <div style="font-size:12px;color:var(--color-text-muted);margin-top:4px;">
+                    Formatos: .md (Markdown) · .html · .txt
+                </div>
+            </div>
+
+            <div class="upload-status" id="uploadStatus"></div>
+
+            <div id="previsualizacionWrap" style="display:none;">
+                <div style="font-size:12px;font-weight:600;color:var(--color-text-secondary);margin-bottom:8px;">
+                    Vista previa (primeras líneas):
+                </div>
+                <div id="previsualizacion"
+                    style="background:var(--color-surface-2);border:1px solid var(--color-border);
+                    border-radius:var(--radius-sm);padding:var(--space-3);font-size:12px;
+                    font-family:var(--font-mono);max-height:150px;overflow-y:auto;color:var(--color-text-secondary);
+                    white-space:pre-wrap;"></div>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModalSubir()">Cancelar</button>
+            <button class="btn btn-primary" id="btnConfirmarSubida" style="display:none;"
+                onclick="confirmarSubida()">
+                <span class="material-icons">save</span>
+                <span id="btnConfirmarText">Guardar manual y actualizar ayuda (?)</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- marked.js para convertir Markdown a HTML -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async () => {
+    const { user, userData } = await CVC.verificarAuth(['admin', 'user']);
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+    CVC.renderNav('manual-sistema.html', userData.rol);
+    CVC.initAyuda('manual-sistema.html');
+
+    const db      = CVC.db;
+    const esAdmin = userData.rol === 'admin';
+
+    if (esAdmin) {
+        document.getElementById('editorBar').style.display = 'flex';
+    }
+
+    let contenidoActual = '';
+    let archivoContenido = '';  // contenido del archivo subido listo para guardar
+
+    // ── Cargar manual ─────────────────────────────────────────
+    async function cargarManual() {
+        try {
+            const snap = await db.collection('config').doc('manual').get();
+            if (snap.exists) {
+                const data = snap.data();
+                contenidoActual = data.contenidoHtml || data.html || '';
+                renderManual(contenidoActual, data);
+            } else {
+                document.getElementById('manualContent').innerHTML =
+                    '<div class="state-empty"><span class="material-icons">menu_book</span>' +
+                    '<div>El manual aún no tiene contenido.</div>' +
+                    (esAdmin ? '<div style="font-size:13px;color:var(--color-text-muted);margin-top:8px;">Usá el botón "Subir archivo" para cargarlo.</div>' : '') +
+                    '</div>';
+            }
+        } catch(e) {
+            document.getElementById('manualContent').innerHTML =
+                '<div class="alert alert-error"><span class="material-icons">error</span>Error al cargar: ' +
+                CVC.escapeHtml(e.message) + '</div>';
+        }
+    }
+
+    function renderManual(html, meta) {
+        document.getElementById('manualContent').innerHTML = html;
+
+        // Meta info
+        if (meta) {
+            const fecha = meta.actualizadoEn?.toDate ?
+                meta.actualizadoEn.toDate().toLocaleDateString('es-AR') : '—';
+            const autor = meta.actualizadoPor || '—';
+            const ver   = meta.version || '';
+            const metaEl = document.getElementById('manualMeta');
+            metaEl.innerHTML =
+                '<span><span class="material-icons">update</span>Actualizado: ' + fecha + '</span>' +
+                '<span><span class="material-icons">person</span>Por: ' + CVC.escapeHtml(autor) + '</span>' +
+                (ver ? '<span><span class="material-icons">label</span>' + CVC.escapeHtml(ver) + '</span>' : '');
+            metaEl.style.display = 'flex';
+
+            if (esAdmin) {
+                document.getElementById('metaVersionBar').textContent =
+                    'Versión: ' + (ver || fecha);
+            }
+        }
+
+        // Generar TOC desde los headings del contenido
+        construirTOC();
+    }
+
+    function construirTOC() {
+        const headings = document.getElementById('manualContent').querySelectorAll('h2, h3');
+        const links    = [];
+        headings.forEach((h, i) => {
+            if (!h.id) h.id = 'sec-' + i;
+            const link = '<a href="#' + h.id + '" class="toc-link ' +
+                (h.tagName === 'H3' ? 'sub' : '') + '">' +
+                CVC.escapeHtml(h.textContent) + '</a>';
+            links.push(link);
+        });
+        const html = links.length ? links.join('') :
+            '<div style="font-size:12px;color:var(--color-text-muted);">Sin índice disponible</div>';
+        document.getElementById('tocLinks').innerHTML = html;
+        document.getElementById('tocModalLinks').innerHTML = html;
+    }
+
+    // ── MODAL SUBIR ARCHIVO ───────────────────────────────────
+
+    window.abrirModalSubir = function() {
+        archivoContenido = '';
+        document.getElementById('archivoInput').value = '';
+        document.getElementById('uploadStatus').style.display = 'none';
+        document.getElementById('previsualizacionWrap').style.display = 'none';
+        document.getElementById('btnConfirmarSubida').style.display = 'none';
+        document.getElementById('modalSubir').style.display = 'flex';
+    };
+
+    window.cerrarModalSubir = function(e) {
+        if (e && e.target !== document.getElementById('modalSubir')) return;
+        document.getElementById('modalSubir').style.display = 'none';
+    };
+
+    window.procesarArchivo = function(file) {
+        if (!file) return;
+        const statusEl = document.getElementById('uploadStatus');
+        statusEl.className = 'upload-status loading';
+        statusEl.innerHTML = '<span class="material-icons" style="font-size:14px;vertical-align:-2px;">hourglass_empty</span> Leyendo archivo...';
+        statusEl.style.display = 'flex';
+        statusEl.style.alignItems = 'center';
+        statusEl.style.gap = '6px';
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const contenido = e.target.result;
+            const esMd      = file.name.endsWith('.md') || file.name.endsWith('.txt');
+
+            // Convertir según tipo
+            let htmlFinal;
+            if (esMd) {
+                try {
+                    // Configurar marked para buena legibilidad
+                    marked.setOptions({ breaks: true, gfm: true });
+                    htmlFinal = marked.parse(contenido);
+                } catch(err) {
+                    mostrarErrorArchivo('Error al convertir Markdown: ' + err.message);
+                    return;
+                }
+            } else {
+                htmlFinal = contenido;  // ya es HTML, usar directo
+            }
+
+            archivoContenido = htmlFinal;
+
+            // Mostrar preview (texto plano de las primeras líneas)
+            const preview = contenido.split('\n').slice(0, 15).join('\n');
+            document.getElementById('previsualizacion').textContent = preview;
+            document.getElementById('previsualizacionWrap').style.display = 'block';
+
+            // Contar secciones detectadas
+            const secCount = (htmlFinal.match(/<h2/g) || []).length;
+            statusEl.className = 'upload-status ok';
+            statusEl.innerHTML =
+                '<span class="material-icons" style="font-size:14px;vertical-align:-2px;">check_circle</span> ' +
+                'Archivo leído: <strong>' + CVC.escapeHtml(file.name) + '</strong>' +
+                (esMd ? ' (convertido de Markdown)' : '') +
+                (secCount > 0 ? ' · ' + secCount + ' secciones detectadas' : '');
+
+            document.getElementById('btnConfirmarSubida').style.display = 'inline-flex';
+        };
+        reader.onerror = function() {
+            mostrarErrorArchivo('No se pudo leer el archivo.');
+        };
+        reader.readAsText(file, 'UTF-8');
+    };
+
+    function mostrarErrorArchivo(msg) {
+        const statusEl = document.getElementById('uploadStatus');
+        statusEl.className = 'upload-status error';
+        statusEl.innerHTML = '<span class="material-icons" style="font-size:14px;vertical-align:-2px;">error</span> ' + CVC.escapeHtml(msg);
+        document.getElementById('btnConfirmarSubida').style.display = 'none';
+    }
+
+    window.confirmarSubida = async function() {
+        if (!archivoContenido) return;
+        const btn  = document.getElementById('btnConfirmarSubida');
+        const text = document.getElementById('btnConfirmarText');
+        btn.disabled = true; text.textContent = 'Guardando...';
+
+        try {
+            await guardarEnFirestore(archivoContenido);
+            contenidoActual = archivoContenido;
+            renderManual(archivoContenido, {
+                actualizadoEn: { toDate: () => new Date() },
+                actualizadoPor: userData.nombre || user.email,
+                version: new Date().toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
+            });
+            document.getElementById('modalSubir').style.display = 'none';
+            CVC.showToast('Manual actualizado correctamente.', 'success');
+        } catch(e) {
+            CVC.showToast('Error al guardar: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false; text.textContent = 'Guardar como manual';
+        }
+    };
+
+    // ── EDITOR TEXTO DIRECTO (fallback) ──────────────────────
+
+    window.abrirEditorTexto = function() {
+        document.getElementById('editorTextarea').value = contenidoActual;
+        document.getElementById('editorWrap').style.display = 'block';
+        document.getElementById('editorTextarea').focus();
+    };
+
+    window.cerrarEditorTexto = function() {
+        document.getElementById('editorWrap').style.display = 'none';
+    };
+
+    window.guardarDesdeEditor = async function() {
+        const nuevoContenido = document.getElementById('editorTextarea').value.trim();
+        if (!nuevoContenido) { CVC.showToast('El contenido está vacío.', 'error'); return; }
+        const btn  = document.querySelector('#editorWrap .btn-primary');
+        const text = document.getElementById('btnGuardarText');
+        btn.disabled = true; text.textContent = 'Guardando...';
+        try {
+            await guardarEnFirestore(nuevoContenido);
+            contenidoActual = nuevoContenido;
+            renderManual(nuevoContenido, {
+                actualizadoEn: { toDate: () => new Date() },
+                actualizadoPor: userData.nombre || user.email,
+                version: new Date().toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
+            });
+            cerrarEditorTexto();
+            CVC.showToast('Manual guardado.', 'success');
+        } catch(e) {
+            CVC.showToast('Error: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false; text.textContent = 'Guardar versión';
+        }
+    };
+
+    // ── Extraer textos de ayuda del HTML del manual ─────────────────────────────
+    //
+    // El manual tiene secciones con <h2> o encabezados con texto.
+    // Para cada página del sistema buscamos su sección correspondiente
+    // y extraemos el primer párrafo como texto de ayuda.
+    //
+    // Mapeo: clave de página → texto a buscar en el manual
+    var AYUDA_SECCIONES = {
+        'dashboard.html':        'Dashboard',
+        'calendario.html':       'Calendario',
+        'reservas.html':         'Reservas',
+        'presupuestos.html':     'Presupuestos',
+        'clientes.html':         'Clientes',
+        'panel-financiero.html': 'Panel Financiero',
+        'pagos.html':            'Ingresos y Egresos',
+        'informes-airbnb.html':  'Informes Airbnb',
+        'cuentas.html':          'Cuentas',
+        'movimientos.html':      'Movimientos',
+        'herramientas-btg.html': 'BTG',
+        'categorias.html':       'Categorías',
+        'tareas.html':           'Tareas',
+        'tareas-admin.html':     'Gestión de Tareas',
+        'pendientes.html':       'Pendientes',
+        'fiscal.html':           'Fiscal',
+        'acceso-contador.html':  'Acceso Contador',
+        'cabanas-admin.html':    'Cabañas',
+        'usuarios.html':         'Usuarios',
+        'manual-sistema.html':   'Manual del Sistema',
+    };
+
+    // Títulos fijos por página (siempre se guardan aunque no haya sección en el manual)
+    var AYUDA_TITULOS = {
+        'dashboard.html':        'Dashboard',
+        'calendario.html':       'Calendario',
+        'reservas.html':         'Reservas',
+        'presupuestos.html':     'Presupuestos',
+        'clientes.html':         'Clientes',
+        'panel-financiero.html': 'Panel Financiero',
+        'pagos.html':            'Ingresos y Egresos',
+        'informes-airbnb.html':  'Informes Airbnb',
+        'cuentas.html':          'Cuentas',
+        'movimientos.html':      'Movimientos',
+        'herramientas-btg.html': 'BTG / Conciliación',
+        'categorias.html':       'Categorías',
+        'tareas.html':           'Tareas',
+        'tareas-admin.html':     'Gestión de Tareas',
+        'pendientes.html':       'Pendientes',
+        'fiscal.html':           'Panel Fiscal',
+        'acceso-contador.html':  'Acceso Contador',
+        'cabanas-admin.html':    'Cabañas',
+        'usuarios.html':         'Usuarios',
+        'manual-sistema.html':   'Manual del Sistema',
+    };
+
+    function extraerAyudaDelManual(html) {
+        var div = document.createElement('div');
+        div.innerHTML = html;
+        var items = {};
+
+        Object.keys(AYUDA_SECCIONES).forEach(function(pagina) {
+            var buscar = AYUDA_SECCIONES[pagina];
+            var titulo = AYUDA_TITULOS[pagina];
+            var resumen = '';
+
+            // Buscar el heading que contenga el texto de la sección
+            var headings = div.querySelectorAll('h1,h2,h3');
+            for (var i = 0; i < headings.length; i++) {
+                var h = headings[i];
+                if (h.textContent.toLowerCase().indexOf(buscar.toLowerCase()) > -1) {
+                    // Extraer el primer párrafo o lista después del heading
+                    var next = h.nextElementSibling;
+                    while (next) {
+                        var tag = next.tagName.toLowerCase();
+                        if (tag === 'p' || tag === 'ul' || tag === 'ol' || tag === 'pre') {
+                            resumen = next.textContent.replace(/\s+/g, ' ').trim().slice(0, 300);
+                            break;
+                        }
+                        if (tag === 'h1' || tag === 'h2' || tag === 'h3') break;
+                        next = next.nextElementSibling;
+                    }
+                    // Si no encontró párrafo, usar el texto del propio heading como fallback
+                    if (!resumen) resumen = titulo + ' — ver el manual para más detalles.';
+                    break;
+                }
+            }
+
+            if (resumen) {
+                items[pagina] = { titulo: titulo, resumen: resumen };
+            }
+        });
+
+        return items;
+    }
+
+    async function guardarEnFirestore(html) {
+        // 1. Guardar el manual
+        await db.collection('config').doc('manual').set({
+            contenidoHtml:  html,
+            html:           html,
+            version:        new Date().toLocaleDateString('es-AR', { month: 'long', year: 'numeric' }),
+            actualizadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
+            actualizadoPor: userData.nombre || user.email
+        });
+
+        // 2. Extraer textos de ayuda del manual y actualizar config/ayuda
+        try {
+            var itemsExtraidos = extraerAyudaDelManual(html);
+            var cantItems = Object.keys(itemsExtraidos).length;
+
+            if (cantItems > 0) {
+                // Leer los items actuales para hacer merge (no sobreescribir todo)
+                var ayudaActual = {};
+                try {
+                    var snap = await db.collection('config').doc('ayuda').get();
+                    if (snap.exists && snap.data().items) {
+                        ayudaActual = snap.data().items;
+                    }
+                } catch(e) {}
+
+                // Merge: los extraídos del manual actualizan los existentes
+                var itemsMerge = Object.assign({}, ayudaActual, itemsExtraidos);
+
+                await db.collection('config').doc('ayuda').set({
+                    items: itemsMerge,
+                    actualizadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
+                    actualizadoPor: userData.nombre || user.email,
+                    fuenteManual:   true
+                });
+
+                CVC.showToast('Manual guardado · ' + cantItems + ' textos de ayuda actualizados', 'success');
+            } else {
+                // No se encontraron secciones — guardar títulos mínimos
+                var itemsMinimos = {};
+                Object.keys(AYUDA_TITULOS).forEach(function(pagina) {
+                    itemsMinimos[pagina] = {
+                        titulo:  AYUDA_TITULOS[pagina],
+                        resumen: AYUDA_TITULOS[pagina] + ' — ver el manual completo para más detalles.'
+                    };
+                });
+                await db.collection('config').doc('ayuda').set({
+                    items: itemsMinimos,
+                    actualizadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
+                    actualizadoPor: userData.nombre || user.email,
+                    fuenteManual:   false
+                });
+                CVC.showToast('Manual guardado · ayuda con títulos mínimos', 'warning');
+            }
+        } catch(e2) {
+            // Si falla la ayuda, el manual igual quedó guardado
+            console.warn('Error actualizando config/ayuda:', e2.message);
+            CVC.showToast('Manual guardado · error al actualizar ayuda: ' + e2.message, 'warning');
+        }
+    }
+
+    // ── TOC MODAL (móvil) ─────────────────────────────────────
+    window.abrirTocModal = function() {
+        document.getElementById('tocModalOverlay').classList.add('open');
+    };
+    window.cerrarTocModal = function(e) {
+        if (!e || e.target === document.getElementById('tocModalOverlay')) {
+            document.getElementById('tocModalOverlay').classList.remove('open');
+        }
+    };
+
+    // Drag & drop en la zona de upload
+    const zone = document.getElementById('uploadZone');
+    zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (file) procesarArchivo(file);
+    });
+
+    // ── Init ──────────────────────────────────────────────────
+    await cargarManual();
+
+})();
+</script>
+</body>
+</html>
