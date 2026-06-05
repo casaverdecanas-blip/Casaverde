@@ -1187,20 +1187,60 @@ var AYUDA_ITEMS = {
 var _ayudaFirestoreCargada = false;
 
 // Cargar textos actualizados desde Firestore (override sobre los defaults)
+// Lee tanto config/ayuda.celulas (nuevo sistema) como config/ayuda.items (legado)
 async function _cargarAyudaFirestore() {
     if (_ayudaFirestoreCargada) return;
     try {
         var snap = await db.collection('config').doc('ayuda').get();
-        if (snap.exists && snap.data().items) {
-            var items = snap.data().items;
-            // Merge: Firestore override sobre defaults
-            Object.keys(items).forEach(function(pagina) {
-                AYUDA_ITEMS[pagina] = Object.assign({}, AYUDA_ITEMS[pagina]||{}, items[pagina]);
+        if (!snap.exists) return;
+        var data = snap.data();
+
+        // ── Sistema nuevo: celulas ────────────────────────────
+        // Estructura: { celulas: { "pagina.pagina": { titulo, resumen, contenido } } }
+        // Las células con campo "paginas" mapean a una o más páginas HTML.
+        // Para la ayuda por página usamos la célula cuyo id termina en ".pagina"
+        // o la primera célula que menciona esa página en su campo "paginas".
+        if (data.celulas) {
+            var celulas = data.celulas;
+            Object.keys(celulas).forEach(function(celulaId) {
+                var cel = celulas[celulaId];
+                // Célula de página principal: id tipo "reservas.pagina"
+                var partes = celulaId.split('.');
+                if (partes.length === 2 && partes[1] === 'pagina') {
+                    var pagina = partes[0] + '.html';
+                    AYUDA_ITEMS[pagina] = Object.assign({}, AYUDA_ITEMS[pagina] || {}, {
+                        titulo:  cel.titulo  || AYUDA_ITEMS[pagina]?.titulo  || '',
+                        resumen: cel.resumen || AYUDA_ITEMS[pagina]?.resumen || '',
+                        detalle: cel.contenido || ''
+                    });
+                }
+                // Cualquier célula que lista páginas en su campo "paginas"
+                if (cel.paginas && Array.isArray(cel.paginas)) {
+                    cel.paginas.forEach(function(pag) {
+                        if (!AYUDA_ITEMS[pag]) {
+                            AYUDA_ITEMS[pag] = {
+                                titulo:  cel.titulo  || pag,
+                                resumen: cel.resumen || '',
+                                detalle: cel.contenido || ''
+                            };
+                        }
+                    });
+                }
             });
-            _ayudaFirestoreCargada = true;
         }
+
+        // ── Sistema legado: items ─────────────────────────────
+        // Estructura: { items: { "pagina.html": { titulo, resumen } } }
+        if (data.items) {
+            var items = data.items;
+            Object.keys(items).forEach(function(pagina) {
+                AYUDA_ITEMS[pagina] = Object.assign({}, AYUDA_ITEMS[pagina] || {}, items[pagina]);
+            });
+        }
+
+        _ayudaFirestoreCargada = true;
     } catch(e) {
-        // Silencioso — usar defaults del código
+        // Silencioso — usar defaults del codigo
     }
 }
 
