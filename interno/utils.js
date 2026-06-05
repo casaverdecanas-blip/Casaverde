@@ -1404,6 +1404,209 @@ function initAyuda(paginaActual) {
     }, 200);
 }
 
+
+// ── AYUDA POR CÉLULA — lee config/ayuda.celulas en Firestore ─────────────────
+//
+//  Complementa el sistema existente de mostrarAyuda() (por página).
+//  mostrarCelula() muestra la célula exacta vinculada a un botón o acción.
+//
+//  Uso desde cualquier HTML:
+//    onclick="CVC.mostrarCelula('reservas.nueva-reserva-directa')"
+//
+//  El panel se crea una sola vez (singleton) y se reutiliza.
+//  Sin template literals — compatible con Safari/iOS.
+
+var _celulasCache = null;
+
+async function _cargarCelulas() {
+    if (_celulasCache) return _celulasCache;
+    try {
+        var snap = await db.collection('config').doc('ayuda').get();
+        _celulasCache = (snap.exists && snap.data().celulas) ? snap.data().celulas : {};
+    } catch(e) {
+        _celulasCache = {};
+    }
+    return _celulasCache;
+}
+
+function _crearPanelCelula() {
+    if (document.getElementById('_celulaModal')) return;
+
+    var overlay = document.createElement('div');
+    overlay.id = '_celulaModal';
+    overlay.style.cssText = [
+        'position:fixed', 'inset:0', 'z-index:10001',
+        'display:none', 'align-items:flex-end', 'justify-content:center',
+        'background:rgba(0,0,0,0.45)'
+    ].join(';');
+
+    var panel = document.createElement('div');
+    panel.id = '_celulaPanel';
+    panel.style.cssText = [
+        'background:var(--color-surface,#fff)',
+        'border-radius:16px 16px 0 0',
+        'width:100%', 'max-width:600px',
+        'max-height:80vh',
+        'display:flex', 'flex-direction:column',
+        'box-shadow:0 -4px 24px rgba(0,0,0,0.18)',
+        'overflow:hidden'
+    ].join(';');
+
+    // Header
+    var header = document.createElement('div');
+    header.style.cssText = [
+        'display:flex', 'align-items:center', 'gap:10px',
+        'padding:16px 20px 12px',
+        'border-bottom:1px solid var(--color-border,#e0e8e0)',
+        'flex-shrink:0'
+    ].join(';');
+
+    var iconoEl = document.createElement('span');
+    iconoEl.className = 'material-icons';
+    iconoEl.style.color = 'var(--color-primary,#2d6a2d)';
+    iconoEl.textContent = 'help_outline';
+
+    var tituloEl = document.createElement('span');
+    tituloEl.id = '_celulaTitulo';
+    tituloEl.style.cssText = 'font-weight:700;font-size:16px;color:var(--color-text-primary,#1a3a1a);flex:1;';
+
+    var btnX = document.createElement('button');
+    btnX.style.cssText = 'background:none;border:none;cursor:pointer;padding:4px;color:var(--color-text-muted,#666);display:flex;align-items:center;';
+    btnX.addEventListener('click', cerrarCelula);
+    var iconoX = document.createElement('span');
+    iconoX.className = 'material-icons';
+    iconoX.textContent = 'close';
+    btnX.appendChild(iconoX);
+
+    header.appendChild(iconoEl);
+    header.appendChild(tituloEl);
+    header.appendChild(btnX);
+
+    // Cuerpo
+    var cuerpo = document.createElement('div');
+    cuerpo.style.cssText = 'overflow-y:auto;padding:16px 20px 24px;-webkit-overflow-scrolling:touch;flex:1;';
+
+    var loadingEl = document.createElement('div');
+    loadingEl.id = '_celulaLoading';
+    loadingEl.style.cssText = 'display:flex;align-items:center;gap:8px;color:var(--color-text-muted,#666);font-size:14px;';
+    var sp = document.createElement('div');
+    sp.className = 'spinner spinner-sm';
+    loadingEl.appendChild(sp);
+    loadingEl.appendChild(document.createTextNode('Cargando...'));
+
+    var resumenEl = document.createElement('p');
+    resumenEl.id = '_celulaResumen';
+    resumenEl.style.cssText = 'margin:0 0 14px;color:var(--color-text-secondary,#444);font-size:15px;line-height:1.65;';
+
+    var btnDet = document.createElement('button');
+    btnDet.id = '_celulaBtnDetalle';
+    btnDet.style.cssText = [
+        'background:none',
+        'border:1px solid var(--color-primary,#2d6a2d)',
+        'border-radius:8px',
+        'padding:7px 14px',
+        'color:var(--color-primary,#2d6a2d)',
+        'font-size:13px', 'cursor:pointer',
+        'display:none', 'align-items:center', 'gap:6px',
+        'margin-bottom:14px'
+    ].join(';');
+    var iconoDet = document.createElement('span');
+    iconoDet.className = 'material-icons';
+    iconoDet.id = '_celulaIconoDet';
+    iconoDet.style.fontSize = '16px';
+    iconoDet.textContent = 'expand_more';
+    var txtDet = document.createElement('span');
+    txtDet.textContent = 'Ver pasos detallados';
+    btnDet.appendChild(iconoDet);
+    btnDet.appendChild(txtDet);
+    btnDet.addEventListener('click', function() {
+        var det = document.getElementById('_celulaDetalle');
+        var ico = document.getElementById('_celulaIconoDet');
+        if (!det) return;
+        var abierto = det.style.display !== 'none';
+        det.style.display = abierto ? 'none' : 'block';
+        ico.textContent   = abierto ? 'expand_more' : 'expand_less';
+    });
+
+    var detalleEl = document.createElement('pre');
+    detalleEl.id = '_celulaDetalle';
+    detalleEl.style.cssText = [
+        'display:none',
+        'background:var(--color-surface-2,#f4f7f4)',
+        'border-radius:8px',
+        'padding:14px',
+        'font-family:inherit', 'font-size:13px', 'line-height:1.7',
+        'color:var(--color-text-secondary,#333)',
+        'white-space:pre-wrap', 'word-break:break-word', 'margin:0'
+    ].join(';');
+
+    cuerpo.appendChild(loadingEl);
+    cuerpo.appendChild(resumenEl);
+    cuerpo.appendChild(btnDet);
+    cuerpo.appendChild(detalleEl);
+
+    panel.appendChild(header);
+    panel.appendChild(cuerpo);
+    overlay.appendChild(panel);
+
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) cerrarCelula();
+    });
+
+    document.body.appendChild(overlay);
+}
+
+async function mostrarCelula(celulaId) {
+    _crearPanelCelula();
+
+    var overlay   = document.getElementById('_celulaModal');
+    var loading   = document.getElementById('_celulaLoading');
+    var tituloEl  = document.getElementById('_celulaTitulo');
+    var resumenEl = document.getElementById('_celulaResumen');
+    var detalleEl = document.getElementById('_celulaDetalle');
+    var btnDet    = document.getElementById('_celulaBtnDetalle');
+    var iconoDet  = document.getElementById('_celulaIconoDet');
+
+    // Reset estado
+    overlay.style.display   = 'flex';
+    loading.style.display   = 'flex';
+    tituloEl.textContent    = 'Ayuda';
+    resumenEl.textContent   = '';
+    detalleEl.textContent   = '';
+    detalleEl.style.display = 'none';
+    btnDet.style.display    = 'none';
+    iconoDet.textContent    = 'expand_more';
+    document.body.style.overflow = 'hidden';
+
+    var celulas = await _cargarCelulas();
+    var celula  = celulas[celulaId];
+
+    loading.style.display = 'none';
+
+    if (!celula) {
+        tituloEl.textContent  = 'Ayuda';
+        resumenEl.textContent = 'No hay informacion disponible para esta seccion todavia.';
+        return;
+    }
+
+    tituloEl.textContent  = celula.titulo  || 'Ayuda';
+    resumenEl.textContent = celula.resumen || '';
+
+    if (celula.contenido && celula.contenido.trim()) {
+        btnDet.style.display    = 'flex';
+        detalleEl.textContent   = celula.contenido;
+    }
+}
+
+function cerrarCelula() {
+    var overlay = document.getElementById('_celulaModal');
+    if (overlay) overlay.style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+window.mostrarCelula = mostrarCelula;
+window.cerrarCelula  = cerrarCelula;
+
 // ── EXPORTAR ──────────────────────────────────────────────────────────────────
 window.CVC = {
     db, auth,
@@ -1427,5 +1630,6 @@ window.CVC = {
     escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
     showLoading, showEmpty, showError, showToast,
     subirComprobante, abrirComprobante,
-    mostrarAyuda, cerrarAyuda, initAyuda, AYUDA_ITEMS
+    mostrarAyuda, cerrarAyuda, cerrarCelula, initAyuda, AYUDA_ITEMS,
+    mostrarCelula
 };
