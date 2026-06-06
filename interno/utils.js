@@ -22,15 +22,6 @@ const FIREBASE_CONFIG = {
 };
 if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
 const db   = firebase.firestore();
-
-// ── Compatibilidad Firefox ────────────────────────────────────
-// Firebase 8.x usa WebChannel para mantener conexión con Firestore.
-// Firefox bloquea WebChannel por sus políticas de cookies de terceros,
-// causando un loop de reconexión con errores en consola.
-// experimentalForceLongPolling fuerza HTTP long-polling como transporte,
-// compatible con todos los navegadores sin pérdida de funcionalidad.
-db.settings({ experimentalForceLongPolling: true, merge: true });
-
 const auth = firebase.auth();
 
 
@@ -692,10 +683,12 @@ const NAV_ADMIN_ITEMS = [
     {
         group: 'Operaciones', icon: 'checklist',
         items: [
-            { href: 'tareas.html',       icon: 'checklist',       label: 'Tareas'        },
-            { href: 'tareas-admin.html', icon: 'manage_search',   label: 'Admin tareas'  },
+            { href: 'tareas.html',           icon: 'checklist',        label: 'Tareas'          },
+            { href: 'tareas-admin.html',     icon: 'manage_search',    label: 'Admin tareas'    },
             { sep: true },
-            { href: 'pendientes.html',   icon: 'pending_actions', label: 'Pendientes'    },
+            { href: 'pendientes.html',       icon: 'pending_actions',  label: 'Pendientes'      },
+            { sep: true },
+            { href: 'limpieza-stats.html',   icon: 'cleaning_services', label: 'An\u00e1lisis limpiezas' },
         ]
     },
     {
@@ -1185,6 +1178,7 @@ var AYUDA_ITEMS = {
     'herramientas-btg.html': { titulo: 'BTG / Conciliación', resumen: 'Flujo: 1) Importar texto del extracto BTG. 2) Auto-conciliar — el sistema cruza automáticamente contra pagos, gastos, informes Airbnb y retiros registrados. 3) Confirmar sugeridos (Nivel B). 4) Registrar los sin correlativo (Nivel C). Cuando el 100% está explicado, la base fiscal es confiable.' },
     'categorias.html':       { titulo: 'Categorías', resumen: 'Define y edita las categorías de movimientos bancarios. Se usan en la pestaña Categorizar de Herramientas BTG.' },
     'tareas.html':           { titulo: 'Tareas', resumen: 'Tocá una tarea para ver el detalle. Botones: INICIAR (empieza cronómetro, los botones cambian sin salir de la pantalla), PAUSAR, FINALIZAR (calcula horas y genera honorario), OK/NO NECESARIA (registra que revisaste y no hacía falta hacerla, sin honorario). La tarea permanece visible mientras trabajás en ella.' },
+    'limpieza-stats.html':   { titulo: 'Análisis de Limpiezas', resumen: 'Estadísticas de limpiezas: tiempos promedio, costo real de honorarios, rendimiento por colaborador y por cabaña. Usá la pestaña Precio sugerido para calibrar el precio de limpieza en base a datos reales.' },
     'tareas-admin.html':     { titulo: 'Gestión de Tareas', resumen: 'Vista administrativa: creá tareas, asignales prioridad y fecha, revisá el historial de quién hizo qué. Tocá cualquier fila de tarea para ver su historial completo en la pestaña siguiente. El historial muestra tanto tareas realizadas como verificadas (OK/No necesaria).' },
     'pendientes.html':       { titulo: 'Pendientes', resumen: 'Lista de cosas por hacer sin cronómetro. El semáforo indica urgencia: Rojo=Urgente, Amarillo=Atención, Verde=Normal. El botón ▶ inicia un cronómetro para ese pendiente — el tiempo queda registrado en el historial de tareas junto con las tareas normales.' },
     'fiscal.html':           { titulo: 'Panel Fiscal', resumen: 'Flujo mensual: 1) Verificar ingresos y gastos deducibles del mes. 2) Calcular IRPF estimado. 3) Pagar el DARF en el banco. 4) Registrar el pago en el Calendario fiscal. Solo gastos con circuito Fiscal entran en el cálculo — los personales y retiros están excluidos.' },
