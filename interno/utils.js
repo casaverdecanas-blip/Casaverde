@@ -1279,91 +1279,206 @@ function _extractSeccion(html, seccionId) {
 
 // Crear el modal de ayuda (singleton)
 function _getAyudaModal() {
-    let modal = document.getElementById('_ayudaModal');
+    var modal = document.getElementById('_ayudaModal');
     if (modal) return modal;
+
     modal = document.createElement('div');
     modal.id = '_ayudaModal';
     modal.style.cssText = [
         'position:fixed', 'inset:0', 'z-index:10000',
-        'display:none', 'align-items:flex-start', 'justify-content:center',
-        'padding:80px 16px 16px', 'background:rgba(0,0,0,0.45)',
-        'backdrop-filter:blur(2px)'
+        'display:none', 'align-items:flex-end', 'justify-content:center',
+        'background:rgba(0,0,0,0.45)'
     ].join(';');
-    modal.innerHTML = [
-        '<div id="_ayudaPanel" style="',
-            'background:var(--color-surface);',
-            'border:1px solid var(--color-border);',
-            'border-radius:var(--radius-lg);',
-            'box-shadow:0 8px 32px rgba(0,0,0,0.18);',
-            'max-width:460px;width:100%;',
-            'padding:var(--space-5);',
-            'position:relative;',
-            'max-height:80vh;overflow-y:auto;',
-        '">',
-            '<button onclick="CVC.cerrarAyuda()" style="',
-                'position:absolute;top:12px;right:12px;',
-                'background:none;border:none;cursor:pointer;',
-                'color:var(--color-text-muted);padding:4px;',
-                'border-radius:var(--radius-sm);',
-                'font-size:20px;line-height:1;',
-            '">',
-                '<span class="material-icons" style="font-size:20px;">close</span>',
-            '</button>',
-            '<div id="_ayudaTitulo" style="font-size:16px;font-weight:700;margin-bottom:var(--space-3);padding-right:32px;color:var(--color-text-primary);"></div>',
-            '<div id="_ayudaResumen" style="font-size:13px;color:var(--color-text-secondary);line-height:1.7;margin-bottom:var(--space-3);"></div>',
-            '<div id="_ayudaManual" style="font-size:12px;color:var(--color-text-muted);background:var(--color-surface-2);border-radius:var(--radius-sm);padding:var(--space-3);display:none;margin-bottom:var(--space-3);line-height:1.6;max-height:200px;overflow-y:auto;"></div>',
-            '<div style="display:flex;gap:8px;flex-wrap:wrap;">',
-                '<a id="_ayudaLinkManual" href="manual-sistema.html" style="',
-                    'font-size:12px;color:var(--color-primary);text-decoration:none;',
-                    'display:inline-flex;align-items:center;gap:4px;',
-                    'padding:4px 10px;border:1px solid var(--color-primary-light);',
-                    'border-radius:var(--radius-sm);background:var(--color-primary-xlight);',
-                '">',
-                    '<span class="material-icons" style="font-size:14px;">menu_book</span>',
-                    'Ver en el manual completo',
-                '</a>',
-            '</div>',
-        '</div>'
-    ].join('');
+
+    var panel = document.createElement('div');
+    panel.style.cssText = [
+        'background:var(--color-surface,#fff)',
+        'border-radius:16px 16px 0 0',
+        'width:100%', 'max-width:600px',
+        'max-height:82vh',
+        'display:flex', 'flex-direction:column',
+        'box-shadow:0 -4px 24px rgba(0,0,0,0.18)',
+        'overflow:hidden'
+    ].join(';');
+
+    // Header
+    var header = document.createElement('div');
+    header.style.cssText = [
+        'display:flex', 'align-items:center', 'gap:10px',
+        'padding:16px 20px 12px',
+        'border-bottom:1px solid var(--color-border,#e0e8e0)',
+        'flex-shrink:0'
+    ].join(';');
+
+    var iconoEl = document.createElement('span');
+    iconoEl.className   = 'material-icons';
+    iconoEl.style.color = 'var(--color-primary,#2d6a2d)';
+    iconoEl.textContent = 'help_outline';
+
+    var tituloEl = document.createElement('div');
+    tituloEl.id = '_ayudaTitulo';
+    tituloEl.style.cssText = 'font-weight:700;font-size:16px;color:var(--color-text-primary,#1a3a1a);flex:1;';
+
+    var btnX = document.createElement('button');
+    btnX.style.cssText = 'background:none;border:none;cursor:pointer;padding:4px;color:var(--color-text-muted,#666);display:flex;align-items:center;';
+    btnX.onclick = function() { CVC.cerrarAyuda(); };
+    var iconoX = document.createElement('span');
+    iconoX.className   = 'material-icons';
+    iconoX.textContent = 'close';
+    btnX.appendChild(iconoX);
+
+    header.appendChild(iconoEl);
+    header.appendChild(tituloEl);
+    header.appendChild(btnX);
+
+    // Cuerpo
+    var cuerpo = document.createElement('div');
+    cuerpo.style.cssText = 'overflow-y:auto;padding:16px 20px;-webkit-overflow-scrolling:touch;flex:1;';
+
+    var resumenEl = document.createElement('p');
+    resumenEl.id = '_ayudaResumen';
+    resumenEl.style.cssText = 'margin:0 0 14px;color:var(--color-text-secondary,#444);font-size:15px;line-height:1.65;';
+
+    // Botón expandir detalle
+    var btnDet = document.createElement('button');
+    btnDet.id   = '_ayudaBtnDetalle';
+    btnDet.style.cssText = [
+        'background:none',
+        'border:1px solid var(--color-primary,#2d6a2d)',
+        'border-radius:8px',
+        'padding:7px 14px',
+        'color:var(--color-primary,#2d6a2d)',
+        'font-size:13px', 'cursor:pointer',
+        'display:none', 'align-items:center', 'gap:6px',
+        'margin-bottom:14px', 'font-family:inherit'
+    ].join(';');
+    var iconoDet = document.createElement('span');
+    iconoDet.className   = 'material-icons';
+    iconoDet.id          = '_ayudaIconoDet';
+    iconoDet.style.fontSize = '16px';
+    iconoDet.textContent = 'expand_more';
+    var txtDet = document.createElement('span');
+    txtDet.textContent = 'Ver pasos detallados';
+    btnDet.appendChild(iconoDet);
+    btnDet.appendChild(txtDet);
+    btnDet.onclick = function() {
+        var det = document.getElementById('_ayudaDetalle');
+        var ico = document.getElementById('_ayudaIconoDet');
+        if (!det) return;
+        var abierto = det.style.display !== 'none';
+        det.style.display = abierto ? 'none' : 'block';
+        ico.textContent   = abierto ? 'expand_more' : 'expand_less';
+    };
+
+    var detalleEl = document.createElement('pre');
+    detalleEl.id = '_ayudaDetalle';
+    detalleEl.style.cssText = [
+        'display:none',
+        'background:var(--color-surface-2,#f4f7f4)',
+        'border-radius:8px',
+        'padding:14px',
+        'font-family:inherit', 'font-size:13px', 'line-height:1.7',
+        'color:var(--color-text-secondary,#333)',
+        'white-space:pre-wrap', 'word-break:break-word', 'margin:0 0 14px'
+    ].join(';');
+
+    cuerpo.appendChild(resumenEl);
+    cuerpo.appendChild(btnDet);
+    cuerpo.appendChild(detalleEl);
+
+    // Footer con link al manual
+    var footer = document.createElement('div');
+    footer.style.cssText = [
+        'padding:12px 20px 16px',
+        'border-top:1px solid var(--color-border,#e0e8e0)',
+        'flex-shrink:0'
+    ].join(';');
+
+    var linkManual = document.createElement('a');
+    linkManual.id   = '_ayudaLinkManual';
+    linkManual.href = 'manual-sistema.html';
+    linkManual.style.cssText = [
+        'font-size:13px', 'color:var(--color-primary,#2d6a2d)',
+        'text-decoration:none',
+        'display:inline-flex', 'align-items:center', 'gap:6px',
+        'padding:6px 12px',
+        'border:1px solid var(--color-primary-light,#a8c8a0)',
+        'border-radius:8px',
+        'background:var(--color-primary-xlight,#eaf3de)'
+    ].join(';');
+    var iconoManual = document.createElement('span');
+    iconoManual.className   = 'material-icons';
+    iconoManual.style.fontSize = '15px';
+    iconoManual.textContent = 'menu_book';
+    linkManual.appendChild(iconoManual);
+    linkManual.appendChild(document.createTextNode('Ver en el manual completo'));
+    footer.appendChild(linkManual);
+
+    panel.appendChild(header);
+    panel.appendChild(cuerpo);
+    panel.appendChild(footer);
+    modal.appendChild(panel);
+
     modal.addEventListener('click', function(e) {
         if (e.target === modal) CVC.cerrarAyuda();
     });
+
     document.body.appendChild(modal);
     return modal;
 }
 
-// Mostrar ayuda para una página específica
+// Mostrar ayuda para una pagina especifica
 async function mostrarAyuda(pagina) {
-    // Cargar textos actualizados desde Firestore (primera vez)
     await _cargarAyudaFirestore();
 
-    const info = AYUDA_ITEMS[pagina];
-    if (!info) return;
+    var info = AYUDA_ITEMS[pagina];
 
-    const modal = _getAyudaModal();
-    document.getElementById('_ayudaTitulo').textContent  = info.titulo || pagina;
-    document.getElementById('_ayudaResumen').textContent = info.resumen || '';
-    document.getElementById('_ayudaManual').style.display = 'none';
-    document.getElementById('_ayudaManual').textContent   = '';
-    modal.style.display = 'flex';
+    // Abrir el modal siempre, aunque no haya info — muestra "sin informacion"
+    _getAyudaModal();
+    document.getElementById('_ayudaModal').style.display = 'flex';
 
-    // Cargar extracto del manual en background
-    if (info.seccion) {
-        try {
-            const html    = await _getManualHtml();
-            const extracto = _extractSeccion(html, info.seccion);
-            if (extracto) {
-                const el = document.getElementById('_ayudaManual');
-                el.textContent   = extracto.replace(/\s+/g, ' ').trim();
-                el.style.display = 'block';
-            }
-        } catch(e) { /* silencioso */ }
+    var tituloEl  = document.getElementById('_ayudaTitulo');
+    var resumenEl = document.getElementById('_ayudaResumen');
+    var detalleEl = document.getElementById('_ayudaDetalle');
+    var btnDet    = document.getElementById('_ayudaBtnDetalle');
+    var iconoDet  = document.getElementById('_ayudaIconoDet');
+    var linkManual = document.getElementById('_ayudaLinkManual');
+
+    // Reset detalle
+    if (detalleEl)  { detalleEl.style.display = 'none'; detalleEl.textContent = ''; }
+    if (btnDet)     { btnDet.style.display = 'none'; }
+    if (iconoDet)   { iconoDet.textContent = 'expand_more'; }
+    document.body.style.overflow = 'hidden';
+
+    if (!info) {
+        tituloEl.textContent  = 'Ayuda';
+        resumenEl.textContent = 'No hay informacion disponible para esta seccion todavia.';
+        if (linkManual) linkManual.href = 'manual-sistema.html';
+        return;
+    }
+
+    tituloEl.textContent  = info.titulo  || pagina;
+    resumenEl.textContent = info.resumen || '';
+
+    // Mostrar detalle si existe (campo "detalle" o "contenido")
+    var detTexto = info.detalle || info.contenido || '';
+    if (detTexto && detTexto.trim()) {
+        if (detalleEl)  detalleEl.textContent = detTexto;
+        if (btnDet)     btnDet.style.display  = 'flex';
+    }
+
+    // Link al manual con ancla a la seccion correspondiente
+    // El ancla es el nombre de la pagina sin .html, que coincide con los headings del manual
+    if (linkManual) {
+        var ancla = pagina.replace('.html', '');
+        linkManual.href = 'manual-sistema.html#' + ancla;
     }
 }
 
 function cerrarAyuda() {
-    const modal = document.getElementById('_ayudaModal');
+    var modal = document.getElementById('_ayudaModal');
     if (modal) modal.style.display = 'none';
+    document.body.style.overflow = '';
 }
 
 // Agregar botones de ayuda (?) al nav despues de renderNav()
