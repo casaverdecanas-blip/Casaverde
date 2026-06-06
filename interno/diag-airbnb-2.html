@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico · Array Cabañas en Informes</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #f4f7f4; margin: 0; font-size: 13px; }
+        h1 { font-size: 18px; color: #1a3a1a; margin-bottom: 4px; }
+        .sub { color: #666; font-size: 12px; margin-bottom: 20px; }
+        .card { background: white; border-radius: 10px; padding: 16px; margin-bottom: 16px; border: 1px solid #dde; overflow-x: auto; }
+        .card h2 { font-size: 13px; font-weight: 700; margin: 0 0 12px; color: #333; text-transform: uppercase; letter-spacing: .05em; }
+        .btn { background: #2d6a2d; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 13px; cursor: pointer; margin-right: 8px; font-family: monospace; }
+        .pre { background: #f4f7f4; border-radius: 6px; padding: 12px; font-size: 11px; line-height: 1.7;
+               white-space: pre-wrap; word-break: break-all; border: 1px solid #dde; margin-top: 8px; }
+        .ok   { color: #1D9E75; font-weight: 700; }
+        .warn { color: #BA7517; font-weight: 700; }
+        .err  { color: #A32D2D; font-weight: 700; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+        th { background: #e8f0e8; color: #1a3a1a; text-align: left; padding: 7px 10px;
+             border-bottom: 2px solid #dde; }
+        td { padding: 6px 10px; border-bottom: 1px solid #eef; vertical-align: top; }
+        tr:hover td { background: #f9fbf9; }
+        .informe-header { background: #1a3a1a; color: white; border-radius: 8px 8px 0 0;
+                          padding: 10px 14px; font-weight: 700; margin-top: 16px; }
+        .informe-body { background: #f9fbf9; border: 1px solid #dde; border-radius: 0 0 8px 8px;
+                        padding: 12px 14px; margin-bottom: 16px; }
+        .caba-card { background: white; border: 1px solid #c8e6c9; border-radius: 8px;
+                     padding: 12px; margin-bottom: 8px; border-left: 4px solid #2d6a2d; }
+        .caba-titulo { font-weight: 700; color: #1a3a1a; margin-bottom: 8px; font-size: 13px; }
+        .kpi-row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .kpi { text-align: center; min-width: 80px; }
+        .kpi-val { font-size: 16px; font-weight: 800; color: #2d6a2d; }
+        .kpi-lbl { font-size: 10px; color: #666; text-transform: uppercase; }
+        .no-caba { background: #fff8f8; border: 1px solid #fca5a5; border-radius: 8px;
+                   padding: 12px; color: #991b1b; }
+        #log { background: #1a1a2e; color: #a8ffa8; border-radius: 8px; padding: 14px;
+               font-size: 11px; line-height: 1.8; max-height: 300px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+
+<h1>🔬 Diagnóstico · Contenido de cabanas[] en informes_airbnb</h1>
+<p class="sub">Muestra exactamente qué hay dentro del array <code>cabanas</code> de cada informe.</p>
+
+<button class="btn" onclick="runDiag()">▶ Mostrar datos</button>
+
+<div id="resultado" style="margin-top:16px;"></div>
+
+<div class="card" style="margin-top:16px;">
+    <h2>Log</h2>
+    <div id="log">Ejecutá el diagnóstico...</div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+var logEl = document.getElementById('log');
+function log(msg, tipo) {
+    var cls = { ok:'color:#a8ffa8', warn:'color:#ffd700', err:'color:#ff6b6b', info:'color:#87ceeb' }[tipo] || 'color:#87ceeb';
+    logEl.innerHTML += '<span style="' + cls + '">[' + new Date().toLocaleTimeString('es-AR') + '] ' + msg + '</span>\n';
+    logEl.scrollTop = logEl.scrollHeight;
+}
+
+function fmt(val) {
+    if (val === null || val === undefined) return '—';
+    if (typeof val === 'number') return 'R$ ' + val.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+    if (val && val.toDate) return val.toDate().toLocaleDateString('es-AR');
+    return String(val);
+}
+
+async function runDiag() {
+    var db  = CVC.db;
+    var div = document.getElementById('resultado');
+    div.innerHTML = '<p style="color:#666;">Cargando...</p>';
+    log('Leyendo informes_airbnb...', 'info');
+
+    try {
+        var snap = await db.collection('informes_airbnb').get();
+        var informes = snap.docs
+            .map(function(d) { return Object.assign({ _id: d.id }, d.data()); })
+            .sort(function(a, b) { return String(b._id).localeCompare(String(a._id)); });
+
+        log(informes.length + ' informes encontrados: ' + informes.map(function(i) { return i._id; }).join(', '), 'ok');
+
+        var html = '';
+
+        // ── Resumen global ────────────────────────────────────────────────────
+        html += '<div class="card"><h2>Resumen de los ' + informes.length + ' informes</h2>';
+        html += '<table><thead><tr>'
+            + '<th>ID / Período</th><th>Tipo</th><th>Bruto</th><th>Neto</th>'
+            + '<th>Noches</th><th>¿Tiene cabanas[]?</th><th>Items en cabanas[]</th>'
+            + '</tr></thead><tbody>';
+
+        informes.forEach(function(inf) {
+            var tieneCab = inf.cabanas && Array.isArray(inf.cabanas) && inf.cabanas.length > 0;
+            var nCab     = tieneCab ? inf.cabanas.length : 0;
+            html += '<tr>'
+                + '<td><strong>' + inf._id + '</strong><br><small style="color:#666;">'
+                + (inf.fecha_inicio || '') + ' → ' + (inf.fecha_fin || '') + '</small></td>'
+                + '<td>' + (inf.tipo || '—') + '</td>'
+                + '<td>' + fmt(inf.ingreso_bruto) + '</td>'
+                + '<td>' + fmt(inf.total_neto) + '</td>'
+                + '<td>' + (inf.noches_reservadas || '—') + '</td>'
+                + '<td>' + (tieneCab
+                    ? '<span class="ok">✅ Sí</span>'
+                    : '<span class="err">❌ No</span>') + '</td>'
+                + '<td>' + nCab + '</td>'
+                + '</tr>';
+        });
+        html += '</tbody></table></div>';
+
+        // ── Detalle de cabanas[] por informe ──────────────────────────────────
+        html += '<div class="card"><h2>Contenido de cabanas[] por informe</h2>';
+
+        informes.forEach(function(inf) {
+            html += '<div class="informe-header">' + inf._id
+                + ' · ' + (inf.tipo || '') + ' · ' + (inf.fecha_inicio || '') + ' → ' + (inf.fecha_fin || '')
+                + '</div>';
+            html += '<div class="informe-body">';
+
+            if (!inf.cabanas || !Array.isArray(inf.cabanas) || !inf.cabanas.length) {
+                html += '<div class="no-caba">❌ No hay array cabanas[] en este informe</div>';
+            } else {
+                log('Informe ' + inf._id + ': ' + inf.cabanas.length + ' cabañas en array', 'ok');
+
+                // Analizar campos disponibles en la primera cabaña
+                var campos = Object.keys(inf.cabanas[0]);
+                html += '<div style="margin-bottom:10px;font-size:11px;color:#666;">'
+                    + 'Campos disponibles en cada cabaña: '
+                    + campos.map(function(c) {
+                        return '<code style="background:#e8f0e8;padding:1px 5px;border-radius:3px;">' + c + '</code>';
+                    }).join(' ')
+                    + '</div>';
+
+                inf.cabanas.forEach(function(cab, idx) {
+                    html += '<div class="caba-card">';
+                    html += '<div class="caba-titulo">'
+                        + '🏠 ' + (cab.nombre || cab.listing || cab.id || ('Cabaña ' + (idx+1)))
+                        + (cab.id ? ' <small style="color:#666;">(id: ' + cab.id + ')</small>' : '')
+                        + '</div>';
+
+                    // KPIs si existen
+                    var kpiCampos = [
+                        { k: 'bruto',         l: 'Bruto' },
+                        { k: 'neto',          l: 'Neto' },
+                        { k: 'comision',      l: 'Comisión' },
+                        { k: 'tarifa',        l: 'Tarifa serv.' },
+                        { k: 'noches',        l: 'Noches' },
+                        { k: 'reservas',      l: 'Reservas' },
+                        { k: 'ingreso_bruto', l: 'Ing. bruto' },
+                        { k: 'total_neto',    l: 'Total neto' },
+                        { k: 'noches_reservadas', l: 'Noches' },
+                        { k: 'precio_noche_prom', l: 'R$/noche' },
+                    ];
+
+                    var tieneKpi = false;
+                    var kpiHtml  = '<div class="kpi-row">';
+                    kpiCampos.forEach(function(kc) {
+                        if (cab[kc.k] !== undefined && cab[kc.k] !== null) {
+                            tieneKpi = true;
+                            kpiHtml += '<div class="kpi">'
+                                + '<div class="kpi-val">'
+                                + (typeof cab[kc.k] === 'number'
+                                    ? 'R$ ' + cab[kc.k].toLocaleString('pt-BR', {minimumFractionDigits:2})
+                                    : cab[kc.k])
+                                + '</div>'
+                                + '<div class="kpi-lbl">' + kc.l + '</div>'
+                                + '</div>';
+                        }
+                    });
+                    kpiHtml += '</div>';
+                    if (tieneKpi) html += kpiHtml;
+
+                    // JSON completo del objeto cabaña
+                    html += '<div class="pre">' + JSON.stringify(cab, null, 2) + '</div>';
+                    html += '</div>';
+                });
+            }
+            html += '</div>';
+        });
+
+        // ── Análisis de campos disponibles ────────────────────────────────────
+        var informeConCabanas = informes.find(function(i) {
+            return i.cabanas && Array.isArray(i.cabanas) && i.cabanas.length > 0;
+        });
+
+        if (informeConCabanas) {
+            var cab0   = informeConCabanas.cabanas[0];
+            var campos = Object.keys(cab0);
+
+            var UTILES = ['bruto','neto','noches','reservas','comision',
+                          'ingreso_bruto','total_neto','noches_reservadas',
+                          'precio_noche_prom','nombre','id','listing'];
+            var FALTA  = ['caba_id','id_sistema','precio_noche_prom'];
+
+            html += '<div class="card"><h2>Análisis de utilidad para rentabilidad</h2>';
+
+            html += '<div style="margin-bottom:12px;">'
+                + '<strong>Campos presentes:</strong> '
+                + campos.map(function(c) {
+                    var util = UTILES.indexOf(c) !== -1;
+                    return '<span style="background:' + (util ? '#d1fae5' : '#fef3c7')
+                        + ';color:' + (util ? '#065f46' : '#92400e')
+                        + ';padding:2px 8px;border-radius:4px;font-size:11px;margin:2px;">'
+                        + c + '</span>';
+                }).join(' ')
+                + '</div>';
+
+            html += '<div style="background:#e8f5e9;border:1px solid #a8c8a0;border-radius:8px;padding:12px;font-size:12px;">'
+                + '<strong>Conclusión:</strong> Con los datos disponibles en <code>cabanas[]</code>, '
+                + 'se puede construir un módulo de rentabilidad por cabaña mostrando:<br>'
+                + '<ul style="margin:8px 0 0 16px;">'
+                + '<li>Ingresos brutos y netos por cabaña por período</li>'
+                + '<li>Noches vendidas por cabaña</li>'
+                + '<li>Precio promedio por noche por cabaña</li>'
+                + '<li>Comparativa entre cabañas</li>'
+                + '<li>Evolución temporal (mensual/anual)</li>'
+                + '</ul></div>';
+
+            html += '</div>';
+        }
+
+        div.innerHTML = html;
+        log('Diagnóstico completo.', 'ok');
+
+    } catch(e) {
+        div.innerHTML = '<div style="color:#991b1b;padding:16px;">Error: ' + e.message + '</div>';
+        log('Error: ' + e.message, 'err');
+    }
+}
+
+window.addEventListener('load', function() { setTimeout(runDiag, 600); });
+</script>
+</body>
+</html>
