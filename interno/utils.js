@@ -1673,3 +1673,205 @@ window.CVC = {
     mostrarAyuda, cerrarAyuda, cerrarCelula, initAyuda, AYUDA_ITEMS,
     mostrarCelula
 };
+// =============================================================================
+//  MÓDULO DE CORRECCIÓN: MANUAL DE AYUDA UNIFICADO Y FEEDBACK (Añadir al final)
+// =============================================================================
+(function() {
+    window.CVC = window.CVC || {};
+
+    // 1. ORIGEN 1: Definición segura de Ayudas Locales / Preseteadas
+    CVC.ayudasLocales = Object.assign({}, CVC.ayudasLocales || {}, {
+        "generar_token": {
+            titulo: "Crear Enlaces de Acceso",
+            texto: "Genera un token firmado para el acceso temporal de terceros (Contador). Expira automáticamente a las 24 horas."
+        },
+        "tokens_lista": {
+            titulo: "Lista de Accesos Activos",
+            texto: "Muestra los enlaces vigentes, próximos a vencer o revocados. Un enlace revocado corta el acceso al instante."
+        }
+        // Tus ayudas locales actuales se mantendrán intactas gracias al Object.assign
+    });
+
+    // Inicializamos el mapa unificado
+    CVC.manualAyuda = Object.assign({}, CVC.ayudasLocales);
+
+    // Variables internas de control para el feedback
+    let _seccionAyudaActual = "";
+    let _puntoAyudaActual = "";
+
+    /**
+     * CORRECCIÓN ASÍNCRONA: Consulta a Firestore de forma segura esperando que el login exista.
+     * Esto soluciona el problema de por qué no se mostraba el origen de la base de datos.
+     */
+    CVC.cargarManualAyuda = async function() {
+        try {
+            // Re-inicializa con una copia limpia local
+            CVC.manualAyuda = Object.assign({}, CVC.ayudasLocales);
+
+            // Aseguramos capturar la instancia de Firestore activa en el panel
+            const db = CVC.db || (typeof firebase !== 'undefined' ? firebase.firestore() : null);
+            
+            if (db) {
+                // ORIGEN 2: Consulta directa al documento 'config/manual'
+                const docRef = db.collection('config').doc('manual');
+                const docSnap = await docRef.get();
+
+                if (docSnap.exists) {
+                    const ayudasBaseDatos = docSnap.data();
+                    // Fusión perfecta: La Base de Datos pisa a la local si tienen la misma clave
+                    CVC.manualAyuda = Object.assign({}, CVC.manualAyuda, ayudasBaseDatos);
+                    console.log("✅ Manual de ayuda unificado con éxito desde Firestore.");
+                } else {
+                    console.warn("⚠️ El documento 'config/manual' no existe en Firestore.");
+                }
+            }
+        } catch (error) {
+            console.error("❌ Error al sincronizar el manual desde Firestore:", error);
+        } finally {
+            // Obligamos a los elementos del DOM a refrescar sus textos (tanto locales como de la BD)
+            CVC.inicializarComponentesAyuda();
+        }
+    };
+
+    /**
+     * Vincula las claves del manual con los atributos del DOM
+     */
+    CVC.inicializarComponentesAyuda = function() {
+        const botonesAyuda = document.querySelectorAll('.btn-ayuda-tooltip, [data-punto]');
+        botonesAyuda.forEach(function(boton) {
+            const puntoKey = boton.getAttribute('data-punto');
+            if (puntoKey && CVC.manualAyuda[puntoKey]) {
+                const data = CVC.manualAyuda[puntoKey];
+                boton.setAttribute('data-titulo', data.titulo || 'Ayuda');
+                boton.setAttribute('data-texto', data.texto || '');
+                if (boton.classList.contains('btn-ayuda-tooltip')) {
+                    boton.style.display = "inline-flex";
+                }
+            }
+        });
+    };
+
+    /**
+     * Crea e inyecta dinámicamente el HTML/CSS del modal global para no alterar tus archivos HTML individuales
+     */
+    function inyectarModalAyudaEstructural() {
+        if (document.getElementById('modalAyudaGlobal')) return;
+
+        const divModal = document.createElement('div');
+        divModal.id = 'modalAyudaGlobal';
+        divModal.className = 'modal-ayuda-sistema';
+        divModal.innerHTML = 
+            '<div class="modal-ayuda-sistema__card">' +
+                '<h3 id="ayudaGlobalTitulo" style="margin-top:0; color:var(--primary,#1b5e20); display:flex; align-items:center; gap:8px;"></h3>' +
+                '<p id="ayudaGlobalTexto" style="color:var(--text,#2d3748); font-size:14px; line-height:1.5; margin-bottom:16px;"></p>' +
+                '<hr style="border:0; border-top:1px solid var(--border,#e2e8f0); margin:16px 0;">' +
+                '<form id="formFeedbackAyuda">' +
+                    '<label for="feedbackComentario" style="display:block; font-size:12px; font-weight:bold; margin-bottom:6px; color:var(--text-muted,#718096);">' +
+                        '¿Sugerencias o problemas con esta sección? Envía un comentario al programador:' +
+                    '</label>' +
+                    '<textarea id="feedbackComentario" placeholder="Ej: No se entiende si este cambio afecta a las reservas activas..." required style="width:100%; min-height:75px; padding:8px; border-radius:var(--radius,6px); border:1px solid var(--border,#e2e8f0); font-family:inherit; font-size:13px; box-sizing:border-box; resize:vertical;"></textarea>' +
+                    '<div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">' +
+                        '<button type="button" id="btnCerrarAyudaGlobal" class="btn-secundario" style="padding:6px 12px; cursor:pointer;">Cerrar</button>' +
+                        '<button type="submit" class="btn-primario" style="padding:6px 12px; cursor:pointer;">Enviar Comentario</button>' +
+                    '</div>' +
+                '</form>' +
+            '</div>';
+
+        const estilos = document.createElement('style');
+        estilos.innerHTML = 
+            '.modal-ayuda-sistema { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:99999; align-items:center; justify-content:center; }' +
+            '.modal-ayuda-sistema.open { display:flex; }' +
+            '.modal-ayuda-sistema__card { background:var(--surface,#ffffff); padding:20px; border-radius:var(--radius,8px); max-width:460px; width:92%; box-shadow:0 4px 14px rgba(0,0,0,0.15); border:1px solid var(--border,#e2e8f0); font-family:inherit; }' +
+            '.btn-ayuda-tooltip { background:none; border:none; color:var(--text-muted,#718096); cursor:pointer; padding:4px; display:inline-flex; align-items:center; justify-content:center; border-radius:50%; transition:all .2s; vertical-align:middle; }' +
+            '.btn-ayuda-tooltip:hover { background:rgba(0,0,0,0.06); color:var(--primary,#1b5e20); }';
+        
+        document.head.appendChild(estilos);
+        document.body.appendChild(divModal);
+
+        document.getElementById('btnCerrarAyudaGlobal').addEventListener('click', cerrarModal);
+        divModal.addEventListener('click', function(e) { if(e.target === divModal) cerrarModal(); });
+        document.getElementById('formFeedbackAyuda').addEventListener('submit', guardarFeedback);
+    }
+
+    function cerrarModal() {
+        const modal = document.getElementById('modalAyudaGlobal');
+        if (modal) modal.classList.remove('open');
+    }
+
+    /**
+     * Captura y graba el feedback en la nueva colección 'feedback_ayuda' de Firestore
+     */
+    async function guardarFeedback(e) {
+        e.preventDefault();
+        const txtArea = document.getElementById('feedbackComentario');
+        const comentario = txtArea.value.trim();
+        if (!comentario) return;
+
+        try {
+            const user = typeof firebase !== 'undefined' ? firebase.auth().currentUser : null;
+            const db = CVC.db || (typeof firebase !== 'undefined' ? firebase.firestore() : null);
+
+            const feedbackPayload = {
+                seccion: _seccionAyudaActual || window.location.pathname.split('/').pop() || "raiz",
+                punto_ayuda: _puntoAyudaActual,
+                comentario: comentario,
+                usuario_email: user ? user.email : "colaborador_anonimo@casaverdecanas.com.br",
+                usuario_id: user ? user.uid : "no_auth",
+                creadoEn: typeof firebase !== 'undefined' ? firebase.firestore.FieldValue.serverTimestamp() : new Date()
+            };
+
+            if (db) {
+                await db.collection('feedback_ayuda').add(feedbackPayload);
+                
+                // Intenta usar tu función nativa de notificaciones de UI, si no usa un alert elegante
+                if (typeof CVC.showToast === 'function') {
+                    CVC.showToast('¡Gracias! Comentario guardado para el programador.', 'success');
+                } else {
+                    alert('¡Gracias! Comentario guardado para el programador.');
+                }
+                cerrarModal();
+            }
+        } catch (err) {
+            console.error("Error al registrar el feedback:", err);
+            alert("No se pudo guardar el comentario: " + err.message);
+        }
+    }
+
+    // Escucha delegada de eventos click para abrir las ayudas interactivas
+    document.body.addEventListener('click', function(e) {
+        const boton = e.target.closest('.btn-ayuda-tooltip');
+        if (!boton) return;
+
+        _puntoAyudaActual = boton.getAttribute('data-punto') || "indefinido";
+        _seccionAyudaActual = boton.getAttribute('data-seccion') || window.location.pathname.split('/').pop();
+        
+        // Intenta obtener el texto en tiempo real desde el manual unificado
+        const datosUnificados = CVC.manualAyuda[_puntoAyudaActual] || {};
+        
+        const titulo = datosUnificados.titulo || boton.getAttribute('data-titulo') || "Ayuda del Sistema";
+        const texto = datosUnificados.texto || boton.getAttribute('data-texto') || "No hay una descripción cargada.";
+
+        inyectarModalAyudaEstructural();
+        document.getElementById('ayudaGlobalTitulo').textContent = titulo;
+        document.getElementById('ayudaGlobalTexto').textContent = texto;
+        document.getElementById('formFeedbackAyuda').reset();
+        
+        document.getElementById('modalAyudaGlobal').classList.add('open');
+    });
+
+    // Vincular la carga al cambio de estado de autenticación existente de Firebase
+    if (typeof firebase !== 'undefined') {
+        firebase.auth().onAuthStateChanged(function(user) {
+            if (user) {
+                // Espera a que la conexión esté completamente establecida para sobreescribir las ayudas
+                setTimeout(function() {
+                    CVC.cargarManualAyuda();
+                }, 300);
+            }
+        });
+    } else {
+        document.addEventListener("DOMContentLoaded", function() {
+            CVC.inicializarComponentesAyuda();
+        });
+    }
+})();
