@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico · Informes Airbnb</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #f4f7f4; margin: 0; font-size: 13px; }
+        h1 { font-size: 18px; color: #1a3a1a; margin-bottom: 4px; }
+        .sub { color: #666; font-size: 12px; margin-bottom: 20px; }
+        .card { background: white; border-radius: 10px; padding: 16px; margin-bottom: 16px; border: 1px solid #dde; overflow-x: auto; }
+        .card h2 { font-size: 13px; font-weight: 700; margin: 0 0 12px; color: #333; text-transform: uppercase; letter-spacing: .05em; }
+        .btn { background: #2d6a2d; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 13px; cursor: pointer; margin-right: 8px; margin-bottom: 8px; font-family: monospace; }
+        .btn-sec { background: #e8f0e8; color: #2d6a2d; border: 1px solid #a8c8a0; }
+        .ok   { color: #1D9E75; font-weight: 700; }
+        .warn { color: #BA7517; font-weight: 700; }
+        .err  { color: #A32D2D; font-weight: 700; }
+        .pre  { background: #f4f7f4; border-radius: 6px; padding: 10px; font-size: 11px;
+                line-height: 1.6; white-space: pre-wrap; word-break: break-all;
+                max-height: 400px; overflow-y: auto; border: 1px solid #dde; margin-top: 6px; }
+        #log { background: #1a1a2e; color: #a8ffa8; border-radius: 8px; padding: 14px;
+               font-size: 11px; line-height: 1.8; max-height: 500px; overflow-y: auto; }
+        .log-ok   { color: #a8ffa8; }
+        .log-warn { color: #ffd700; }
+        .log-err  { color: #ff6b6b; }
+        .log-info { color: #87ceeb; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        th { background: #e8f0e8; color: #1a3a1a; text-align: left; padding: 6px 8px;
+             border-bottom: 2px solid #dde; white-space: nowrap; }
+        td { padding: 5px 8px; border-bottom: 1px solid #eef; vertical-align: top; }
+        tr:hover td { background: #f9fbf9; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 10px; font-weight: 700; }
+        .badge-ok  { background: #d1fae5; color: #065f46; }
+        .badge-warn{ background: #fef3c7; color: #92400e; }
+        .badge-err { background: #fee2e2; color: #991b1b; }
+        .campo-list { display: flex; flex-wrap: wrap; gap: 4px; }
+        .campo-tag { background: #e8f0e8; color: #1a3a1a; padding: 2px 8px; border-radius: 4px; font-size: 10px; }
+        .campo-tag.missing { background: #fee2e2; color: #991b1b; }
+        .campo-tag.extra   { background: #fef3c7; color: #92400e; }
+        .section { margin-bottom: 24px; }
+        .section-title { font-size: 11px; font-weight: 700; color: #666; text-transform: uppercase;
+                         letter-spacing: .06em; margin-bottom: 8px; margin-top: 16px; }
+    </style>
+</head>
+<body>
+
+<h1>🔍 Diagnóstico · Informes Airbnb</h1>
+<p class="sub">Analiza la estructura real de <code>informes_airbnb</code> y <code>reservas</code> para entender por qué los datos por cabaña no están disponibles.</p>
+
+<div style="margin-bottom:16px;">
+    <button class="btn" onclick="runDiag()">▶ Ejecutar diagnóstico</button>
+    <button class="btn btn-sec" onclick="document.getElementById('log').innerHTML=''">Limpiar log</button>
+</div>
+
+<!-- SECCIÓN 1: Estructura de informes_airbnb -->
+<div class="card">
+    <h2>1 · Colección informes_airbnb — estructura de documentos</h2>
+    <div id="res1">Esperando...</div>
+</div>
+
+<!-- SECCIÓN 2: Detalle de reservas dentro de un informe -->
+<div class="card">
+    <h2>2 · Array "reservas" dentro de un informe — campos disponibles</h2>
+    <div id="res2">Esperando...</div>
+</div>
+
+<!-- SECCIÓN 3: Colección reservas — campos de origen Airbnb -->
+<div class="card">
+    <h2>3 · Colección "reservas" — reservas de origen Airbnb</h2>
+    <div id="res3">Esperando...</div>
+</div>
+
+<!-- SECCIÓN 4: Cruce posible informe ↔ reserva -->
+<div class="card">
+    <h2>4 · Posibilidad de cruce informe ↔ reserva (para obtener cabaña)</h2>
+    <div id="res4">Esperando...</div>
+</div>
+
+<!-- SECCIÓN 5: Resumen del problema -->
+<div class="card">
+    <h2>5 · Diagnóstico del problema y opciones de solución</h2>
+    <div id="res5">Esperando...</div>
+</div>
+
+<div class="card">
+    <h2>Log</h2>
+    <div id="log">Ejecutá el diagnóstico...</div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+var logEl = document.getElementById('log');
+
+function log(msg, tipo) {
+    var cls = { ok:'log-ok', warn:'log-warn', err:'log-err', info:'log-info' }[tipo] || 'log-info';
+    var ts  = new Date().toLocaleTimeString('es-AR');
+    logEl.innerHTML += '<span class="' + cls + '">[' + ts + '] ' + msg + '</span>\n';
+    logEl.scrollTop = logEl.scrollHeight;
+}
+
+function set(id, html) { document.getElementById(id).innerHTML = html; }
+
+function badge(txt, tipo) {
+    return '<span class="badge badge-' + tipo + '">' + txt + '</span>';
+}
+
+function campoTag(nombre, tipo) {
+    return '<span class="campo-tag ' + (tipo || '') + '">' + nombre + '</span>';
+}
+
+async function runDiag() {
+    log('Iniciando diagnóstico de informes Airbnb...', 'info');
+    var db = CVC.db;
+
+    // ── 1. Estructura de informes_airbnb ─────────────────────────────────────
+    log('Leyendo colección informes_airbnb...', 'info');
+    var informes = [];
+    try {
+        var snap = await db.collection('informes_airbnb').get();
+        informes = snap.docs.map(function(d) { return Object.assign({ _id: d.id }, d.data()); });
+        log('informes_airbnb: ' + informes.length + ' documentos', 'ok');
+    } catch(e) {
+        log('Error: ' + e.message, 'err');
+        set('res1', '<span class="err">❌ Error al leer: ' + e.message + '</span>');
+        return;
+    }
+
+    if (!informes.length) {
+        set('res1', '<span class="warn">⚠ No hay documentos en informes_airbnb</span>');
+        log('Colección vacía', 'warn');
+    } else {
+        // Analizar campos de cada documento (nivel raíz)
+        var camposSet = {};
+        informes.forEach(function(inf) {
+            Object.keys(inf).forEach(function(k) {
+                if (!camposSet[k]) camposSet[k] = { tipo: typeof inf[k], ejemplos: [] };
+                if (camposSet[k].ejemplos.length < 2) {
+                    var val = inf[k];
+                    if (Array.isArray(val)) val = '[Array de ' + val.length + ' items]';
+                    else if (val && typeof val === 'object' && val.toDate) val = val.toDate().toLocaleDateString('es-AR');
+                    else if (val && typeof val === 'object') val = '{objeto}';
+                    camposSet[k].ejemplos.push(String(val).slice(0, 60));
+                }
+            });
+        });
+
+        var camposHtml = '<div class="section-title">Campos a nivel raíz del documento</div>';
+        camposHtml += '<table><thead><tr><th>Campo</th><th>Tipo</th><th>Ejemplo</th><th>¿Info cabaña?</th></tr></thead><tbody>';
+
+        var CAMPOS_CABA = ['caba', 'cabana', 'cabaña', 'listing', 'property', 'propertyId', 'room'];
+        Object.keys(camposSet).forEach(function(k) {
+            var esCaba = CAMPOS_CABA.some(function(c) { return k.toLowerCase().indexOf(c) !== -1; });
+            camposHtml += '<tr>'
+                + '<td><strong>' + k + '</strong></td>'
+                + '<td>' + camposSet[k].tipo + '</td>'
+                + '<td style="color:#666;">' + camposSet[k].ejemplos.join('<br>') + '</td>'
+                + '<td>' + (esCaba ? badge('✓ SÍ', 'ok') : '—') + '</td>'
+                + '</tr>';
+        });
+        camposHtml += '</tbody></table>';
+        camposHtml += '<div style="margin-top:8px;font-size:11px;color:#666;">' + informes.length + ' documentos analizados. IDs: '
+            + informes.map(function(i) { return i._id; }).join(', ') + '</div>';
+        set('res1', camposHtml);
+    }
+
+    // ── 2. Array reservas dentro de un informe ────────────────────────────────
+    log('Analizando array reservas dentro de informes...', 'info');
+    var informeConReservas = informes.find(function(i) { return i.reservas && i.reservas.length > 0; });
+
+    if (!informeConReservas) {
+        set('res2', '<span class="warn">⚠ Ningún informe tiene campo "reservas" con items</span>');
+        log('Sin reservas en los informes', 'warn');
+    } else {
+        var resEjemplo = informeConReservas.reservas[0];
+        log('Informe con reservas: ' + informeConReservas._id + ' — ' + informeConReservas.reservas.length + ' reservas', 'ok');
+
+        // Analizar campos de las reservas
+        var camposRes = {};
+        informeConReservas.reservas.forEach(function(r) {
+            Object.keys(r).forEach(function(k) {
+                if (!camposRes[k]) camposRes[k] = { tipo: typeof r[k], ejemplos: [] };
+                if (camposRes[k].ejemplos.length < 3) {
+                    camposRes[k].ejemplos.push(String(r[k]).slice(0, 80));
+                }
+            });
+        });
+
+        var CAMPOS_CABA2 = ['caba', 'cabana', 'listing', 'property', 'room', 'loft', 'depto'];
+        var CAMPOS_HUSP  = ['huesped', 'nombre', 'guest', 'name', 'confirmacion', 'codigo'];
+        var CAMPOS_MONTO = ['monto', 'bruto', 'neto', 'total', 'amount', 'payout', 'precio'];
+        var CAMPOS_FECHA = ['fecha', 'date', 'checkin', 'checkout', 'inicio', 'fin'];
+
+        var html2 = '<div class="section-title">Informe: ' + informeConReservas._id + ' — ' + informeConReservas.reservas.length + ' reservas</div>';
+        html2 += '<table><thead><tr><th>Campo</th><th>Tipo</th><th>Ejemplos (primeros 3)</th><th>Categoría</th></tr></thead><tbody>';
+
+        Object.keys(camposRes).forEach(function(k) {
+            var kl  = k.toLowerCase();
+            var cat = '—';
+            if (CAMPOS_CABA2.some(function(c) { return kl.indexOf(c) !== -1; })) cat = badge('CABAÑA', 'ok');
+            else if (CAMPOS_HUSP.some(function(c)  { return kl.indexOf(c) !== -1; })) cat = badge('huésped', 'ok');
+            else if (CAMPOS_MONTO.some(function(c) { return kl.indexOf(c) !== -1; })) cat = badge('monto', 'warn');
+            else if (CAMPOS_FECHA.some(function(c) { return kl.indexOf(c) !== -1; })) cat = badge('fecha', 'warn');
+
+            html2 += '<tr>'
+                + '<td><strong>' + k + '</strong></td>'
+                + '<td>' + camposRes[k].tipo + '</td>'
+                + '<td style="color:#555;font-size:10px;">' + camposRes[k].ejemplos.join('<br>') + '</td>'
+                + '<td>' + cat + '</td>'
+                + '</tr>';
+        });
+        html2 += '</tbody></table>';
+
+        // Mostrar primera reserva completa como JSON
+        html2 += '<div class="section-title">Primera reserva — datos completos</div>';
+        html2 += '<div class="pre">' + JSON.stringify(resEjemplo, null, 2) + '</div>';
+        set('res2', html2);
+    }
+
+    // ── 3. Colección reservas — reservas Airbnb ───────────────────────────────
+    log('Leyendo colección reservas (origen Airbnb)...', 'info');
+    try {
+        var resSnap = await db.collection('reservas')
+            .where('origen', '==', 'airbnb')
+            .limit(5)
+            .get();
+
+        var resAirbnb = resSnap.docs.map(function(d) { return Object.assign({ _id: d.id }, d.data()); });
+        log('Reservas Airbnb encontradas: ' + resAirbnb.length, resAirbnb.length ? 'ok' : 'warn');
+
+        if (!resAirbnb.length) {
+            // Intentar con airbnb_activa
+            var resSnap2 = await db.collection('reservas')
+                .where('estado', 'in', ['airbnb_activa', 'airbnb_cancelada'])
+                .limit(5)
+                .get();
+            resAirbnb = resSnap2.docs.map(function(d) { return Object.assign({ _id: d.id }, d.data()); });
+            log('Reservas airbnb_activa: ' + resAirbnb.length, resAirbnb.length ? 'ok' : 'warn');
+        }
+
+        if (!resAirbnb.length) {
+            set('res3', '<span class="warn">⚠ No se encontraron reservas con origen:airbnb ni estado airbnb_activa</span>');
+        } else {
+            var ej = resAirbnb[0];
+            var CAMPOS_UTILES = ['caba', 'cabana', 'checkIn', 'checkOut', 'nombre', 'totalBRL',
+                                 'noches', 'confirmacion', 'origen', 'estado', 'uid_airbnb', 'eventId'];
+            var html3 = '<div class="section-title">Campos disponibles en reservas Airbnb</div>';
+            html3 += '<div class="campo-list">';
+            Object.keys(ej).forEach(function(k) {
+                var util = CAMPOS_UTILES.indexOf(k) !== -1;
+                html3 += campoTag(k, util ? '' : 'extra');
+            });
+            html3 += '</div>';
+            html3 += '<div class="section-title">Primera reserva Airbnb — datos completos</div>';
+
+            // Serializar el objeto limpiando timestamps
+            var ejClean = {};
+            Object.keys(ej).forEach(function(k) {
+                var v = ej[k];
+                if (v && v.toDate) v = v.toDate().toLocaleDateString('es-AR');
+                ejClean[k] = v;
+            });
+            html3 += '<div class="pre">' + JSON.stringify(ejClean, null, 2) + '</div>';
+            set('res3', html3);
+        }
+    } catch(e) {
+        log('Error reservas: ' + e.message, 'err');
+        set('res3', '<span class="err">❌ ' + e.message + '</span>');
+    }
+
+    // ── 4. Cruce posible informe ↔ reserva ────────────────────────────────────
+    log('Analizando posibilidad de cruce...', 'info');
+    if (informeConReservas && informeConReservas.reservas && informeConReservas.reservas.length) {
+        var r0 = informeConReservas.reservas[0];
+        var camposCruce = [];
+
+        // Buscar campos que podrían cruzar con reservas
+        ['confirmacion', 'codigo', 'codigoReserva', 'reservationCode',
+         'nombre', 'huesped', 'guest', 'checkIn', 'fecha_inicio',
+         'neto', 'bruto'].forEach(function(c) {
+            if (r0[c] !== undefined) {
+                camposCruce.push({ campo: c, valor: r0[c] });
+            }
+        });
+
+        var html4 = '<div class="section-title">Campos en informe.reservas[0] que podrían cruzar con colección reservas</div>';
+        if (camposCruce.length) {
+            html4 += '<table><thead><tr><th>Campo</th><th>Valor ejemplo</th><th>¿Existe en reservas?</th></tr></thead><tbody>';
+            camposCruce.forEach(function(c) {
+                html4 += '<tr><td><strong>' + c.campo + '</strong></td>'
+                    + '<td>' + String(c.valor).slice(0, 80) + '</td>'
+                    + '<td>' + badge('Por verificar', 'warn') + '</td></tr>';
+            });
+            html4 += '</tbody></table>';
+        } else {
+            html4 += '<span class="warn">No se encontraron campos comunes obvios</span>';
+        }
+
+        // Mostrar todos los campos del primer item
+        html4 += '<div class="section-title">Todos los campos disponibles en informe.reservas[0]</div>';
+        html4 += '<div class="pre">' + JSON.stringify(r0, null, 2) + '</div>';
+        set('res4', html4);
+    } else {
+        set('res4', '<span class="warn">Sin datos suficientes para analizar cruce</span>');
+    }
+
+    // ── 5. Diagnóstico y opciones ─────────────────────────────────────────────
+    log('Generando diagnóstico...', 'info');
+
+    var tieneCaba  = false;
+    var tieneCodig = false;
+    var tienePeriod = false;
+
+    if (informeConReservas && informeConReservas.reservas && informeConReservas.reservas.length) {
+        var r = informeConReservas.reservas[0];
+        var ks = Object.keys(r).map(function(k) { return k.toLowerCase(); });
+        tieneCaba   = ks.some(function(k) { return k.indexOf('caba') !== -1 || k.indexOf('listing') !== -1; });
+        tieneCodig  = ks.some(function(k) { return k.indexOf('confirm') !== -1 || k.indexOf('codigo') !== -1 || k.indexOf('code') !== -1; });
+        tienePeriod = !!informeConReservas.periodo || !!informeConReservas.mes;
+    }
+
+    var html5 = '<div class="section-title">Resultado del diagnóstico</div>';
+
+    html5 += '<div style="margin-bottom:12px;">'
+        + (tieneCaba
+            ? '<div class="ok">✅ Los informes SÍ incluyen campo de cabaña — el problema es otro</div>'
+            : '<div class="err">❌ Los informes NO incluyen campo de cabaña por reserva</div>')
+        + '<div style="margin-top:4px;font-size:11px;color:#666;">'
+        + 'Airbnb solo reporta liquidaciones globales (todas las cabañas juntas por período). '
+        + 'No hay separación por propiedad en el PDF.</div>'
+        + '</div>';
+
+    html5 += '<div class="section-title">Opciones para obtener rentabilidad por cabaña</div>';
+    html5 += '<div style="display:flex;flex-direction:column;gap:10px;">'
+
+        + '<div style="background:#f4f7f4;border-radius:8px;padding:12px;">'
+        + '<strong>Opción A — Cruzar informe con reservas por código de confirmación</strong><br>'
+        + '<span style="font-size:11px;color:#666;">'
+        + 'Si el informe tiene el código de confirmación de Airbnb y la reserva también lo guarda, '
+        + 'se puede vincular cada pago con su cabaña. Requiere que las reservas guarden el confirmationCode de Airbnb.'
+        + '</span><br>'
+        + badge(tieneCodig ? 'Posible — hay campo de código' : 'Requiere agregar campo', tieneCodig ? 'ok' : 'warn')
+        + '</div>'
+
+        + '<div style="background:#f4f7f4;border-radius:8px;padding:12px;">'
+        + '<strong>Opción B — Usar reservas como fuente de verdad de ingresos por cabaña</strong><br>'
+        + '<span style="font-size:11px;color:#666;">'
+        + 'Ignorar los informes Airbnb para análisis por cabaña. Usar directamente <code>reservas</code> '
+        + 'con campo <code>caba</code> + <code>totalBRL</code> + <code>noches</code>. '
+        + 'El informe Airbnb se usa solo para conciliar el depósito bancario (que sí es global).'
+        + '</span><br>'
+        + badge('Más simple — datos ya disponibles', 'ok')
+        + '</div>'
+
+        + '<div style="background:#f4f7f4;border-radius:8px;padding:12px;">'
+        + '<strong>Opción C — Separar múltiples cuentas de Airbnb por cabaña</strong><br>'
+        + '<span style="font-size:11px;color:#666;">'
+        + 'Si cada cabaña tuviera su propia cuenta de Airbnb, los informes vendrían separados. '
+        + 'No es viable sin cambiar la operación en Airbnb.'
+        + '</span><br>'
+        + badge('No viable sin cambio operativo', 'err')
+        + '</div>'
+
+        + '</div>';
+
+    html5 += '<div class="section-title">Recomendación</div>';
+    html5 += '<div style="background:#e8f5e9;border:1px solid #a8c8a0;border-radius:8px;padding:12px;font-size:12px;">'
+        + '<strong>Implementar Opción B:</strong> construir el análisis de rentabilidad por cabaña '
+        + 'directamente desde la colección <code>reservas</code>, que ya tiene <code>caba</code>, '
+        + '<code>totalBRL</code>, <code>checkIn</code>, <code>checkOut</code> y <code>noches</code>. '
+        + 'Los informes de Airbnb se mantienen para conciliación bancaria (cruce con depósito BTG). '
+        + 'El módulo de análisis por cabaña puede mostrar: precio por noche promedio, ocupación, '
+        + 'ingresos totales, comparativa entre cabañas — todo desde datos que ya existen.'
+        + '</div>';
+
+    set('res5', html5);
+    log('Diagnóstico completo.', 'ok');
+}
+
+window.addEventListener('load', function() { setTimeout(runDiag, 600); });
+</script>
+</body>
+</html>
