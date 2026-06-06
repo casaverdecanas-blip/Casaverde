@@ -22,6 +22,15 @@ const FIREBASE_CONFIG = {
 };
 if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
 const db   = firebase.firestore();
+
+// ── Compatibilidad Firefox ────────────────────────────────────
+// Firebase 8.x usa WebChannel para mantener conexión con Firestore.
+// Firefox bloquea WebChannel por sus políticas de cookies de terceros,
+// causando un loop de reconexión con errores en consola.
+// experimentalForceLongPolling fuerza HTTP long-polling como transporte,
+// compatible con todos los navegadores sin pérdida de funcionalidad.
+db.settings({ experimentalForceLongPolling: true, merge: true });
+
 const auth = firebase.auth();
 
 
