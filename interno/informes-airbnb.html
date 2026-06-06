@@ -246,7 +246,11 @@
 <div class="modal-ov" id="mImport" onclick="cImport(event)">
 <div class="modal-bx">
     <h3>📄 Importar informe Airbnb — PDF</h3>
-    <p class="text-muted text-xs" style="margin-bottom:var(--space-4)">Subí el PDF. La IA lee todos los campos automáticamente. Revisalos y guardá.</p>
+    <p class="text-muted text-xs" style="margin-bottom:var(--space-2)">Subí el PDF. La IA lee todos los campos automáticamente. Revisalos y guardá.</p>
+    <div style="background:var(--color-info-bg,#e3f2fd);border:1px solid var(--color-info-light,#90caf9);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);font-size:var(--text-xs);color:var(--color-info,#1565c0);margin-bottom:var(--space-4);display:flex;gap:var(--space-2);align-items:flex-start;">
+        <span class="material-icons" style="font-size:15px;flex-shrink:0;margin-top:1px;">info</span>
+        <span>Si un informe ya fue importado, subir el mismo PDF lo <strong>sobreescribe</strong> con los datos actualizados. Usá esto para reprocesar los informes que tienen los datos de cabaña en R$ 0,00.</span>
+    </div>
 
     <div class="upload-zone" id="upZone">
         <input type="file" accept=".pdf" id="pdfIn" onchange="procesarPDF(this.files[0])">
@@ -380,7 +384,6 @@
 const { user, userData } = await CVC.verificarAuth('admin');
 document.getElementById('userName').textContent = userData.nombre || user.email;
 CVC.renderNav('informes-airbnb.html');
-CVC.initAyuda('informes-airbnb.html');
 
 const db = CVC.db;
 const { escapeHtml, showToast, showEmpty } = CVC;
@@ -678,65 +681,94 @@ window.procesarPDF = async function(file) {
         ? cuentas.map(c => '- "' + c.nombre + '" (' + c.moneda + ') → id: "' + c.id + '"').join('\n')
         : '- Sin cuentas registradas aún';
 
-    const PROMPT=`Sos un extractor de datos de informes de Airbnb en PDF.
-Extrae TODOS los datos y respondé ÚNICAMENTE con JSON válido, sin texto adicional ni markdown.
+    const PROMPT=`Sos un extractor de datos de informes de ingresos de Airbnb en PDF.
+Respondé ÚNICAMENTE con JSON válido, sin texto adicional, sin markdown, sin explicaciones.
 
-Formato exacto:
+El PDF tiene estas secciones — extraé de TODAS:
+
+1. RESUMEN GLOBAL (al inicio): ingreso_bruto total, ajustes, tarifa_servicio total, total_neto.
+
+2. SECCIÓN "Alojamientos": tabla con una fila por propiedad. Cada fila tiene:
+   - nombre del alojamiento
+   - Ingresos brutos (puede ser R$0.00 si no hubo ingresos ese período)
+   - Ajustes
+   - Tarifas de servicio (número NEGATIVO, ej: -R$530.00 → -530)
+   - Total (BRL)
+
+3. SECCIÓN "Estadísticas de desempeño" (puede estar al final, página 2 o 3): tabla con:
+   - nombre del alojamiento
+   - Noches reservadas
+   - Promedio de noches por estancia
+   Esta sección puede aparecer tanto global como desglosada por alojamiento.
+
+4. SECCIÓN "Ingresos mensuales" (solo en informes anuales): tabla mes/bruto/neto.
+
+5. SECCIÓN "Formas de cobro": cada forma de pago con monto y moneda.
+
+Formato JSON de respuesta:
 {
   "tipo": "mensual" o "anual",
   "anio": número,
   "mes": número (1-12) o null si es anual,
-  "ingreso_bruto": número,
-  "ajustes": número (negativo o 0),
-  "tarifa_servicio": número NEGATIVO,
+  "ingreso_bruto": número sin símbolo (ej: 21971.87),
+  "ajustes": número (0 o negativo),
+  "tarifa_servicio": número NEGATIVO (ej: -994.77),
   "total_neto": número,
-  "impuesto_airbnb": número,
-  "noches_reservadas": número,
+  "impuesto_airbnb": número (el monto que pagó Airbnb a las autoridades, de la línea "Impuestos liquidados por Airbnb"),
+  "noches_reservadas": número GLOBAL del período,
+  "promedio_noches_estancia": número global (ej: 7.8),
   "anfitrion": "nombre del anfitrión",
   "formas_cobro": [
     {
-      "nombre_pdf": "texto exacto de la forma de cobro como aparece en el PDF",
+      "nombre_pdf": "texto exacto",
       "monto": número,
       "moneda": "BRL" o "USD" o "UYU",
-      "cuenta_id_sugerida": "id de la cuenta más probable de la lista, o null"
+      "cuenta_id_sugerida": null
     }
   ],
   "cabanas": [
     {
       "caba_id": 1 o 2 o 3,
-      "nombre_airbnb": "nombre exacto del alojamiento en el PDF",
-      "ingreso_bruto": número,
-      "tarifa_servicio": número NEGATIVO,
-      "total_neto": número,
-      "impuesto_airbnb": número,
-      "noches": número,
-      "promedio_noches": número
+      "nombre_airbnb": "nombre exacto como aparece en el PDF",
+      "ingreso_bruto": número (de la tabla Alojamientos, columna Ingresos brutos),
+      "ajustes": número (de la tabla Alojamientos, columna Ajustes, 0 si no hay),
+      "tarifa_servicio": número NEGATIVO (de la tabla Alojamientos, columna Tarifas de servicio),
+      "impuesto_airbnb": número (de la tabla Impuestos, columna Impuesto liquidado por Airbnb),
+      "total_neto": número (de la tabla Alojamientos, columna Total BRL),
+      "noches": número (de la tabla Estadísticas de desempeño, columna Noches reservadas — BUSCAR EN TODA LA PÁGINA, puede estar al final),
+      "promedio_noches": número (de Estadísticas de desempeño, columna Promedio de noches por estancia)
     }
   ]
 }
+
+REGLAS CRÍTICAS:
+- Los valores monetarios: eliminar "R$", ",", espacios. Ej: "R$14.379,56" → 14379.56
+- Las tarifas de servicio son SIEMPRE negativas. Si el PDF muestra "-R$695.15" → -695.15
+- Si un alojamiento tuvo R$0.00 en ingresos ese período, igualmente incluirlo con todos sus valores en 0
+- Las noches están en la sección "Estadísticas de desempeño" que puede estar en la ÚLTIMA PÁGINA
+- Si un campo no aparece usá 0. No inventes valores.
+- SIEMPRE incluir las 3 cabañas en el array "cabanas"
 
 Mapeo de cabañas:
 - "Cabaña confortable y amplia rodeada de arboles" → caba_id: 1
 - "Departamento ideal para familias" → caba_id: 2
 - "Loft en Canasvieiras cerquita de la playa" → caba_id: 3
 
-Cuentas registradas en el sistema — para sugerir cuenta_id_sugerida en formas_cobro:
+Cuentas del sistema para cuenta_id_sugerida:
 ${cuentasConocidas}
 
-Para cuenta_id_sugerida: buscá coincidencia por nombre del titular entre el PDF y la lista.
-Si el PDF dice "Maria Florencia de Tezanos Pinto" o "Ch 1550" → buscá esa cuenta.
-Si dice "PayPal" → buscá la cuenta PayPal con moneda BRL.
-Si dice "Western Union" o "Mauro Gastaldello" → buscá esa cuenta.
-Si no hay coincidencia clara → usá null.
-
-Si un campo no aparece, usá 0 para números y [] para arrays. No inventes datos.`;
+Para cuenta_id_sugerida:
+- "Maria Florencia de Tezanos Pinto" / "Ch 1550" → cuenta BTG Flor
+- "Mauro Gastaldello" / "Western Union" / "Savings 0731" → cuenta Mauro
+- "PayPal" → cuenta PayPal con esa moneda
+- Sin coincidencia clara → null`;
 
     try {
         const res=await fetch('https://casaverdecanas.netlify.app/.netlify/functions/claude-proxy',{
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({
-                model:'gemini-1.5-flash',
+                model:'gemini-2.0-flash-lite',
                 max_tokens:1000,
                 messages:[{
                     role:'user',
