@@ -1366,52 +1366,65 @@ function cerrarAyuda() {
     if (modal) modal.style.display = 'none';
 }
 
-// Agregar botones de ayuda (?) al nav después de renderNav()
+// Agregar botones de ayuda (?) al nav despues de renderNav()
+// IMPORTANTE: carga Firestore primero y DESPUES agrega los botones
+// para que AYUDA_ITEMS ya tenga el contenido actualizado al momento
+// de verificar qué páginas tienen ayuda disponible.
 function initAyuda(paginaActual) {
-    const pagina = paginaActual || window.location.pathname.split('/').pop() || 'dashboard.html';
+    var pagina = paginaActual || window.location.pathname.split('/').pop() || 'dashboard.html';
 
-    // Botón flotante de ayuda para la página actual
-    if (AYUDA_ITEMS[pagina]) {
-        let fab = document.getElementById('_ayudaFab');
-        if (!fab) {
-            fab = document.createElement('button');
-            fab.id = '_ayudaFab';
-            fab.title = 'Ayuda de esta sección';
-            fab.style.cssText = [
-                'position:fixed', 'bottom:24px', 'right:24px',
-                'width:44px', 'height:44px',
-                'border-radius:50%',
-                'background:var(--color-primary)',
-                'color:white', 'border:none', 'cursor:pointer',
-                'display:flex', 'align-items:center', 'justify-content:center',
-                'box-shadow:0 4px 16px rgba(0,0,0,0.18)',
-                'z-index:999', 'font-size:20px',
-                'transition:transform .15s, box-shadow .15s',
-            ].join(';');
-            fab.innerHTML = '<span class="material-icons" style="font-size:20px;">help_outline</span>';
-            fab.addEventListener('click', function() { CVC.mostrarAyuda(pagina); });
-            fab.addEventListener('mouseenter', function() {
-                fab.style.transform = 'scale(1.1)';
-                fab.style.boxShadow = '0 6px 20px rgba(0,0,0,0.22)';
-            });
-            fab.addEventListener('mouseleave', function() {
-                fab.style.transform = '';
-                fab.style.boxShadow = '0 4px 16px rgba(0,0,0,0.18)';
-            });
-            document.body.appendChild(fab);
-        }
-    }
+    // Cargar Firestore primero, luego montar los botones
+    _cargarAyudaFirestore().then(function() {
+        _montarFab(pagina);
+        _montarNavDots();
+    });
+}
 
-    // Agregar puntos (?) en los items del nav dropdown
+function _montarFab(pagina) {
+    // El FAB se muestra siempre — aunque la página no tenga célula todavía
+    // Al tocar abrirá el panel con "sin información" si no hay célula
+    var fab = document.getElementById('_ayudaFab');
+    if (fab) return; // ya existe
+
+    fab = document.createElement('button');
+    fab.id    = '_ayudaFab';
+    fab.title = 'Ayuda de esta sección';
+    fab.style.cssText = [
+        'position:fixed', 'bottom:24px', 'right:24px',
+        'width:44px', 'height:44px',
+        'border-radius:50%',
+        'background:var(--color-primary)',
+        'color:white', 'border:none', 'cursor:pointer',
+        'display:flex', 'align-items:center', 'justify-content:center',
+        'box-shadow:0 4px 16px rgba(0,0,0,0.18)',
+        'z-index:999', 'font-size:20px',
+        'transition:transform .15s, box-shadow .15s'
+    ].join(';');
+    fab.innerHTML = '<span class="material-icons" style="font-size:20px;">help_outline</span>';
+    fab.addEventListener('click', function() { CVC.mostrarAyuda(pagina); });
+    fab.addEventListener('mouseenter', function() {
+        fab.style.transform  = 'scale(1.1)';
+        fab.style.boxShadow  = '0 6px 20px rgba(0,0,0,0.22)';
+    });
+    fab.addEventListener('mouseleave', function() {
+        fab.style.transform  = '';
+        fab.style.boxShadow  = '0 4px 16px rgba(0,0,0,0.18)';
+    });
+    document.body.appendChild(fab);
+}
+
+function _montarNavDots() {
+    // Esperar a que el nav esté en el DOM
     setTimeout(function() {
         var links = document.querySelectorAll('.nav-dropdown__item, .nav-link');
         links.forEach(function(link) {
             var href = (link.getAttribute('href') || '').split('/').pop();
+            // Mostrar ? si la página tiene contenido en AYUDA_ITEMS
             if (!AYUDA_ITEMS[href]) return;
             if (link.querySelector('._nav-help')) return; // ya tiene
             var dot = document.createElement('button');
             dot.className = '_nav-help';
-            dot.title = 'Ayuda rápida';
+            dot.title     = 'Ayuda rapida';
             dot.style.cssText = [
                 'width:16px', 'height:16px',
                 'border-radius:50%',
@@ -1423,7 +1436,7 @@ function initAyuda(paginaActual) {
                 'display:inline-flex', 'align-items:center', 'justify-content:center',
                 'margin-left:auto', 'flex-shrink:0',
                 'transition:background .15s',
-                'line-height:1',
+                'line-height:1'
             ].join(';');
             dot.textContent = '?';
             dot.addEventListener('mouseenter', function() {
@@ -1437,11 +1450,11 @@ function initAyuda(paginaActual) {
                 e.stopPropagation();
                 CVC.mostrarAyuda(href);
             });
-            link.style.display = 'flex';
+            link.style.display    = 'flex';
             link.style.alignItems = 'center';
             link.appendChild(dot);
         });
-    }, 200);
+    }, 300);
 }
 
 
