@@ -9,16 +9,17 @@ const CORS = {
 };
 
 // Modelos disponibles — el frontend puede elegir
+// gemini-2.0-flash-lite fue discontinuado — se redirige a 2.5
 const MODELOS = {
-    'gemini-2.0-flash-lite':  'gemini-2.0-flash-lite',
+    'gemini-2.0-flash-lite':  'gemini-2.5-flash-lite',  // alias — 2.0 discontinuado
     'gemini-2.5-flash-lite':  'gemini-2.5-flash-lite',
     'gemini-2.5-flash':       'gemini-2.5-flash',
-    'gemini-1.5-flash':       'gemini-1.5-flash',
-    'gemini-1.5-pro':         'gemini-1.5-pro',
+    'gemini-1.5-flash':       'gemini-2.5-flash-lite',  // alias — usar 2.5
+    'gemini-1.5-pro':         'gemini-2.5-flash',       // alias — usar 2.5
 };
 
 // Modelo por defecto si el frontend no especifica
-const MODELO_DEFAULT = 'gemini-2.0-flash-lite';
+const MODELO_DEFAULT = 'gemini-2.5-flash-lite';
 
 exports.handler = async function(event, context) {
 
