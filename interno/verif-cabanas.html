@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verificación · Cabañas vs Airbnb</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #f4f7f4; font-size: 13px; }
+        h1 { font-size: 17px; color: #1a3a1a; margin-bottom: 4px; }
+        .sub { color: #666; font-size: 12px; margin-bottom: 20px; }
+        .card { background: white; border-radius: 10px; padding: 16px; margin-bottom: 16px; border: 1px solid #dde; }
+        .card h2 { font-size: 12px; font-weight: 700; margin: 0 0 12px; color: #333; text-transform: uppercase; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th { background: #e8f0e8; color: #1a3a1a; text-align: left; padding: 7px 10px; border-bottom: 2px solid #dde; }
+        td { padding: 7px 10px; border-bottom: 1px solid #eef; vertical-align: top; }
+        .ok   { color: #1D9E75; font-weight: 700; }
+        .warn { color: #BA7517; font-weight: 700; }
+        .err  { color: #A32D2D; font-weight: 700; }
+        .match-box { background: #e8f5e9; border: 1px solid #a8c8a0; border-radius: 8px; padding: 10px 14px; margin-bottom: 8px; }
+        .nomatch-box { background: #fff8f8; border: 1px solid #fca5a5; border-radius: 8px; padding: 10px 14px; margin-bottom: 8px; color: #991b1b; }
+    </style>
+</head>
+<body>
+
+<h1>Verificacion Cabanas vs Airbnb</h1>
+<p class="sub">Confirma que el mapeo del prompt coincide con los nombres reales en Firestore y en los PDFs.</p>
+
+<div class="card">
+    <h2>1 · Cabanas en Firestore (sistema)</h2>
+    <div id="resCabanas">Cargando...</div>
+</div>
+
+<div class="card">
+    <h2>2 · Nombres encontrados en informes Airbnb</h2>
+    <div id="resAirbnb">Cargando...</div>
+</div>
+
+<div class="card">
+    <h2>3 · Verificacion del mapeo</h2>
+    <div id="resMapeo">Cargando...</div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async function() {
+    var db = CVC.db;
+    var cabanas = [];
+
+    // 1. Cabanas en Firestore
+    try {
+        var cabSnap = await db.collection('cabanas').get();
+        cabanas = cabSnap.docs.map(function(d) {
+            var data = d.data();
+            return {
+                id:       data.id || parseInt(d.id),
+                nombreEs: data.nombre && data.nombre.es ? data.nombre.es : '(sin nombre)',
+                color:    data.color || '#2d6a2d'
+            };
+        }).sort(function(a, b) { return a.id - b.id; });
+    } catch(e) {
+        document.getElementById('resCabanas').innerHTML = '<span class="err">Error: ' + e.message + '</span>';
+        return;
+    }
+
+    var html1 = '<table><thead><tr><th>ID sistema</th><th>Nombre espanol (usado en el sistema)</th></tr></thead><tbody>';
+    cabanas.forEach(function(c) {
+        html1 += '<tr><td><strong>C' + c.id + '</strong></td><td>' + c.nombreEs + '</td></tr>';
+    });
+    html1 += '</tbody></table>';
+    document.getElementById('resCabanas').innerHTML = html1;
+
+    // 2. Nombres en informes Airbnb desde Firestore
+    var nombresAirbnb = {};
+    try {
+        var infSnap = await db.collection('informes_airbnb').get();
+        infSnap.docs.forEach(function(d) {
+            var inf = d.data();
+            // Los campos son planos: buscar campos que empiecen con "cabanas"
+            // O el campo cabanas si es array
+            if (inf.cabanas && Array.isArray(inf.cabanas)) {
+                inf.cabanas.forEach(function(cab) {
+                    var id  = cab.caba_id;
+                    var nom = cab.nombre_airbnb || '(sin nombre)';
+                    if (!nombresAirbnb[id]) nombresAirbnb[id] = {};
+                    nombresAirbnb[id][nom] = (nombresAirbnb[id][nom] || 0) + 1;
+                });
+            }
+        });
+    } catch(e) {}
+
+    var html2 = '<table><thead><tr><th>caba_id asignado</th><th>Nombre en PDF Airbnb</th><th>N informes</th></tr></thead><tbody>';
+    var hayDatos = false;
+    Object.keys(nombresAirbnb).sort().forEach(function(id) {
+        hayDatos = true;
+        Object.keys(nombresAirbnb[id]).forEach(function(nom) {
+            html2 += '<tr><td><strong>C' + id + '</strong></td><td>' + nom + '</td><td>' + nombresAirbnb[id][nom] + '</td></tr>';
+        });
+    });
+    if (!hayDatos) {
+        html2 += '<tr><td colspan="3" style="color:#999;">Sin datos extraidos todavia — procesar los PDFs primero</td></tr>';
+    }
+    html2 += '</tbody></table>';
+    document.getElementById('resAirbnb').innerHTML = html2;
+
+    // 3. Verificar mapeo
+    var MAPEO_PROMPT = {
+        1: 'Cabana confortable y amplia rodeada de arboles',
+        2: 'Departamento ideal para familias',
+        3: 'Loft en Canasvieiras cerquita de la playa'
+    };
+
+    // Tambien verificar contra los PDFs que leimos directamente
+    var NOMBRES_PDF = {
+        1: 'Cabana confortable y amplia rodeada de arboles',
+        2: 'Departamento ideal para familias',
+        3: 'Loft en Canasvieiras cerquita de la playa'
+    };
+
+    var html3 = '';
+    var hayProblemas = false;
+
+    cabanas.forEach(function(c) {
+        var idNum      = parseInt(c.id);
+        var nomSistema = c.nombreEs;
+        var nomPrompt  = MAPEO_PROMPT[idNum] || '(no mapeada)';
+        var nomsAirbnb = nombresAirbnb[idNum] ? Object.keys(nombresAirbnb[idNum]) : [];
+
+        // Comparacion sin tildes y minusculas para ser flexible
+        function normalizar(s) { return s.toLowerCase().normalize('NFD').replace(/[^a-z0-9 ]/g, '').trim(); }
+
+        var promptEnPdf = nomsAirbnb.some(function(n) {
+            return normalizar(n) === normalizar(nomPrompt);
+        });
+        var sistemaVsPrompt = normalizar(nomSistema) === normalizar(nomPrompt);
+
+        // Si no hay informes procesados aun, solo comparar sistema vs prompt
+        if (!hayDatos) {
+            if (sistemaVsPrompt) {
+                html3 += '<div class="match-box"><strong>OK C' + idNum + '</strong> — '
+                    + 'Nombre sistema coincide con prompt de extraccion<br>'
+                    + 'Sistema: <em>' + nomSistema + '</em><br>'
+                    + 'Prompt: <em>' + nomPrompt + '</em>'
+                    + '</div>';
+            } else {
+                hayProblemas = true;
+                html3 += '<div class="nomatch-box"><strong>REVISAR C' + idNum + '</strong><br>'
+                    + 'Sistema: <em>' + nomSistema + '</em><br>'
+                    + 'Prompt mapea a: <em>' + nomPrompt + '</em><br>'
+                    + '<span class="warn">Los nombres difieren — puede causar asignacion incorrecta</span>'
+                    + '</div>';
+            }
+        } else {
+            if (promptEnPdf && sistemaVsPrompt) {
+                html3 += '<div class="match-box"><strong>OK C' + idNum + ' — Todo coincide</strong><br>'
+                    + 'Sistema: <em>' + nomSistema + '</em><br>'
+                    + 'Prompt: <em>' + nomPrompt + '</em><br>'
+                    + 'PDFs: <em>' + nomsAirbnb.join(', ') + '</em>'
+                    + '</div>';
+            } else {
+                hayProblemas = true;
+                html3 += '<div class="nomatch-box"><strong>REVISAR C' + idNum + '</strong><br>'
+                    + 'Sistema: <em>' + nomSistema + '</em><br>'
+                    + 'Prompt mapea a: <em>' + nomPrompt + '</em><br>'
+                    + 'PDFs contienen: <em>' + (nomsAirbnb.length ? nomsAirbnb.join(', ') : 'ninguno') + '</em><br>'
+                    + (!sistemaVsPrompt ? '<span class="warn">Nombre sistema difiere del prompt</span><br>' : '')
+                    + (!promptEnPdf ? '<span class="err">El nombre del prompt no aparece en los PDFs</span>' : '')
+                    + '</div>';
+            }
+        }
+    });
+
+    if (!hayProblemas) {
+        html3 += '<div style="background:#e8f5e9;border-radius:8px;padding:12px;font-size:12px;margin-top:8px;">'
+            + 'El mapeo es coherente. Los nombres del prompt coinciden con el sistema y con los PDFs.'
+            + '</div>';
+    } else {
+        html3 += '<div style="background:#fff8f8;border-radius:8px;padding:12px;font-size:12px;margin-top:8px;color:#991b1b;">'
+            + 'Hay diferencias en los nombres. Actualizar el prompt en informes-airbnb.html '
+            + 'con los nombres exactos que aparecen en los PDFs para evitar asignaciones incorrectas.'
+            + '</div>';
+    }
+
+    document.getElementById('resMapeo').innerHTML = html3;
+})();
+</script>
+</body>
+</html>

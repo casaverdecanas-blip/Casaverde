@@ -246,11 +246,7 @@
 <div class="modal-ov" id="mImport" onclick="cImport(event)">
 <div class="modal-bx">
     <h3>📄 Importar informe Airbnb — PDF</h3>
-    <p class="text-muted text-xs" style="margin-bottom:var(--space-2)">Subí el PDF. La IA lee todos los campos automáticamente. Revisalos y guardá.</p>
-    <div style="background:var(--color-info-bg,#e3f2fd);border:1px solid var(--color-info-light,#90caf9);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);font-size:var(--text-xs);color:var(--color-info,#1565c0);margin-bottom:var(--space-4);display:flex;gap:var(--space-2);align-items:flex-start;">
-        <span class="material-icons" style="font-size:15px;flex-shrink:0;margin-top:1px;">info</span>
-        <span>Si un informe ya fue importado, subir el mismo PDF lo <strong>sobreescribe</strong> con los datos actualizados. Usá esto para reprocesar los informes que tienen los datos de cabaña en R$ 0,00.</span>
-    </div>
+    <p class="text-muted text-xs" style="margin-bottom:var(--space-4)">Subí el PDF. La IA lee todos los campos automáticamente. Revisalos y guardá.</p>
 
     <div class="upload-zone" id="upZone">
         <input type="file" accept=".pdf" id="pdfIn" onchange="procesarPDF(this.files[0])">
@@ -688,87 +684,66 @@ El PDF tiene estas secciones — extraé de TODAS:
 
 1. RESUMEN GLOBAL (al inicio): ingreso_bruto total, ajustes, tarifa_servicio total, total_neto.
 
-2. SECCIÓN "Alojamientos": tabla con una fila por propiedad. Cada fila tiene:
-   - nombre del alojamiento
-   - Ingresos brutos (puede ser R$0.00 si no hubo ingresos ese período)
-   - Ajustes
-   - Tarifas de servicio (número NEGATIVO, ej: -R$530.00 → -530)
-   - Total (BRL)
+2. SECCIÓN "Alojamientos": tabla con una fila por propiedad con: nombre, Ingresos brutos, Ajustes, Tarifas de servicio (NEGATIVO), Total (BRL).
 
-3. SECCIÓN "Estadísticas de desempeño" (puede estar al final, página 2 o 3): tabla con:
-   - nombre del alojamiento
-   - Noches reservadas
-   - Promedio de noches por estancia
-   Esta sección puede aparecer tanto global como desglosada por alojamiento.
+3. SECCIÓN "Estadísticas de desempeño" (puede estar al final, pagina 2 o 3): Noches reservadas y Promedio de noches por alojamiento.
 
-4. SECCIÓN "Ingresos mensuales" (solo en informes anuales): tabla mes/bruto/neto.
+4. SECCIÓN "Formas de cobro": forma de pago con monto y moneda.
 
-5. SECCIÓN "Formas de cobro": cada forma de pago con monto y moneda.
-
-Formato JSON de respuesta:
+Formato JSON:
 {
   "tipo": "mensual" o "anual",
   "anio": número,
   "mes": número (1-12) o null si es anual,
-  "ingreso_bruto": número sin símbolo (ej: 21971.87),
+  "ingreso_bruto": número (ej: 21971.87),
   "ajustes": número (0 o negativo),
-  "tarifa_servicio": número NEGATIVO (ej: -994.77),
+  "tarifa_servicio": número NEGATIVO,
   "total_neto": número,
-  "impuesto_airbnb": número (el monto que pagó Airbnb a las autoridades, de la línea "Impuestos liquidados por Airbnb"),
-  "noches_reservadas": número GLOBAL del período,
-  "promedio_noches_estancia": número global (ej: 7.8),
-  "anfitrion": "nombre del anfitrión",
-  "formas_cobro": [
-    {
-      "nombre_pdf": "texto exacto",
-      "monto": número,
-      "moneda": "BRL" o "USD" o "UYU",
-      "cuenta_id_sugerida": null
-    }
-  ],
+  "impuesto_airbnb": número (monto pagado a autoridades),
+  "noches_reservadas": número global,
+  "promedio_noches_estancia": número global,
+  "anfitrion": "nombre",
+  "formas_cobro": [{"nombre_pdf":"texto","monto":número,"moneda":"BRL/USD/UYU","cuenta_id_sugerida":null}],
   "cabanas": [
     {
       "caba_id": 1 o 2 o 3,
-      "nombre_airbnb": "nombre exacto como aparece en el PDF",
-      "ingreso_bruto": número (de la tabla Alojamientos, columna Ingresos brutos),
-      "ajustes": número (de la tabla Alojamientos, columna Ajustes, 0 si no hay),
-      "tarifa_servicio": número NEGATIVO (de la tabla Alojamientos, columna Tarifas de servicio),
-      "impuesto_airbnb": número (de la tabla Impuestos, columna Impuesto liquidado por Airbnb),
-      "total_neto": número (de la tabla Alojamientos, columna Total BRL),
-      "noches": número (de la tabla Estadísticas de desempeño, columna Noches reservadas — BUSCAR EN TODA LA PÁGINA, puede estar al final),
-      "promedio_noches": número (de Estadísticas de desempeño, columna Promedio de noches por estancia)
+      "nombre_airbnb": "nombre exacto del PDF",
+      "ingreso_bruto": número,
+      "ajustes": número,
+      "tarifa_servicio": número NEGATIVO,
+      "impuesto_airbnb": número,
+      "total_neto": número,
+      "noches": número (de Estadísticas de desempeño — BUSCAR EN TODA LA PÁGINA incluida la ÚLTIMA),
+      "promedio_noches": número
     }
   ]
 }
 
 REGLAS CRÍTICAS:
-- Los valores monetarios: eliminar "R$", ",", espacios. Ej: "R$14.379,56" → 14379.56
-- Las tarifas de servicio son SIEMPRE negativas. Si el PDF muestra "-R$695.15" → -695.15
-- Si un alojamiento tuvo R$0.00 en ingresos ese período, igualmente incluirlo con todos sus valores en 0
-- Las noches están en la sección "Estadísticas de desempeño" que puede estar en la ÚLTIMA PÁGINA
-- Si un campo no aparece usá 0. No inventes valores.
-- SIEMPRE incluir las 3 cabañas en el array "cabanas"
+- Números BRL: eliminar "R$" y puntos, cambiar coma por punto. "R$14.379,56" → 14379.56
+- Tarifas de servicio SIEMPRE negativas. "-R$695.15" → -695.15
+- Si un alojamiento tuvo R$0.00 ese período igualmente incluirlo con 0
+- Las noches están en "Estadísticas de desempeño" que puede estar en la ÚLTIMA PÁGINA del PDF
+- SIEMPRE incluir las 3 cabañas
+- No inventar valores — usar 0 si no aparece
 
 Mapeo de cabañas:
 - "Cabaña confortable y amplia rodeada de arboles" → caba_id: 1
 - "Departamento ideal para familias" → caba_id: 2
 - "Loft en Canasvieiras cerquita de la playa" → caba_id: 3
 
-Cuentas del sistema para cuenta_id_sugerida:
-${cuentasConocidas}
-
-Para cuenta_id_sugerida:
-- "Maria Florencia de Tezanos Pinto" / "Ch 1550" → cuenta BTG Flor
-- "Mauro Gastaldello" / "Western Union" / "Savings 0731" → cuenta Mauro
+Cuentas: ${cuentasConocidas}
+- "Maria Florencia de Tezanos Pinto" / "Ch 1550" → BTG Flor
+- "Mauro Gastaldello" / "Savings 0731" → BTG Mauro
 - "PayPal" → cuenta PayPal con esa moneda
-- Sin coincidencia clara → null`;
+- Sin coincidencia → null`;
 
     try {
         const res=await fetch('https://serene-scone-76bd4e.netlify.app/.netlify/functions/claude-proxy',{
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({
-                model:'gemini-2.0-flash-lite',
+                model:'gemini-2.5-flash-lite',
                 max_tokens:1000,
                 messages:[{
                     role:'user',
@@ -884,13 +859,18 @@ window.guardar = async function() {
     const periodo=tipo==='mensual'?`${anio}-${mes}`:anio;
     if(!vn('eBruto')){showImpErr('Ingresá el monto de ingresos brutos.');return;}
     if(!vn('eNeto')) {showImpErr('Ingresá el total neto recibido.');return;}
-    if(informes.find(i=>i.periodo===periodo)){showImpErr(`Ya existe el informe ${periodo}. Editalo desde el historial.`);return;}
+    const existente = informes.find(function(i){ return i.periodo===periodo; });
+    if(existente){
+        if(!confirm('Ya existe el informe ' + periodo + '.\n\n¿Sobreescribir con los datos nuevos del PDF?\n\nEsto reemplazara todos los valores actuales incluidos los datos por cabana.')){
+            return;
+        }
+    }
     const btn=document.getElementById('btnTxt');
     btn.textContent='Guardando…';
     document.getElementById('btnGuardar').disabled=true;
     try {
         await db.collection('informes_airbnb').doc(periodo).set(buildDocData('e',periodo,tipo,anio,mes));
-        showToast(`Informe ${periodo} guardado.`,'success');
+        showToast('Informe ' + periodo + (existente ? ' actualizado.' : ' guardado.'),'success');
         document.getElementById('mImport').classList.remove('open');
         await cargar();
     } catch(e){showImpErr('Error: '+e.message);document.getElementById('btnGuardar').disabled=false;}
