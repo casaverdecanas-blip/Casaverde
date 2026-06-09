@@ -852,7 +852,26 @@
             subirComprobante, abrirComprobante } = CVC;
 
     CVC.renderNav('pagos.html', userData.rol);
-    CVC.initAyuda('pagos.html');
+
+    // ── Acceso directo por URL params ──────────────────────────
+    // Desde Dashboard → "Registrar gasto con foto" → pagos.html?tab=egresos&accion=importar
+    var urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('tab') === 'egresos') {
+        var tabEgresos = document.querySelector('[data-tab="egresos"]');
+        if (tabEgresos) tabEgresos.click();
+        if (urlParams.get('accion') === 'importar') {
+            setTimeout(function() {
+                // Buscar el botón "Importar factura IA" en la pestaña Egresos
+                var btns = document.querySelectorAll('button');
+                for (var bi = 0; bi < btns.length; bi++) {
+                    if (btns[bi].textContent.indexOf('Importar factura') !== -1) {
+                        btns[bi].click();
+                        break;
+                    }
+                }
+            }, 500);
+        }
+    }
 
     // ── Visibilidad por rol ───────────────────────────────────
     if (esAdmin) {
@@ -1586,15 +1605,22 @@
 
             fLog('✅ Imagen lista. Enviando a IA...', 'ok');
 
-            var PROMPT = 'Sos un extractor de datos de facturas y recibos de compra.\n' +
-                'Extraé los datos del comprobante y respondé ÚNICAMENTE con JSON válido, sin texto adicional:\n' +
-                '{"proveedor":"","fecha":"YYYY-MM-DD","monto_total":0,"moneda":"BRL","concepto":"","numero_factura":"","categoria_sugerida":"","metodo_pago_sugerido":"","items":""}';
+            var PROMPT = 'Sos un extractor de datos de facturas y recibos de compra en Brasil.' +
+                ' Extraé los datos del comprobante y respondé UNICAMENTE con JSON valido, sin texto adicional ni markdown:' +
+                ' {"proveedor":"","fecha":"YYYY-MM-DD","monto_total":0,"moneda":"BRL","concepto":"",' +
+                '"numero_factura":"","categoria_sugerida":"","metodo_pago_sugerido":"","items":""}.' +
+                ' Para monto_total: eliminar R$, puntos de miles, reemplazar coma decimal por punto. Ejemplo: R$1.234,56 → 1234.56.' +
+                ' Para categoria_sugerida usar una de: Materiales, Servicios, Limpieza, Mantenimiento, Alimentos, Transporte, Otros.' +
+                ' Para metodo_pago_sugerido usar: efectivo, debito, credito, pix, transferencia.';
 
-            var response = await fetch('https://api.anthropic.com/v1/messages', {
+            // Llamar al proxy de Netlify (igual que informes-airbnb)
+            var PROXY_URL = 'https://serene-scone-76bd4e.netlify.app/.netlify/functions/claude-proxy';
+
+            var response = await fetch(PROXY_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    model: 'claude-sonnet-4-20250514',
+                    model: 'gemini-2.5-flash-lite',
                     max_tokens: 1000,
                     messages: [{
                         role: 'user',
@@ -1607,6 +1633,12 @@
             });
 
             var data = await response.json();
+            if (!response.ok) {
+                fLog('❌ Error del proxy: ' + (data.error || response.status), 'err');
+                document.getElementById('fCampos').style.display     = 'block';
+                document.getElementById('fBtnGuardar').style.display = 'inline-flex';
+                return;
+            }
             var raw  = data.content && data.content[0] ? data.content[0].text : '';
             fLog('Interpretando...', 'ok');
 
