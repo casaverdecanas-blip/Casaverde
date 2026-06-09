@@ -269,14 +269,9 @@
                     <span class="material-icons">trending_down</span>
                     Egresos — gastos operativos
                 </h2>
-                <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;">
-                    <button class="btn btn-secondary" onclick="abrirImportarFactura()">
-                        <span class="material-icons">document_scanner</span> Importar factura IA
-                    </button>
-                    <button class="btn btn-primary" onclick="abrirModalEgreso()">
-                        <span class="material-icons">add</span> Registrar gasto
-                    </button>
-                </div>
+                <button class="btn btn-primary" onclick="abrirNuevoGasto()">
+                    <span class="material-icons">add</span> Registrar gasto
+                </button>
             </div>
             <div id="egresosContainer">
                 <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
@@ -727,6 +722,220 @@
     </div>
 </div>
 
+
+<!-- ══ MODAL: NUEVO GASTO UNIFICADO ═══════════════════════════════════════ -->
+<div class="modal-overlay" id="modalNuevoGasto" style="display:none;" onclick="cerrarNuevoGasto(event)">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:480px;">
+        <div class="modal__header">
+            <div class="modal__title">
+                <span class="material-icons">add_shopping_cart</span>
+                Registrar gasto
+            </div>
+            <button class="modal__close" onclick="cerrarNuevoGasto()">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+            <!-- Selector modo -->
+            <div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-4);">
+                <button id="modoRapidoBtn" onclick="setModoGasto('rapido')"
+                    style="flex:1;padding:var(--space-3);border-radius:var(--radius-md);
+                           border:2px solid var(--color-primary);background:var(--color-primary);
+                           color:white;font-family:var(--font-body);font-weight:700;cursor:pointer;
+                           display:flex;align-items:center;justify-content:center;gap:var(--space-2);">
+                    <span class="material-icons" style="font-size:18px;">edit</span> Rapido
+                </button>
+                <button id="modoFotoBtn" onclick="setModoGasto('foto')"
+                    style="flex:1;padding:var(--space-3);border-radius:var(--radius-md);
+                           border:2px solid var(--color-border);background:var(--color-surface-2);
+                           color:var(--color-text-secondary);font-family:var(--font-body);font-weight:700;cursor:pointer;
+                           display:flex;align-items:center;justify-content:center;gap:var(--space-2);">
+                    <span class="material-icons" style="font-size:18px;">document_scanner</span> Con foto IA
+                </button>
+            </div>
+
+            <!-- MODO RAPIDO -->
+            <div id="seccionRapida">
+                <div class="form-group" style="margin-bottom:var(--space-3);">
+                    <label class="form-label">Monto (R$) *</label>
+                    <input type="number" id="ngMonto" class="form-control" step="0.01" min="0" placeholder="0,00"
+                        style="font-size:var(--text-xl);font-weight:700;text-align:right;">
+                </div>
+                <div class="form-group" style="margin-bottom:var(--space-3);">
+                    <label class="form-label">De donde salio *</label>
+                    <select id="ngCuenta" class="form-control">
+                        <option value="">-- Pendiente de asignar --</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:var(--space-3);">
+                    <label class="form-label">Para que *</label>
+                    <input type="text" id="ngConcepto" class="form-control"
+                        placeholder="Materiales, limpieza, nafta...">
+                </div>
+                <!-- Opcionales colapsados -->
+                <div id="ngOpcionales" style="display:none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Fecha</label>
+                            <input type="date" id="ngFecha" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Metodo de pago</label>
+                            <select id="ngMetodo" class="form-control">
+                                <option value="pix">PIX</option>
+                                <option value="efectivo">Efectivo</option>
+                                <option value="debito">Debito</option>
+                                <option value="credito">Credito</option>
+                                <option value="transferencia">Transferencia</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Circuito fiscal</label>
+                        <select id="ngCircuito" class="form-control">
+                            <option value="fiscal">Fiscal (gasto del negocio)</option>
+                            <option value="personal">Personal (fondos propios)</option>
+                            <option value="mixto">Mixto</option>
+                            <option value="">Sin clasificar -- revisar despues</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Proveedor</label>
+                        <input type="text" id="ngProveedor" class="form-control" placeholder="Nombre del comercio">
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Foto del comprobante</label>
+                        <input type="file" id="ngComprobanteInput" accept="image/*" capture="environment"
+                            style="display:none;" onchange="ngPreviewFoto(this)">
+                        <button class="btn btn-secondary btn-sm"
+                            onclick="document.getElementById('ngComprobanteInput').click()">
+                            <span class="material-icons">photo_camera</span> Agregar foto
+                        </button>
+                        <img id="ngComprobantePreview" src=""
+                            style="display:none;width:100%;border-radius:var(--radius-md);margin-top:var(--space-2);">
+                    </div>
+                </div>
+                <button onclick="toggleNgOpcionales()" id="ngToggleBtn"
+                    style="background:none;border:none;color:var(--color-primary);font-size:var(--text-sm);
+                           cursor:pointer;padding:0;font-family:var(--font-body);margin-bottom:var(--space-3);">
+                    + Mas detalles (opcional)
+                </button>
+            </div>
+
+            <!-- MODO FOTO IA -->
+            <div id="seccionFoto" style="display:none;">
+                <div id="ngUpZone"
+                    style="border:2px dashed var(--color-border);border-radius:var(--radius-lg);
+                           padding:var(--space-6);text-align:center;cursor:pointer;margin-bottom:var(--space-3);"
+                    onclick="document.getElementById('ngFotoInput').click()">
+                    <span class="material-icons" style="font-size:36px;color:var(--color-text-muted);">document_scanner</span>
+                    <div style="font-weight:700;color:var(--color-text-secondary);margin-top:var(--space-2);">
+                        Toma o selecciona una foto de la factura
+                    </div>
+                    <div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-top:4px;">
+                        La IA extrae todos los datos automaticamente
+                    </div>
+                    <input type="file" id="ngFotoInput" accept="image/*" capture="environment"
+                        style="display:none;" onchange="ngProcesarFoto(this)">
+                </div>
+                <img id="ngFotoPreview" src=""
+                    style="display:none;width:100%;border-radius:var(--radius-md);margin-bottom:var(--space-3);">
+                <div id="ngFotoLog"
+                    style="display:none;background:#1a1a2e;border-radius:var(--radius-md);
+                           padding:var(--space-3);font-size:11px;font-family:monospace;color:#a8ffa8;
+                           max-height:80px;overflow-y:auto;margin-bottom:var(--space-3);"></div>
+                <div id="ngFotoExtraido" style="display:none;">
+                    <div style="background:var(--color-success-bg);border:1px solid rgba(29,158,117,0.2);
+                         border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);
+                         font-size:var(--text-sm);color:var(--color-success);margin-bottom:var(--space-3);
+                         display:flex;align-items:center;gap:var(--space-2);">
+                        <span class="material-icons" style="font-size:15px;">auto_fix_high</span>
+                        Datos extraidos por IA -- revisa y completa lo que falta
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Monto (R$) *</label>
+                        <input type="number" id="ngFMonto" class="form-control" step="0.01" min="0"
+                            style="font-size:var(--text-xl);font-weight:700;text-align:right;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">De donde salio *</label>
+                        <select id="ngFCuenta" class="form-control">
+                            <option value="">-- Pendiente de asignar --</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Concepto *</label>
+                        <input type="text" id="ngFConcepto" class="form-control">
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Proveedor</label>
+                        <input type="text" id="ngFProveedor" class="form-control">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Fecha</label>
+                            <input type="date" id="ngFFecha" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Metodo</label>
+                            <select id="ngFMetodo" class="form-control">
+                                <option value="pix">PIX</option>
+                                <option value="efectivo">Efectivo</option>
+                                <option value="debito">Debito</option>
+                                <option value="credito">Credito</option>
+                                <option value="transferencia">Transferencia</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Circuito fiscal</label>
+                        <select id="ngFCircuito" class="form-control">
+                            <option value="fiscal">Fiscal (gasto del negocio)</option>
+                            <option value="personal">Personal</option>
+                            <option value="mixto">Mixto</option>
+                            <option value="">Sin clasificar -- revisar despues</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Items de la compra</label>
+                        <textarea id="ngFItems" class="form-control" rows="3" style="font-size:11px;"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">N factura</label>
+                            <input type="text" id="ngFReferencia" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Categoria</label>
+                            <select id="ngFCategoria" class="form-control">
+                                <option value="materiales">Materiales</option>
+                                <option value="limpieza">Limpieza / insumos</option>
+                                <option value="mantenimiento">Mantenimiento</option>
+                                <option value="servicios">Servicios</option>
+                                <option value="administrativo">Administrativo</option>
+                                <option value="alimentos">Alimentos</option>
+                                <option value="transporte">Transporte</option>
+                                <option value="otro">Otro</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert alert-error" id="ngError" style="display:none;">
+                <span class="material-icons">error_outline</span>
+                <span id="ngErrorText"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarNuevoGasto()">Cancelar</button>
+            <button class="btn btn-primary" id="ngBtnGuardar" onclick="guardarNuevoGasto()">
+                <span class="material-icons">save</span>
+                <span id="ngBtnTxt">Guardar gasto</span>
+            </button>
+        </div>
+    </div>
+</div>
 
 <!-- ── MODAL: Importar factura con IA ─────────────────────────── -->
 <div class="modal-overlay" id="modalFactura" style="display:none;" onclick="cerrarModalFactura(event)">
@@ -1316,6 +1525,22 @@
             showToast('Ingreso registrado.', 'success');
             document.getElementById('modalIngreso').style.display = 'none';
             await cargarTodo();
+
+    // Precargar cuentas en el selector de la factura IA
+    try {
+        var cSnapF = await db.collection('cuentas').where('activa','==',true).get();
+        var selCF  = document.getElementById('fCuentaOrigen');
+        if (selCF) {
+            cSnapF.docs.forEach(function(d) {
+                var c = d.data();
+                var opt = document.createElement('option');
+                opt.value = d.id;
+                opt.dataset.nom = c.nombre || '';
+                opt.textContent = (c.nombre || d.id) + ' (' + (c.moneda || '') + ')';
+                selCF.appendChild(opt);
+            });
+        }
+    } catch(e) { /* silencioso */ }
         } catch(e) { mostrarErrorIngreso('Error: ' + e.message); }
         finally { btn.disabled = false; text.textContent = 'Guardar'; }
     };
@@ -1561,20 +1786,7 @@
         document.getElementById('fError').style.display      = 'none';
         document.getElementById('fImgInput').value           = '';
         document.getElementById('modalFactura').style.display = 'flex';
-        // Poblar selector de cuentas de origen
-        var selCuentaF = document.getElementById('fCuentaOrigen');
-        if (selCuentaF && selCuentaF.options.length <= 1) {
-            db.collection('cuentas').where('activa','==',true).get().then(function(snap) {
-                snap.docs.forEach(function(d) {
-                    var c = d.data();
-                    var opt = document.createElement('option');
-                    opt.value = d.id;
-                    opt.dataset.nom = c.nombre || '';
-                    opt.textContent = (c.nombre || d.id) + ' (' + (c.moneda || '') + ')';
-                    selCuentaF.appendChild(opt);
-                });
-            }).catch(function() {});
-        }
+        // Cuentas se cargan al init de la página — ver abajo
     };
     window.cerrarModalFactura = function(e) {
         if (e && e.target !== document.getElementById('modalFactura')) return;
@@ -1674,7 +1886,7 @@
             fLog('Interpretando...', 'ok');
 
             var ext;
-            try { ext = JSON.parse(raw.replace(/```json|```/g, '').trim()); }
+            try { var bt=String.fromCharCode(96); var cleanRaw=raw.split(bt).join('').split(bt+'json').join('').replace('json','').trim(); ext=JSON.parse(cleanRaw); }
             catch(e) {
                 fLog('❌ Error en JSON: ' + e.message, 'err');
                 document.getElementById('fCampos').style.display     = 'block';
@@ -1700,7 +1912,29 @@
             document.getElementById('fMetodo').value = d.metodo_pago_sugerido;
         if (d.concepto)        document.getElementById('fConcepto').value   = d.concepto;
         if (d.numero_factura)  document.getElementById('fReferencia').value = d.numero_factura;
-        if (d.items)           document.getElementById('fItems').value      = d.items;
+        // items puede ser string o array de objetos — convertir a texto legible
+        if (d.items) {
+            var itemsTxt = d.items;
+            if (Array.isArray(d.items)) {
+                itemsTxt = d.items.map(function(it) {
+                    if (typeof it === 'string') return it;
+                    // Objeto con descripcion/cantidad/precio
+                    var partes = [];
+                    if (it.descripcion || it.description || it.nombre || it.item) {
+                        partes.push(it.descripcion || it.description || it.nombre || it.item);
+                    }
+                    if (it.cantidad || it.qty || it.qtde) partes.push('x' + (it.cantidad || it.qty || it.qtde));
+                    if (it.precio || it.price || it.valor || it.vl_total) {
+                        partes.push('R$ ' + (it.precio || it.price || it.valor || it.vl_total));
+                    }
+                    return partes.join(' ');
+                }).join('
+');
+            } else if (typeof d.items === 'object') {
+                itemsTxt = JSON.stringify(d.items);
+            }
+            document.getElementById('fItems').value = itemsTxt;
+        }
         document.getElementById('fCampos').style.display     = 'block';
         document.getElementById('fBtnGuardar').style.display = 'inline-flex';
     }
@@ -1755,6 +1989,318 @@
     // ── Init ──────────────────────────────────────────────────
     await cargarTodo();
 
+
+    // ══ NUEVO MODAL DE GASTO UNIFICADO ═══════════════════════════════════════
+
+    var _ngModo        = 'rapido';
+    var _ngComprobanteFile = null;
+    var _ngFotoFile    = null;
+    var _ngCuentasCache = [];
+
+    // Abrir modal
+    window.abrirNuevoGasto = async function() {
+        // Reset
+        _ngModo = 'rapido';
+        _ngComprobanteFile = null;
+        _ngFotoFile = null;
+        document.getElementById('ngMonto').value    = '';
+        document.getElementById('ngConcepto').value = '';
+        document.getElementById('ngProveedor') && (document.getElementById('ngProveedor').value = '');
+        document.getElementById('ngOpcionales').style.display = 'none';
+        document.getElementById('ngToggleBtn').textContent = '+ Mas detalles (opcional)';
+        document.getElementById('seccionRapida').style.display = 'block';
+        document.getElementById('seccionFoto').style.display   = 'none';
+        document.getElementById('ngFotoPreview').style.display = 'none';
+        document.getElementById('ngFotoLog').style.display     = 'none';
+        document.getElementById('ngFotoExtraido').style.display = 'none';
+        document.getElementById('ngError').style.display       = 'none';
+        document.getElementById('ngFecha') && (document.getElementById('ngFecha').value = new Date().toISOString().split('T')[0]);
+        setModoGasto('rapido');
+
+        // Cargar cuentas si no estan cargadas
+        if (_ngCuentasCache.length === 0) {
+            try {
+                var snap = await db.collection('cuentas').where('activa','==',true).get();
+                _ngCuentasCache = snap.docs.map(function(d) {
+                    return { id: d.id, nombre: d.data().nombre || d.id, moneda: d.data().moneda || '' };
+                });
+            } catch(e) { _ngCuentasCache = []; }
+        }
+
+        // Poblar selects de cuentas
+        ['ngCuenta', 'ngFCuenta'].forEach(function(selectId) {
+            var sel = document.getElementById(selectId);
+            if (!sel) return;
+            sel.innerHTML = '<option value="">-- Pendiente de asignar --</option>';
+            _ngCuentasCache.forEach(function(c) {
+                var opt = document.createElement('option');
+                opt.value = c.id;
+                opt.dataset.nom = c.nombre;
+                opt.textContent = c.nombre + ' (' + c.moneda + ')';
+                sel.appendChild(opt);
+            });
+        });
+
+        document.getElementById('modalNuevoGasto').style.display = 'flex';
+        setTimeout(function() { document.getElementById('ngMonto').focus(); }, 150);
+    };
+
+    window.cerrarNuevoGasto = function(e) {
+        if (e && e.target !== document.getElementById('modalNuevoGasto')) return;
+        document.getElementById('modalNuevoGasto').style.display = 'none';
+    };
+
+    window.setModoGasto = function(modo) {
+        _ngModo = modo;
+        var esFoto = modo === 'foto';
+        document.getElementById('seccionRapida').style.display = esFoto ? 'none' : 'block';
+        document.getElementById('seccionFoto').style.display   = esFoto ? 'block' : 'none';
+        // Estilos botones
+        var btnR = document.getElementById('modoRapidoBtn');
+        var btnF = document.getElementById('modoFotoBtn');
+        if (btnR) {
+            btnR.style.background   = esFoto ? 'var(--color-surface-2)' : 'var(--color-primary)';
+            btnR.style.color        = esFoto ? 'var(--color-text-secondary)' : 'white';
+            btnR.style.borderColor  = esFoto ? 'var(--color-border)' : 'var(--color-primary)';
+        }
+        if (btnF) {
+            btnF.style.background   = esFoto ? 'var(--color-primary)' : 'var(--color-surface-2)';
+            btnF.style.color        = esFoto ? 'white' : 'var(--color-text-secondary)';
+            btnF.style.borderColor  = esFoto ? 'var(--color-primary)' : 'var(--color-border)';
+        }
+    };
+
+    window.toggleNgOpcionales = function() {
+        var el  = document.getElementById('ngOpcionales');
+        var btn = document.getElementById('ngToggleBtn');
+        var visible = el.style.display !== 'none';
+        el.style.display  = visible ? 'none' : 'block';
+        btn.textContent   = visible ? '+ Mas detalles (opcional)' : '- Ocultar detalles';
+    };
+
+    window.ngPreviewFoto = function(input) {
+        var file = input.files[0];
+        if (!file) return;
+        _ngComprobanteFile = file;
+        var img = document.getElementById('ngComprobantePreview');
+        img.src = URL.createObjectURL(file);
+        img.style.display = 'block';
+    };
+
+    // Procesar foto con IA
+    window.ngProcesarFoto = async function(input) {
+        var file = input.files[0];
+        if (!file) return;
+        _ngFotoFile = file;
+
+        var preview = document.getElementById('ngFotoPreview');
+        preview.src = URL.createObjectURL(file);
+        preview.style.display = 'block';
+
+        var logEl = document.getElementById('ngFotoLog');
+        logEl.style.display = 'block';
+        logEl.innerHTML = '';
+
+        function flog(msg, color) {
+            logEl.innerHTML += '<span style="color:' + (color||'#93c5fd') + '">' + msg + '</span>
+';
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        document.getElementById('ngUpZone').style.display = 'none';
+        flog('Procesando imagen...');
+
+        try {
+            // Comprimir imagen
+            var b64 = await new Promise(function(res, rej) {
+                var canvas = document.createElement('canvas');
+                var img2   = new Image();
+                img2.onload = function() {
+                    var max = 1200;
+                    var w = img2.width, h = img2.height;
+                    if (w > max) { h = h * max / w; w = max; }
+                    if (h > max) { w = w * max / h; h = max; }
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img2, 0, 0, w, h);
+                    res(canvas.toDataURL('image/jpeg', 0.75).split(',')[1]);
+                };
+                img2.onerror = rej;
+                img2.src = URL.createObjectURL(file);
+            });
+
+            flog('Enviando a Gemini IA...', '#fbbf24');
+
+            var PROMPT = 'Sos un extractor de datos de facturas y recibos de compra en Brasil.' +
+                ' Extrae todos los datos posibles del comprobante y responde UNICAMENTE con JSON valido, sin texto adicional:' +
+                ' {"proveedor":"","fecha":"YYYY-MM-DD","monto_total":0,"moneda":"BRL","concepto":"",' +
+                '"numero_factura":"","categoria_sugerida":"","metodo_pago_sugerido":"",' +
+                '"items":[{"descripcion":"","cantidad":1,"precio":0}]}.' +
+                ' Numeros BRL: eliminar R$, puntos de miles, cambiar coma por punto. R$1.234,56 -> 1234.56.' +
+                ' metodo_pago_sugerido: pix, efectivo, debito, credito o transferencia.' +
+                ' categoria_sugerida: Materiales, Limpieza, Mantenimiento, Servicios, Alimentos, Transporte u Otro.';
+
+            var resp = await fetch('https://serene-scone-76bd4e.netlify.app/.netlify/functions/claude-proxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: 'gemini-2.5-flash-lite',
+                    max_tokens: 1500,
+                    messages: [{
+                        role: 'user',
+                        content: [
+                            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
+                            { type: 'text',  text: PROMPT }
+                        ]
+                    }]
+                })
+            });
+
+            var data = await resp.json();
+            if (!resp.ok) { flog('Error: ' + (data.error || resp.status), '#f87171'); return; }
+
+            var raw = data.content && data.content[0] ? data.content[0].text : '';
+            flog('Interpretando datos...', '#4ade80');
+
+            var ext;
+            try {
+                var bt=String.fromCharCode(96); var cleanRaw=raw.split(bt).join('').split(bt+'json').join('').replace('json','').trim(); ext=JSON.parse(cleanRaw);
+            } catch(e) {
+                flog('Error al interpretar JSON: ' + e.message, '#f87171');
+                return;
+            }
+
+            // Poblar campos
+            if (ext.monto_total)  document.getElementById('ngFMonto').value    = ext.monto_total;
+            if (ext.concepto)     document.getElementById('ngFConcepto').value  = ext.concepto;
+            if (ext.proveedor)    document.getElementById('ngFProveedor').value = ext.proveedor;
+            if (ext.fecha)        document.getElementById('ngFFecha').value     = ext.fecha;
+            if (ext.numero_factura) document.getElementById('ngFReferencia').value = ext.numero_factura;
+
+            // Metodo de pago
+            if (ext.metodo_pago_sugerido) {
+                var sel = document.getElementById('ngFMetodo');
+                var vals = ['pix','efectivo','debito','credito','transferencia'];
+                if (vals.indexOf(ext.metodo_pago_sugerido) !== -1) sel.value = ext.metodo_pago_sugerido;
+            }
+
+            // Categoria
+            if (ext.categoria_sugerida) {
+                var catMap = {
+                    'materiales':'materiales','limpieza':'limpieza','mantenimiento':'mantenimiento',
+                    'servicios':'servicios','alimentos':'alimentos','transporte':'transporte','otro':'otro'
+                };
+                var catSel = document.getElementById('ngFCategoria');
+                var catKey = ext.categoria_sugerida.toLowerCase();
+                if (catMap[catKey]) catSel.value = catMap[catKey];
+            }
+
+            // Items
+            if (ext.items) {
+                var itemsTxt = '';
+                if (Array.isArray(ext.items)) {
+                    itemsTxt = ext.items.map(function(it) {
+                        if (typeof it === 'string') return it;
+                        var partes = [];
+                        if (it.descripcion || it.description) partes.push(it.descripcion || it.description);
+                        if (it.cantidad && it.cantidad !== 1) partes.push('x' + it.cantidad);
+                        if (it.precio)  partes.push('R$ ' + it.precio);
+                        return partes.join(' - ');
+                    }).filter(Boolean).join('
+');
+                } else {
+                    itemsTxt = String(ext.items);
+                }
+                document.getElementById('ngFItems').value = itemsTxt;
+            }
+
+            flog('Datos extraidos correctamente', '#4ade80');
+            document.getElementById('ngFotoExtraido').style.display = 'block';
+
+        } catch(e) {
+            document.getElementById('ngUpZone').style.display = 'block';
+            flog('Error: ' + e.message, '#f87171');
+        }
+    };
+
+    // Guardar nuevo gasto
+    window.guardarNuevoGasto = async function() {
+        var esFoto   = _ngModo === 'foto';
+        var monto    = parseFloat(esFoto ? document.getElementById('ngFMonto').value : document.getElementById('ngMonto').value);
+        var concepto = (esFoto ? document.getElementById('ngFConcepto').value : document.getElementById('ngConcepto').value).trim();
+        var selCta   = document.getElementById(esFoto ? 'ngFCuenta' : 'ngCuenta');
+        var cuentaId  = selCta ? selCta.value : '';
+        var cuentaNom = selCta && selCta.options[selCta.selectedIndex] ? (selCta.options[selCta.selectedIndex].dataset.nom || '') : '';
+
+        if (!monto || monto <= 0) {
+            document.getElementById('ngErrorText').textContent = 'Ingresa un monto valido.';
+            document.getElementById('ngError').style.display = 'flex'; return;
+        }
+        if (!concepto) {
+            document.getElementById('ngErrorText').textContent = 'Ingresa un concepto o para que fue el gasto.';
+            document.getElementById('ngError').style.display = 'flex'; return;
+        }
+
+        var btn = document.getElementById('ngBtnGuardar');
+        var txt = document.getElementById('ngBtnTxt');
+        btn.disabled = true; txt.textContent = 'Guardando...';
+        document.getElementById('ngError').style.display = 'none';
+
+        try {
+            var fecha    = (esFoto ? document.getElementById('ngFFecha').value : document.getElementById('ngFecha').value)
+                           || new Date().toISOString().split('T')[0];
+            var metodo   = (esFoto ? document.getElementById('ngFMetodo').value : document.getElementById('ngMetodo').value) || 'pix';
+            var circuito = (esFoto ? document.getElementById('ngFCircuito').value : document.getElementById('ngCircuito').value) || '';
+            var proveedor = (esFoto ? document.getElementById('ngFProveedor').value : document.getElementById('ngProveedor').value || '').trim();
+            var items    = esFoto ? (document.getElementById('ngFItems').value || '') : '';
+            var ref      = esFoto ? (document.getElementById('ngFReferencia').value || '') : '';
+            var cat      = esFoto ? document.getElementById('ngFCategoria').value : 'otro';
+
+            var docData = {
+                concepto: concepto,
+                monto:    monto,
+                moneda:   'BRL',
+                fecha:    fecha,
+                metodo:   metodo,
+                circuito: circuito || null,
+                deducible: circuito === 'fiscal' || circuito === 'mixto',
+                proveedor: proveedor,
+                categoria: cat,
+                cuentaOrigenId:  cuentaId,
+                cuentaOrigenNom: cuentaNom,
+                sinCuenta: !cuentaId,
+                items:     items,
+                referenciaComprobante: ref,
+                notas:     '',
+                comprobanteUrl: null,
+                origen:    esFoto ? 'factura_ia' : 'manual',
+                creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
+                creadoPor: user.uid
+            };
+
+            var docRef = await db.collection('gastos').add(docData);
+
+            // Subir foto si hay
+            var fotoFile = esFoto ? _ngFotoFile : _ngComprobanteFile;
+            if (fotoFile) {
+                txt.textContent = 'Subiendo foto...';
+                try {
+                    var url = await CVC.subirComprobante(fotoFile, 'gastos', docRef.id);
+                    await docRef.update({ comprobanteUrl: url });
+                } catch(se) { console.warn('Foto:', se.message); }
+            }
+
+            CVC.showToast('Gasto registrado.' + (!cuentaId ? ' Pendiente asignar cuenta.' : ''), 'success');
+            document.getElementById('modalNuevoGasto').style.display = 'none';
+            await cargarTodo();
+
+        } catch(e) {
+            document.getElementById('ngErrorText').textContent = 'Error: ' + e.message;
+            document.getElementById('ngError').style.display = 'flex';
+        } finally {
+            btn.disabled = false; txt.textContent = 'Guardar gasto';
+        }
+    };
+    // ══ FIN NUEVO MODAL ═══════════════════════════════════════════════════════
 })();
 </script>
 
