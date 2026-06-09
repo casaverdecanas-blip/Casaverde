@@ -813,8 +813,25 @@
                     <input type="text" id="fReferencia" class="form-control">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Ítems detectados</label>
-                    <textarea id="fItems" class="form-control" rows="3" style="font-size:11px;"></textarea>
+                    <label class="form-label">Ítems de la compra</label>
+                    <textarea id="fItems" class="form-control" rows="3" style="font-size:11px;"
+                        placeholder="Se completa automáticamente con los productos detectados"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Cuenta de origen</label>
+                        <select id="fCuentaOrigen" class="form-control">
+                            <option value="">— Pendiente de asignar —</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Circuito fiscal</label>
+                        <select id="fCircuito" class="form-control">
+                            <option value="fiscal">Fiscal (gasto del negocio)</option>
+                            <option value="personal">Personal (fondos propios)</option>
+                            <option value="mixto">Mixto (parte fiscal + parte personal)</option>
+                        </select>
+                    </div>
                 </div>
             </div>
             <div class="alert alert-error" id="fError" style="display:none;">
@@ -1544,6 +1561,20 @@
         document.getElementById('fError').style.display      = 'none';
         document.getElementById('fImgInput').value           = '';
         document.getElementById('modalFactura').style.display = 'flex';
+        // Poblar selector de cuentas de origen
+        var selCuentaF = document.getElementById('fCuentaOrigen');
+        if (selCuentaF && selCuentaF.options.length <= 1) {
+            db.collection('cuentas').where('activa','==',true).get().then(function(snap) {
+                snap.docs.forEach(function(d) {
+                    var c = d.data();
+                    var opt = document.createElement('option');
+                    opt.value = d.id;
+                    opt.dataset.nom = c.nombre || '';
+                    opt.textContent = (c.nombre || d.id) + ' (' + (c.moneda || '') + ')';
+                    selCuentaF.appendChild(opt);
+                });
+            }).catch(function() {});
+        }
     };
     window.cerrarModalFactura = function(e) {
         if (e && e.target !== document.getElementById('modalFactura')) return;
@@ -1686,18 +1717,26 @@
         try {
             const ref   = document.getElementById('fReferencia').value.trim();
             const items = document.getElementById('fItems').value.trim();
+            var selCF    = document.getElementById('fCuentaOrigen');
+            var circuito = document.getElementById('fCircuito') ? document.getElementById('fCircuito').value : 'fiscal';
+            var cuentaId  = selCF ? selCF.value : '';
+            var cuentaNom = selCF && selCF.options[selCF.selectedIndex] ? (selCF.options[selCF.selectedIndex].dataset.nom || '') : '';
             await db.collection('gastos').add({
                 concepto, monto, fecha,
-                categoria:  document.getElementById('fCategoria').value,
-                moneda:     document.getElementById('fMoneda').value,
-                metodo:     document.getElementById('fMetodo').value,
-                proveedor:  document.getElementById('fProveedor').value.trim(),
-                notas:      [ref ? 'Factura: ' + ref : '', items].filter(Boolean).join(' | '),
-                circuito:   'fiscal', deducible: true,
+                categoria:            document.getElementById('fCategoria').value,
+                moneda:               document.getElementById('fMoneda').value,
+                metodo:               document.getElementById('fMetodo').value,
+                proveedor:            document.getElementById('fProveedor').value.trim(),
+                notas:                ref ? 'Factura: ' + ref : '',
+                items:                items,
+                circuito:             circuito,
+                deducible:            circuito === 'fiscal' || circuito === 'mixto',
+                cuentaOrigenId:       cuentaId,
+                cuentaOrigenNom:      cuentaNom,
                 referenciaComprobante: ref,
-                origen:     'factura_ia',
-                creadoEn:   firebase.firestore.FieldValue.serverTimestamp(),
-                creadoPor:  user.uid
+                origen:               'factura_ia',
+                creadoEn:             firebase.firestore.FieldValue.serverTimestamp(),
+                creadoPor:            user.uid
             });
             showToast('Gasto registrado desde factura.', 'success');
             document.getElementById('modalFactura').style.display = 'none';
