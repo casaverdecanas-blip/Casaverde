@@ -1198,7 +1198,7 @@
         agregarFechas(honorariosCache);
         const sel = document.getElementById('selectMes');
         sel.innerHTML = '<option value="">Todos los meses</option>'
-            + [...meses].sort().reverse().map(function(m) {
+            + meses.slice().sort().reverse().map(function(m) {
                 const parts = m.split('-');
                 return '<option value="' + m + '">'
                     + new Date(parts[0], parts[1] - 1).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
@@ -1234,25 +1234,25 @@
                     return (b.creadoEn && b.creadoEn.toDate ? b.creadoEn.toDate().getTime() : 0)
                          - (a.creadoEn && a.creadoEn.toDate ? a.creadoEn.toDate().getTime() : 0);
                 };
-                reservasCache = resS.docs.map(function(d) { return { id: d.id, ...d.data() }; })
+                reservasCache = resS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
                     .filter(function(r) { return ['confirmada','pendiente','finalizada'].includes(r.estado); })
                     .sort(function(a, b) {
                         return (b.checkIn && b.checkIn.toDate ? b.checkIn.toDate().getTime() : 0)
                              - (a.checkIn && a.checkIn.toDate ? a.checkIn.toDate().getTime() : 0);
                     });
-                presupuestosCache = presS.docs.map(function(d) { return { id: d.id, ...d.data() }; });
-                ingresosCache     = ingS.docs.map(function(d) { return { id: d.id, ...d.data() }; }).sort(sortDesc);
-                egresosCache      = egS.docs.map(function(d) { return { id: d.id, ...d.data() }; }).sort(sortDesc);
-                honorariosCache   = honS.docs.map(function(d) { return { id: d.id, ...d.data() }; })
+                presupuestosCache = presS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+                ingresosCache     = ingS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); }).sort(sortDesc);
+                egresosCache      = egS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); }).sort(sortDesc);
+                honorariosCache   = honS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
                     .filter(function(h) { return h.estado !== 'pagado'; }).sort(sortDesc);
-                cuentasCache      = cuentS.docs.map(function(d) { return { id: d.id, ...d.data() }; });
+                cuentasCache      = cuentS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
                 poblarSelectMes();
                 renderBalance(); renderIngresos(); renderEgresos(); renderHonorarios();
                 poblarSelectIngreso();
             } else {
                 const honS = await db.collection('honorarios')
                     .where('uid', '==', user.uid).get();
-                honorariosCache = honS.docs.map(function(d) { return { id: d.id, ...d.data() }; })
+                honorariosCache = honS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
                     .filter(function(h) { return h.estado !== 'pagado'; });
                 renderMiBalance(); renderHonorarios();
             }
@@ -1411,7 +1411,7 @@
     async function cargarRetiros() {
         try {
             const snap = await db.collection('retiros').orderBy('fecha', 'desc').limit(200).get();
-            retirosCache = snap.docs.map(function(d) { return { id: d.id, ...d.data() }; });
+            retirosCache = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
             renderRetiros();
         } catch(e) {
             console.warn('cargarRetiros:', e.message);
