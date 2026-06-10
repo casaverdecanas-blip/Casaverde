@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diagnóstico utils.js</title>
+<style>
+body { font-family: monospace; background:#111; color:#0f0; padding:16px; font-size:13px; }
+.ok   { color:#0f0; }
+.err  { color:#f55; font-weight:bold; }
+.warn { color:#fa0; }
+.info { color:#8cf; }
+#log  { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h2 style="color:#fff">Diagnostico utils.js</h2>
+<div id="log"></div>
+
+<script>
+var log = document.getElementById('log');
+function p(msg, cls) {
+    log.innerHTML += '<span class="' + (cls||'ok') + '">' + new Date().toLocaleTimeString() + ' ' + msg + '</span>\n';
+}
+
+p('[1] Pagina cargada', 'info');
+p('[2] Iniciando carga de Firebase...', 'info');
+</script>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"
+    onload="p('[3] firebase-app.js OK','ok')"
+    onerror="p('[3] firebase-app.js FALLO','err')">
+</script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"
+    onload="p('[4] firebase-auth.js OK','ok')"
+    onerror="p('[4] firebase-auth.js FALLO','err')">
+</script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"
+    onload="p('[5] firebase-firestore.js OK','ok')"
+    onerror="p('[5] firebase-firestore.js FALLO','err')">
+</script>
+
+<script>
+p('[6] Antes de cargar utils.js...', 'info');
+window.onerror = function(msg, src, line, col, err) {
+    p('[ERROR GLOBAL] ' + msg + ' | linea:' + line + ' col:' + col, 'err');
+    if (err) p('  Stack: ' + err.message, 'err');
+    return false;
+};
+</script>
+
+<script src="utils.js"
+    onload="p('[7] utils.js cargado (script ejecutado)','ok')"
+    onerror="p('[7] utils.js FALLO al cargar','err')">
+</script>
+
+<script>
+p('[8] Verificando window.CVC...', 'info');
+if (typeof window.CVC === 'undefined') {
+    p('[8] ERROR: window.CVC no existe -- utils.js fallo internamente', 'err');
+} else {
+    p('[8] window.CVC existe OK', 'ok');
+    var fns = ['verificarAuth','renderNav','db','auth','escapeHtml','showToast','initAyuda'];
+    fns.forEach(function(fn) {
+        if (typeof window.CVC[fn] !== 'undefined') {
+            p('[9] CVC.' + fn + ' OK', 'ok');
+        } else {
+            p('[9] CVC.' + fn + ' FALTA', 'err');
+        }
+    });
+}
+
+p('[10] Verificando Firebase...', 'info');
+if (typeof firebase === 'undefined') {
+    p('[10] ERROR: firebase no esta definido', 'err');
+} else {
+    p('[10] firebase OK', 'ok');
+    try {
+        var db = firebase.firestore();
+        p('[11] firebase.firestore() OK', 'ok');
+        db.collection('usuarios').limit(1).get()
+            .then(function() { p('[12] Firestore conecta OK -- puede leer la BD', 'ok'); })
+            .catch(function(e) { p('[12] Firestore ERROR: ' + e.message, 'err'); });
+    } catch(e) {
+        p('[11] firebase.firestore() ERROR: ' + e.message, 'err');
+    }
+    try {
+        firebase.auth().onAuthStateChanged(function(user) {
+            if (user) {
+                p('[13] Auth: usuario logueado -- uid: ' + user.uid.slice(0,8) + '...', 'ok');
+            } else {
+                p('[13] Auth: sin sesion activa (normal si no estas logueado)', 'warn');
+            }
+        });
+    } catch(e) {
+        p('[13] Auth ERROR: ' + e.message, 'err');
+    }
+}
+p('[FIN] Diagnostico completado', 'info');
+</script>
+</body>
+</html>
