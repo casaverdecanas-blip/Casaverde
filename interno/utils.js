@@ -235,17 +235,17 @@ async function sincronizarDesdeGCal(googleApiKey, cabanasCache) {
     }
 
     var cabanasConCal = (cabanasCache || []).filter(
-        function(c) { return c.google_calendar_id && c.google_calendar_id.includes('@'; })
+        function(c) { return c.google_calendar_id && c.google_calendar_id.includes('@'); }
     );
     if (!cabanasConCal.length) {
         return { creadas: 0, omitidas: 0, canceladas: 0, error: 'Sin cabanas con Calendar ID configurado' };
     }
 
-    var resultados   = await Promise.all(cabanasConCal.map(function(c) { return leerGCal(c.google_calendar_id; }, c.id)));
-    var todosEventos = resultados.flat();
+    var resultados   = await Promise.all(cabanasConCal.map(function(c) { return leerGCal(c.google_calendar_id, c.id)));
+    var todosEventos = [].concat.apply([], resultados);
 
     var existSnap       = await db.collection('reservas').where('origen', '==', 'airbnb').get();
-    var reservasAirbnb  = existSnap.docs.map(function(d) { return (Object.assign(; }{ id: d.id }, d.data())));
+    var reservasAirbnb  = existSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); };
     var googleIdsActivos    = new Set(todosEventos.map(function(e) { return e.googleId; }));
     var googleIdsExistentes = new Set(reservasAirbnb.map(function(d) { return d.airbnb_google_id; }).filter(Boolean));
 
@@ -321,7 +321,7 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
     try {
         var proxSnap = await db.collection('reservas').where('caba', '==', reservaData.caba).get();
         var proxima = proxSnap.docs
-            .map(function(d) { return (Object.assign(; }{ id: d.id }, d.data())))
+            .map(function(d) { return Object.assign({ id: d.id }, d.data()); }
             .filter(function(r) {
                 if (!['confirmada', 'pendiente'].includes(r.estado)) return false;
                 if (r.id === reservaId) return false;
@@ -524,7 +524,7 @@ async function getHistorialTareas(tareaId) {
     try {
         var snap = await db.collection('historial_tareas')
             .where('tareaId', '==', tareaId).orderBy('finalizadoEn', 'desc').get();
-        var registros = snap.docs.map(function(d) { return (Object.assign(; }{ id: d.id }, d.data())));
+        var registros = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); };
         if (registros.length === 0) return { totalVeces: 0, ultimaVez: null, porUsuario: [], resumen: { totalHoras: 0, totalMonto: 0, colaboradoresUnicos: 0 } };
         var porUid = {};
         var totalHoras = 0, totalMonto = 0;
@@ -812,7 +812,7 @@ function inferirCategoria(descripcion) {
     if (!descripcion) return { cat: null, etiqueta: '' };
     var desc = descripcion.toLowerCase();
     for (var regla of BTG_CATEGORIAS) {
-        if (regla.palabras.some(function(p) { return desc.includes(p; }))) {
+        if (regla.palabras.some(function(p) { return desc.includes(p); })) {
             return { cat: regla.cat, etiqueta: regla.etiqueta };
         }
     }
@@ -826,7 +826,7 @@ function fingerprintMovimiento(fecha, monto, descripcion) {
 }
 
 async function conciliarMovimientos(movimientos, cuentaId) {
-    var _set = new Set(movimientos.map(function(m) { return m.fecha; })); var fechas = Array.from(_set).filter(Boolean);
+    var _setArr = []; movimientos.forEach(function(m) { if (m.fecha && _setArr.indexOf(m.fecha) === -1) _setArr.push(m.fecha); }); var fechas = _setArr.filter(Boolean);
     if (!fechas.length) return movimientos.map(function(m) { return Object.assign({}, m, { estado: 'nuevo' }); });
     var CHUNK = 30;
     var existentes = [];
@@ -836,7 +836,7 @@ async function conciliarMovimientos(movimientos, cuentaId) {
             .where('cuentaId', '==', cuentaId)
             .where('fecha',    'in',  lote)
             .get();
-        snap.docs.forEach(function(d) { return existentes.push(Object.assign(; }{ id: d.id }, d.data())));
+        snap.docs.forEach(function(d) { existentes.push(Object.assign({ id: d.id }, d.data())); });
     }
     return movimientos.map(function(m) {
         var fp = fingerprintMovimiento(m.fecha, m.monto, m.descripcion);
@@ -975,7 +975,7 @@ function _descripcionContiene(descripcion, texto) {
     var desc  = (descripcion || '').toUpperCase();
     var token = texto.toUpperCase().trim();
     if (token.length >= 5 && desc.includes(token)) return true;
-    return token.split(/\s+/).some(function(p) { return p.length >= 4 && desc.includes(p; }));
+    return token.split(/\s+/).some(function(p) { return p.length >= 4 && desc.includes(p); });
 }
 
 function matchMovimientoBancario(movBanco, registros, config) {
