@@ -405,10 +405,10 @@ Ejemplo:
 <script src="utils.js"></script>
 <script>
 (async () => {
-    const { user, userData } = await CVC.verificarAuth('admin');
+    const { user, userData } = await CVC.verificarAuth(['admin', 'user']);
     document.getElementById('userName').textContent = userData.nombre || user.email;
-    CVC.renderNav('cuentas.html');
-    CVC.initAyuda('cuentas.html');
+    CVC.renderNav('cuentas.html', userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('cuentas.html');
 
     const db = CVC.db;
     const { escapeHtml, showToast, showEmpty, showError } = CVC;
@@ -610,11 +610,6 @@ Ejemplo:
     };
 
     // ── Parser inteligente de extracto ────────────────────────
-    //
-    //  Detecta líneas con fecha + descripción + monto (+ saldo opcional).
-    //  Soporta formatos brasileros (punto como separador de miles, coma decimal)
-    //  y formatos internacionales.
-    //
     window.parsearExtracto = async function() {
         const texto  = document.getElementById('extractoTexto').value.trim();
         const formato = document.getElementById('formatoFecha').value;
@@ -631,7 +626,6 @@ Ejemplo:
         const lineas = texto.split('\n').map(l => l.trim()).filter(l => l.length > 3);
         const resultado = [];
 
-        // Regex para montos (formatos BR y estándar)
         const reMontosBR = /([+-]?\s*[\d.]+,\d{2})/g;
         const reMontosEN = /([+-]?\s*[\d,]+\.\d{2})/g;
         const reFechaDMY = /(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/;
@@ -654,7 +648,6 @@ Ejemplo:
         }
 
         function parseMonto(str) {
-            // Detectar si es formato BR (coma decimal) o EN (punto decimal)
             const esBR = /\d+\.\d{3},\d{2}/.test(str) || /\d+,\d{2}$/.test(str);
             if (esBR) {
                 return parseFloat(str.replace(/\./g,'').replace(',','.').replace(/\s/g,'')) || null;
@@ -664,20 +657,17 @@ Ejemplo:
 
         for (const linea of lineas) {
             const fecha = parseFecha(linea);
-            if (!fecha) continue; // línea sin fecha = encabezado u otra cosa
+            if (!fecha) continue;
 
-            // Extraer montos de la línea
             const montosBR = [...linea.matchAll(reMontosBR)].map(m => parseMonto(m[1])).filter(n => n !== null);
             const montosEN = [...linea.matchAll(reMontosEN)].map(m => parseMonto(m[1])).filter(n => n !== null);
             const montos   = (montosBR.length >= montosEN.length) ? montosBR : montosEN;
 
             if (!montos.length) continue;
 
-            // El primer monto es el movimiento, el último es el saldo post (si hay 2+)
             const monto    = montos[0];
             const saldoPost = montos.length >= 2 ? montos[montos.length - 1] : null;
 
-            // Descripción: texto entre fecha y primer monto
             let desc = linea
                 .replace(reFechaDMY, '').replace(reFechaYMD, '')
                 .replace(reMontosBR, '').replace(reMontosEN, '')
@@ -710,7 +700,7 @@ Ejemplo:
             const fechas = [...new Set(resultado.map(r => r.fecha))];
             const existSnap = await db.collection('movimientos')
                 .where('cuentaId', '==', cuentaId)
-                .where('fecha', 'in', fechas.slice(0, 10)) // Firestore limite
+                .where('fecha', 'in', fechas.slice(0, 10))
                 .get();
             const existentes = existSnap.docs.map(d => d.data());
 
@@ -783,7 +773,6 @@ Ejemplo:
         btn.disabled = true; text.textContent = 'Importando...';
 
         try {
-            // Guardar en batches de 400 (límite Firestore)
             const CHUNK = 400;
             for (let i = 0; i < selec.length; i += CHUNK) {
                 const batch = db.batch();
@@ -809,7 +798,6 @@ Ejemplo:
                 await batch.commit();
             }
 
-            // Actualizar saldo actual de la cuenta con el último saldoPost disponible
             const conSaldo = selec.filter(l => l.saldoPost != null);
             if (conSaldo.length) {
                 const ultimo = conSaldo.sort((a,b) => b.fecha.localeCompare(a.fecha))[0];
