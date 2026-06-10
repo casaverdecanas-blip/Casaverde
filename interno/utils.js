@@ -1,21 +1,21 @@
 // ============================================================
-//  utils.js -- Casa Verde Canas  v4.2
-//  Funciones compartidas . /interno/
+//  utils.js — Casa Verde Canas  v4.2
+//  Funciones compartidas · /interno/
 //
 //  CAMBIOS v4.2:
-//  - [FIX]   toggleNavDrop() -- el panel ahora usa position:fixed
+//  - [FIX]   toggleNavDrop() — el panel ahora usa position:fixed
 //            en lugar de absolute, lo que corrige el problema de
 //            clipping cuando el nav tiene overflow:hidden o
 //            position:relative. Los paneles se despliegan sobre
 //            todo el contenido sin quedar cortados.
 //  - [NAV]   NAV_ADMIN_ITEMS actualizado:
-//            . Operaciones: agrega tareas-admin.html, pendientes.html
-//            . Nuevo grupo "Fiscal": fiscal.html, acceso-contador.html
+//            · Operaciones: agrega tareas-admin.html, pendientes.html
+//            · Nuevo grupo "Fiscal": fiscal.html, acceso-contador.html
 // ============================================================
 
 
-// -- FIREBASE ------------------------------------------------------------------
-var FIREBASE_CONFIG = {
+// ── FIREBASE ──────────────────────────────────────────────────────────────────
+const FIREBASE_CONFIG = {
     apiKey:     'AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4',
     authDomain: 'casaverdecanas-199.firebaseapp.com',
     projectId:  'casaverdecanas-199'
@@ -26,8 +26,8 @@ db.settings({ experimentalForceLongPolling: true, merge: true });
 var auth = firebase.auth();
 
 
-// -- CONSTANTES ----------------------------------------------------------------
-var ESTADOS_RESERVA = {
+// ── CONSTANTES ────────────────────────────────────────────────────────────────
+const ESTADOS_RESERVA = {
     pendiente:        { label: 'Pendiente',        cssClass: 'badge-pendiente'  },
     confirmada:       { label: 'Confirmada',        cssClass: 'badge-confirmada' },
     anulada:          { label: 'Anulada',           cssClass: 'badge-anulada'    },
@@ -36,58 +36,58 @@ var ESTADOS_RESERVA = {
     airbnb_cancelada: { label: 'Cancelada Airbnb',  cssClass: 'badge-pendiente'  }
 };
 
-var ESTADOS_TAREA = {
+const ESTADOS_TAREA = {
     pendiente:  { label: 'Pendiente',  cssClass: 'badge-pendiente'  },
     en_curso:   { label: 'En curso',   cssClass: 'badge-en_curso'   },
     finalizada: { label: 'Finalizada', cssClass: 'badge-finalizada' }
 };
 
-var PRIORIDADES = {
+const PRIORIDADES = {
     alta:  { label: 'Alta',  cssClass: 'badge-alta'  },
     media: { label: 'Media', cssClass: 'badge-media' },
     baja:  { label: 'Baja',  cssClass: 'badge-baja'  }
 };
 
-var ESTADOS_BLOQUEANTES = ['confirmada', 'airbnb_activa'];
+const ESTADOS_BLOQUEANTES = ['confirmada', 'airbnb_activa'];
 
-var CALENDAR_IDS = {
+const CALENDAR_IDS = {
     1: 'h5a1h0a8dg9rl0oufvq19hn05r4gbubg@import.calendar.google.com',
     2: '8i3hl5ppqi6al50kf7casj5n5vl9sp1j@import.calendar.google.com',
     3: '60n7foetdu2qvsn16mi7is8j6i4ugm66@import.calendar.google.com'
 };
 
 
-// -- BADGES --------------------------------------------------------------------
+// ── BADGES ────────────────────────────────────────────────────────────────────
 function badgeEstado(estado) {
-    var e = ESTADOS_RESERVA[estado] || ESTADOS_TAREA[estado] || { label: estado, cssClass: 'badge-neutral' };
+    const e = ESTADOS_RESERVA[estado] || ESTADOS_TAREA[estado] || { label: estado, cssClass: 'badge-neutral' };
     return '<span class="badge ' + e.cssClass + '">' + e.label + '</span>';
 }
 
 function badgePrioridad(prioridad) {
-    var p = PRIORIDADES[prioridad] || { label: prioridad, cssClass: 'badge-neutral' };
+    const p = PRIORIDADES[prioridad] || { label: prioridad, cssClass: 'badge-neutral' };
     return '<span class="badge ' + p.cssClass + '">' + p.label + '</span>';
 }
 
 
-// -- AUTENTICACION -------------------------------------------------------------
+// ── AUTENTICACION ─────────────────────────────────────────────────────────────
 function verificarAuth(rolesPermitidos) {
-    var roles = Array.isArray(rolesPermitidos) ? rolesPermitidos : [rolesPermitidos];
-    return new Promise(function(resolve, reject) {
-        var timer = setTimeout(function() {
+    const roles = Array.isArray(rolesPermitidos) ? rolesPermitidos : [rolesPermitidos];
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
             reject(new Error('Firebase no responde (timeout). Verifica tu conexion.'));
         }, 15000);
 
-        auth.onAuthStateChanged(async function(user) {
+        auth.onAuthStateChanged(async (user) => {
             clearTimeout(timer);
             if (!user) { window.location.href = 'index.html'; return; }
             try {
-                var userDoc = await db.collection('usuarios').doc(user.uid).get();
+                const userDoc = await db.collection('usuarios').doc(user.uid).get();
                 if (!userDoc.exists) {
                     await auth.signOut();
                     window.location.href = 'index.html';
                     return;
                 }
-                var userData = userDoc.data();
+                const userData = userDoc.data();
                 if (userData.activo === false) {
                     await auth.signOut();
                     window.location.href = 'index.html';
@@ -97,7 +97,7 @@ function verificarAuth(rolesPermitidos) {
                     window.location.href = userData.rol === 'user' ? 'tareas.html' : 'index.html';
                     return;
                 }
-                resolve({ user: user, userData: userData });
+                resolve({ user, userData });
             } catch (e) {
                 console.error('verificarAuth:', e);
                 reject(e);
@@ -112,20 +112,20 @@ async function cerrarSesion() {
 }
 
 
-// -- CALCULO DE PRECIO ---------------------------------------------------------
+// ── CALCULO DE PRECIO ─────────────────────────────────────────────────────────
 function calcularPrecio(cabana, checkIn, checkOut, adultos, ninos) {
-    var tarifas       = cabana.tarifas || {};
-    var capacidadBase = (cabana.capacidad && cabana.capacidad.base) || 2;
-    var personasExtra = Math.max(0, (adultos + ninos) - capacidadBase);
+    const tarifas       = cabana.tarifas || {};
+    const capacidadBase = cabana.(capacidad && capacidad.base) || 2;
+    const personasExtra = Math.max(0, (adultos + ninos) - capacidadBase);
 
-    var subtotal = 0, noches = 0;
-    var fecha    = new Date(checkIn  + 'T12:00:00');
-    var fin    = new Date(checkOut + 'T12:00:00');
+    let subtotal = 0, noches = 0;
+    let fecha    = new Date(checkIn  + 'T12:00:00');
+    const fin    = new Date(checkOut + 'T12:00:00');
 
     while (fecha < fin) {
-        var fechaStr  = fecha.toISOString().split('T')[0];
-        var intervalo = (tarifas.intervalos || []).find(
-            function(i) { return i.desde <= fechaStr && i.hasta >= fechaStr; }
+        const fechaStr  = fecha.toISOString().split('T')[0];
+        const intervalo = (tarifas.intervalos || []).find(
+            i => i.desde <= fechaStr && i.hasta >= fechaStr
         );
         subtotal += (intervalo ? intervalo.precioNoche  : (tarifas.precioBase         || 0))
                   + (intervalo ? intervalo.precioExtra  : (tarifas.precioExtraPersona || 0)) * personasExtra;
@@ -133,26 +133,26 @@ function calcularPrecio(cabana, checkIn, checkOut, adultos, ninos) {
         noches++;
     }
 
-    var limpieza = tarifas.precioLimpieza || 0;
-    return { noches: noches, subtotal: subtotal, limpieza: limpieza, total: subtotal + limpieza };
+    const limpieza = tarifas.precioLimpieza || 0;
+    return { noches, subtotal, limpieza, total: subtotal + limpieza };
 }
 
 
-// -- VERIFICAR DISPONIBILIDAD --------------------------------------------------
+// ── VERIFICAR DISPONIBILIDAD ──────────────────────────────────────────────────
 async function verificarDisponibilidadCabana(cabaId, checkIn, checkOut, editandoId) {
-    var checkInDate  = new Date(checkIn  + 'T12:00:00');
-    var checkOutDate = new Date(checkOut + 'T12:00:00');
+    const checkInDate  = new Date(checkIn  + 'T12:00:00');
+    const checkOutDate = new Date(checkOut + 'T12:00:00');
 
-    var snap = await db.collection('reservas')
+    const snap = await db.collection('reservas')
         .where('caba',   '==', cabaId)
         .where('estado', 'in', ESTADOS_BLOQUEANTES)
         .get();
 
-    for (var doc of snap.docs) {
+    for (const doc of snap.docs) {
         if (editandoId && doc.id === editandoId) continue;
-        var r    = doc.data();
-        var rIn  = (r.checkIn && r.checkIn.toDate)  ? r.checkIn.toDate()  : new Date(r.checkIn);
-        var rOut = (r.checkOut && r.checkOut.toDate) ? r.checkOut.toDate() : new Date(r.checkOut);
+        const r    = doc.data();
+        const rIn  = r.(checkIn && checkIn.toDate)  ? r.checkIn.toDate()  : new Date(r.checkIn);
+        const rOut = r.(checkOut && checkOut.toDate) ? r.checkOut.toDate() : new Date(r.checkOut);
         if (checkInDate < rOut && checkOutDate > rIn) {
             return {
                 disponible: false,
@@ -170,21 +170,21 @@ async function verificarDisponibilidadCabana(cabaId, checkIn, checkOut, editando
 }
 
 function mensajeConflicto(conflicto) {
-    var etiqueta = (ESTADOS_RESERVA[conflicto.estado] && ESTADOS_RESERVA[conflicto.estado].label) || conflicto.estado;
-    var ci  = conflicto.checkIn.split('-').reverse().join('/');
-    var co  = conflicto.checkOut.split('-').reverse().join('/');
+    const etiqueta = (ESTADOS_RESERVA[conflicto.estado] && ESTADOS_RESERVA[conflicto.estado].label) || conflicto.estado;
+    const ci  = conflicto.checkIn.split('-').reverse().join('/');
+    const co  = conflicto.checkOut.split('-').reverse().join('/');
     return 'Fechas no disponibles -- ya existe una reserva ('
         + etiqueta + ') del ' + ci + ' al ' + co
         + ' para ' + (conflicto.nombre !== 'Sin nombre' ? conflicto.nombre : 'otro huesped') + '.';
 }
 
 
-// -- SINCRONIZAR DISPONIBILIDAD PUBLICA ---------------------------------------
+// ── SINCRONIZAR DISPONIBILIDAD PUBLICA ───────────────────────────────────────
 async function sincronizarDisponibilidad(reservaId, reservaData) {
     try {
-        var estado     = reservaData.estado || 'pendiente';
-        var bloqueante = ESTADOS_BLOQUEANTES.includes(estado);
-        var libre      = ['anulada', 'finalizada', 'airbnb_cancelada', 'pendiente'].includes(estado);
+        const estado     = reservaData.estado || 'pendiente';
+        const bloqueante = ESTADOS_BLOQUEANTES.includes(estado);
+        const libre      = ['anulada', 'finalizada', 'airbnb_cancelada', 'pendiente'].includes(estado);
         if (libre) { await db.collection('disponibilidad').doc(reservaId).delete(); return; }
         if (bloqueante) {
             await db.collection('disponibilidad').doc(reservaId).set({
@@ -201,56 +201,58 @@ async function sincronizarDisponibilidad(reservaId, reservaData) {
 }
 
 
-// -- SINCRONIZAR AIRBNB DESDE GOOGLE CALENDAR ---------------------------------
+// ── SINCRONIZAR AIRBNB DESDE GOOGLE CALENDAR ─────────────────────────────────
 async function sincronizarDesdeGCal(googleApiKey, cabanasCache) {
-    var hoy     = new Date();
-    var enUnAno = new Date(hoy);
+    const hoy     = new Date();
+    const enUnAno = new Date(hoy);
     enUnAno.setFullYear(enUnAno.getFullYear() + 1);
 
     async function leerGCal(calId, cabaId) {
         if (!calId || !calId.includes('@')) return [];
-        var url = 'https://www.googleapis.com/calendar/v3/calendars/'
+        const url = 'https://www.googleapis.com/calendar/v3/calendars/'
             + encodeURIComponent(calId) + '/events'
             + '?key=' + googleApiKey
             + '&timeMin=' + hoy.toISOString()
             + '&timeMax=' + enUnAno.toISOString()
             + '&singleEvents=true&orderBy=startTime&maxResults=250';
         try {
-            var res  = await fetch(url);
+            const res  = await fetch(url);
             if (!res.ok) { console.warn('GCal cabana ' + cabaId + ': HTTP ' + res.status); return []; }
-            var data = await res.json();
+            const data = await res.json();
             return (data.items || [])
-                .filter(function(ev) { return ev.status !== 'cancelled'; })
-                .filter(function(ev) {
-                    var t = (ev.summary || '').toLowerCase();
+                .filter(ev => ev.status !== 'cancelled')
+                .filter(ev => {
+                    const t = (ev.summary || '').toLowerCase();
                     return !t.includes('not available') && !t.includes('no disponible')
                         && !t.includes('indisponivel')  && !t.includes('unavailable');
                 })
-                .map(function(ev) {
-                    var ini = ev.start.date || (ev.start.dateTime && ev.start.dateTime.split('T')[0]);
-                    var fn  = ev.end.date   || (ev.end.dateTime   && ev.end.dateTime.split('T')[0]);
-                    return { googleId: ev.id, titulo: ev.summary || 'Airbnb', inicio: ini, fin: fn, cabaId: cabaId };
-                });
+                .map(ev => ({
+                    googleId: ev.id,
+                    titulo:   ev.summary || 'Airbnb',
+                    inicio:   ev.start.date || ev.start.(dateTime && dateTime.split)('T')[0],
+                    fin:      ev.end.date   || ev.end.(dateTime && dateTime.split)('T')[0],
+                    cabaId
+                }));
         } catch(e) { console.warn('GCal cabana ' + cabaId + ':', e.message); return []; }
     }
 
-    var cabanasConCal = (cabanasCache || []).filter(
-        function(c) { return c.google_calendar_id && c.google_calendar_id.includes('@'); }
+    const cabanasConCal = (cabanasCache || []).filter(
+        c => c.google_calendar_id && c.google_calendar_id.includes('@')
     );
     if (!cabanasConCal.length) {
         return { creadas: 0, omitidas: 0, canceladas: 0, error: 'Sin cabanas con Calendar ID configurado' };
     }
 
-    var resultados   = await Promise.all(cabanasConCal.map(function(c) { return leerGCal(c.google_calendar_id, c.id); }));
-    var todosEventos = [].concat.apply([], resultados);
+    const resultados   = await Promise.all(cabanasConCal.map(c => leerGCal(c.google_calendar_id, c.id)));
+    const todosEventos = resultados.flat();
 
-    var existSnap       = await db.collection('reservas').where('origen', '==', 'airbnb').get();
-    var reservasAirbnb  = existSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
-    var googleIdsActivos    = new Set(todosEventos.map(function(e) { return e.googleId; }));
-    var googleIdsExistentes = new Set(reservasAirbnb.map(function(d) { return d.airbnb_google_id; }).filter(Boolean));
+    const existSnap       = await db.collection('reservas').where('origen', '==', 'airbnb').get();
+    const reservasAirbnb  = existSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const googleIdsActivos    = new Set(todosEventos.map(e => e.googleId));
+    const googleIdsExistentes = new Set(reservasAirbnb.map(d => d.airbnb_google_id).filter(Boolean));
 
-    var canceladas = 0;
-    for (var res of reservasAirbnb) {
+    let canceladas = 0;
+    for (const res of reservasAirbnb) {
         if (!res.airbnb_google_id) continue;
         if (['airbnb_cancelada', 'anulada', 'finalizada'].includes(res.estado)) continue;
         if (!googleIdsActivos.has(res.airbnb_google_id)) {
@@ -264,15 +266,15 @@ async function sincronizarDesdeGCal(googleApiKey, cabanasCache) {
         }
     }
 
-    var creadas = 0, omitidas = 0;
-    var batch = db.batch();
-    var enBatch = 0;
-    var nuevasReservas = [];
+    let creadas = 0, omitidas = 0;
+    const batch = db.batch();
+    let enBatch = 0;
+    const nuevasReservas = [];
 
-    for (var ev of todosEventos) {
+    for (const ev of todosEventos) {
         if (googleIdsExistentes.has(ev.googleId)) { omitidas++; continue; }
-        var ref = db.collection('reservas').doc();
-        var reservaData = {
+        const ref = db.collection('reservas').doc();
+        const reservaData = {
             airbnb_google_id: ev.googleId,
             origen:           'airbnb',
             estado:           'airbnb_activa',
@@ -294,48 +296,48 @@ async function sincronizarDesdeGCal(googleApiKey, cabanasCache) {
     }
     if (enBatch > 0) await batch.commit();
 
-    for (var r of nuevasReservas) {
+    for (const r of nuevasReservas) {
         await sincronizarDisponibilidad(r.id, r.data);
     }
 
-    return { creadas: creadas, omitidas: omitidas, canceladas: canceladas };
+    return { creadas, omitidas, canceladas };
 }
 
 
-// -- CREAR TAREA DE LIMPIEZA ---------------------------------------------------
+// ── CREAR TAREA DE LIMPIEZA ───────────────────────────────────────────────────
 async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
-    var checkOut = (reservaData.checkOut && reservaData.checkOut.toDate)
+    const checkOut = reservaData.(checkOut && checkOut.toDate)
         ? reservaData.checkOut.toDate()
         : new Date(reservaData.checkOut);
 
-    var nombreCabana = 'Cabana ' + reservaData.caba;
+    let nombreCabana = 'Cabana ' + reservaData.caba;
     try {
-        var cabSnap = await db.collection('cabanas').doc(String(reservaData.caba)).get();
+        const cabSnap = await db.collection('cabanas').doc(String(reservaData.caba)).get();
         if (cabSnap.exists) {
-            var cab = cabSnap.data();
-            nombreCabana = (cab.nombre && cab.nombre.es) || (cab.nombre && cab.nombre.pt) || ('Cabana ' + reservaData.caba);
+            const cab = cabSnap.data();
+            nombreCabana = cab.(nombre && nombre.es) || cab.(nombre && nombre.pt) || ('Cabana ' + reservaData.caba);
         }
     } catch(e) { /* fallback */ }
 
-    var proximoHuesped = null;
+    let proximoHuesped = null;
     try {
-        var proxSnap = await db.collection('reservas').where('caba', '==', reservaData.caba).get();
-        var _proxDocs = proxSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
-        _proxDocs = _proxDocs.filter(function(r) {
-            if (!['confirmada', 'pendiente'].includes(r.estado)) return false;
-            if (r.id === reservaId) return false;
-            var ci = (r.checkIn && r.checkIn.toDate) ? r.checkIn.toDate() : new Date(r.checkIn);
-            return ci >= checkOut;
-        });
-        _proxDocs.sort(function(a, b) {
-            var ca = (a.checkIn && a.checkIn.toDate) ? a.checkIn.toDate() : new Date(a.checkIn);
-            var cb = (b.checkIn && b.checkIn.toDate) ? b.checkIn.toDate() : new Date(b.checkIn);
-            return ca - cb;
-        });
-        var proxima = _proxDocs[0];
+        const proxSnap = await db.collection('reservas').where('caba', '==', reservaData.caba).get();
+        const proxima = proxSnap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter(r => {
+                if (!['confirmada', 'pendiente'].includes(r.estado)) return false;
+                if (r.id === reservaId) return false;
+                const ci = r.(checkIn && checkIn.toDate) ? r.checkIn.toDate() : new Date(r.checkIn);
+                return ci >= checkOut;
+            })
+            .sort((a, b) => {
+                const ca = a.(checkIn && checkIn.toDate) ? a.checkIn.toDate() : new Date(a.checkIn);
+                const cb = b.(checkIn && checkIn.toDate) ? b.checkIn.toDate() : new Date(b.checkIn);
+                return ca - cb;
+            })[0];
 
         if (proxima) {
-            var ci = (proxima.checkIn && proxima.checkIn.toDate) ? proxima.checkIn.toDate() : new Date(proxima.checkIn);
+            const ci = proxima.(checkIn && checkIn.toDate) ? proxima.checkIn.toDate() : new Date(proxima.checkIn);
             proximoHuesped = {
                 nombre:         proxima.nombre         || '--',
                 checkIn:        ci,
@@ -348,15 +350,15 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
         }
     } catch(e) { console.warn('proxima reserva:', e); }
 
-    var alertasEntrada = [];
+    const alertasEntrada = [];
     if ((proximoHuesped && proximoHuesped.mascotas) === 'si')       alertasEntrada.push('MASCOTAS');
     if ((proximoHuesped && proximoHuesped.niniosPequenos) === 'si') alertasEntrada.push('NINOS PEQUENOS');
 
-    var alertasSalida = [];
+    const alertasSalida = [];
     if (reservaData.mascotas === 'si')       alertasSalida.push('MASCOTAS');
     if (reservaData.niniosPequenos === 'si') alertasSalida.push('NINOS PEQUENOS');
 
-    var lineas = [];
+    const lineas = [];
 
     if (proximoHuesped) {
         lineas.push('ENTRADA');
@@ -404,91 +406,86 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
 }
 
 
-// -- LOGICA DE TAREAS -- SUBCOLECCION ------------------------------------------
+// ── LOGICA DE TAREAS — SUBCOLECCION ──────────────────────────────────────────
 async function iniciarTarea(tareaId, currentUser) {
-    var tareaRef    = db.collection('tareas').doc(tareaId);
-    var sesionesRef = tareaRef.collection('sesiones');
-    var tareaDoc    = await tareaRef.get();
+    const tareaRef    = db.collection('tareas').doc(tareaId);
+    const sesionesRef = tareaRef.collection('sesiones');
+    const tareaDoc    = await tareaRef.get();
     if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
-    var tarea = tareaDoc.data();
+    const tarea = tareaDoc.data();
     if (tarea.estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
-    var todasSnap = await sesionesRef.where('uid', '==', currentUser.uid).get();
-    var yaAbierta = todasSnap.docs.find(function(d) { return d.data(; }).fin === null);
+    const todasSnap = await sesionesRef.where('uid', '==', currentUser.uid).get();
+    const yaAbierta = todasSnap.docs.find(d => d.data().fin === null);
     if (yaAbierta) throw new Error('Ya tenes una sesion activa en esta tarea');
-    var ahora = firebase.firestore.Timestamp.now();
+    const ahora = firebase.firestore.Timestamp.now();
     await sesionesRef.add({ uid: currentUser.uid, nombre: currentUser.nombre || currentUser.email, inicio: ahora, fin: null, tareaId });
-    var sesActuales = (tarea.sesionesActivas || []);
+    const sesActuales = (tarea.sesionesActivas || []);
     sesActuales.push({ uid: currentUser.uid, nombre: currentUser.nombre || currentUser.email, inicio: ahora });
     await tareaRef.update({ estado: 'en_curso', sesionesActivas: sesActuales });
 }
 
 async function pausarTarea(tareaId, currentUser) {
-    var tareaRef    = db.collection('tareas').doc(tareaId);
-    var sesionesRef = tareaRef.collection('sesiones');
-    var tareaDoc    = await tareaRef.get();
+    const tareaRef    = db.collection('tareas').doc(tareaId);
+    const sesionesRef = tareaRef.collection('sesiones');
+    const tareaDoc    = await tareaRef.get();
     if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
     if (tareaDoc.data().estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
-    var todasSnap  = await sesionesRef.where('uid', '==', currentUser.uid).get();
-    var sesAbierta = todasSnap.docs.find(function(d) { return d.data(; }).fin === null);
+    const todasSnap  = await sesionesRef.where('uid', '==', currentUser.uid).get();
+    const sesAbierta = todasSnap.docs.find(d => d.data().fin === null);
     if (!sesAbierta) throw new Error('No tenes una sesion activa en esta tarea');
-    var ahora = firebase.firestore.Timestamp.now();
+    const ahora = firebase.firestore.Timestamp.now();
     await sesAbierta.ref.update({ fin: ahora });
-    var todasSnap2     = await sesionesRef.get();
-    var quedanAbiertas = todasSnap2.docs.some(function(d) { return d.data(; }).fin === null);
-    var sesActuales    = (tareaDoc.data().sesionesActivas || []).filter(function(s) { return s.uid !== currentUser.uid; });
+    const todasSnap2     = await sesionesRef.get();
+    const quedanAbiertas = todasSnap2.docs.some(d => d.data().fin === null);
+    const sesActuales    = (tareaDoc.data().sesionesActivas || []).filter(s => s.uid !== currentUser.uid);
     await tareaRef.update({ estado: quedanAbiertas ? 'en_curso' : 'pendiente', sesionesActivas: sesActuales });
 }
 
 async function finalizarTarea(tareaId, currentUser) {
-    var tareaRef    = db.collection('tareas').doc(tareaId);
-    var sesionesRef = tareaRef.collection('sesiones');
-    var tareaDoc    = await tareaRef.get();
+    const tareaRef    = db.collection('tareas').doc(tareaId);
+    const sesionesRef = tareaRef.collection('sesiones');
+    const tareaDoc    = await tareaRef.get();
     if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
-    var tarea = tareaDoc.data();
+    const tarea = tareaDoc.data();
     if (tarea.estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
-    var ahora     = firebase.firestore.Timestamp.now();
-    var ahoraDate = ahora.toDate();
-    var sesSnap   = await sesionesRef.get();
-    var sesiones    = sesSnap.docs.map(function(d) { return Object.assign({ _ref: d.ref }, d.data()); });
+    const ahora     = firebase.firestore.Timestamp.now();
+    const ahoraDate = ahora.toDate();
+    const sesSnap   = await sesionesRef.get();
+    let sesiones    = sesSnap.docs.map(d => ({ _ref: d.ref, ...d.data() }));
     // Si quien finaliza nunca cronometró, agregar sesión de 0h para que quede como responsable
-    if (!sesiones.some(function(s) { return s.uid === currentUser.uid; })) {
-        var ref = await sesionesRef.add({
+    if (!sesiones.some(s => s.uid === currentUser.uid)) {
+        const ref = await sesionesRef.add({
             uid: currentUser.uid, nombre: currentUser.nombre || currentUser.email,
-            inicio: ahora, fin: ahora, tareaId: tareaId, sinCronometro: true
+            inicio: ahora, fin: ahora, tareaId, sinCronometro: true
         });
         sesiones.push({ _ref: ref, uid: currentUser.uid,
             nombre: currentUser.nombre || currentUser.email,
             inicio: ahora, fin: ahora, sinCronometro: true });
     }
-    var b1 = db.batch();
-    for (var s of sesiones) { if (s.fin === null) { b1.update(s._ref, { fin: ahora }); s.fin = ahora; } }
+    const b1 = db.batch();
+    for (const s of sesiones) { if (s.fin === null) { b1.update(s._ref, { fin: ahora }); s.fin = ahora; } }
     await b1.commit();
-    var horasPor  = {};
-    var nombrePor = {};
-    for (var s of sesiones) {
-        var ini = (s.inicio && s.inicio.toDate) ? s.inicio.toDate() : new Date(s.inicio);
-        var fin = (s.fin && s.fin.toDate)    ? s.fin.toDate()    : new Date(s.fin);
-        var hrs = Math.max(0, (fin - ini) / 3600000);
+    const horasPor  = {};
+    const nombrePor = {};
+    for (const s of sesiones) {
+        const ini = s.(inicio && inicio.toDate) ? s.inicio.toDate() : new Date(s.inicio);
+        const fin = s.(fin && fin.toDate)    ? s.fin.toDate()    : new Date(s.fin);
+        const hrs = Math.max(0, (fin - ini) / 3600000);
         horasPor[s.uid]  = (horasPor[s.uid]  || 0) + hrs;
         nombrePor[s.uid] = s.nombre;
     }
-    var totalHoras    = Object.values(horasPor).reduce(function(a, b) { return a + b; }, 0);
-    var monto         = tarea.monto || 0;
-    var colaboradores = Object.keys(horasPor).map(function(uid) {
-        var horas = horasPor[uid];
-        return {
-            uid: uid,
-            nombre: nombrePor[uid],
-            horas: parseFloat(horas.toFixed(2)),
-            montoRecibido: monto > 0 && totalHoras > 0 ? parseFloat(((horas / totalHoras) * monto).toFixed(2)) : 0
-        };
-    });
-    var b2      = db.batch();
-    var histRef = db.collection('historial_tareas').doc();
+    const totalHoras    = Object.values(horasPor).reduce((a, b) => a + b, 0);
+    const monto         = tarea.monto || 0;
+    const colaboradores = Object.entries(horasPor).map(([uid, horas]) => ({
+        uid, nombre: nombrePor[uid], horas: parseFloat(horas.toFixed(2)),
+        montoRecibido: monto > 0 && totalHoras > 0 ? parseFloat(((horas / totalHoras) * monto).toFixed(2)) : 0
+    }));
+    const b2      = db.batch();
+    const histRef = db.collection('historial_tareas').doc();
     b2.set(histRef, {
-        tareaId: tareaId, nombre: tarea.nombre, descripcion: tarea.descripcion || '', tipo: tarea.tipo || 'general',
+        tareaId, nombre: tarea.nombre, descripcion: tarea.descripcion || '', tipo: tarea.tipo || 'general',
         prioridad: tarea.prioridad || 'media', fechaInicio: tarea.fechaInicio || null,
-        fechaFin: ahoraDate.toISOString().split('T')[0], monto: monto, totalHoras: parseFloat(totalHoras.toFixed(2)),
+        fechaFin: ahoraDate.toISOString().split('T')[0], monto, totalHoras: parseFloat(totalHoras.toFixed(2)),
         colaboradores, reservaId: tarea.reservaId || null, cabana: tarea.cabana || null,
         recurrencia: tarea.recurrencia || 0,
         finalizadoPor: currentUser.uid,
@@ -496,52 +493,52 @@ async function finalizarTarea(tareaId, currentUser) {
         finalizadoEn: ahora, creadoEn: tarea.creadoEn || null
     });
     if (monto > 0) {
-        for (var col of colaboradores) {
+        for (const col of colaboradores) {
             if (col.montoRecibido <= 0) continue;
-            var hRef = db.collection('honorarios').doc();
+            const hRef = db.collection('honorarios').doc();
             b2.set(hRef, {
-                colaboradorId: col.uid, colaboradorNombre: col.nombre, tareaId: tareaId, historialId: histRef.id,
+                colaboradorId: col.uid, colaboradorNombre: col.nombre, tareaId, historialId: histRef.id,
                 reservaId: tarea.reservaId || null, monto: col.montoRecibido, moneda: 'BRL',
                 concepto: 'Tarea: ' + tarea.nombre + ' -- ' + ahoraDate.toLocaleDateString('es-AR'),
                 horas: col.horas, estado: 'pendiente', fechaPago: null, pagadoPor: null, creadoEn: ahora
             });
         }
     }
-    var recurrencia = tarea.recurrencia || 0;
+    const recurrencia = tarea.recurrencia || 0;
     if (recurrencia === 0) { b2.delete(tareaRef); }
     else {
-        var nuevaFecha = new Date(ahoraDate);
+        const nuevaFecha = new Date(ahoraDate);
         nuevaFecha.setDate(nuevaFecha.getDate() + recurrencia);
         b2.update(tareaRef, { estado: 'pendiente', sesionesActivas: [], fechaInicio: nuevaFecha.toISOString().split('T')[0], ultimaVez: ahora });
     }
     await b2.commit();
     if (recurrencia > 0) {
-        var b3 = db.batch();
-        for (var s of sesiones) b3.delete(s._ref);
+        const b3 = db.batch();
+        for (const s of sesiones) b3.delete(s._ref);
         await b3.commit();
     }
     return colaboradores;
 }
 
 
-// -- HISTORIAL DE CUMPLIMIENTOS DE TAREA --------------------------------------
+// ── HISTORIAL DE CUMPLIMIENTOS DE TAREA ──────────────────────────────────────
 async function getHistorialTareas(tareaId) {
     try {
-        var snap = await db.collection('historial_tareas')
+        const snap = await db.collection('historial_tareas')
             .where('tareaId', '==', tareaId).orderBy('finalizadoEn', 'desc').get();
-        var registros = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); };
+        const registros = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         if (registros.length === 0) return { totalVeces: 0, ultimaVez: null, porUsuario: [], resumen: { totalHoras: 0, totalMonto: 0, colaboradoresUnicos: 0 } };
-        var porUid = {};
-        var totalHoras = 0, totalMonto = 0;
-        var colaboradoresUnicos = new Set();
-        for (var reg of registros) {
-            for (var col of (reg.colaboradores || [])) {
+        const porUid = {};
+        let totalHoras = 0, totalMonto = 0;
+        const colaboradoresUnicos = new Set();
+        for (const reg of registros) {
+            for (const col of (reg.colaboradores || [])) {
                 colaboradoresUnicos.add(col.uid);
                 if (!porUid[col.uid]) porUid[col.uid] = { nombre: col.nombre, veces: 0, horasTotal: 0, montoTotal: 0, ultimaVez: null };
                 porUid[col.uid].veces      += 1;
                 porUid[col.uid].horasTotal += col.horas || 0;
                 porUid[col.uid].montoTotal += col.montoRecibido || 0;
-                var fe = (reg.finalizadoEn && reg.finalizadoEn.toDate) ? reg.finalizadoEn.toDate() : new Date(reg.finalizadoEn);
+                const fe = reg.(finalizadoEn && finalizadoEn.toDate) ? reg.finalizadoEn.toDate() : new Date(reg.finalizadoEn);
                 if (!porUid[col.uid].ultimaVez || fe > porUid[col.uid].ultimaVez) porUid[col.uid].ultimaVez = fe;
             }
             totalHoras += reg.totalHoras || 0;
@@ -550,7 +547,7 @@ async function getHistorialTareas(tareaId) {
         return {
             totalVeces: registros.length,
             ultimaVez: (registros[0] && registros[0].finalizadoEn && registros[0].finalizadoEn.toDate) ? registros[0].finalizadoEn.toDate() : null,
-            porUsuario: Object.values(porUid).sort(function(a, b) { return b.veces - a.veces; }),
+            porUsuario: Object.values(porUid).sort((a, b) => b.veces - a.veces),
             resumen: { totalHoras: parseFloat(totalHoras.toFixed(2)), totalMonto: parseFloat(totalMonto.toFixed(2)), colaboradoresUnicos: colaboradoresUnicos.size }
         };
     } catch (e) {
@@ -560,23 +557,23 @@ async function getHistorialTareas(tareaId) {
 }
 
 
-// -- URGENCIA DE TAREA ---------------------------------------------------------
+// ── URGENCIA DE TAREA ─────────────────────────────────────────────────────────
 function urgenciaTarea(tarea) {
     if (!tarea.fechaInicio) return { color: 'gris', label: 'Sin fecha' };
     if (tarea.estado === 'en_curso') return { color: 'verde', label: 'En curso' };
-    var hoy = new Date();
+    const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
-    var inicio     = new Date(tarea.fechaInicio + 'T00:00:00');
-    var diasAtraso = Math.floor((hoy - inicio) / 86400000);
+    const inicio     = new Date(tarea.fechaInicio + 'T00:00:00');
+    const diasAtraso = Math.floor((hoy - inicio) / 86400000);
     if (diasAtraso < 0)   return { color: 'gris',     label: 'Proximamente'       };
     if (diasAtraso === 0) return { color: 'verde',    label: 'Hoy'                };
-    var ciclo = tarea.recurrencia > 0 ? tarea.recurrencia : 3;
+    const ciclo = tarea.recurrencia > 0 ? tarea.recurrencia : 3;
     if (diasAtraso > ciclo || diasAtraso > 10) return { color: 'rojo', label: diasAtraso + 'd de atraso' };
     return { color: 'amarillo', label: diasAtraso + 'd de atraso' };
 }
 
 
-// -- HELPERS DE FORMATO --------------------------------------------------------
+// ── HELPERS DE FORMATO ────────────────────────────────────────────────────────
 function escapeHtml(str) {
     if (!str) return '';
     return String(str).replace(/[&<>"']/g, function(m) {
@@ -586,40 +583,40 @@ function escapeHtml(str) {
 
 function formatFecha(timestamp) {
     if (!timestamp) return '--';
-    var d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     return d.toLocaleDateString('es-AR');
 }
 
 function formatFechaHora(timestamp) {
     if (!timestamp) return '--';
-    var d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     return d.toLocaleString('es-AR');
 }
 
 function formatHoras(horas) {
     if (!horas || horas <= 0) return '0m';
-    var h = Math.floor(horas);
-    var m = Math.round((horas - h) * 60);
+    const h = Math.floor(horas);
+    const m = Math.round((horas - h) * 60);
     if (h === 0) return m + 'm';
     if (m === 0) return h + 'h';
     return h + 'h ' + m + 'm';
 }
 
-var COLORES_CABANAS = ['#FF9800', '#3498db', '#2ecc71', '#9b59b6', '#e74c3c', '#1abc9c'];
+const COLORES_CABANAS = ['#FF9800', '#3498db', '#2ecc71', '#9b59b6', '#e74c3c', '#1abc9c'];
 function colorCabana(index) { return COLORES_CABANAS[index % COLORES_CABANAS.length]; }
 
 
-// -- HELPERS DE UI -------------------------------------------------------------
+// ── HELPERS DE UI ─────────────────────────────────────────────────────────────
 function showLoading(container, mensaje) {
     mensaje = mensaje || 'Cargando...';
-    var el = typeof container === 'string' ? document.querySelector(container) : container;
+    const el = typeof container === 'string' ? document.querySelector(container) : container;
     if (!el) return;
     el.innerHTML = '<div class="state-loading"><div class="spinner"></div><span>' + escapeHtml(mensaje) + '</span></div>';
 }
 
 function showEmpty(container, titulo, descripcion, icono) {
     titulo = titulo || 'Sin datos'; descripcion = descripcion || ''; icono = icono || 'inbox';
-    var el = typeof container === 'string' ? document.querySelector(container) : container;
+    const el = typeof container === 'string' ? document.querySelector(container) : container;
     if (!el) return;
     el.innerHTML = '<div class="state-empty"><span class="material-icons">' + escapeHtml(icono) + '</span>'
         + '<div class="state-empty__title">' + escapeHtml(titulo) + '</div>'
@@ -629,9 +626,9 @@ function showEmpty(container, titulo, descripcion, icono) {
 
 function showError(container, titulo, descripcion, onRetry) {
     titulo = titulo || 'Ocurrio un error'; descripcion = descripcion || '';
-    var el = typeof container === 'string' ? document.querySelector(container) : container;
+    const el = typeof container === 'string' ? document.querySelector(container) : container;
     if (!el) return;
-    var retryId = onRetry ? 'retry-' + Date.now() : null;
+    const retryId = onRetry ? 'retry-' + Date.now() : null;
     el.innerHTML = '<div class="state-error"><span class="material-icons">error_outline</span>'
         + '<div class="state-error__title">' + escapeHtml(titulo) + '</div>'
         + (descripcion ? '<div class="state-error__desc">' + escapeHtml(descripcion) + '</div>' : '')
@@ -642,15 +639,15 @@ function showError(container, titulo, descripcion, onRetry) {
 
 function showToast(mensaje, tipo) {
     tipo = tipo || 'success';
-    var iconos = { success: 'check_circle', error: 'error', warning: 'warning', info: 'info' };
-    var wrap = document.getElementById('cvc-toasts');
+    const iconos = { success: 'check_circle', error: 'error', warning: 'warning', info: 'info' };
+    let wrap = document.getElementById('cvc-toasts');
     if (!wrap) {
         wrap = document.createElement('div');
         wrap.id = 'cvc-toasts';
         wrap.className = 'toast-container';
         document.body.appendChild(wrap);
     }
-    var toast = document.createElement('div');
+    const toast = document.createElement('div');
     toast.className = 'toast toast-' + tipo;
     toast.innerHTML = '<span class="material-icons">' + (iconos[tipo] || 'info') + '</span><span>' + escapeHtml(mensaje) + '</span>';
     wrap.appendChild(toast);
@@ -658,8 +655,8 @@ function showToast(mensaje, tipo) {
 }
 
 
-// -- NAV CENTRALIZADA v4.2 -----------------------------------------------------
-var NAV_ADMIN_ITEMS = [
+// ── NAV CENTRALIZADA v4.2 ─────────────────────────────────────────────────────
+const NAV_ADMIN_ITEMS = [
     { href: 'dashboard.html',    icon: 'dashboard',      label: 'Dashboard'  },
     { href: 'calendario.html',   icon: 'calendar_month', label: 'Calendario' },
     {
@@ -687,10 +684,12 @@ var NAV_ADMIN_ITEMS = [
     {
         group: 'Operaciones', icon: 'checklist',
         items: [
-            { href: 'tareas.html',       icon: 'checklist',       label: 'Tareas'        },
-            { href: 'tareas-admin.html', icon: 'manage_search',   label: 'Admin tareas'  },
+            { href: 'tareas.html',           icon: 'checklist',        label: 'Tareas'          },
+            { href: 'tareas-admin.html',     icon: 'manage_search',    label: 'Admin tareas'    },
             { sep: true },
-            { href: 'pendientes.html',   icon: 'pending_actions', label: 'Pendientes'    },
+            { href: 'pendientes.html',       icon: 'pending_actions',  label: 'Pendientes'      },
+            { sep: true },
+            { href: 'limpieza-stats.html',   icon: 'cleaning_services', label: 'An\u00e1lisis limpiezas' },
         ]
     },
     {
@@ -711,7 +710,7 @@ var NAV_ADMIN_ITEMS = [
     }
 ];
 
-var NAV_USER_ITEMS = [
+const NAV_USER_ITEMS = [
     { href: 'tareas.html',         icon: 'checklist', label: 'Tareas'     },
     { href: 'pagos.html',          icon: 'payments',  label: 'Mis cobros' },
     { href: 'manual-sistema.html', icon: 'menu_book', label: 'Manual'     }
@@ -719,23 +718,23 @@ var NAV_USER_ITEMS = [
 
 function renderNav(paginaActiva, rol) {
     rol = rol || 'admin';
-    var el = document.getElementById('appNav') || document.querySelector('.admin-nav');
+    const el = document.getElementById('appNav') || document.querySelector('.admin-nav');
     if (!el) return;
-    var items = rol === 'admin' ? NAV_ADMIN_ITEMS : NAV_USER_ITEMS;
+    const items = rol === 'admin' ? NAV_ADMIN_ITEMS : NAV_USER_ITEMS;
     el.innerHTML = items.map(function(item, gi) {
         if (item.href) {
-            var activo = item.href === paginaActiva;
+            const activo = item.href === paginaActiva;
             return '<a href="' + item.href + '" class="nav-item' + (activo ? ' active' : '') + '">'
                 + '<span class="material-icons">' + item.icon + '</span> ' + item.label + '</a>';
         }
         if (item.group) {
-            var grupoId     = 'navdrop-' + gi;
-            var tieneActivo = (item.items || []).some(function(sub) {
+            const grupoId     = 'navdrop-' + gi;
+            const tieneActivo = (item.items || []).some(function(sub) {
                 return sub.href && (sub.href === paginaActiva || sub.href.replace('.html', '') === paginaActiva);
             });
-            var panelItems = (item.items || []).map(function(sub) {
+            const panelItems = (item.items || []).map(function(sub) {
                 if (sub.sep) return '<div class="nav-dropdown__sep"></div>';
-                var esActivo = sub.href === paginaActiva || sub.href.replace('.html', '') === paginaActiva;
+                const esActivo = sub.href === paginaActiva || sub.href.replace('.html', '') === paginaActiva;
                 return '<a href="' + sub.href + '" class="nav-dropdown__item' + (esActivo ? ' active' : '') + '">'
                     + '<span class="material-icons">' + sub.icon + '</span> ' + sub.label + '</a>';
             }).join('');
@@ -753,22 +752,22 @@ function renderNav(paginaActiva, rol) {
     document.addEventListener('click', _cerrarDropdowns);
 }
 
-// -- FIX v4.2: position:fixed para que el panel no quede cortado ---------------
+// ── FIX v4.2: position:fixed para que el panel no quede cortado ───────────────
 function toggleNavDrop(e, id) {
     e.stopPropagation();
-    var dropEl = document.getElementById(id);
+    const dropEl = document.getElementById(id);
     if (!dropEl) return;
-    var estaAbierto = dropEl.classList.contains('open');
+    const estaAbierto = dropEl.classList.contains('open');
     // Cerrar todos
     document.querySelectorAll('.nav-dropdown.open').forEach(function(d) {
         d.classList.remove('open');
-        var p = d.querySelector('.nav-dropdown__panel');
+        const p = d.querySelector('.nav-dropdown__panel');
         if (p) { p.style.cssText = ''; }
     });
     if (estaAbierto) return;
-    var trigger = dropEl.querySelector('.nav-dropdown__trigger');
-    var panel   = dropEl.querySelector('.nav-dropdown__panel');
-    var rect    = trigger.getBoundingClientRect();
+    const trigger = dropEl.querySelector('.nav-dropdown__trigger');
+    const panel   = dropEl.querySelector('.nav-dropdown__panel');
+    const rect    = trigger.getBoundingClientRect();
     // Fixed: coordenadas relativas al viewport
     panel.style.position = 'fixed';
     panel.style.top      = (rect.bottom + 4) + 'px';
@@ -778,7 +777,7 @@ function toggleNavDrop(e, id) {
     dropEl.classList.add('open');
     // Corrección si se sale por la derecha
     requestAnimationFrame(function() {
-        var pr = panel.getBoundingClientRect();
+        const pr = panel.getBoundingClientRect();
         if (pr.right > window.innerWidth - 8) {
             panel.style.left  = 'auto';
             panel.style.right = '8px';
@@ -789,7 +788,7 @@ function toggleNavDrop(e, id) {
 function _cerrarDropdowns() {
     document.querySelectorAll('.nav-dropdown.open').forEach(function(d) {
         d.classList.remove('open');
-        var p = d.querySelector('.nav-dropdown__panel');
+        const p = d.querySelector('.nav-dropdown__panel');
         if (p) { p.style.cssText = ''; }
     });
 }
@@ -798,8 +797,8 @@ window.toggleNavDrop    = toggleNavDrop;
 window._cerrarDropdowns = _cerrarDropdowns;
 
 
-// -- BTG: categorías automáticas -----------------------------------------------
-var BTG_CATEGORIAS = [
+// ── BTG: categorías automáticas ───────────────────────────────────────────────
+const BTG_CATEGORIAS = [
     { palabras: ['airbnb', 'air bnb'],                   cat: 'Airbnb',             etiqueta: 'Liquidación Airbnb'   },
     { palabras: ['celesc', 'energia', 'energía'],         cat: 'Luz (Celesc)',       etiqueta: ''                     },
     { palabras: ['casan', 'agua', 'saneamento'],          cat: 'Agua (Casan)',       etiqueta: ''                     },
@@ -815,9 +814,9 @@ var BTG_CATEGORIAS = [
 
 function inferirCategoria(descripcion) {
     if (!descripcion) return { cat: null, etiqueta: '' };
-    var desc = descripcion.toLowerCase();
-    for (var regla of BTG_CATEGORIAS) {
-        if (regla.palabras.some(function(p) { return desc.includes(p); })) {
+    const desc = descripcion.toLowerCase();
+    for (const regla of BTG_CATEGORIAS) {
+        if (regla.palabras.some(p => desc.includes(p))) {
             return { cat: regla.cat, etiqueta: regla.etiqueta };
         }
     }
@@ -825,47 +824,49 @@ function inferirCategoria(descripcion) {
 }
 
 function fingerprintMovimiento(fecha, monto, descripcion) {
-    var montoStr = Math.abs(monto || 0).toFixed(2);
-    var descStr  = (descripcion || '').slice(0, 20).toLowerCase().replace(/\s+/g, '');
+    const montoStr = Math.abs(monto || 0).toFixed(2);
+    const descStr  = (descripcion || '').slice(0, 20).toLowerCase().replace(/\s+/g, '');
     return fecha + '|' + montoStr + '|' + descStr;
 }
 
 async function conciliarMovimientos(movimientos, cuentaId) {
-    var _setArr = []; movimientos.forEach(function(m) { if (m.fecha && _setArr.indexOf(m.fecha) === -1) _setArr.push(m.fecha); }); var fechas = _setArr.filter(Boolean);
-    if (!fechas.length) return movimientos.map(function(m) { return Object.assign({}, m, { estado: 'nuevo' }); });
-    var CHUNK = 30;
-    var existentes = [];
-    for (var i = 0; i < fechas.length; i += CHUNK) {
-        var lote = fechas.slice(i, i + CHUNK);
-        var snap = await db.collection('movimientos')
+    const fechas = [...new Set(movimientos.map(m => m.fecha))].filter(Boolean);
+    if (!fechas.length) return movimientos.map(m => ({ ...m, estado: 'nuevo' }));
+    const CHUNK = 30;
+    const existentes = [];
+    for (let i = 0; i < fechas.length; i += CHUNK) {
+        const lote = fechas.slice(i, i + CHUNK);
+        const snap = await db.collection('movimientos')
             .where('cuentaId', '==', cuentaId)
             .where('fecha',    'in',  lote)
             .get();
-        snap.docs.forEach(function(d) { existentes.push(Object.assign({ id: d.id }, d.data())); });
+        snap.docs.forEach(d => existentes.push({ id: d.id, ...d.data() }));
     }
-    return movimientos.map(function(m) {
-        var fp = fingerprintMovimiento(m.fecha, m.monto, m.descripcion);
-        var dupExacto = existentes.find(function(e) { return e.fecha === m.fecha &&; }
+    return movimientos.map(m => {
+        const fp = fingerprintMovimiento(m.fecha, m.monto, m.descripcion);
+        const dupExacto = existentes.find(e =>
+            e.fecha === m.fecha &&
             Math.abs(e.monto - m.monto) < 0.01 &&
             (e.descripcion || '').slice(0,20).toLowerCase().replace(/\s+/g,'') === (m.descripcion || '').slice(0,20).toLowerCase().replace(/\s+/g,'')
         );
-        var posibleDup = !dupExacto && existentes.find(function(e) { return e.fecha === m.fecha && Math.abs(e.monto - m.monto; }) < 0.01
+        const posibleDup = !dupExacto && existentes.find(e =>
+            e.fecha === m.fecha && Math.abs(e.monto - m.monto) < 0.01
         );
-        return Object.assign({}, m, { fingerprint: fp, estado: dupExacto ? 'duplicado' : posibleDup ? 'posible_duplicado' : 'nuevo' });
+        return { ...m, fingerprint: fp, estado: dupExacto ? 'duplicado' : posibleDup ? 'posible_duplicado' : 'nuevo' };
     });
 }
 
 async function importarMovimientosConfirmados(movimientos, opciones) {
-    var cuentaId = opciones.cuentaId; var moneda = opciones.moneda; var importadoPor = opciones.importadoPor;
-    var CHUNK = 400;
-    var importados = 0, saltados = 0;
-    for (var i = 0; i < movimientos.length; i += CHUNK) {
-        var batch = db.batch();
-        movimientos.slice(i, i + CHUNK).forEach(function(m) {
+    const { cuentaId, moneda, importadoPor } = opciones;
+    const CHUNK = 400;
+    let importados = 0, saltados = 0;
+    for (let i = 0; i < movimientos.length; i += CHUNK) {
+        const batch = db.batch();
+        movimientos.slice(i, i + CHUNK).forEach(m => {
             if (m.estado === 'duplicado') { saltados++; return; }
-            var ref = db.collection('movimientos').doc();
+            const ref = db.collection('movimientos').doc();
             batch.set(ref, {
-                cuentaId: cuentaId, moneda: moneda,
+                cuentaId, moneda,
                 fecha: m.fecha, descripcion: m.descripcion, monto: m.monto,
                 tipo: m.tipo || (m.monto >= 0 ? 'credito' : 'debito'),
                 saldoPost: m.saldoPost || null,
@@ -878,12 +879,12 @@ async function importarMovimientosConfirmados(movimientos, opciones) {
         });
         await batch.commit();
     }
-    return { importados: importados, saltados: saltados };
+    return { importados, saltados };
 }
 
 
 
-// -- VERIFICAR TAREA -- no era necesaria ---------------------------------------
+// ── VERIFICAR TAREA — no era necesaria ───────────────────────────────────────
 //
 // Registra que la tarea fue revisada y no necesitaba realizarse.
 // Crea entrada en historial_tareas con tipo 'verificada' y monto 0.
@@ -891,13 +892,13 @@ async function importarMovimientosConfirmados(movimientos, opciones) {
 // (para que no aparezca inmediatamente como urgente de nuevo).
 
 async function verificarTarea(tareaId, currentUser, nota) {
-    var tareaRef = db.collection('tareas').doc(tareaId);
-    var tareaDoc = await tareaRef.get();
+    const tareaRef = db.collection('tareas').doc(tareaId);
+    const tareaDoc = await tareaRef.get();
     if (!tareaDoc.exists) throw new Error('Tarea no encontrada');
-    var tarea = tareaDoc.data();
+    const tarea = tareaDoc.data();
     if (tarea.estado === 'finalizada') throw new Error('La tarea ya fue finalizada');
 
-    var ahora = firebase.firestore.Timestamp.now();
+    const ahora = firebase.firestore.Timestamp.now();
 
     // Guardar en historial con tipo 'verificada'
     await db.collection('historial_tareas').add({
@@ -923,11 +924,11 @@ async function verificarTarea(tareaId, currentUser, nota) {
 
     // Avanzar la fecha de inicio al día siguiente del ciclo
     // para que no aparezca inmediatamente como urgente
-    var hoy          = new Date(); hoy.setHours(0,0,0,0);
-    var ciclo        = tarea.recurrencia > 0 ? tarea.recurrencia : 7;
-    var nuevaFecha   = new Date(hoy);
+    const hoy          = new Date(); hoy.setHours(0,0,0,0);
+    const ciclo        = tarea.recurrencia > 0 ? tarea.recurrencia : 7;
+    const nuevaFecha   = new Date(hoy);
     nuevaFecha.setDate(nuevaFecha.getDate() + ciclo);
-    var nuevaFechaStr = nuevaFecha.toISOString().split('T')[0];
+    const nuevaFechaStr = nuevaFecha.toISOString().split('T')[0];
 
     await tareaRef.update({
         estado:          'pendiente',
@@ -938,21 +939,21 @@ async function verificarTarea(tareaId, currentUser, nota) {
     });
 }
 
-// -- MOTOR DE AUTO-CONCILIACIÓN ------------------------------------------------
-var _CONCIL_DEFAULTS = {
+// ── MOTOR DE AUTO-CONCILIACIÓN ────────────────────────────────────────────────
+const _CONCIL_DEFAULTS = {
     palabrasClaveAirbnb:  ['AIRBNB', 'AIR BNB', 'AIRBNB PAYMENTS', 'Airbnb'],
     toleranciaMontoPctA:  0.005,
     toleranciaMontoPctB:  0.02,
     toleranciaFechaDiasA: 3,
     toleranciaFechaDiasB: 7,
 };
-var _configConciliacion = null;
+let _configConciliacion = null;
 
 async function cargarConfigConciliacion() {
     if (_configConciliacion) return _configConciliacion;
     try {
-        var snap = await db.collection('config').doc('conciliacion').get();
-        _configConciliacion = snap.exists ? Object.assign({}, _CONCIL_DEFAULTS, snap.data()) : Object.assign({}, _CONCIL_DEFAULTS);
+        const snap = await db.collection('config').doc('conciliacion').get();
+        _configConciliacion = snap.exists ? { ..._CONCIL_DEFAULTS, ...snap.data() } : { ..._CONCIL_DEFAULTS };
     } catch (e) { _configConciliacion = { ..._CONCIL_DEFAULTS }; }
     return _configConciliacion;
 }
@@ -971,50 +972,51 @@ function _diasDiferencia(fechaA, fechaB) {
 }
 
 function _esAirbnb(descripcion, palabrasClave) {
-    var desc = (descripcion || '').toUpperCase();
-    return palabrasClave.some(function(p) { return desc.includes(p.toUpperCase(; })));
+    const desc = (descripcion || '').toUpperCase();
+    return palabrasClave.some(p => desc.includes(p.toUpperCase()));
 }
 
 function _descripcionContiene(descripcion, texto) {
     if (!texto || texto.length < 3) return false;
-    var desc  = (descripcion || '').toUpperCase();
-    var token = texto.toUpperCase().trim();
+    const desc  = (descripcion || '').toUpperCase();
+    const token = texto.toUpperCase().trim();
     if (token.length >= 5 && desc.includes(token)) return true;
-    return token.split(/\s+/).some(function(p) { return p.length >= 4 && desc.includes(p); });
+    return token.split(/\s+/).some(p => p.length >= 4 && desc.includes(p));
 }
 
 function matchMovimientoBancario(movBanco, registros, config) {
-    var cfg = config || _CONCIL_DEFAULTS;
-    var palabrasClaveAirbnb = cfg.palabrasClaveAirbnb; var toleranciaMontoPctA = cfg.toleranciaMontoPctA; var toleranciaMontoPctB = cfg.toleranciaMontoPctB; var toleranciaFechaDiasA = cfg.toleranciaFechaDiasA; var toleranciaFechaDiasB = cfg.toleranciaFechaDiasB;
-    var montoBanco = Math.abs(movBanco.monto);
-    var esCreditoBanco = movBanco.monto >= 0;
-    var mejorMatch = null, mejorNivel = 'C', mejorConfianza = 0;
-    var mejorRazon = 'Sin coincidencia en el sistema';
-    for (var reg of registros) {
-        var fechaReg = _toDateStr(reg.fecha || reg.creadoEn);
-        var montoReg = Math.abs(reg.monto || reg.total_neto || 0);
+    const cfg = config || _CONCIL_DEFAULTS;
+    const { palabrasClaveAirbnb, toleranciaMontoPctA, toleranciaMontoPctB,
+            toleranciaFechaDiasA, toleranciaFechaDiasB } = cfg;
+    const montoBanco = Math.abs(movBanco.monto);
+    const esCreditoBanco = movBanco.monto >= 0;
+    let mejorMatch = null, mejorNivel = 'C', mejorConfianza = 0;
+    let mejorRazon = 'Sin coincidencia en el sistema';
+    for (const reg of registros) {
+        const fechaReg = _toDateStr(reg.fecha || reg.creadoEn);
+        const montoReg = Math.abs(reg.monto || reg.total_neto || 0);
         if (!montoReg) continue;
-        var esCreditoReg = reg._coleccion === 'pagos' || reg._coleccion === 'informes_airbnb';
+        const esCreditoReg = reg._coleccion === 'pagos' || reg._coleccion === 'informes_airbnb';
         if (esCreditoBanco !== esCreditoReg) continue;
-        var difMonto  = montoReg > 0 ? Math.abs(montoBanco - montoReg) / montoReg : 1;
-        var difDias   = _diasDiferencia(movBanco.fecha, fechaReg);
-        var nombreRef = reg.clienteNombre || reg.proveedor || reg.anfitrion || '';
-        var origenOk  = _esAirbnb(movBanco.descripcion, palabrasClaveAirbnb) ||
+        const difMonto  = montoReg > 0 ? Math.abs(montoBanco - montoReg) / montoReg : 1;
+        const difDias   = _diasDiferencia(movBanco.fecha, fechaReg);
+        const nombreRef = reg.clienteNombre || reg.proveedor || reg.anfitrion || '';
+        const origenOk  = _esAirbnb(movBanco.descripcion, palabrasClaveAirbnb) ||
                           _descripcionContiene(movBanco.descripcion, nombreRef);
         if (difMonto <= toleranciaMontoPctA && difDias <= toleranciaFechaDiasA && origenOk) {
-            var c = 1.0 - (difMonto * 10) - (difDias * 0.02);
+            const c = 1.0 - (difMonto * 10) - (difDias * 0.02);
             if (c > mejorConfianza) { mejorMatch = reg; mejorNivel = 'A'; mejorConfianza = c;
-                mejorRazon = 'Monto ±' + (difMonto*100).toFixed(2) + '% . Fecha ±' + difDias + 'd . Origen reconocido'; }
+                mejorRazon = 'Monto ±' + (difMonto*100).toFixed(2) + '% · Fecha ±' + difDias + 'd · Origen reconocido'; }
             continue;
         }
         if (difMonto <= toleranciaMontoPctA && difDias <= toleranciaFechaDiasB) {
-            var c = 0.8 - (difDias * 0.03);
+            const c = 0.8 - (difDias * 0.03);
             if (c > mejorConfianza) { mejorMatch = reg; mejorNivel = 'B'; mejorConfianza = c;
-                mejorRazon = 'Monto exacto . Fecha ±' + difDias + 'd (fuera ventana A)'; }
+                mejorRazon = 'Monto exacto · Fecha ±' + difDias + 'd (fuera ventana A)'; }
         } else if (difMonto <= toleranciaMontoPctB && difDias <= toleranciaFechaDiasB && origenOk) {
-            var c = 0.65 - (difMonto * 5) - (difDias * 0.02);
+            const c = 0.65 - (difMonto * 5) - (difDias * 0.02);
             if (c > mejorConfianza) { mejorMatch = reg; mejorNivel = 'B'; mejorConfianza = c;
-                mejorRazon = 'Monto ±' + (difMonto*100).toFixed(2) + '% . Fecha ±' + difDias + 'd . Origen reconocido'; }
+                mejorRazon = 'Monto ±' + (difMonto*100).toFixed(2) + '% · Fecha ±' + difDias + 'd · Origen reconocido'; }
         }
     }
     return { nivel: mejorNivel, confianza: Math.max(0, Math.min(1, mejorConfianza)),
@@ -1022,32 +1024,33 @@ function matchMovimientoBancario(movBanco, registros, config) {
 }
 
 async function conciliarContraRegistros(movimientos, cuentaId) {
-    var config = await cargarConfigConciliacion();
-    var fechas = movimientos.map(function(m) { return m.fecha; }).filter(Boolean).sort();
+    const config = await cargarConfigConciliacion();
+    const fechas = movimientos.map(m => m.fecha).filter(Boolean).sort();
     if (!fechas.length) return movimientos;
-    var desde = new Date(fechas[0]);
-    var hasta = new Date(fechas[fechas.length - 1]);
+    const desde = new Date(fechas[0]);
+    const hasta = new Date(fechas[fechas.length - 1]);
     desde.setDate(desde.getDate() - 8); hasta.setDate(hasta.getDate() + 8);
-    var desdeFmt = desde.toISOString().slice(0, 10);
-    var hastaFmt = hasta.toISOString().slice(0, 10);
-    var _snaps = await Promise.all([
+    const desdeFmt = desde.toISOString().slice(0, 10);
+    const hastaFmt = hasta.toISOString().slice(0, 10);
+    const [pagosSnap, gastosSnap, informesSnap] = await Promise.all([
         db.collection('pagos').where('fecha','>=',desdeFmt).where('fecha','<=',hastaFmt).get(),
         db.collection('gastos').where('fecha','>=',desdeFmt).where('fecha','<=',hastaFmt).get(),
-        db.collection('informes_airbnb').where('fecha','>=',desdeFmt).where('fecha','<=',hastaFmt).get().catch(function() { return {docs:[]}; }),
+        db.collection('informes_airbnb').where('fecha','>=',desdeFmt).where('fecha','<=',hastaFmt).get().catch(()=>({docs:[]})),
     ]);
-    var pagosSnap = _snaps[0]; var gastosSnap = _snaps[1]; var informesSnap = _snaps[2];
-    var registros = pagosSnap.docs.map(function(d) { return Object.assign({}, d.data(), { _id: d.id, _coleccion: 'pagos' }); })
-        .concat(gastosSnap.docs.map(function(d) { return Object.assign({}, d.data(), { _id: d.id, _coleccion: 'gastos' }); }))
-        .concat(informesSnap.docs.map(function(d) { return Object.assign({}, d.data(), { _id: d.id, _coleccion: 'informes_airbnb' }); }));
-    return movimientos.map(function(mov) {
+    const registros = [
+        ...pagosSnap.docs.map(d => ({ ...d.data(), _id: d.id, _coleccion: 'pagos' })),
+        ...gastosSnap.docs.map(d => ({ ...d.data(), _id: d.id, _coleccion: 'gastos' })),
+        ...informesSnap.docs.map(d => ({ ...d.data(), _id: d.id, _coleccion: 'informes_airbnb' })),
+    ];
+    return movimientos.map(mov => {
         if (mov.estado === 'duplicado')
-            return Object.assign({}, mov, { matchResultado: { nivel: 'DUP', confianza: 1, registro: null, razon: 'Duplicado exacto ya importado' } });
-        return Object.assign({}, mov, { matchResultado: matchMovimientoBancario(mov, registros, config) });
+            return { ...mov, matchResultado: { nivel: 'DUP', confianza: 1, registro: null, razon: 'Duplicado exacto ya importado' } };
+        return { ...mov, matchResultado: matchMovimientoBancario(mov, registros, config) };
     });
 }
 
 async function guardarConciliacion(movimientoId, matchResultado, confirmadoPor) {
-    var nivel = matchResultado.nivel; var registro = matchResultado.registro; var coleccion = matchResultado.coleccion; var razon = matchResultado.razon; var confianza = matchResultado.confianza;
+    const { nivel, registro, coleccion, razon, confianza } = matchResultado;
     if (!movimientoId || nivel === 'C' || nivel === 'DUP') return;
     await db.collection('movimientos').doc(movimientoId).update({
         conciliado: true, conciliadoNivel: nivel,
@@ -1058,7 +1061,7 @@ async function guardarConciliacion(movimientoId, matchResultado, confirmadoPor) 
     });
 }
 
-// -- COMPROBANTES -- Cloudinary (upload sin firma) ------------------------------
+// ── COMPROBANTES — Cloudinary (upload sin firma) ──────────────────────────────
 //
 // Comprime la imagen en el cliente (max 1200px, calidad 0.75) y la sube
 // a Cloudinary via fetch usando un upload preset unsigned.
@@ -1069,7 +1072,7 @@ async function guardarConciliacion(movimientoId, matchResultado, confirmadoPor) 
 // Carpeta en Cloudinary: comprobantes/{anio}/{mes}
 //
 // NO requiere firebase-storage.js ni plan Blaze.
-// NO requiere API Secret -- upload preset unsigned es suficiente.
+// NO requiere API Secret — upload preset unsigned es suficiente.
 
 var _CVC_CLOUDINARY_CLOUD  = 'dnwfu8ffn';
 var _CVC_CLOUDINARY_PRESET = 'preset-comprobantes';
@@ -1144,21 +1147,21 @@ function abrirComprobante(url) {
 }
 
 
-// -- AYUDA CONTEXTUAL -- tooltip por sección del manual ------------------------
+// ── AYUDA CONTEXTUAL — tooltip por sección del manual ────────────────────────
 //
 // Uso en cualquier página:
-//   CVC.initAyuda()  -- llamar una vez después de renderNav()
+//   CVC.initAyuda()  — llamar una vez después de renderNav()
 //
 // Cada item del NAV puede tener una propiedad "ayuda" con:
 //   { titulo, resumen, seccionManual }
 //   seccionManual: id del <h2> o <details> en el manual (para link directo)
 
-// AYUDA_ITEMS -- cargado desde Firestore (config/ayuda)
+// AYUDA_ITEMS — cargado desde Firestore (config/ayuda)
 // El objeto se hidrata al primer llamado a mostrarAyuda()
 // Puede editarse desde la consola Firebase sin redeploy
 //
 // Estructura en Firestore:
-//   config/ayuda  ->  { items: { "pagina.html": { titulo, resumen, detalle } } }
+//   config/ayuda  →  { items: { "pagina.html": { titulo, resumen, detalle } } }
 //
 // Fallback: textos por defecto para cuando Firestore no responde
 
@@ -1166,23 +1169,24 @@ var AYUDA_ITEMS = {
     'dashboard.html':        { titulo: 'Dashboard', resumen: 'Resumen general del complejo. Muestra KPIs, alertas, check-ins próximos, pendientes urgentes, tareas atrasadas, reservas sin confirmar y presupuestos sin seña. Cada tarjeta es clickeable y lleva a la sección correspondiente.' },
     'calendario.html':       { titulo: 'Calendario', resumen: 'Vista mensual de todas las reservas por cabaña. Los bloques de color indican ocupación. Tocá un día para ver el detalle o crear una reserva.' },
     'reservas.html':         { titulo: 'Reservas', resumen: 'Gestión completa de reservas directas y de Airbnb. Podés confirmar, editar fechas, registrar pagos y crear tareas de limpieza asociadas. Las reservas pendientes requieren confirmación manual.' },
-    'presupuestos.html':     { titulo: 'Presupuestos', resumen: 'Creá y enviá presupuestos a potenciales huéspedes. El sistema calcula el precio automáticamente según tarifas y temporada. Podés editar el precio final con el botón    para aplicar descuentos o precios especiales.' },
+    'presupuestos.html':     { titulo: 'Presupuestos', resumen: 'Creá y enviá presupuestos a potenciales huéspedes. El sistema calcula el precio automáticamente según tarifas y temporada. Podés editar el precio final con el botón ✏️ para aplicar descuentos o precios especiales.' },
     'clientes.html':         { titulo: 'Clientes', resumen: 'Directorio de huéspedes con historial de reservas. Se completa automáticamente al confirmar una reserva.' },
     'panel-financiero.html': { titulo: 'Panel Financiero', resumen: 'Vista consolidada de todas las cuentas con balance por período. Elegí rango de fechas con los atajos (Este mes / Mes anterior / Este año / Todo) y verás ingresos, egresos, retiros y flujo neto por cuenta y por socio. También muestra movimientos sin conciliar y gastos sin comprobante.' },
     'pagos.html':            { titulo: 'Ingresos y Egresos', resumen: 'Registrá cobros a huéspedes (tab Ingresos), gastos con foto de comprobante (tab Egresos), retiros personales (tab Retiros y personal) y honorarios. Los gastos se clasifican por circuito: Fiscal (Casa Verde, va al IRPF), Personal (fondos propios, no declarable) o Mixto (parte fiscal + parte personal con slider).' },
     'informes-airbnb.html':  { titulo: 'Informes Airbnb', resumen: 'Importá los PDFs de liquidación de Airbnb. La IA extrae automáticamente los datos de cada reserva, comisiones y monto neto depositado. Los informes se cruzan con los extractos BTG en la conciliación.' },
     'cuentas.html':          { titulo: 'Cuentas', resumen: 'Administración de cuentas bancarias (BTG Mauro, BTG Flor y otras). Muestra saldo actual y permite actualizar manualmente.' },
     'movimientos.html':      { titulo: 'Movimientos', resumen: 'Extracto completo de movimientos importados desde el banco. Podés categorizar, filtrar y buscar. Los movimientos sin conciliar aparecen destacados.' },
-    'herramientas-btg.html': { titulo: 'BTG / Conciliación', resumen: 'Flujo: 1) Importar texto del extracto BTG. 2) Auto-conciliar -- el sistema cruza automáticamente contra pagos, gastos, informes Airbnb y retiros registrados. 3) Confirmar sugeridos (Nivel B). 4) Registrar los sin correlativo (Nivel C). Cuando el 100% está explicado, la base fiscal es confiable.' },
+    'herramientas-btg.html': { titulo: 'BTG / Conciliación', resumen: 'Flujo: 1) Importar texto del extracto BTG. 2) Auto-conciliar — el sistema cruza automáticamente contra pagos, gastos, informes Airbnb y retiros registrados. 3) Confirmar sugeridos (Nivel B). 4) Registrar los sin correlativo (Nivel C). Cuando el 100% está explicado, la base fiscal es confiable.' },
     'categorias.html':       { titulo: 'Categorías', resumen: 'Define y edita las categorías de movimientos bancarios. Se usan en la pestaña Categorizar de Herramientas BTG.' },
     'tareas.html':           { titulo: 'Tareas', resumen: 'Tocá una tarea para ver el detalle. Botones: INICIAR (empieza cronómetro, los botones cambian sin salir de la pantalla), PAUSAR, FINALIZAR (calcula horas y genera honorario), OK/NO NECESARIA (registra que revisaste y no hacía falta hacerla, sin honorario). La tarea permanece visible mientras trabajás en ella.' },
+    'limpieza-stats.html':   { titulo: 'Análisis de Limpiezas', resumen: 'Estadísticas de limpiezas: tiempos promedio, costo real de honorarios, rendimiento por colaborador y por cabaña. Usá la pestaña Precio sugerido para calibrar el precio de limpieza en base a datos reales.' },
     'tareas-admin.html':     { titulo: 'Gestión de Tareas', resumen: 'Vista administrativa: creá tareas, asignales prioridad y fecha, revisá el historial de quién hizo qué. Tocá cualquier fila de tarea para ver su historial completo en la pestaña siguiente. El historial muestra tanto tareas realizadas como verificadas (OK/No necesaria).' },
-    'pendientes.html':       { titulo: 'Pendientes', resumen: 'Lista de cosas por hacer sin cronómetro. El semáforo indica urgencia: Rojo=Urgente, Amarillo=Atención, Verde=Normal. El botón > inicia un cronómetro para ese pendiente -- el tiempo queda registrado en el historial de tareas junto con las tareas normales.' },
-    'fiscal.html':           { titulo: 'Panel Fiscal', resumen: 'Flujo mensual: 1) Verificar ingresos y gastos deducibles del mes. 2) Calcular IRPF estimado. 3) Pagar el DARF en el banco. 4) Registrar el pago en el Calendario fiscal. Solo gastos con circuito Fiscal entran en el cálculo -- los personales y retiros están excluidos.' },
-    'acceso-contador.html':  { titulo: 'Acceso Contador', resumen: 'Generá un link temporal para que la contadora acceda a los datos fiscales sin usuario. El link vence automáticamente. La contadora ve solo datos fiscales en portugués -- sin datos personales ni retiros.' },
+    'pendientes.html':       { titulo: 'Pendientes', resumen: 'Lista de cosas por hacer sin cronómetro. El semáforo indica urgencia: Rojo=Urgente, Amarillo=Atención, Verde=Normal. El botón ▶ inicia un cronómetro para ese pendiente — el tiempo queda registrado en el historial de tareas junto con las tareas normales.' },
+    'fiscal.html':           { titulo: 'Panel Fiscal', resumen: 'Flujo mensual: 1) Verificar ingresos y gastos deducibles del mes. 2) Calcular IRPF estimado. 3) Pagar el DARF en el banco. 4) Registrar el pago en el Calendario fiscal. Solo gastos con circuito Fiscal entran en el cálculo — los personales y retiros están excluidos.' },
+    'acceso-contador.html':  { titulo: 'Acceso Contador', resumen: 'Generá un link temporal para que la contadora acceda a los datos fiscales sin usuario. El link vence automáticamente. La contadora ve solo datos fiscales en portugués — sin datos personales ni retiros.' },
     'cabanas-admin.html':    { titulo: 'Cabañas', resumen: 'Configuración de las tres unidades: fotos, descripción en 3 idiomas, amenities, tarifas por temporada y vinculación con Google Calendar de Airbnb.' },
     'usuarios.html':         { titulo: 'Usuarios', resumen: 'Gestión de accesos. Dos roles: Admin (acceso completo) y Colaborador (solo ve sus tareas y cobros). La persona primero crea su cuenta en el login, luego el admin le asigna el rol acá.' },
-    'manual-sistema.html':   { titulo: 'Manual del Sistema', resumen: 'Documentación completa. Para actualizar: subí el archivo .md o .html generado por Claude -> se convierte y guarda en Firestore automáticamente.' },
+    'manual-sistema.html':   { titulo: 'Manual del Sistema', resumen: 'Documentación completa. Para actualizar: subí el archivo .md o .html generado por Claude → se convierte y guarda en Firestore automáticamente.' },
 };
 var _ayudaFirestoreCargada = false;
 
@@ -1195,16 +1199,16 @@ async function _cargarAyudaFirestore() {
         if (!snap.exists) return;
         var data = snap.data();
 
-        // -- Sistema nuevo: celulas guardadas como campos planos --
+        // ── Sistema nuevo: celulas guardadas como campos planos ──
         //
         // El parser guardo cada celula como un campo separado con notacion
         // de punto: "celulas.reservas.pagina", "celulas.pagos.registrar-ingreso", etc.
         // Firestore los almacena como campos individuales, NO como mapa anidado.
-        // Por eso data.celulas es undefined -- hay que buscar los campos
+        // Por eso data.celulas es undefined — hay que buscar los campos
         // cuya clave empiece con "celulas."
         //
         // Ejemplo de campo en Firestore:
-        //   "celulas.reservas.pagina" -> { titulo, resumen, contenido, paginas, boton }
+        //   "celulas.reservas.pagina" → { titulo, resumen, contenido, paginas, boton }
 
         var PREFIX = 'celulas.';
         Object.keys(data).forEach(function(campo) {
@@ -1215,7 +1219,7 @@ async function _cargarAyudaFirestore() {
             if (!cel || typeof cel !== 'object') return;
 
             // Celula de pagina principal: termina en ".pagina"
-            // Ejemplo: "reservas.pagina" -> reservas.html
+            // Ejemplo: "reservas.pagina" → reservas.html
             var partes = celulaId.split('.');
             if (partes.length === 2 && partes[1] === 'pagina') {
                 var paginaHtml = partes[0] + '.html';
@@ -1242,7 +1246,7 @@ async function _cargarAyudaFirestore() {
             }
         });
 
-        // -- Sistema legado: items -----------------------------
+        // ── Sistema legado: items ─────────────────────────────
         // Estructura: { items: { "pagina.html": { titulo, resumen } } }
         // Solo se aplica si la pagina no fue poblada por las celulas nuevas
         if (data.items) {
@@ -1256,18 +1260,18 @@ async function _cargarAyudaFirestore() {
 
         _ayudaFirestoreCargada = true;
     } catch(e) {
-        // Silencioso -- usar defaults del codigo
+        // Silencioso — usar defaults del codigo
     }
 }
 
 
 // Cache del manual para no releer Firestore en cada tooltip
-var _manualHtmlCache = null;
+let _manualHtmlCache = null;
 
 async function _getManualHtml() {
     if (_manualHtmlCache) return _manualHtmlCache;
     try {
-        var snap = await db.collection('config').doc('manual').get();
+        const snap = await db.collection('config').doc('manual').get();
         _manualHtmlCache = snap.exists ? (snap.data().contenidoHtml || snap.data().html || '') : '';
     } catch(e) {
         _manualHtmlCache = '';
@@ -1277,15 +1281,15 @@ async function _getManualHtml() {
 
 function _extractSeccion(html, seccionId) {
     if (!html || !seccionId) return null;
-    var div = document.createElement('div');
+    const div = document.createElement('div');
     div.innerHTML = html;
     // Buscar por id o por texto en h2/details/summary
-    var byId = div.querySelector('#' + seccionId);
+    const byId = div.querySelector('#' + seccionId);
     if (byId) return byId.textContent.slice(0, 400).trim();
     // Buscar en details con summary que contenga el texto
-    var details = div.querySelectorAll('details');
-    for (var d of details) {
-        var s = d.querySelector('summary');
+    const details = div.querySelectorAll('details');
+    for (const d of details) {
+        const s = d.querySelector('summary');
         if (s && s.textContent.toLowerCase().includes(seccionId.toLowerCase())) {
             return d.textContent.slice(0, 400).trim();
         }
@@ -1295,7 +1299,7 @@ function _extractSeccion(html, seccionId) {
 
 // Crear el modal de ayuda (singleton)
 function _getAyudaModal() {
-    var modal = document.getElementById('_ayudaModal');
+    let modal = document.getElementById('_ayudaModal');
     if (modal) return modal;
     modal = document.createElement('div');
     modal.id = '_ayudaModal';
@@ -1353,10 +1357,10 @@ async function mostrarAyuda(pagina) {
     // Cargar textos actualizados desde Firestore (primera vez)
     await _cargarAyudaFirestore();
 
-    var info = AYUDA_ITEMS[pagina];
+    const info = AYUDA_ITEMS[pagina];
     if (!info) return;
 
-    var modal = _getAyudaModal();
+    const modal = _getAyudaModal();
     document.getElementById('_ayudaTitulo').textContent  = info.titulo || pagina;
     document.getElementById('_ayudaResumen').textContent = info.resumen || '';
     document.getElementById('_ayudaManual').style.display = 'none';
@@ -1366,10 +1370,10 @@ async function mostrarAyuda(pagina) {
     // Cargar extracto del manual en background
     if (info.seccion) {
         try {
-            var html    = await _getManualHtml();
-            var extracto = _extractSeccion(html, info.seccion);
+            const html    = await _getManualHtml();
+            const extracto = _extractSeccion(html, info.seccion);
             if (extracto) {
-                var el = document.getElementById('_ayudaManual');
+                const el = document.getElementById('_ayudaManual');
                 el.textContent   = extracto.replace(/\s+/g, ' ').trim();
                 el.style.display = 'block';
             }
@@ -1378,7 +1382,7 @@ async function mostrarAyuda(pagina) {
 }
 
 function cerrarAyuda() {
-    var modal = document.getElementById('_ayudaModal');
+    const modal = document.getElementById('_ayudaModal');
     if (modal) modal.style.display = 'none';
 }
 
@@ -1397,7 +1401,7 @@ function initAyuda(paginaActual) {
 }
 
 function _montarFab(pagina) {
-    // El FAB se muestra siempre -- aunque la página no tenga célula todavía
+    // El FAB se muestra siempre — aunque la página no tenga célula todavía
     // Al tocar abrirá el panel con "sin información" si no hay célula
     var fab = document.getElementById('_ayudaFab');
     if (fab) return; // ya existe
@@ -1474,7 +1478,7 @@ function _montarNavDots() {
 }
 
 
-// -- AYUDA POR CÉLULA -- lee config/ayuda.celulas en Firestore -----------------
+// ── AYUDA POR CÉLULA — lee config/ayuda.celulas en Firestore ─────────────────
 //
 //  Complementa el sistema existente de mostrarAyuda() (por página).
 //  mostrarCelula() muestra la célula exacta vinculada a un botón o acción.
@@ -1483,7 +1487,7 @@ function _montarNavDots() {
 //    onclick="CVC.mostrarCelula('reservas.nueva-reserva-directa')"
 //
 //  El panel se crea una sola vez (singleton) y se reutiliza.
-//  Sin template literals -- compatible con Safari/iOS.
+//  Sin template literals — compatible con Safari/iOS.
 
 var _celulasCache = null;
 
@@ -1676,29 +1680,29 @@ function cerrarCelula() {
 window.mostrarCelula = mostrarCelula;
 window.cerrarCelula  = cerrarCelula;
 
-// -- EXPORTAR ------------------------------------------------------------------
+// ── EXPORTAR ──────────────────────────────────────────────────────────────────
 window.CVC = {
-    db: db, auth: auth,
-    ESTADOS_RESERVA: ESTADOS_RESERVA, ESTADOS_TAREA: ESTADOS_TAREA, PRIORIDADES: PRIORIDADES, CALENDAR_IDS: CALENDAR_IDS, ESTADOS_BLOQUEANTES: ESTADOS_BLOQUEANTES,
-    NAV_ADMIN_ITEMS: NAV_ADMIN_ITEMS, NAV_USER_ITEMS: NAV_USER_ITEMS, renderNav: renderNav,
-    badgeEstado: badgeEstado, badgePrioridad: badgePrioridad,
-    verificarAuth: verificarAuth, cerrarSesion: cerrarSesion,
-    calcularPrecio: calcularPrecio,
-    verificarDisponibilidadCabana: verificarDisponibilidadCabana,
-    mensajeConflicto: mensajeConflicto,
-    crearTareaLimpieza: crearTareaLimpieza,
-    sincronizarDisponibilidad: sincronizarDisponibilidad,
-    sincronizarDesdeGCal: sincronizarDesdeGCal,
-    iniciarTarea: iniciarTarea, pausarTarea: pausarTarea, finalizarTarea: finalizarTarea, urgenciaTarea: urgenciaTarea,
-    getHistorialTareas: getHistorialTareas,
-    BTG_CATEGORIAS: BTG_CATEGORIAS, inferirCategoria: inferirCategoria, fingerprintMovimiento: fingerprintMovimiento,
-    conciliarMovimientos: conciliarMovimientos, importarMovimientosConfirmados: importarMovimientosConfirmados,
-    matchMovimientoBancario: matchMovimientoBancario, conciliarContraRegistros: conciliarContraRegistros,
-    guardarConciliacion: guardarConciliacion, cargarConfigConciliacion: cargarConfigConciliacion,
-    verificarTarea: verificarTarea,
-    escapeHtml: escapeHtml, formatFecha: formatFecha, formatFechaHora: formatFechaHora, formatHoras: formatHoras, colorCabana: colorCabana,
-    showLoading: showLoading, showEmpty: showEmpty, showError: showError, showToast: showToast,
-    subirComprobante: subirComprobante, abrirComprobante: abrirComprobante,
-    mostrarAyuda: mostrarAyuda, cerrarAyuda: cerrarAyuda, cerrarCelula: cerrarCelula, initAyuda: initAyuda, AYUDA_ITEMS: AYUDA_ITEMS,
-    mostrarCelula: mostrarCelula
+    db, auth,
+    ESTADOS_RESERVA, ESTADOS_TAREA, PRIORIDADES, CALENDAR_IDS, ESTADOS_BLOQUEANTES,
+    NAV_ADMIN_ITEMS, NAV_USER_ITEMS, renderNav,
+    badgeEstado, badgePrioridad,
+    verificarAuth, cerrarSesion,
+    calcularPrecio,
+    verificarDisponibilidadCabana,
+    mensajeConflicto,
+    crearTareaLimpieza,
+    sincronizarDisponibilidad,
+    sincronizarDesdeGCal,
+    iniciarTarea, pausarTarea, finalizarTarea, urgenciaTarea,
+    getHistorialTareas,
+    BTG_CATEGORIAS, inferirCategoria, fingerprintMovimiento,
+    conciliarMovimientos, importarMovimientosConfirmados,
+    matchMovimientoBancario, conciliarContraRegistros,
+    guardarConciliacion, cargarConfigConciliacion,
+    verificarTarea,
+    escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
+    showLoading, showEmpty, showError, showToast,
+    subirComprobante, abrirComprobante,
+    mostrarAyuda, cerrarAyuda, cerrarCelula, initAyuda, AYUDA_ITEMS,
+    mostrarCelula
 };
