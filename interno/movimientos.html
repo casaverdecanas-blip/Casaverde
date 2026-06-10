@@ -247,10 +247,10 @@
 <script src="utils.js"></script>
 <script>
 (async () => {
-    const { user, userData } = await CVC.verificarAuth('admin');
+    const { user, userData } = await CVC.verificarAuth(['admin', 'user']);
     document.getElementById('userName').textContent = userData.nombre || user.email;
     CVC.renderNav('movimientos.html', userData.rol);
-    CVC.initAyuda('movimientos.html');
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('movimientos.html');
 
     const db = CVC.db;
     const { escapeHtml, showEmpty, showToast } = CVC;
@@ -410,7 +410,6 @@
             return;
         }
 
-        // Construir opciones de categoría (una vez, para reutilizar)
         const grupos = {};
         categoriasCache.forEach(c => {
             if (!grupos[c.grupo]) grupos[c.grupo] = [];
@@ -446,7 +445,6 @@
                     ${fmtMonto(m.monto, moneda)}
                 </td>
                 <td>
-                    <!-- Select de categoría — guarda automáticamente al cambiar -->
                     <select class="cat-select ${m.categoriaId ? 'asignada' : ''}"
                         id="cat-${m.id}"
                         onchange="asignarCategoria('${m.id}', this)">
@@ -454,7 +452,6 @@
                     </select>
                 </td>
                 <td>
-                    <!-- Etiqueta libre — guarda al perder foco -->
                     <input type="text" class="etiqueta-input"
                         id="etiq-${m.id}"
                         value="${escapeHtml(m.etiqueta || '')}"
@@ -472,7 +469,7 @@
                         <span class="material-icons" style="font-size:14px;">delete</span>
                     </button>
                 </td>
-            </tr>`;
+            </table>`;
         }).join('');
 
         container.innerHTML = `
@@ -486,27 +483,24 @@
                         <th>Etiqueta</th>
                         <th style="text-align:right;">Saldo</th>
                         <th></th>
-                    </tr>
+                    </table>
                 </thead>
                 <tbody>${rows}</tbody>
             </table>`;
     }
 
-    // ── Asignar categoría (guarda al cambiar el select) ───────
+    // ── Asignar categoría ───────────────────────────────────────
     window.asignarCategoria = async function(movId, selectEl) {
         const categoriaId = selectEl.value || null;
         selectEl.classList.add('guardando');
         try {
             await db.collection('movimientos').doc(movId).update({ categoriaId });
-            // Actualizar cache
             const m = movimientosCache.find(x => x.id === movId);
             if (m) m.categoriaId = categoriaId;
             selectEl.classList.remove('guardando');
             selectEl.classList.toggle('asignada', !!categoriaId);
-            // Actualizar clase de la fila
             const fila = selectEl.closest('tr');
             if (fila) fila.classList.toggle('sin-categorizar', !categoriaId);
-            // Actualizar resumen sin re-renderizar la tabla entera
             renderResumen(getFiltrados(), cuenta.moneda || 'BRL');
         } catch(e) {
             selectEl.classList.remove('guardando');
@@ -514,7 +508,7 @@
         }
     };
 
-    // ── Guardar etiqueta al perder foco ───────────────────────
+    // ── Guardar etiqueta ───────────────────────────────────────
     window.guardarEtiqueta = async function(movId, valor) {
         try {
             await db.collection('movimientos').doc(movId).update({ etiqueta: valor.trim() });
@@ -564,7 +558,6 @@
     };
 
     // ── Init ──────────────────────────────────────────────────
-    // Preseleccionar mes actual
     const hoy = new Date();
     document.getElementById('filtroMes').value =
         `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}`;
