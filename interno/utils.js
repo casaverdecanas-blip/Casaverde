@@ -21,9 +21,9 @@ const FIREBASE_CONFIG = {
     projectId:  'casaverdecanas-199'
 };
 if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
-var db   = firebase.firestore();
+const db   = firebase.firestore();
 db.settings({ experimentalForceLongPolling: true, merge: true });
-var auth = firebase.auth();
+const auth = firebase.auth();
 
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
@@ -115,7 +115,7 @@ async function cerrarSesion() {
 // ── CALCULO DE PRECIO ─────────────────────────────────────────────────────────
 function calcularPrecio(cabana, checkIn, checkOut, adultos, ninos) {
     const tarifas       = cabana.tarifas || {};
-    const capacidadBase = cabana.(capacidad && capacidad.base) || 2;
+    const capacidadBase = (cabana.capacidad && cabana.capacidad.base) || 2;
     const personasExtra = Math.max(0, (adultos + ninos) - capacidadBase);
 
     let subtotal = 0, noches = 0;
@@ -151,8 +151,8 @@ async function verificarDisponibilidadCabana(cabaId, checkIn, checkOut, editando
     for (const doc of snap.docs) {
         if (editandoId && doc.id === editandoId) continue;
         const r    = doc.data();
-        const rIn  = r.(checkIn && checkIn.toDate)  ? r.checkIn.toDate()  : new Date(r.checkIn);
-        const rOut = r.(checkOut && checkOut.toDate) ? r.checkOut.toDate() : new Date(r.checkOut);
+        const rIn  = (r.checkIn && r.checkIn.toDate)  ? r.checkIn.toDate()  : new Date(r.checkIn);
+        const rOut = (r.checkOut && r.checkOut.toDate) ? r.checkOut.toDate() : new Date(r.checkOut);
         if (checkInDate < rOut && checkOutDate > rIn) {
             return {
                 disponible: false,
@@ -229,8 +229,8 @@ async function sincronizarDesdeGCal(googleApiKey, cabanasCache) {
                 .map(ev => ({
                     googleId: ev.id,
                     titulo:   ev.summary || 'Airbnb',
-                    inicio:   ev.start.date || ev.start.(dateTime && dateTime.split)('T')[0],
-                    fin:      ev.end.date   || ev.end.(dateTime && dateTime.split)('T')[0],
+                    inicio:   ev.start.date || (ev.start.dateTime && ev.start.dateTime.split('T')[0]),
+                    fin:      ev.end.date   || (ev.end.dateTime && ev.end.dateTime.split('T')[0]),
                     cabaId
                 }));
         } catch(e) { console.warn('GCal cabana ' + cabaId + ':', e.message); return []; }
@@ -306,7 +306,7 @@ async function sincronizarDesdeGCal(googleApiKey, cabanasCache) {
 
 // ── CREAR TAREA DE LIMPIEZA ───────────────────────────────────────────────────
 async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
-    const checkOut = reservaData.(checkOut && checkOut.toDate)
+    const checkOut = (reservaData.checkOut && reservaData.checkOut.toDate)
         ? reservaData.checkOut.toDate()
         : new Date(reservaData.checkOut);
 
@@ -315,7 +315,7 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
         const cabSnap = await db.collection('cabanas').doc(String(reservaData.caba)).get();
         if (cabSnap.exists) {
             const cab = cabSnap.data();
-            nombreCabana = cab.(nombre && nombre.es) || cab.(nombre && nombre.pt) || ('Cabana ' + reservaData.caba);
+            nombreCabana = (cab.nombre && cab.nombre.es) || (cab.nombre && cab.nombre.pt) || ('Cabana ' + reservaData.caba);
         }
     } catch(e) { /* fallback */ }
 
@@ -327,17 +327,17 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
             .filter(r => {
                 if (!['confirmada', 'pendiente'].includes(r.estado)) return false;
                 if (r.id === reservaId) return false;
-                const ci = r.(checkIn && checkIn.toDate) ? r.checkIn.toDate() : new Date(r.checkIn);
+                const ci = (r.checkIn && r.checkIn.toDate) ? r.checkIn.toDate() : new Date(r.checkIn);
                 return ci >= checkOut;
             })
             .sort((a, b) => {
-                const ca = a.(checkIn && checkIn.toDate) ? a.checkIn.toDate() : new Date(a.checkIn);
-                const cb = b.(checkIn && checkIn.toDate) ? b.checkIn.toDate() : new Date(b.checkIn);
+                const ca = (a.checkIn && a.checkIn.toDate) ? a.checkIn.toDate() : new Date(a.checkIn);
+                const cb = (b.checkIn && b.checkIn.toDate) ? b.checkIn.toDate() : new Date(b.checkIn);
                 return ca - cb;
             })[0];
 
         if (proxima) {
-            const ci = proxima.(checkIn && checkIn.toDate) ? proxima.checkIn.toDate() : new Date(proxima.checkIn);
+            const ci = (proxima.checkIn && proxima.checkIn.toDate) ? proxima.checkIn.toDate() : new Date(proxima.checkIn);
             proximoHuesped = {
                 nombre:         proxima.nombre         || '--',
                 checkIn:        ci,
@@ -351,8 +351,8 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
     } catch(e) { console.warn('proxima reserva:', e); }
 
     const alertasEntrada = [];
-    if ((proximoHuesped && proximoHuesped.mascotas) === 'si')       alertasEntrada.push('MASCOTAS');
-    if ((proximoHuesped && proximoHuesped.niniosPequenos) === 'si') alertasEntrada.push('NINOS PEQUENOS');
+    if ((proximoHuesped && proximoHuesped.mascotas === 'si'))       alertasEntrada.push('MASCOTAS');
+    if ((proximoHuesped && proximoHuesped.niniosPequenos === 'si')) alertasEntrada.push('NINOS PEQUENOS');
 
     const alertasSalida = [];
     if (reservaData.mascotas === 'si')       alertasSalida.push('MASCOTAS');
@@ -468,8 +468,8 @@ async function finalizarTarea(tareaId, currentUser) {
     const horasPor  = {};
     const nombrePor = {};
     for (const s of sesiones) {
-        const ini = s.(inicio && inicio.toDate) ? s.inicio.toDate() : new Date(s.inicio);
-        const fin = s.(fin && fin.toDate)    ? s.fin.toDate()    : new Date(s.fin);
+        const ini = (s.inicio && s.inicio.toDate) ? s.inicio.toDate() : new Date(s.inicio);
+        const fin = (s.fin && s.fin.toDate)    ? s.fin.toDate()    : new Date(s.fin);
         const hrs = Math.max(0, (fin - ini) / 3600000);
         horasPor[s.uid]  = (horasPor[s.uid]  || 0) + hrs;
         nombrePor[s.uid] = s.nombre;
@@ -538,7 +538,7 @@ async function getHistorialTareas(tareaId) {
                 porUid[col.uid].veces      += 1;
                 porUid[col.uid].horasTotal += col.horas || 0;
                 porUid[col.uid].montoTotal += col.montoRecibido || 0;
-                const fe = reg.(finalizadoEn && finalizadoEn.toDate) ? reg.finalizadoEn.toDate() : new Date(reg.finalizadoEn);
+                const fe = (reg.finalizadoEn && reg.finalizadoEn.toDate) ? reg.finalizadoEn.toDate() : new Date(reg.finalizadoEn);
                 if (!porUid[col.uid].ultimaVez || fe > porUid[col.uid].ultimaVez) porUid[col.uid].ultimaVez = fe;
             }
             totalHoras += reg.totalHoras || 0;
