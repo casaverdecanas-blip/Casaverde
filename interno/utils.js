@@ -97,7 +97,7 @@ function verificarAuth(rolesPermitidos) {
                     window.location.href = userData.rol === 'user' ? 'tareas.html' : 'index.html';
                     return;
                 }
-                resolve({ user, userData });
+                resolve({ user: user, userData: userData });
             } catch (e) {
                 console.error('verificarAuth:', e);
                 reject(e);
@@ -134,7 +134,7 @@ function calcularPrecio(cabana, checkIn, checkOut, adultos, ninos) {
     }
 
     var limpieza = tarifas.precioLimpieza || 0;
-    return { noches, subtotal, limpieza, total: subtotal + limpieza };
+    return { noches: noches, subtotal: subtotal, limpieza: limpieza, total: subtotal + limpieza };
 }
 
 
@@ -241,11 +241,11 @@ async function sincronizarDesdeGCal(googleApiKey, cabanasCache) {
         return { creadas: 0, omitidas: 0, canceladas: 0, error: 'Sin cabanas con Calendar ID configurado' };
     }
 
-    var resultados   = await Promise.all(cabanasConCal.map(function(c) { return leerGCal(c.google_calendar_id, c.id)));
+    var resultados   = await Promise.all(cabanasConCal.map(function(c) { return leerGCal(c.google_calendar_id, c.id); }));
     var todosEventos = [].concat.apply([], resultados);
 
     var existSnap       = await db.collection('reservas').where('origen', '==', 'airbnb').get();
-    var reservasAirbnb  = existSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); };
+    var reservasAirbnb  = existSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
     var googleIdsActivos    = new Set(todosEventos.map(function(e) { return e.googleId; }));
     var googleIdsExistentes = new Set(reservasAirbnb.map(function(d) { return d.airbnb_google_id; }).filter(Boolean));
 
@@ -298,7 +298,7 @@ async function sincronizarDesdeGCal(googleApiKey, cabanasCache) {
         await sincronizarDisponibilidad(r.id, r.data);
     }
 
-    return { creadas, omitidas, canceladas };
+    return { creadas: creadas, omitidas: omitidas, canceladas: canceladas };
 }
 
 
@@ -454,7 +454,7 @@ async function finalizarTarea(tareaId, currentUser) {
     if (!sesiones.some(function(s) { return s.uid === currentUser.uid; })) {
         var ref = await sesionesRef.add({
             uid: currentUser.uid, nombre: currentUser.nombre || currentUser.email,
-            inicio: ahora, fin: ahora, tareaId, sinCronometro: true
+            inicio: ahora, fin: ahora, tareaId: tareaId, sinCronometro: true
         });
         sesiones.push({ _ref: ref, uid: currentUser.uid,
             nombre: currentUser.nombre || currentUser.email,
@@ -474,16 +474,21 @@ async function finalizarTarea(tareaId, currentUser) {
     }
     var totalHoras    = Object.values(horasPor).reduce(function(a, b) { return a + b; }, 0);
     var monto         = tarea.monto || 0;
-    var colaboradores = Object.keys(horasPor).map(function(uid) { var horas = horasPor[uid]; return ({
-        uid, nombre: nombrePor[uid], horas: parseFloat(horas.toFixed(2)),
-        montoRecibido: monto > 0 && totalHoras > 0 ? parseFloat(((horas / totalHoras) * monto).toFixed(2)) : 0
-    }));
+    var colaboradores = Object.keys(horasPor).map(function(uid) {
+        var horas = horasPor[uid];
+        return {
+            uid: uid,
+            nombre: nombrePor[uid],
+            horas: parseFloat(horas.toFixed(2)),
+            montoRecibido: monto > 0 && totalHoras > 0 ? parseFloat(((horas / totalHoras) * monto).toFixed(2)) : 0
+        };
+    });
     var b2      = db.batch();
     var histRef = db.collection('historial_tareas').doc();
     b2.set(histRef, {
-        tareaId, nombre: tarea.nombre, descripcion: tarea.descripcion || '', tipo: tarea.tipo || 'general',
+        tareaId: tareaId, nombre: tarea.nombre, descripcion: tarea.descripcion || '', tipo: tarea.tipo || 'general',
         prioridad: tarea.prioridad || 'media', fechaInicio: tarea.fechaInicio || null,
-        fechaFin: ahoraDate.toISOString().split('T')[0], monto, totalHoras: parseFloat(totalHoras.toFixed(2)),
+        fechaFin: ahoraDate.toISOString().split('T')[0], monto: monto, totalHoras: parseFloat(totalHoras.toFixed(2)),
         colaboradores, reservaId: tarea.reservaId || null, cabana: tarea.cabana || null,
         recurrencia: tarea.recurrencia || 0,
         finalizadoPor: currentUser.uid,
@@ -495,7 +500,7 @@ async function finalizarTarea(tareaId, currentUser) {
             if (col.montoRecibido <= 0) continue;
             var hRef = db.collection('honorarios').doc();
             b2.set(hRef, {
-                colaboradorId: col.uid, colaboradorNombre: col.nombre, tareaId, historialId: histRef.id,
+                colaboradorId: col.uid, colaboradorNombre: col.nombre, tareaId: tareaId, historialId: histRef.id,
                 reservaId: tarea.reservaId || null, monto: col.montoRecibido, moneda: 'BRL',
                 concepto: 'Tarea: ' + tarea.nombre + ' -- ' + ahoraDate.toLocaleDateString('es-AR'),
                 horas: col.horas, estado: 'pendiente', fechaPago: null, pagadoPor: null, creadoEn: ahora
@@ -860,7 +865,7 @@ async function importarMovimientosConfirmados(movimientos, opciones) {
             if (m.estado === 'duplicado') { saltados++; return; }
             var ref = db.collection('movimientos').doc();
             batch.set(ref, {
-                cuentaId, moneda,
+                cuentaId: cuentaId, moneda: moneda,
                 fecha: m.fecha, descripcion: m.descripcion, monto: m.monto,
                 tipo: m.tipo || (m.monto >= 0 ? 'credito' : 'debito'),
                 saldoPost: m.saldoPost || null,
@@ -873,7 +878,7 @@ async function importarMovimientosConfirmados(movimientos, opciones) {
         });
         await batch.commit();
     }
-    return { importados, saltados };
+    return { importados: importados, saltados: saltados };
 }
 
 
@@ -1673,27 +1678,27 @@ window.cerrarCelula  = cerrarCelula;
 
 // -- EXPORTAR ------------------------------------------------------------------
 window.CVC = {
-    db, auth,
-    ESTADOS_RESERVA, ESTADOS_TAREA, PRIORIDADES, CALENDAR_IDS, ESTADOS_BLOQUEANTES,
-    NAV_ADMIN_ITEMS, NAV_USER_ITEMS, renderNav,
-    badgeEstado, badgePrioridad,
-    verificarAuth, cerrarSesion,
-    calcularPrecio,
-    verificarDisponibilidadCabana,
-    mensajeConflicto,
-    crearTareaLimpieza,
-    sincronizarDisponibilidad,
-    sincronizarDesdeGCal,
-    iniciarTarea, pausarTarea, finalizarTarea, urgenciaTarea,
-    getHistorialTareas,
-    BTG_CATEGORIAS, inferirCategoria, fingerprintMovimiento,
-    conciliarMovimientos, importarMovimientosConfirmados,
-    matchMovimientoBancario, conciliarContraRegistros,
-    guardarConciliacion, cargarConfigConciliacion,
-    verificarTarea,
-    escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
-    showLoading, showEmpty, showError, showToast,
-    subirComprobante, abrirComprobante,
-    mostrarAyuda, cerrarAyuda, cerrarCelula, initAyuda, AYUDA_ITEMS,
-    mostrarCelula
+    db: db, auth: auth,
+    ESTADOS_RESERVA: ESTADOS_RESERVA, ESTADOS_TAREA: ESTADOS_TAREA, PRIORIDADES: PRIORIDADES, CALENDAR_IDS: CALENDAR_IDS, ESTADOS_BLOQUEANTES: ESTADOS_BLOQUEANTES,
+    NAV_ADMIN_ITEMS: NAV_ADMIN_ITEMS, NAV_USER_ITEMS: NAV_USER_ITEMS, renderNav: renderNav,
+    badgeEstado: badgeEstado, badgePrioridad: badgePrioridad,
+    verificarAuth: verificarAuth, cerrarSesion: cerrarSesion,
+    calcularPrecio: calcularPrecio,
+    verificarDisponibilidadCabana: verificarDisponibilidadCabana,
+    mensajeConflicto: mensajeConflicto,
+    crearTareaLimpieza: crearTareaLimpieza,
+    sincronizarDisponibilidad: sincronizarDisponibilidad,
+    sincronizarDesdeGCal: sincronizarDesdeGCal,
+    iniciarTarea: iniciarTarea, pausarTarea: pausarTarea, finalizarTarea: finalizarTarea, urgenciaTarea: urgenciaTarea,
+    getHistorialTareas: getHistorialTareas,
+    BTG_CATEGORIAS: BTG_CATEGORIAS, inferirCategoria: inferirCategoria, fingerprintMovimiento: fingerprintMovimiento,
+    conciliarMovimientos: conciliarMovimientos, importarMovimientosConfirmados: importarMovimientosConfirmados,
+    matchMovimientoBancario: matchMovimientoBancario, conciliarContraRegistros: conciliarContraRegistros,
+    guardarConciliacion: guardarConciliacion, cargarConfigConciliacion: cargarConfigConciliacion,
+    verificarTarea: verificarTarea,
+    escapeHtml: escapeHtml, formatFecha: formatFecha, formatFechaHora: formatFechaHora, formatHoras: formatHoras, colorCabana: colorCabana,
+    showLoading: showLoading, showEmpty: showEmpty, showError: showError, showToast: showToast,
+    subirComprobante: subirComprobante, abrirComprobante: abrirComprobante,
+    mostrarAyuda: mostrarAyuda, cerrarAyuda: cerrarAyuda, cerrarCelula: cerrarCelula, initAyuda: initAyuda, AYUDA_ITEMS: AYUDA_ITEMS,
+    mostrarCelula: mostrarCelula
 };
