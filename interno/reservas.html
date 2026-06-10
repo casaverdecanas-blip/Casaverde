@@ -355,10 +355,10 @@
 <script src="utils.js"></script>
 <script>
 (async () => {
-    const { user, userData } = await CVC.verificarAuth('admin');
+    const { user, userData } = await CVC.verificarAuth(['admin', 'user']);
     document.getElementById('userName').textContent = userData.nombre || user.email;
-    CVC.renderNav('reservas.html');
-    CVC.initAyuda('reservas.html');
+    CVC.renderNav('reservas.html', userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('reservas.html');
 
     const db = CVC.db;
     const {
@@ -601,11 +601,6 @@
     };
 
     // ── Verificación de solapamiento en tiempo real ───────────
-    //
-    //  Se dispara al cambiar cabaña, check-in o check-out.
-    //  Solo muestra advertencia, no bloquea — el bloqueo real
-    //  ocurre en guardarReserva() antes de escribir en Firestore.
-    //
     let solapamientoTimer = null;
     function verificarSolapamientoLive() {
         clearTimeout(solapamientoTimer);
@@ -1020,10 +1015,6 @@
     };
 
     // ── Actualizar tarea de limpieza al editar reserva ────────
-    //
-    //  Cuando se edita una reserva confirmada, la tarea de limpieza
-    //  asociada se regenera con los datos actualizados del huésped.
-    //
     async function actualizarTareaLimpieza(reservaId, reservaData) {
         try {
             const tareasSnap = await db.collection('tareas')
