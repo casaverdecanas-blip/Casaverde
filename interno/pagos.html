@@ -303,8 +303,7 @@
                     <span class="material-icons">engineering</span>
                     Honorarios a colaboradores
                 </h2>
-                <button class="btn btn-primary" id="btnNuevoHonorario"
-                    onclick="abrirModalHonorario()" style="display:none;">
+                <button class="btn btn-primary" id="btnNuevoHonorario" onclick="abrirModalHonorario()" style="display:none;">
                     <span class="material-icons">add</span> Nuevo honorario
                 </button>
             </div>
@@ -1075,6 +1074,7 @@
     window.onerror = function(msg, src, line, col, err) {
         console.error('PAGOS ERROR:', msg, 'linea:'+line, err ? err.message : '');
     };
+    // CORREGIDO: usar await correctamente
     var { user, userData } = await CVC.verificarAuth(['admin', 'user']);
     document.getElementById('userName').textContent = userData.nombre || user.email;
 
@@ -1084,6 +1084,7 @@
             subirComprobante, abrirComprobante } = CVC;
 
     CVC.renderNav('pagos.html', userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('pagos.html');
 
     // -- Acceso directo por URL params --------------------------
     // Desde Dashboard -> "Registrar gasto con foto" -> pagos.html?tab=egresos&accion=importar
@@ -1285,7 +1286,7 @@
                 '<td><button class="btn btn-danger btn-sm" onclick="eliminarIngreso(\'' + p.id + '\')"><span class="material-icons">delete</span></button></td>' +
                 '</tr>';
         }).join('');
-        container.innerHTML = '<div class="table-container"><table class="table table-responsive"><thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Monto</th><th>Método</th><th>Obs.</th><th></th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr style="background:var(--color-success-bg);"><td colspan="3" style="font-weight:700;padding:var(--space-3) var(--space-4);">TOTAL</td><td class="fila-monto fila-ingreso" style="padding:var(--space-3) var(--space-4);">R$ ' + sumaBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td><td colspan="3"></td></tr></tfoot></table></div>';
+        container.innerHTML = '<div class="table-container"><table class="table table-responsive"><thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Monto</th><th>Método</th><th>Obs.</th><th></th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr style="background:var(--color-success-bg);"><td colspan="3" style="font-weight:700;padding:var(--space-3) var(--space-4);">TOTAL</td><td class="fila-monto fila-ingreso" style="padding:var(--space-3) var(--space-4);">R$ ' + sumaBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td><td colspan="3"></td></tfoot></table></div>';
     }
 
     // -- Render: Egresos ---------------------------------------
@@ -1316,7 +1317,7 @@
                 '<td style="white-space:nowrap;">' + compBtn + '<button class="btn btn-danger btn-sm" onclick="eliminarEgreso(\'' + g.id + '\')"><span class="material-icons">delete</span></button></td>' +
                 '</tr>';
         }).join('');
-        container.innerHTML = '<div class="table-container"><table class="table table-responsive"><thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Monto</th><th>Método</th><th>Resp./Proveedor</th><th></th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr style="background:var(--color-danger-bg);"><td colspan="3" style="font-weight:700;padding:var(--space-3) var(--space-4);">TOTAL FISCAL</td><td class="fila-monto fila-egreso" style="padding:var(--space-3) var(--space-4);">R$ ' + sumaBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td><td colspan="3"></td></tr></tfoot></table></div>';
+        container.innerHTML = '<div class="table-container"><table class="table table-responsive"><thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Monto</th><th>Método</th><th>Resp./Proveedor</th><th></th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr style="background:var(--color-danger-bg);"><td colspan="3" style="font-weight:700;padding:var(--space-3) var(--space-4);">TOTAL FISCAL</td><td class="fila-monto fila-egreso" style="padding:var(--space-3) var(--space-4);">R$ ' + sumaBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td><td colspan="3"></td></tfoot></table></div>';
     }
 
     // -- Render: Honorarios ------------------------------------
@@ -1379,7 +1380,8 @@
                 '<td style="text-align:right;font-family:var(--font-mono);">' + mon + (r.monto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td>' +
                 '<td>' + escapeHtml(r.tipoFondo || '--') + '</td>' +
                 '<td>' + compBtn + '</td>' +
-                '<td>' + reclasif + '</td></tr>';
+                '<td>' + reclasif + '</td>' +
+                '</tr>';
         }).join('');
         container.innerHTML =
             '<div class="stats-row" style="margin-bottom:var(--space-3);">' + balanceHtml + '</div>' +
@@ -1931,8 +1933,7 @@
                         partes.push('R$ ' + (it.precio || it.price || it.valor || it.vl_total));
                     }
                     return partes.join(' ');
-                }).join('
-');
+                }).join('\n');
             } else if (typeof d.items === 'object') {
                 itemsTxt = JSON.stringify(d.items);
             }
@@ -2105,8 +2106,7 @@
         logEl.innerHTML = '';
 
         function flog(msg, color) {
-            logEl.innerHTML += '<span style="color:' + (color||'#93c5fd') + '">' + msg + '</span>
-';
+            logEl.innerHTML += '<span style="color:' + (color||'#93c5fd') + '">' + msg + '</span>\n';
             logEl.scrollTop = logEl.scrollHeight;
         }
 
@@ -2208,8 +2208,7 @@
                         if (it.cantidad && it.cantidad !== 1) partes.push('x' + it.cantidad);
                         if (it.precio)  partes.push('R$ ' + it.precio);
                         return partes.join(' - ');
-                    }).filter(Boolean).join('
-');
+                    }).filter(Boolean).join('\n');
                 } else {
                     itemsTxt = String(ext.items);
                 }
