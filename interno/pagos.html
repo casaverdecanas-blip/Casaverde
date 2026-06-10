@@ -1075,12 +1075,12 @@
     window.onerror = function(msg, src, line, col, err) {
         console.error('PAGOS ERROR:', msg, 'linea:'+line, err ? err.message : '');
     };
-    const { user, userData } = await CVC.verificarAuth(['admin', 'user']);
+    var { user, userData } = await CVC.verificarAuth(['admin', 'user']);
     document.getElementById('userName').textContent = userData.nombre || user.email;
 
-    const db      = CVC.db;
-    const esAdmin = userData.rol === 'admin';
-    const { escapeHtml, formatFecha, formatHoras, showEmpty, showError, showToast,
+    var db      = CVC.db;
+    var esAdmin = userData.rol === 'admin';
+    var { escapeHtml, formatFecha, formatHoras, showEmpty, showError, showToast,
             subirComprobante, abrirComprobante } = CVC;
 
     CVC.renderNav('pagos.html', userData.rol);
@@ -1118,19 +1118,19 @@
     }
 
     // -- Estado local ------------------------------------------
-    let reservasCache     = [];
-    let ingresosCache     = [];
-    let egresosCache      = [];
-    let honorariosCache   = [];
-    let presupuestosCache = [];
-    let retirosCache      = [];
-    let usuariosCache     = [];
-    let cuentasCache      = [];
-    let mesFiltro         = null;
-    let _eComprobanteFile = null;
+    var reservasCache     = [];
+    var ingresosCache     = [];
+    var egresosCache      = [];
+    var honorariosCache   = [];
+    var presupuestosCache = [];
+    var retirosCache      = [];
+    var usuariosCache     = [];
+    var cuentasCache      = [];
+    var mesFiltro         = null;
+    var _eComprobanteFile = null;
 
-    const fmt     = n => 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-    const CATS    = { limpieza:'Limpieza', mantenimiento:'Mantenimiento', servicios:'Servicios',
+    var fmt     = function(n) { return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2 }); };
+    var CATS    = { limpieza:'Limpieza', mantenimiento:'Mantenimiento', servicios:'Servicios',
                       jardineria:'Jardinería', administrativo:'Administrativo',
                       alimentacion:'Alimentación', transporte:'Transporte', otro:'Otro' };
 
@@ -1157,20 +1157,20 @@
 
     // -- Filtro de mes -----------------------------------------
     function poblarSelectMes() {
-        const meses = new Set();
-        const agregarFechas = function(arr) {
+        var meses = new Set();
+        var agregarFechas = function(arr) {
             arr.forEach(function(p) {
-                const f = p.creadoEn && p.creadoEn.toDate ? p.creadoEn.toDate() : (p.fecha ? new Date(p.fecha) : null);
+                var f = p.creadoEn && p.creadoEn.toDate ? p.creadoEn.toDate() : (p.fecha ? new Date(p.fecha) : null);
                 if (f) meses.add(f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0'));
             });
         };
         agregarFechas(ingresosCache);
         agregarFechas(egresosCache);
         agregarFechas(honorariosCache);
-        const sel = document.getElementById('selectMes');
+        var sel = document.getElementById('selectMes');
         sel.innerHTML = '<option value="">Todos los meses</option>'
             + meses.slice().sort().reverse().map(function(m) {
-                const parts = m.split('-');
+                var parts = m.split('-');
                 return '<option value="' + m + '">'
                     + new Date(parts[0], parts[1] - 1).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
                     + '</option>';
@@ -1184,7 +1184,7 @@
 
     function enMes(item) {
         if (!mesFiltro) return true;
-        const f = item.creadoEn && item.creadoEn.toDate ? item.creadoEn.toDate() : (item.fecha ? new Date(item.fecha) : null);
+        var f = item.creadoEn && item.creadoEn.toDate ? item.creadoEn.toDate() : (item.fecha ? new Date(item.fecha) : null);
         if (!f) return false;
         return f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') === mesFiltro;
     }
@@ -1193,7 +1193,7 @@
     async function cargarTodo() {
         try {
             if (esAdmin) {
-                const [resS, ingS, egS, honS, presS, cuentS] = await Promise.all([
+                var [resS, ingS, egS, honS, presS, cuentS] = await Promise.all([
                     db.collection('reservas').get(),
                     db.collection('pagos').get(),
                     db.collection('gastos').get(),
@@ -1201,7 +1201,7 @@
                     db.collection('presupuestos').get(),
                     db.collection('cuentas').get()
                 ]);
-                const sortDesc = function(a, b) {
+                var sortDesc = function(a, b) {
                     return (b.creadoEn && b.creadoEn.toDate ? b.creadoEn.toDate().getTime() : 0)
                          - (a.creadoEn && a.creadoEn.toDate ? a.creadoEn.toDate().getTime() : 0);
                 };
@@ -1221,7 +1221,7 @@
                 renderBalance(); renderIngresos(); renderEgresos(); renderHonorarios();
                 poblarSelectIngreso();
             } else {
-                const honS = await db.collection('honorarios')
+                var honS = await db.collection('honorarios')
                     .where('uid', '==', user.uid).get();
                 honorariosCache = honS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
                     .filter(function(h) { return h.estado !== 'pagado'; });
@@ -1244,13 +1244,13 @@
 
     // -- Render: Balance ---------------------------------------
     function renderBalance() {
-        const ing = ingresosCache.filter(enMes);
-        const egr = egresosCache.filter(function(g) { return enMes(g) && (g.circuito || 'fiscal') === 'fiscal'; });
-        const hon = honorariosCache.filter(enMes);
-        const tIng = ing.reduce(function(a, p) { return a + (p.monto || 0); }, 0);
-        const tEgr = egr.reduce(function(a, g) { return a + (g.monto || 0); }, 0);
-        const tHon = hon.reduce(function(a, h) { return a + (h.monto || 0); }, 0);
-        const neto = tIng - tEgr - tHon;
+        var ing = ingresosCache.filter(enMes);
+        var egr = egresosCache.filter(function(g) { return enMes(g) && (g.circuito || 'fiscal') === 'fiscal'; });
+        var hon = honorariosCache.filter(enMes);
+        var tIng = ing.reduce(function(a, p) { return a + (p.monto || 0); }, 0);
+        var tEgr = egr.reduce(function(a, g) { return a + (g.monto || 0); }, 0);
+        var tHon = hon.reduce(function(a, h) { return a + (h.monto || 0); }, 0);
+        var neto = tIng - tEgr - tHon;
         document.getElementById('balanceHeader').innerHTML =
             '<div class="balance-card ingreso"><div class="balance-card__label"><span class="material-icons">trending_up</span> Ingresos</div><div class="balance-card__monto">' + fmt(tIng) + '</div><div class="balance-card__sub">' + ing.length + ' cobros</div></div>' +
             '<div class="balance-card egreso"><div class="balance-card__label"><span class="material-icons">trending_down</span> Egresos fiscales</div><div class="balance-card__monto">' + fmt(tEgr) + '</div><div class="balance-card__sub">' + egr.length + ' gastos</div></div>' +
@@ -1259,9 +1259,9 @@
     }
 
     function renderMiBalance() {
-        const pend  = honorariosCache.filter(function(h) { return h.estado !== 'pagado'; });
-        const total = pend.reduce(function(a, h) { return a + (h.monto || 0); }, 0);
-        const hs    = honorariosCache.reduce(function(a, h) { return a + (h.horas || 0); }, 0);
+        var pend  = honorariosCache.filter(function(h) { return h.estado !== 'pagado'; });
+        var total = pend.reduce(function(a, h) { return a + (h.monto || 0); }, 0);
+        var hs    = honorariosCache.reduce(function(a, h) { return a + (h.horas || 0); }, 0);
         document.getElementById('miBalanceMonto').textContent = fmt(total);
         document.getElementById('miBalanceSub').textContent   =
             pend.length + ' tareas pendientes . ' + formatHoras(hs) + ' acumuladas';
@@ -1269,12 +1269,12 @@
 
     // -- Render: Ingresos --------------------------------------
     function renderIngresos() {
-        const container = document.getElementById('ingresosContainer');
-        const lista     = ingresosCache.filter(enMes);
+        var container = document.getElementById('ingresosContainer');
+        var lista     = ingresosCache.filter(enMes);
         if (!lista.length) { showEmpty(container, 'Sin ingresos', 'No hay cobros en este período.', 'trending_up'); return; }
-        const sumaBRL = lista.filter(function(p) { return p.moneda === 'BRL'; }).reduce(function(a, p) { return a + (p.monto || 0); }, 0);
-        const rows = lista.map(function(p) {
-            const res = reservasCache.find(function(r) { return r.id === p.reservaId; });
+        var sumaBRL = lista.filter(function(p) { return p.moneda === 'BRL'; }).reduce(function(a, p) { return a + (p.monto || 0); }, 0);
+        var rows = lista.map(function(p) {
+            var res = reservasCache.find(function(r) { return r.id === p.reservaId; });
             return '<tr>' +
                 '<td>' + escapeHtml(p.fecha || (p.creadoEn && p.creadoEn.toDate ? p.creadoEn.toDate().toLocaleDateString('es-AR') : '--')) + '</td>' +
                 '<td><strong>' + escapeHtml(p.clienteNombre || (res ? res.nombre : '--')) + '</strong></td>' +
@@ -1290,20 +1290,20 @@
 
     // -- Render: Egresos ---------------------------------------
     function renderEgresos() {
-        const container = document.getElementById('egresosContainer');
-        const lista     = egresosCache.filter(enMes);
+        var container = document.getElementById('egresosContainer');
+        var lista     = egresosCache.filter(enMes);
         if (!lista.length) { showEmpty(container, 'Sin gastos', 'No hay gastos en este período.', 'trending_down'); return; }
-        const sumaBRL = lista.filter(function(g) { return g.moneda === 'BRL' && (g.circuito || 'fiscal') === 'fiscal'; })
+        var sumaBRL = lista.filter(function(g) { return g.moneda === 'BRL' && (g.circuito || 'fiscal') === 'fiscal'; })
             .reduce(function(a, g) { return a + (g.monto || 0); }, 0);
-        const rows = lista.map(function(g) {
-            const sim = g.moneda === 'USD' ? 'US$' : g.moneda === 'UYU' ? '$U' : g.moneda === 'ARS' ? '$' : 'R$';
-            const circuito = g.circuito || 'fiscal';
-            const circBadge = circuito === 'personal'
+        var rows = lista.map(function(g) {
+            var sim = g.moneda === 'USD' ? 'US$' : g.moneda === 'UYU' ? '$U' : g.moneda === 'ARS' ? '$' : 'R$';
+            var circuito = g.circuito || 'fiscal';
+            var circBadge = circuito === 'personal'
                 ? '<span style="font-size:10px;background:#E6F1FB;color:#185FA5;padding:2px 6px;border-radius:3px;">personal</span>'
                 : circuito === 'mixto'
                 ? '<span style="font-size:10px;background:#FAEEDA;color:#854F0B;padding:2px 6px;border-radius:3px;">mixto</span>'
                 : '';
-            const compBtn = g.comprobanteUrl
+            var compBtn = g.comprobanteUrl
                 ? '<button class="btn btn-ghost btn-sm" onclick="abrirComprobante(\'' + g.comprobanteUrl + '\')" title="Ver comprobante"><span class="material-icons" style="font-size:16px;">attach_file</span></button>'
                 : '';
             return '<tr>' +
@@ -1321,19 +1321,19 @@
 
     // -- Render: Honorarios ------------------------------------
     function renderHonorarios() {
-        const container = document.getElementById('honorariosContainer');
+        var container = document.getElementById('honorariosContainer');
         if (!honorariosCache.length) { showEmpty(container, 'Sin honorarios', 'No hay honorarios pendientes.', 'engineering'); return; }
-        const porColab = {};
+        var porColab = {};
         honorariosCache.forEach(function(h) {
-            const uid = h.uid || h.colaboradorId || 'sin_uid';
-            const nom = h.nombre || h.colaboradorNombre || 'Sin nombre';
+            var uid = h.uid || h.colaboradorId || 'sin_uid';
+            var nom = h.nombre || h.colaboradorNombre || 'Sin nombre';
             if (!porColab[uid]) porColab[uid] = { nombre: nom, items: [], total: 0, horas: 0 };
             porColab[uid].items.push(h);
             porColab[uid].total += h.monto || 0;
             porColab[uid].horas += h.horas || 0;
         });
         container.innerHTML = Object.values(porColab).map(function(c) {
-            const rows = c.items.map(function(h) {
+            var rows = c.items.map(function(h) {
                 return '<div class="honorario-row">' +
                     '<div><div style="font-size:var(--text-sm);font-weight:600;">' + escapeHtml(h.concepto || h.tareaNombre || '--') + '</div>' +
                     '<div style="font-size:var(--text-xs);color:var(--color-text-muted);">' + formatHoras(h.horas) + ' . ' + (h.creadoEn && h.creadoEn.toDate ? h.creadoEn.toDate().toLocaleDateString('es-AR') : '--') + '</div></div>' +
@@ -1350,27 +1350,27 @@
 
     // -- Render: Retiros ---------------------------------------
     function renderRetiros() {
-        const container = document.getElementById('retirosContainer');
+        var container = document.getElementById('retirosContainer');
         if (!retirosCache.length) { showEmpty(container, 'Sin retiros', 'No hay retiros personales registrados.', 'person'); return; }
-        const balancePorPersona = {};
+        var balancePorPersona = {};
         retirosCache.forEach(function(r) {
-            const nom = r.usuarioNom || 'Sin asignar';
+            var nom = r.usuarioNom || 'Sin asignar';
             if (!balancePorPersona[nom]) balancePorPersona[nom] = { total: 0, cant: 0 };
             balancePorPersona[nom].total += r.monto || 0;
             balancePorPersona[nom].cant  += 1;
         });
-        const balanceHtml = Object.entries(balancePorPersona).map(function(entry) {
+        var balanceHtml = Object.keys(balancePorPersona).map(function(key) { var entry = [key, balancePorPersona[key]];
             return '<div class="stat-chip"><div class="stat-chip__val">R$ ' +
                 Math.round(entry[1].total).toLocaleString('pt-BR') + '</div>' +
                 '<div class="stat-chip__label">' + escapeHtml(entry[0]) + ' (' + entry[1].cant + ')</div></div>';
         }).join('');
-        const rows = retirosCache.map(function(r) {
-            const mon = r.moneda === 'UYU' ? '$U ' : r.moneda === 'USD' ? 'US$ ' : 'R$ ';
-            const tieneComp = !!r.comprobanteUrl;
-            const compBtn = tieneComp
+        var rows = retirosCache.map(function(r) {
+            var mon = r.moneda === 'UYU' ? '$U ' : r.moneda === 'USD' ? 'US$ ' : 'R$ ';
+            var tieneComp = !!r.comprobanteUrl;
+            var compBtn = tieneComp
                 ? '<button class="btn btn-ghost btn-sm" onclick="abrirComprobante(\'' + r.comprobanteUrl + '\')"><span class="material-icons" style="font-size:16px;">attach_file</span></button>'
                 : '<span style="font-size:11px;color:var(--color-text-muted);">sin foto</span>';
-            const reclasif = r.reclasificado
+            var reclasif = r.reclasificado
                 ? '<span style="font-size:11px;background:#E1F5EE;color:#0F6E56;padding:2px 7px;border-radius:3px;">Reclasificado ' + (r.pctReclasif || 0) + '%</span>'
                 : '';
             return '<tr><td>' + escapeHtml(r.fecha || '--') + '</td>' +
@@ -1391,7 +1391,7 @@
     // -- Cargar retiros ----------------------------------------
     async function cargarRetiros() {
         try {
-            const snap = await db.collection('retiros').orderBy('fecha', 'desc').limit(200).get();
+            var snap = await db.collection('retiros').orderBy('fecha', 'desc').limit(200).get();
             retirosCache = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
             renderRetiros();
         } catch(e) {
@@ -1402,22 +1402,22 @@
     // -- Poblar select de retiros ------------------------------
     async function poblarSelectRetiro() {
         try {
-            const snap = await db.collection('usuarios').orderBy('nombre').get();
-            const sel  = document.getElementById('rUsuario');
+            var snap = await db.collection('usuarios').orderBy('nombre').get();
+            var sel  = document.getElementById('rUsuario');
             if (!sel) return;
             sel.innerHTML = '<option value="">-- Seleccionar --</option>' +
                 snap.docs.map(function(d) {
-                    const u = d.data();
+                    var u = d.data();
                     return '<option value="' + d.id + '" data-nom="' + escapeHtml(u.nombre) + '">' + escapeHtml(u.nombre) + '</option>';
                 }).join('');
-            const rFecha = document.getElementById('rFecha');
+            var rFecha = document.getElementById('rFecha');
             if (rFecha && !rFecha.value) rFecha.value = new Date().toISOString().split('T')[0];
         } catch(e) { console.warn('poblarSelectRetiro:', e.message); }
     }
 
     // -- Poblar select de ingreso ------------------------------
     function poblarSelectIngreso() {
-        const sel = document.getElementById('iReserva');
+        var sel = document.getElementById('iReserva');
         sel.innerHTML = '<option value="">-- Seleccionar reserva --</option>' +
             reservasCache.map(function(r) {
                 return '<option value="' + r.id + '">' + escapeHtml(r.nombre || '--') + ' . ' +
@@ -1429,20 +1429,20 @@
     // -- Poblar selects de egreso (responsable + cuenta) -------
     async function poblarSelectsEgreso() {
         try {
-            const [usuSnap, cuentSnap] = await Promise.all([
+            var [usuSnap, cuentSnap] = await Promise.all([
                 db.collection('usuarios').orderBy('nombre').get(),
                 db.collection('cuentas').get()
             ]);
-            const selResp   = document.getElementById('eResponsable');
-            const selCuenta = document.getElementById('eCuentaOrigen');
+            var selResp   = document.getElementById('eResponsable');
+            var selCuenta = document.getElementById('eCuentaOrigen');
             selResp.innerHTML = '<option value="">-- Quién pagó --</option>' +
                 usuSnap.docs.map(function(d) {
-                    const u = d.data();
+                    var u = d.data();
                     return '<option value="' + d.id + '" data-nom="' + escapeHtml(u.nombre) + '">' + escapeHtml(u.nombre) + '</option>';
                 }).join('');
             selCuenta.innerHTML = '<option value="">-- Cuenta usada --</option>' +
                 cuentSnap.docs.map(function(d) {
-                    const c = d.data();
+                    var c = d.data();
                     return '<option value="' + d.id + '" data-nom="' + escapeHtml(c.nombre) + '">' + escapeHtml(c.nombre) + ' (' + (c.moneda || 'BRL') + ')</option>';
                 }).join('');
         } catch(e) { console.warn('poblarSelectsEgreso:', e.message); }
@@ -1450,15 +1450,15 @@
 
     // -- Campos según circuito ---------------------------------
     window.actualizarCamposCircuito = function() {
-        const circuito = document.querySelector('input[name="eCircuito"]:checked') ? document.querySelector('input[name="eCircuito"]:checked').value : 'fiscal';
+        var circuito = document.querySelector('input[name="eCircuito"]:checked') ? document.querySelector('input[name="eCircuito"]:checked').value : 'fiscal';
         document.getElementById('camposFiscal').style.display          = (circuito === 'fiscal' || circuito === 'mixto') ? '' : 'none';
         document.getElementById('camposMixto').style.display           = circuito === 'mixto' ? '' : 'none';
         document.getElementById('camposNotasPersonales').style.display  = (circuito === 'personal' || circuito === 'mixto') ? '' : 'none';
     };
 
     window.actualizarMontoMixto = function() {
-        const monto = parseFloat(document.getElementById('eMonto').value) || 0;
-        const pct   = parseInt(document.getElementById('ePctFiscal').value || '50');
+        var monto = parseFloat(document.getElementById('eMonto').value) || 0;
+        var pct   = parseInt(document.getElementById('ePctFiscal').value || '50');
         document.getElementById('ePctFiscalLabel').textContent     = pct + '%';
         document.getElementById('eMontoFiscalLabel').textContent   = 'R$ ' + (monto * pct / 100).toFixed(2).replace('.', ',');
         document.getElementById('eMontoPersonalLabel').textContent = 'R$ ' + (monto * (100 - pct) / 100).toFixed(2).replace('.', ',');
@@ -1466,10 +1466,10 @@
 
     // -- Comprobante preview -----------------------------------
     window.previsualizarComprobante = function(input) {
-        const file = input.files[0];
+        var file = input.files[0];
         if (!file) return;
         _eComprobanteFile = file;
-        const reader = new FileReader();
+        var reader = new FileReader();
         reader.onload = function(e) {
             document.getElementById('eComprobanteImg').src = e.target.result;
             document.getElementById('eComprobantePreview').style.display = 'block';
@@ -1478,9 +1478,9 @@
     };
 
     window.previsualizarComprobanteRetiro = function(input) {
-        const file = input.files[0];
+        var file = input.files[0];
         if (!file) return;
-        const reader = new FileReader();
+        var reader = new FileReader();
         reader.onload = function(e) {
             document.getElementById('rComprobanteImg').src = e.target.result;
             document.getElementById('rComprobantePreview').style.display = 'block';
@@ -1505,27 +1505,27 @@
         document.getElementById('modalIngreso').style.display = 'none';
     };
     window.actualizarSaldo = function() {
-        const reservaId = document.getElementById('iReserva').value;
-        const r = reservasCache.find(function(x) { return x.id === reservaId; });
+        var reservaId = document.getElementById('iReserva').value;
+        var r = reservasCache.find(function(x) { return x.id === reservaId; });
         if (!r) { document.getElementById('saldoBox').style.display = 'none'; return; }
-        const totalBRL  = r.totalBRL || 0;
-        const pagadoBRL = r.pagadoBRL || 0;
-        const saldo     = totalBRL - pagadoBRL;
+        var totalBRL  = r.totalBRL || 0;
+        var pagadoBRL = r.pagadoBRL || 0;
+        var saldo     = totalBRL - pagadoBRL;
         document.getElementById('saldoTotal').textContent    = fmt(totalBRL);
         document.getElementById('saldoPagado').textContent   = fmt(pagadoBRL);
         document.getElementById('saldoPendiente').textContent = fmt(saldo);
         document.getElementById('saldoBox').style.display = 'block';
     };
     window.guardarIngreso = async function() {
-        const reservaId     = document.getElementById('iReserva').value;
-        const clienteNombre = reservasCache.find(function(r) { return r.id === reservaId; })?.nombre || '';
-        const monto         = parseFloat(document.getElementById('iMonto').value);
-        const monedaPago    = document.getElementById('iMoneda').value;
+        var reservaId     = document.getElementById('iReserva').value;
+        var clienteNombre = reservasCache.find(function(r) { return r.id === reservaId; })?.nombre || '';
+        var monto         = parseFloat(document.getElementById('iMonto').value);
+        var monedaPago    = document.getElementById('iMoneda').value;
         document.getElementById('iError').style.display = 'none';
         if (!reservaId) { mostrarErrorIngreso('Seleccioná una reserva.'); return; }
         if (!monto || monto <= 0) { mostrarErrorIngreso('Ingresá un monto válido.'); return; }
-        const btn  = document.getElementById('iBtnGuardar');
-        const text = document.getElementById('iBtnText');
+        var btn  = document.getElementById('iBtnGuardar');
+        var text = document.getElementById('iBtnText');
         btn.disabled = true; text.textContent = 'Guardando...';
         try {
             await db.collection('pagos').add({
@@ -1572,7 +1572,7 @@
         document.getElementById('eResponsable').value   = '';
         document.getElementById('eCuentaOrigen').value  = '';
         document.getElementById('eNotasPersonales').value = '';
-        const radioFiscal = document.querySelector('input[name="eCircuito"][value="fiscal"]');
+        var radioFiscal = document.querySelector('input[name="eCircuito"][value="fiscal"]');
         if (radioFiscal) radioFiscal.checked = true;
         actualizarCamposCircuito();
         _eComprobanteFile = null;
@@ -1588,29 +1588,29 @@
     };
 
     window.guardarEgreso = async function() {
-        const concepto  = document.getElementById('eConcepto').value.trim();
-        const monto     = parseFloat(document.getElementById('eMonto').value);
-        const fecha     = document.getElementById('eFecha').value;
-        const circuito  = document.querySelector('input[name="eCircuito"]:checked') ?
+        var concepto  = document.getElementById('eConcepto').value.trim();
+        var monto     = parseFloat(document.getElementById('eMonto').value);
+        var fecha     = document.getElementById('eFecha').value;
+        var circuito  = document.querySelector('input[name="eCircuito"]:checked') ?
             document.querySelector('input[name="eCircuito"]:checked').value : 'fiscal';
         document.getElementById('eError').style.display = 'none';
         if (!concepto)            { mostrarErrorEgreso('Ingresá un concepto.'); return; }
         if (!monto || monto <= 0) { mostrarErrorEgreso('Ingresá un monto válido.'); return; }
         if (!fecha)               { mostrarErrorEgreso('Seleccioná una fecha.'); return; }
-        const btn  = document.getElementById('eBtnGuardar');
-        const text = document.getElementById('eBtnText');
+        var btn  = document.getElementById('eBtnGuardar');
+        var text = document.getElementById('eBtnText');
         btn.disabled = true; text.textContent = 'Guardando...';
         try {
-            const pctFiscal    = circuito === 'mixto' ? parseInt(document.getElementById('ePctFiscal').value || '50') : (circuito === 'fiscal' ? 100 : 0);
-            const montoFiscal  = parseFloat((monto * pctFiscal / 100).toFixed(2));
-            const montoPersonal = parseFloat((monto - montoFiscal).toFixed(2));
-            const selResp = document.getElementById('eResponsable');
-            const responsableId  = selResp.value || '';
-            const responsableNom = selResp.options[selResp.selectedIndex] ? (selResp.options[selResp.selectedIndex].dataset.nom || '') : '';
-            const selCuenta = document.getElementById('eCuentaOrigen');
-            const cuentaOrigenId  = selCuenta.value || '';
-            const cuentaOrigenNom = selCuenta.options[selCuenta.selectedIndex] ? (selCuenta.options[selCuenta.selectedIndex].dataset.nom || '') : '';
-            const docData = {
+            var pctFiscal    = circuito === 'mixto' ? parseInt(document.getElementById('ePctFiscal').value || '50') : (circuito === 'fiscal' ? 100 : 0);
+            var montoFiscal  = parseFloat((monto * pctFiscal / 100).toFixed(2));
+            var montoPersonal = parseFloat((monto - montoFiscal).toFixed(2));
+            var selResp = document.getElementById('eResponsable');
+            var responsableId  = selResp.value || '';
+            var responsableNom = selResp.options[selResp.selectedIndex] ? (selResp.options[selResp.selectedIndex].dataset.nom || '') : '';
+            var selCuenta = document.getElementById('eCuentaOrigen');
+            var cuentaOrigenId  = selCuenta.value || '';
+            var cuentaOrigenNom = selCuenta.options[selCuenta.selectedIndex] ? (selCuenta.options[selCuenta.selectedIndex].dataset.nom || '') : '';
+            var docData = {
                 concepto, monto, moneda: document.getElementById('eMoneda').value,
                 categoria:   document.getElementById('eCategoria').value,
                 metodo:      document.getElementById('eMetodo').value,
@@ -1626,11 +1626,11 @@
                 creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
                 creadoPor: user.uid
             };
-            const docRef = await db.collection('gastos').add(docData);
+            var docRef = await db.collection('gastos').add(docData);
             if (_eComprobanteFile) {
                 text.textContent = 'Subiendo foto...';
                 try {
-                    const url = await subirComprobante(_eComprobanteFile, 'gastos', docRef.id);
+                    var url = await subirComprobante(_eComprobanteFile, 'gastos', docRef.id);
                     await docRef.update({ comprobanteUrl: url });
                 } catch(se) { console.warn('Storage:', se.message); }
             }
@@ -1664,18 +1664,18 @@
 
     // -- Guardar retiro ----------------------------------------
     window.guardarRetiro = async function() {
-        const usuarioEl = document.getElementById('rUsuario');
-        const monto     = parseFloat(document.getElementById('rMonto').value);
-        const concepto  = document.getElementById('rConcepto').value.trim();
-        const fecha     = document.getElementById('rFecha').value || new Date().toISOString().split('T')[0];
+        var usuarioEl = document.getElementById('rUsuario');
+        var monto     = parseFloat(document.getElementById('rMonto').value);
+        var concepto  = document.getElementById('rConcepto').value.trim();
+        var fecha     = document.getElementById('rFecha').value || new Date().toISOString().split('T')[0];
         if (!usuarioEl.value) { showToast('Seleccioná una persona.', 'error'); return; }
         if (!monto || monto <= 0) { showToast('Ingresá un monto válido.', 'error'); return; }
         if (!concepto) { showToast('Ingresá un concepto.', 'error'); return; }
-        const btn  = document.getElementById('rBtnGuardar');
-        const text = document.getElementById('rBtnText');
+        var btn  = document.getElementById('rBtnGuardar');
+        var text = document.getElementById('rBtnText');
         btn.disabled = true; text.textContent = 'Guardando...';
         try {
-            const docData = {
+            var docData = {
                 usuarioId:      usuarioEl.value,
                 usuarioNom:     usuarioEl.options[usuarioEl.selectedIndex] ? (usuarioEl.options[usuarioEl.selectedIndex].dataset.nom || '') : '',
                 monto, moneda:  document.getElementById('rMoneda').value,
@@ -1686,12 +1686,12 @@
                 comprobanteUrl: null, reclasificado: false,
                 creadoEn: firebase.firestore.FieldValue.serverTimestamp(), creadoPor: user.uid
             };
-            const docRef = await db.collection('retiros').add(docData);
-            const rFileInput = document.getElementById('rComprobanteInput');
+            var docRef = await db.collection('retiros').add(docData);
+            var rFileInput = document.getElementById('rComprobanteInput');
             if (rFileInput && rFileInput.files[0]) {
                 text.textContent = 'Subiendo foto...';
                 try {
-                    const url = await subirComprobante(rFileInput.files[0], 'retiros', docRef.id);
+                    var url = await subirComprobante(rFileInput.files[0], 'retiros', docRef.id);
                     await docRef.update({ comprobanteUrl: url });
                 } catch(se) { console.warn('Storage retiro:', se.message); }
             }
@@ -1708,7 +1708,7 @@
     // -- Modal: Honorario --------------------------------------
     window.abrirModalHonorario = async function() {
         try {
-            const snap = await db.collection('usuarios').where('activo','==',true).orderBy('nombre').get();
+            var snap = await db.collection('usuarios').where('activo','==',true).orderBy('nombre').get();
             document.getElementById('hColaborador').innerHTML =
                 '<option value="">-- Seleccionar colaborador --</option>' +
                 snap.docs.filter(function(d) { return d.data().rol === 'user'; }).map(function(d) {
@@ -1727,19 +1727,19 @@
         document.getElementById('modalHonorario').style.display = 'none';
     };
     window.guardarHonorario = async function() {
-        const uid      = document.getElementById('hColaborador').value;
-        const monto    = parseFloat(document.getElementById('hMonto').value);
-        const concepto = document.getElementById('hConcepto').value.trim();
-        const estado   = document.getElementById('hEstado').value;
+        var uid      = document.getElementById('hColaborador').value;
+        var monto    = parseFloat(document.getElementById('hMonto').value);
+        var concepto = document.getElementById('hConcepto').value.trim();
+        var estado   = document.getElementById('hEstado').value;
         document.getElementById('hError').style.display = 'none';
         if (!uid)                     { mostrarErrorHonorario('Seleccioná un colaborador.'); return; }
         if (!monto || monto <= 0)     { mostrarErrorHonorario('Ingresá un monto válido.'); return; }
         if (!concepto)                { mostrarErrorHonorario('Ingresá un concepto.'); return; }
-        const btn  = document.getElementById('hBtnGuardar');
-        const text = document.getElementById('hBtnText');
+        var btn  = document.getElementById('hBtnGuardar');
+        var text = document.getElementById('hBtnText');
         btn.disabled = true; text.textContent = 'Guardando...';
         try {
-            const nombre = document.getElementById('hColaborador').options[document.getElementById('hColaborador').selectedIndex]?.text || '';
+            var nombre = document.getElementById('hColaborador').options[document.getElementById('hColaborador').selectedIndex]?.text || '';
             await db.collection('honorarios').add({
                 uid, nombre, monto, horas: parseFloat(document.getElementById('hHoras').value) || 0,
                 concepto, estado, moneda: 'BRL',
@@ -1798,9 +1798,9 @@
 
     function fLog(msg, tipo) {
         tipo = tipo || 'info';
-        const b   = document.getElementById('fLogBox');
+        var b   = document.getElementById('fLogBox');
         b.style.display = 'block';
-        const col = { ok:'#4ade80', info:'#93c5fd', warn:'#fbbf24', err:'#f87171' }[tipo] || '#93c5fd';
+        var col = { ok:'#4ade80', info:'#93c5fd', warn:'#fbbf24', err:'#f87171' }[tipo] || '#93c5fd';
         b.innerHTML += '<span style="color:' + col + '">' + msg + '</span>\n';
         b.scrollTop  = b.scrollHeight;
     }
@@ -1943,17 +1943,17 @@
     }
 
     window.guardarDesdeFactura = async function() {
-        const concepto = document.getElementById('fConcepto').value.trim() || document.getElementById('fProveedor').value.trim();
-        const monto    = parseFloat(document.getElementById('fMonto').value);
-        const fecha    = document.getElementById('fFecha').value || new Date().toISOString().split('T')[0];
+        var concepto = document.getElementById('fConcepto').value.trim() || document.getElementById('fProveedor').value.trim();
+        var monto    = parseFloat(document.getElementById('fMonto').value);
+        var fecha    = document.getElementById('fFecha').value || new Date().toISOString().split('T')[0];
         if (!concepto)            { mostrarErrorFactura('Ingresá un concepto o proveedor.'); return; }
         if (!monto || monto <= 0) { mostrarErrorFactura('Ingresá un monto válido.'); return; }
-        const btn = document.getElementById('fBtnGuardar');
-        const txt = document.getElementById('fBtnTxt');
+        var btn = document.getElementById('fBtnGuardar');
+        var txt = document.getElementById('fBtnTxt');
         btn.disabled = true; txt.textContent = 'Guardando...';
         try {
-            const ref   = document.getElementById('fReferencia').value.trim();
-            const items = document.getElementById('fItems').value.trim();
+            var ref   = document.getElementById('fReferencia').value.trim();
+            var items = document.getElementById('fItems').value.trim();
             var selCF    = document.getElementById('fCuentaOrigen');
             var circuito = document.getElementById('fCircuito') ? document.getElementById('fCircuito').value : 'fiscal';
             var cuentaId  = selCF ? selCF.value : '';
