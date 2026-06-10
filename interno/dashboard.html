@@ -432,7 +432,7 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="utils.js"></script>
 <script>
-function(async () {
+(async function() {
     var { user, userData } = await CVC.verificarAuth(['admin','user']);
     document.getElementById('userName').textContent = userData.nombre || user.email;
     var esAdmin = userData.rol === 'admin';
@@ -454,7 +454,6 @@ function(async () {
 
     var urgenciaClass = { rojo:'badge-alta', amarillo:'badge-pendiente', verde:'badge-en_curso', gris:'badge-neutral' };
 
-    // -- ACCESOS RÁPIDOS -- estructura de menú -----------------
     var ACCESOS = [
         {
             label: 'Reservas', icon: 'event', page: 'reservas.html',
@@ -508,7 +507,7 @@ function(async () {
 
     function renderAccesos() {
         var nav = document.getElementById('accesosNav');
-        nav.innerHTML = ACCESOS.mapfunction((grupo, gi) {
+        nav.innerHTML = ACCESOS.map(function(grupo, gi) {
             var subItems = grupo.items.map(function(item) {
                 if (item.sep) return '<div class="acceso-sep"></div>';
                 return '<a href="' + item.href + '" class="acceso-sub">' +
@@ -545,7 +544,6 @@ function(async () {
             drop.style.top  = (rect.bottom + 4) + 'px';
             drop.style.left = rect.left + 'px';
             drop.classList.add('open');
-            // Ajustar si sale de pantalla
             var dr = drop.getBoundingClientRect();
             if (dr.right > window.innerWidth - 8) {
                 drop.style.left = (rect.right - dr.width) + 'px';
@@ -554,7 +552,6 @@ function(async () {
     };
     renderAccesos();
 
-    // -- CARGA PRINCIPAL ---------------------------------------
     var reservas = [], tareas = [], pendientes = [];
 
     try {
@@ -568,7 +565,6 @@ function(async () {
         reservas   = resSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
         tareas     = tarSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
         pendientes = pendSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
-
         var presupuestos = presSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
 
         renderKPIs(reservas, tareas, pendientes);
@@ -584,19 +580,17 @@ function(async () {
         showError('#kpiGrid', 'Error al cargar', e.message, function() { location.reload(); })
     }
 
-    // -- KPIs --------------------------------------------------
     function renderKPIs(reservas, tareas, pendientes) {
-        var resActivas  = reservas.filter(function(r) { return ['confirmada','airbnb_activa','pendiente'].includes(r.estado))
+        var resActivas  = reservas.filter(function(r) { return ['confirmada','airbnb_activa','pendiente'].includes(r.estado); })
         var resPend     = reservas.filter(function(r) { return r.estado === 'pendiente'; })
         var tarPend     = tareas.filter(function(t) { return t.estado !== 'finalizada' && t.activa !== false; })
         var tarUrg      = tarPend.filter(function(t) { return urgenciaTarea(t).color === 'rojo'; })
         var pendPend    = pendientes.filter(function(p) { return !p.completado; })
 
         var mesActual   = new Date().toISOString().slice(0,7);
-        // Ingresos del mes desde reservas confirmadas (estimado por totalBRL)
         var ingMes      = reservas
-            .filter(function(r) { return r.estado === 'confirmada' && r.checkIn &&; }
-                (r.checkIn.toDate ? r.checkIn.toDate() : new Date(r.checkIn)).toISOString().slice(0,7) === mesActual)
+            .filter(function(r) { return r.estado === 'confirmada' && r.checkIn &&
+                (r.checkIn.toDate ? r.checkIn.toDate() : new Date(r.checkIn)).toISOString().slice(0,7) === mesActual; })
             .reduce((s,r) => s + (r.totalBRL || r.pagadoBRL || 0), 0);
 
         var kpiData = [
@@ -612,18 +606,17 @@ function(async () {
               ayuda:'Estimado basado en el total de reservas confirmadas con check-in en el mes actual. Para el balance real usá el Panel Financiero.' },
         ];
 
-        document.getElementById('kpiGrid').innerHTML = kpiData.map(function(k) { return '<a href="' + k.href + '" class="kpi-card ' + k.cls + '">' +; }
+        document.getElementById('kpiGrid').innerHTML = kpiData.map(function(k) { return '<a href="' + k.href + '" class="kpi-card ' + k.cls + '">' +
                 '<span class="kpi-help" onclick="event.preventDefault();event.stopPropagation();' +
                     'CVC.mostrarAyuda(\'' + k.href + '\')" title="¿Cómo se calcula esto?">?</span>' +
                 '<span class="material-icons kpi-icon">' + k.icon + '</span>' +
                 '<div class="kpi-number">' + k.num + '</div>' +
                 '<div class="kpi-label">' + k.label + '</div>' +
                 '<div class="kpi-sub">' + k.sub + '</div>' +
-            '</a>'
-        ).join('');
+            '</a>';
+        }).join('');
     }
 
-    // -- PRÓXIMOS CHECK-INS ------------------------------------
     function renderCheckins(reservas) {
         var el = document.getElementById('proximosCheckins');
         var en7 = new Date(hoy); en7.setDate(en7.getDate() + 7);
@@ -633,7 +626,7 @@ function(async () {
                 var ci = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
                 return ci >= hoy && ci <= en7;
             })
-            .sortfunction((a,b) {
+            .sort(function(a,b) {
                 var da = a.checkIn?.toDate ? a.checkIn.toDate() : new Date(a.checkIn);
                 var db_ = b.checkIn?.toDate ? b.checkIn.toDate() : new Date(b.checkIn);
                 return da - db_;
@@ -665,13 +658,11 @@ function(async () {
             }).join('') + '</div>';
     }
 
-    // -- PENDIENTES --------------------------------------------
     function renderPendientes(pendientes) {
         var el = document.getElementById('pendientesContainer');
-        // Campo: 'texto', semáforo: 'semaforo' (rojo/amarillo/verde/gris), asignado: 'asignadoNom'
         var activos = pendientes
             .filter(function(p) { return !p.realizado; })
-            .sortfunction((a,b) {
+            .sort(function(a,b) {
                 var ord = { rojo:0, amarillo:1, verde:2, gris:3 };
                 return (ord[a.semaforo]||3) - (ord[b.semaforo]||3);
             })
@@ -708,14 +699,13 @@ function(async () {
             }).join('') + '</div>';
     }
 
-    // -- TAREAS URGENTES ---------------------------------------
     function renderTareasUrgentes(tareas) {
         var el = document.getElementById('tareasUrgentesContainer');
         var activas = tareas.filter(function(t) { return t.estado !== 'finalizada' && t.activa !== false; })
         var urgentes = activas
-            .map(function(t) { return Object.assign({}, t, { urg: urgenciaTarea(t) })); }
+            .map(function(t) { return Object.assign({}, t, { urg: urgenciaTarea(t) }); })
             .filter(function(t) { return t.urg.color === 'rojo' || t.urg.color === 'amarillo'; })
-            .sortfunction((a,b) {
+            .sort(function(a,b) {
                 var ord = { rojo:0, amarillo:1 };
                 return (ord[a.urg.color]||2) - (ord[b.urg.color]||2);
             })
@@ -728,7 +718,7 @@ function(async () {
             return;
         }
         el.innerHTML = '<div class="compact-list">' +
-            urgentes.map(function(t) { return '<a href="tareas.html?id=' + t.id + '" class="compact-row">' +; }
+            urgentes.map(function(t) { return '<a href="tareas.html?id=' + t.id + '" class="compact-row">' +
                     '<div class="urg-dot ' + (t.urg.color === 'rojo' ? 'urg-rojo' : 'urg-amarillo') + '"></div>' +
                     '<div class="compact-row__main">' +
                         '<div class="compact-row__title">' + escapeHtml(t.nombre||'--') + '</div>' +
@@ -740,16 +730,15 @@ function(async () {
                         '</span>' +
                         badgePrioridad(t.prioridad) +
                     '</div>' +
-                '</a>'
-            ).join('') + '</div>';
+                '</a>';
+            }).join('') + '</div>';
     }
 
-    // -- RESERVAS SIN CONFIRMAR --------------------------------
     function renderReservasPendientes(reservas) {
         var el = document.getElementById('reservasPendientesContainer');
         var pendConf = reservas
             .filter(function(r) { return r.estado === 'pendiente'; })
-            .sortfunction((a,b) {
+            .sort(function(a,b) {
                 var da = a.checkIn?.toDate ? a.checkIn.toDate() : new Date(a.checkIn||0);
                 var db_ = b.checkIn?.toDate ? b.checkIn.toDate() : new Date(b.checkIn||0);
                 return da - db_;
@@ -761,7 +750,7 @@ function(async () {
                 'Todas las reservas están confirmadas</div>';
             return;
         }
-        el.innerHTML = pendConf.map(function(r) { return '<a href="reservas.html?id=' + r.id + '" class="conf-banner">' +; }
+        el.innerHTML = pendConf.map(function(r) { return '<a href="reservas.html?id=' + r.id + '" class="conf-banner">' +
                 '<span class="material-icons conf-banner__warn">warning_amber</span>' +
                 '<div class="conf-banner__text">' +
                     '<div class="conf-banner__title">  Confirmar -- ' + escapeHtml(r.nombre||'Sin nombre') + '</div>' +
@@ -772,11 +761,10 @@ function(async () {
                     '</div>' +
                 '</div>' +
                 '<span class="material-icons" style="font-size:18px;color:var(--color-text-muted);">arrow_forward</span>' +
-            '</a>'
-        ).join('');
+            '</a>';
+        }).join('');
     }
 
-    // -- PRESUPUESTOS SIN SEÑA ---------------------------------
     function renderPresupuestos(presupuestos) {
         var el = document.getElementById('presupuestosContainer');
         var hace30 = new Date(hoy); hace30.setDate(hace30.getDate() - 30);
@@ -786,7 +774,7 @@ function(async () {
                 var f = p.creadoEn?.toDate ? p.creadoEn.toDate() : new Date(p.creadoEn||0);
                 return f >= hace30;
             })
-            .sortfunction((a,b) {
+            .sort(function(a,b) {
                 var fa = a.creadoEn?.toDate ? a.creadoEn.toDate() : new Date(a.creadoEn||0);
                 var fb = b.creadoEn?.toDate ? b.creadoEn.toDate() : new Date(b.creadoEn||0);
                 return fb - fa;
@@ -819,13 +807,12 @@ function(async () {
             }).join('') + '</div>';
     }
 
-    // -- WIDGET CUENTAS ----------------------------------------
     async function cargarWidgetCuentas() {
         try {
             var snap    = await db.collection('cuentas').get();
-            var cuentas = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+            var cuentas = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
                 .filter(function(c) { return c.activa !== false; })
-                .sort((a,b) => (a.orden||99) - (b.orden||99));
+                .sort(function(a,b) { return (a.orden||99) - (b.orden||99); });
             if (!cuentas.length) return;
 
             var SIMBOLO = { BRL:'R$', USD:'US$', UYU:'$U', ARS:'$' };
@@ -851,20 +838,18 @@ function(async () {
         } catch(e) { console.warn('Widget cuentas:', e.message); }
     }
 
-    // -- ALERTAS PROACTIVAS ------------------------------------
     async function cargarAlertas(reservas, tareas) {
         var alertas = [];
         var hoy48   = new Date(hoy); hoy48.setHours(hoy48.getHours() + 48);
         var hace14  = new Date(hoy); hace14.setDate(hace14.getDate() - 14);
 
-        // Check-ins en <48h sin limpieza
         var prox48 = reservas.filter(function(r) {
             if (!['confirmada','airbnb_activa'].includes(r.estado)) return false;
             var ci = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
             return ci >= hoy && ci <= hoy48;
         });
         for (var r of prox48) {
-            var tieneTask = tareas.some(function(t) { return t.reservaId === r.id && t.tipo === 'limpieza' && t.estado !== 'finalizada'; })
+            var tieneTask = tareas.some(function(t) { return t.reservaId === r.id && t.tipo === 'limpieza' && t.estado !== 'finalizada'; });
             if (!tieneTask) {
                 var ci   = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
                 var difH = Math.round((ci - hoy) / 3600000);
@@ -875,7 +860,6 @@ function(async () {
             }
         }
 
-        // Tareas rojas
         var tarRojas = tareas.filter(function(t) { return t.estado !== 'finalizada' && t.activa !== false && urgenciaTarea(t).color === 'rojo'; });
         if (tarRojas.length) {
             alertas.push({ nivel:'critico', icon:'warning',
@@ -884,7 +868,6 @@ function(async () {
                 href:'tareas.html' });
         }
 
-        // Honorarios viejos
         try {
             var honSnap = await db.collection('honorarios').where('estado','==','pendiente').get();
             var viejos  = honSnap.docs.filter(function(d) { var cen = d.data().creadoEn; var f = cen && cen.toDate ? cen.toDate() : null; return f && f < hace14; });
@@ -897,7 +880,6 @@ function(async () {
             }
         } catch(e) {}
 
-        // Movimientos sin categorizar
         try {
             var movSnap = await db.collection('movimientos').where('categoriaId','==',null).limit(1).get();
             if (!movSnap.empty) {
@@ -922,8 +904,6 @@ function(async () {
         document.getElementById('alertasPanel').classList.add('visible');
     }
 
-    // -- SYNC AIRBNB -------------------------------------------
-    // Clave de Google Calendar leída desde Firestore -- nunca en el código fuente
     var GOOGLE_API_KEY = '';
     try {
         var cfgSnap = await db.collection('config').doc('integraciones').get();
@@ -964,8 +944,6 @@ function(async () {
         el.innerHTML = '<span class="material-icons" style="font-size:15px;vertical-align:middle;margin-right:5px;">' + m[2] + '</span>' + msg;
         el.style.display = 'block';
     }
-
-}  // cierre sincronizarAirbnb scope
 
 })();
 </script>
