@@ -376,228 +376,228 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="utils.js"></script>
 <script>
-(async () => {
-const { user, userData } = await CVC.verificarAuth('admin');
+(async function() {
+var { user, userData } = await CVC.verificarAuth('admin');
 document.getElementById('userName').textContent = userData.nombre || user.email;
 CVC.renderNav('informes-airbnb.html');
 
-const db = CVC.db;
-const { escapeHtml, showToast, showEmpty } = CVC;
+var db = CVC.db;
+var { escapeHtml, showToast, showEmpty } = CVC;
 
-let informes = [], cuentas = [];
+var informes = [], cuentas = [];
 
-const NOMB = {
+var NOMB = {
     1:'Cabaña confortable y amplia rodeada de arboles',
     2:'Departamento ideal para familias',
     3:'Loft en Canasvieiras cerquita de la playa'
 };
-const MESES = {1:'Enero',2:'Febrero',3:'Marzo',4:'Abril',5:'Mayo',6:'Junio',
+var MESES = {1:'Enero',2:'Febrero',3:'Marzo',4:'Abril',5:'Mayo',6:'Junio',
                7:'Julio',8:'Agosto',9:'Septiembre',10:'Octubre',11:'Noviembre',12:'Diciembre'};
 
-const R  = n => 'R$ '+(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-const pct= (n,d) => d ? (Math.abs(n)/d*100).toFixed(1)+'%':'—';
-const vn = id => parseFloat(document.getElementById(id)?.value)||0;
-const sv = (id,val) => { const el=document.getElementById(id); if(el) el.value=val??''; };
+var R  = function(n) { return 'R$ '+(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+var pct= function(n,d) { return d ? (Math.abs(n)/d*100).toFixed(1)+'%':' '; };
+var vn = function(id) { return parseFloat(document.getElementById(id)?.value)||0; };
+var sv = function(id,val) { var el=document.getElementById(id); if(el) el.value=val || ''; };
 
-// ── CARGA ─────────────────────────────────────────────────────
+//    CARGA                                                      
 async function cargar() {
-    const [iS, cS] = await Promise.all([
+    var [iS, cS] = await Promise.all([
         db.collection('informes_airbnb').orderBy('periodo','desc').get(),
         db.collection('cuentas').orderBy('orden').get()
     ]);
-    informes = iS.docs.map(d=>({id:d.id,...d.data()}));
-    cuentas  = cS.docs.map(d=>({id:d.id,...d.data()}));
+    informes = iS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+    cuentas  = cS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
     ['eCuenta','xCuenta'].forEach(poblarC);
     renderKPIs(); renderHist(); renderCabs();
-    const h=new Date();
-    document.getElementById('bDesde').value=`${h.getFullYear()-1}-01`;
-    document.getElementById('bHasta').value=`${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}`;
+    var h=new Date();
+    document.getElementById('bDesde').value="" + (h.getFullYear()-1) + "-01";
+    document.getElementById('bHasta').value="" + (h.getFullYear()) + "-" + (String(h.getMonth()+1).padStart(2,'0')) + "";
 }
 
 function poblarC(sel) {
-    const el=document.getElementById(sel); if(!el) return;
-    const prev=el.value;
-    el.innerHTML='<option value="">— Sin asignar —</option>'+
-        cuentas.map(c=>`<option value="${c.id}">${escapeHtml(c.nombre)} (${c.moneda})</option>`).join('');
+    var el=document.getElementById(sel); if(!el) return;
+    var prev=el.value;
+    el.innerHTML='<option value="">  Sin asignar  </option>'+
+        cuentas.map(function(c) { return '<option value="' + c.id + '">' + escapeHtml(c.nombre) + ' (' + c.moneda + ')</option>'; }).join('');
     if(prev) el.value=prev;
 }
 
-// ── KPIs ──────────────────────────────────────────────────────
+//    KPIs                                                       
 function renderKPIs() {
-    const mens=informes.filter(i=>i.tipo==='mensual');
-    const anios=new Set(mens.map(i=>i.periodo.slice(0,4)));
-    const base=[...mens,...informes.filter(i=>i.tipo==='anual'&&!anios.has(i.periodo))];
-    const neto=base.reduce((s,i)=>s+(i.total_neto||0),0);
-    const bruto=base.reduce((s,i)=>s+(i.ingreso_bruto||0),0);
-    const comis=base.reduce((s,i)=>s+Math.abs(i.tarifa_servicio||0),0);
-    const imp=base.reduce((s,i)=>s+(i.impuesto_airbnb||0),0);
-    const noch=base.reduce((s,i)=>s+(i.noches_reservadas||0),0);
+    var mens=informes.filter(function(i) { return i.tipo==='mensual'; });
+    var anios=new Set(mens.map(function(i) { return i.periodo.slice(0,4); }));
+    var base=mens.concat(informes.filter(function(i) { return i.tipo==='anual'&&!anios.has(i.periodo); }));
+    var neto=base.reduce(function(s,i){return s+(i.total_neto||0);},0);
+    var bruto=base.reduce(function(s,i){return s+(i.ingreso_bruto||0);},0);
+    var comis=base.reduce(function(s,i){return s+Math.abs(i.tarifa_servicio||0);},0);
+    var imp=base.reduce(function(s,i){return s+(i.impuesto_airbnb||0);},0);
+    var noch=base.reduce(function(s,i){return s+(i.noches_reservadas||0);},0);
     document.getElementById('kNeto').textContent=R(neto);
-    document.getElementById('kNetoSub').textContent=`${base.length} informes · bruto ${R(bruto)}`;
+    document.getElementById('kNetoSub').textContent="" + (base.length) + " informes · bruto " + (R(bruto)) + "";
     document.getElementById('kComis').textContent=R(comis);
-    document.getElementById('kComisSub').textContent=`${pct(comis,bruto)} del bruto`;
+    document.getElementById('kComisSub').textContent="" + (pct(comis,bruto)) + " del bruto";
     document.getElementById('kImp').textContent=R(imp);
-    document.getElementById('kNoches').textContent=noch||'—';
-    document.getElementById('kNochesSub').textContent=noch?`${R(neto/noch)} / noche prom`:'';
+    document.getElementById('kNoches').textContent=noch||' ';
+    document.getElementById('kNochesSub').textContent=noch?"" + (R(neto/noch)) + " / noche prom":'';
 }
 
-// ── HISTORIAL ─────────────────────────────────────────────────
+//    HISTORIAL                                                  
 function renderHist() {
-    const c=document.getElementById('histCont');
+    var c=document.getElementById('histCont');
     if(!informes.length){showEmpty(c,'Sin informes','Importá el primer PDF de Airbnb.','cloud_download');return;}
-    c.innerHTML=informes.map(inf=>{
-        const cta=cuentas.find(x=>x.id===inf.cuentaId);
-        const co=inf.estado_conciliacion||'pendiente';
-        const cCl={conciliado:'cb-ok',parcial:'cb-par',pendiente:'cb-pend'}[co]||'cb-pend';
-        const cLb={conciliado:'✅ Conciliado',parcial:'🟡 Parcial',pendiente:'⏳ Pendiente'}[co];
-        const tp=inf.ingreso_bruto?(Math.abs(inf.tarifa_servicio||0)/inf.ingreso_bruto*100).toFixed(1):'—';
-        const cabs=Array.isArray(inf.cabanas)?inf.cabanas:[];
-        const cr=cabs.map(c=>`<tr>
-            <td><strong>${escapeHtml(c.nombre_airbnb||'—')}</strong></td>
-            <td class="mono">${R(c.ingreso_bruto)}</td>
-            <td class="mono fee-c">${R(c.tarifa_servicio)}</td>
-            <td class="mono neto-c">${R(c.total_neto)}</td>
-            <td class="mono" style="color:var(--color-text-muted)">${R(c.impuesto_airbnb)}</td>
-            <td>${c.noches||0}n · ${c.promedio_noches||0}p</td>
-        </tr>`).join('');
-        return `<div class="inf-row" id="r_${inf.id}">
-            <div class="inf-row__head" onclick="toggleR('${inf.id}')">
-                <span class="inf-row__periodo">${inf.periodo}</span>
-                <span class="tipo-badge tipo-${inf.tipo||'mensual'}">${inf.tipo==='anual'?'Anual':'Mensual'}</span>
+    c.innerHTML=informes.map(function(inf) {
+        var cta=cuentas.find(function(x) { return x.id===inf.cuentaId); };
+        var co=inf.estado_conciliacion||'pendiente';
+        var cCl={conciliado:'cb-ok',parcial:'cb-par',pendiente:'cb-pend'}[co]||'cb-pend';
+        var cLb={conciliado:'  Conciliado',parcial:'  Parcial',pendiente:'  Pendiente'}[co];
+        var tp=inf.ingreso_bruto?(Math.abs(inf.tarifa_servicio||0)/inf.ingreso_bruto*100).toFixed(1):' ';
+        var cabs=Array.isArray(inf.cabanas)?inf.cabanas:[];
+        var cr=cabs.map(function(c) { return "<tr>; }
+            <td><strong>" + (escapeHtml(c.nombre_airbnb||' ')) + "</strong></td>
+            <td class="mono">" + (R(c.ingreso_bruto)) + "</td>
+            <td class="mono fee-c">" + (R(c.tarifa_servicio)) + "</td>
+            <td class="mono neto-c">" + (R(c.total_neto)) + "</td>
+            <td class="mono" style="color:var(--color-text-muted)">" + (R(c.impuesto_airbnb)) + "</td>
+            <td>" + (c.noches||0) + "n · " + (c.promedio_noches||0) + "p</td>
+        </tr>").join('');
+        return "<div class="inf-row" id="r_" + (inf.id) + "">
+            <div class="inf-row__head" onclick="toggleR('" + (inf.id) + "')">
+                <span class="inf-row__periodo">" + (inf.periodo) + "</span>
+                <span class="tipo-badge tipo-" + (inf.tipo||'mensual') + "">" + (inf.tipo==='anual'?'Anual':'Mensual') + "</span>
                 <div class="inf-montos">
-                    <div class="m"><div class="m__l">Bruto</div><div class="m__v">${R(inf.ingreso_bruto)}</div></div>
-                    <div class="m"><div class="m__l">Comisión ${tp}%</div><div class="m__v fee-c">${R(inf.tarifa_servicio)}</div></div>
-                    <div class="m"><div class="m__l">Neto</div><div class="m__v neto-c">${R(inf.total_neto)}</div></div>
-                    ${inf.noches_reservadas?`<div class="m"><div class="m__l">Noches</div><div class="m__v">${inf.noches_reservadas}</div></div>`:''}
+                    <div class="m"><div class="m__l">Bruto</div><div class="m__v">" + (R(inf.ingreso_bruto)) + "</div></div>
+                    <div class="m"><div class="m__l">Comisión " + (tp) + "%</div><div class="m__v fee-c">" + (R(inf.tarifa_servicio)) + "</div></div>
+                    <div class="m"><div class="m__l">Neto</div><div class="m__v neto-c">" + (R(inf.total_neto)) + "</div></div>
+                    ${inf.noches_reservadas?"<div class="m"><div class="m__l">Noches</div><div class="m__v">${inf.noches_reservadas}</div></div>":''}
                 </div>
-                <span class="cb ${cCl}">${cLb}</span>
+                <span class="cb " + (cCl) + "">" + (cLb) + "</span>
                 <span class="material-icons inf-chev">expand_more</span>
             </div>
             <div class="inf-detail">
                 <div style="display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin:var(--space-3) 0">
                     <span style="font-size:var(--text-xs);color:var(--color-text-muted)">
                         <span class="material-icons" style="font-size:14px;vertical-align:middle">account_balance</span>
-                        Cuenta: <strong style="color:var(--color-text-primary)">${cta?escapeHtml(cta.nombre):'<em>Sin asignar</em>'}</strong>
-                        ${inf.notas_conciliacion?` · 📝 ${escapeHtml(inf.notas_conciliacion)}`:''}
+                        Cuenta: <strong style="color:var(--color-text-primary)">" + (cta?escapeHtml(cta.nombre):'<em>Sin asignar</em>') + "</strong>
+                        ${inf.notas_conciliacion?" ·   ${escapeHtml(inf.notas_conciliacion)}":''}
                     </span>
-                    <button class="btn btn-secondary btn-sm" onclick="abrirEditar('${inf.id}')">
+                    <button class="btn btn-secondary btn-sm" onclick="abrirEditar('" + (inf.id) + "')">
                         <span class="material-icons">edit</span>Editar
                     </button>
                 </div>
-                ${inf.impuesto_airbnb?`<div style="font-size:11px;color:var(--color-text-muted);margin-bottom:var(--space-2)">Imp. Airbnb al fisco: <strong>${R(inf.impuesto_airbnb)}</strong></div>`:''}
-                ${cabs.length?`<table class="ct"><thead><tr><th>Cabaña</th><th>Bruto</th><th>Tarifa</th><th>Neto</th><th>Imp.</th><th>Noches</th></tr></thead><tbody>${cr}</tbody></table>`:''}
+                ${inf.impuesto_airbnb?"<div style="font-size:11px;color:var(--color-text-muted);margin-bottom:var(--space-2)">Imp. Airbnb al fisco: <strong>${R(inf.impuesto_airbnb)}</strong></div>":''}
+                ${cabs.length?"<table class="ct"><thead><tr><th>Cabaña</th><th>Bruto</th><th>Tarifa</th><th>Neto</th><th>Imp.</th><th>Noches</th></tr></thead><tbody>${cr}</tbody></table>":''}
                 <div style="font-size:10px;color:var(--color-text-muted);margin-top:var(--space-2)">
-                    Cargado: ${inf.cargado_en?.toDate?.()?.toLocaleDateString('es-AR')||'—'} · ${escapeHtml(inf.fuente||'—')}
+                    Cargado: " + (inf.(cargado_en && cargado_en.toDate)?.()?.toLocaleDateString('es-AR')||' ') + " · " + (escapeHtml(inf.fuente||' ')) + "
                 </div>
             </div>
-        </div>`;
+        </div>";
     }).join('');
 }
-window.toggleR = id => document.getElementById('r_'+id)?.classList.toggle('open');
+window.toggleR = function(id) { return document.getElementById('r_'+id)?.classList.toggle('open'); };
 
-// ── BALANCE ───────────────────────────────────────────────────
+//    BALANCE                                                    
 window.calcBal = function() {
-    const desde=document.getElementById('bDesde').value;
-    const hasta=document.getElementById('bHasta').value;
+    var desde=document.getElementById('bDesde').value;
+    var hasta=document.getElementById('bHasta').value;
     if(!desde||!hasta){showToast('Seleccioná ambas fechas.','error');return;}
-    const rango=informes.filter(i=>i.tipo==='mensual'&&i.periodo>=desde&&i.periodo<=hasta)
+    var rango=informes.filter(function(i) { return i.tipo==='mensual'&&i.periodo>=desde&&i.periodo<=hasta); }
         .sort((a,b)=>a.periodo.localeCompare(b.periodo));
-    const cont=document.getElementById('balResult');
+    var cont=document.getElementById('balResult');
     if(!rango.length){
         cont.innerHTML='<div class="alert alert-error"><span class="material-icons">info</span><span>Sin informes mensuales en ese rango. Importá los PDFs correspondientes.</span></div>';
         return;
     }
-    const tNeto=rango.reduce((s,i)=>s+(i.total_neto||0),0);
-    const tBruto=rango.reduce((s,i)=>s+(i.ingreso_bruto||0),0);
-    const tComis=rango.reduce((s,i)=>s+Math.abs(i.tarifa_servicio||0),0);
-    const tImp=rango.reduce((s,i)=>s+(i.impuesto_airbnb||0),0);
-    const tNoch=rango.reduce((s,i)=>s+(i.noches_reservadas||0),0);
+    var tNeto=rango.reduce((s,i)=>s+(i.total_neto||0),0);
+    var tBruto=rango.reduce((s,i)=>s+(i.ingreso_bruto||0),0);
+    var tComis=rango.reduce((s,i)=>s+Math.abs(i.tarifa_servicio||0),0);
+    var tImp=rango.reduce((s,i)=>s+(i.impuesto_airbnb||0),0);
+    var tNoch=rango.reduce((s,i)=>s+(i.noches_reservadas||0),0);
 
     // Agrupar neto por cuenta
-    const porC={};
-    rango.forEach(i=>{
-        const k=i.cuentaId||'__sin__';
+    var porC={};
+    rango.forEach(function(i) {
+        var k=i.cuentaId||'__sin__';
         porC[k]=(porC[k]||0)+(i.total_neto||0);
     });
-    const cuentasHtml=Object.entries(porC).map(([cid,m])=>{
-        const c=cid==='__sin__'?{nombre:'Sin cuenta'}:cuentas.find(x=>x.id===cid);
-        return `<div class="bk"><div class="bk__l">${escapeHtml(c?.nombre||'Cuenta')}</div><div class="bk__v neto-c">${R(m)}</div></div>`;
+    var cuentasHtml=Object.entries(porC).mapfunction(([cid,m]) {
+        var c=cid==='__sin__'?{nombre:'Sin cuenta'}:cuentas.find(function(x) { return x.id===cid); };
+        return "<div class="bk"><div class="bk__l">" + (escapeHtml((c && c.nombre)||'Cuenta')) + "</div><div class="bk__v neto-c">" + (R(m)) + "</div></div>";
     }).join('');
 
-    const filas=rango.map(i=>{
-        const cta=cuentas.find(c=>c.id===i.cuentaId);
-        const co=i.estado_conciliacion||'pendiente';
-        const cCl={conciliado:'cb-ok',parcial:'cb-par',pendiente:'cb-pend'}[co]||'cb-pend';
-        return `<tr>
-            <td style="font-family:var(--font-mono);font-weight:600">${i.periodo}</td>
-            <td style="font-family:var(--font-mono)">${R(i.ingreso_bruto)}</td>
-            <td style="font-family:var(--font-mono);color:var(--color-danger)">${R(i.tarifa_servicio)}</td>
-            <td style="font-family:var(--font-mono);font-weight:700;color:var(--color-success)">${R(i.total_neto)}</td>
-            <td style="font-size:11px;color:var(--color-text-muted)">${R(i.impuesto_airbnb)}</td>
-            <td>${i.noches_reservadas||'—'}</td>
-            <td style="font-size:12px">${cta?escapeHtml(cta.nombre):'<em style="color:var(--color-text-muted)">Sin asignar</em>'}</td>
-            <td><span class="cb ${cCl}">${{conciliado:'✅',parcial:'🟡',pendiente:'⏳'}[co]||'⏳'} ${co}</span></td>
-        </tr>`;
+    var filas=rango.map(function(i) {
+        var cta=cuentas.find(function(c) { return c.id===i.cuentaId); };
+        var co=i.estado_conciliacion||'pendiente';
+        var cCl={conciliado:'cb-ok',parcial:'cb-par',pendiente:'cb-pend'}[co]||'cb-pend';
+        return "<tr>
+            <td style="font-family:var(--font-mono);font-weight:600">" + (i.periodo) + "</td>
+            <td style="font-family:var(--font-mono)">" + (R(i.ingreso_bruto)) + "</td>
+            <td style="font-family:var(--font-mono);color:var(--color-danger)">" + (R(i.tarifa_servicio)) + "</td>
+            <td style="font-family:var(--font-mono);font-weight:700;color:var(--color-success)">" + (R(i.total_neto)) + "</td>
+            <td style="font-size:11px;color:var(--color-text-muted)">" + (R(i.impuesto_airbnb)) + "</td>
+            <td>" + (i.noches_reservadas||' ') + "</td>
+            <td style="font-size:12px">" + (cta?escapeHtml(cta.nombre):'<em style="color:var(--color-text-muted)">Sin asignar</em>') + "</td>
+            <td><span class="cb " + (cCl) + "">" + ({conciliado:' ',parcial:' ',pendiente:' ') + "[co]||' '} " + (co) + "</span></td>
+        </tr>";
     }).join('');
 
-    cont.innerHTML=`<div class="bal-result">
+    cont.innerHTML="<div class="bal-result">
         <div class="bal-header">
-            <div><div style="font-size:11px;opacity:.7">Balance Airbnb</div><div style="font-size:var(--text-lg);font-weight:800">${desde} → ${hasta}</div></div>
-            <div style="text-align:right"><div style="font-size:11px;opacity:.7">Neto total recibido</div><div style="font-size:var(--text-2xl);font-weight:800;font-family:var(--font-mono)">${R(tNeto)}</div></div>
+            <div><div style="font-size:11px;opacity:.7">Balance Airbnb</div><div style="font-size:var(--text-lg);font-weight:800">" + (desde) + "   " + (hasta) + "</div></div>
+            <div style="text-align:right"><div style="font-size:11px;opacity:.7">Neto total recibido</div><div style="font-size:var(--text-2xl);font-weight:800;font-family:var(--font-mono)">" + (R(tNeto)) + "</div></div>
         </div>
         <div class="bal-kpis">
-            <div class="bk"><div class="bk__l">Bruto cobrado</div><div class="bk__v">${R(tBruto)}</div></div>
-            <div class="bk"><div class="bk__l">Comisión Airbnb</div><div class="bk__v fee-c">−${R(tComis)}</div></div>
-            <div class="bk"><div class="bk__l">Imp. Airbnb</div><div class="bk__v">${R(tImp)}</div></div>
-            <div class="bk"><div class="bk__l">Noches vendidas</div><div class="bk__v">${tNoch}</div></div>
-            <div class="bk"><div class="bk__l">Períodos</div><div class="bk__v">${rango.length} meses</div></div>
-            ${cuentasHtml}
+            <div class="bk"><div class="bk__l">Bruto cobrado</div><div class="bk__v">" + (R(tBruto)) + "</div></div>
+            <div class="bk"><div class="bk__l">Comisión Airbnb</div><div class="bk__v fee-c"> " + (R(tComis)) + "</div></div>
+            <div class="bk"><div class="bk__l">Imp. Airbnb</div><div class="bk__v">" + (R(tImp)) + "</div></div>
+            <div class="bk"><div class="bk__l">Noches vendidas</div><div class="bk__v">" + (tNoch) + "</div></div>
+            <div class="bk"><div class="bk__l">Períodos</div><div class="bk__v">" + (rango.length) + " meses</div></div>
+            " + (cuentasHtml) + "
         </div>
         <div class="bal-tabla">
         <table class="bt">
             <thead><tr><th>Período</th><th>Bruto</th><th>Tarifa</th><th>Neto</th><th>Imp.</th><th>Noches</th><th>Cuenta depósito</th><th>Conciliación</th></tr></thead>
-            <tbody>${filas}</tbody>
-            <tfoot><tr><td>TOTAL</td><td style="font-family:var(--font-mono)">${R(tBruto)}</td><td style="font-family:var(--font-mono);color:var(--color-danger)">−${R(tComis)}</td><td style="font-family:var(--font-mono);color:var(--color-success)">${R(tNeto)}</td><td style="font-family:var(--font-mono)">${R(tImp)}</td><td>${tNoch}</td><td colspan="2"></td></tr></tfoot>
+            <tbody>" + (filas) + "</tbody>
+            <tfoot><tr><td>TOTAL</td><td style="font-family:var(--font-mono)">" + (R(tBruto)) + "</td><td style="font-family:var(--font-mono);color:var(--color-danger)"> " + (R(tComis)) + "</td><td style="font-family:var(--font-mono);color:var(--color-success)">" + (R(tNeto)) + "</td><td style="font-family:var(--font-mono)">" + (R(tImp)) + "</td><td>" + (tNoch) + "</td><td colspan="2"></td></tr></tfoot>
         </table>
         </div>
-    </div>`;
+    </div>";
 };
 
-// ── POR CABAÑA ────────────────────────────────────────────────
+//    POR CABAÑA                                                 
 function renderCabs() {
-    const cont=document.getElementById('cabCont');
-    const a={1:{n:NOMB[1],b:0,nt:0,t:0,i:0,no:0,p:0},2:{n:NOMB[2],b:0,nt:0,t:0,i:0,no:0,p:0},3:{n:NOMB[3],b:0,nt:0,t:0,i:0,no:0,p:0}};
-    informes.forEach(inf=>(inf.cabanas||[]).forEach(c=>{
-        const x=a[c.caba_id];if(!x)return;
+    var cont=document.getElementById('cabCont');
+    var a={1:{n:NOMB[1],b:0,nt:0,t:0,i:0,no:0,p:0},2:{n:NOMB[2],b:0,nt:0,t:0,i:0,no:0,p:0},3:{n:NOMB[3],b:0,nt:0,t:0,i:0,no:0,p:0}};
+    informes.forEach(function(inf) { return (inf.cabanas||[]).forEach(function(c) {; }
+        var x=a[c.caba_id];if(!x)return;
         x.b+=c.ingreso_bruto||0;x.nt+=c.total_neto||0;x.t+=c.tarifa_servicio||0;
         x.i+=c.impuesto_airbnb||0;x.no+=c.noches||0;x.p++;
     }));
-    cont.innerHTML=Object.entries(a).map(([id,d])=>`
+    cont.innerHTML=Object.entries(a).map(([id,d])=>"
     <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);margin-bottom:var(--space-3);overflow:hidden">
         <div style="background:var(--color-primary-xlight);padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-border-light);display:flex;justify-content:space-between;align-items:center">
-            <strong>C${id} — ${escapeHtml(d.n)}</strong>
-            <span style="font-size:11px;color:var(--color-text-muted)">${d.p} período${d.p!==1?'s':''}</span>
+            <strong>C" + (id) + "   " + (escapeHtml(d.n)) + "</strong>
+            <span style="font-size:11px;color:var(--color-text-muted)">" + (d.p) + " período" + (d.p!==1?'s':'') + "</span>
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:var(--space-3);padding:var(--space-4)">
-            ${[['Bruto acumulado',R(d.b),''],['Neto acumulado',R(d.nt),'var(--color-success)'],['Comisión',R(d.t),'var(--color-danger)'],['Imp. Airbnb',R(d.i),''],['Noches totales',d.no+' nch',''],['R$/noche prom',d.no?R(d.nt/d.no):'—','var(--color-primary)']].map(([l,v,c])=>`
+            ${[['Bruto acumulado',R(d.b),''],['Neto acumulado',R(d.nt),'var(--color-success)'],['Comisión',R(d.t),'var(--color-danger)'],['Imp. Airbnb',R(d.i),''],['Noches totales',d.no+' nch',''],['R$/noche prom',d.no?R(d.nt/d.no):' ','var(--color-primary)']].map(([l,v,c])=>"
             <div style="text-align:center;padding:var(--space-3);background:var(--color-surface-2);border-radius:var(--radius-sm)">
                 <div style="font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--color-text-muted);margin-bottom:3px">${l}</div>
                 <div style="font-family:var(--font-mono);font-weight:700;${c?'color:'+c:''}">${v}</div>
-            </div>`).join('')}
+            </div>").join('')}
         </div>
-    </div>`).join('');
+    </div>").join('');
 }
 
-// ── TABS ──────────────────────────────────────────────────────
-window.doTab = (n,btn) => {
-    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+//    TABS                                                       
+window.doTab = function(n,btn) {
+    document.querySelectorAll('.tab-panel').forEach(function(p) { return p.classList.remove('active')); };
+    document.querySelectorAll('.tab-btn').forEach(function(b) { return b.classList.remove('active')); };
     document.getElementById('tab-'+n).classList.add('active');
     btn.classList.add('active');
 };
 
-// ── IMPORTADOR ────────────────────────────────────────────────
-window.abrirImport = () => {
+//    IMPORTADOR                                                 
+window.abrirImport = function() {
     document.getElementById('pdfIn').value='';
     document.getElementById('logBox').innerHTML='';
     document.getElementById('logBox').classList.remove('visible');
@@ -607,48 +607,48 @@ window.abrirImport = () => {
     document.getElementById('impErr').style.display='none';
     document.getElementById('mImport').classList.add('open');
 };
-window.cImport = (e) => {
+window.cImport = function(e) {
     if(e&&e.target!==document.getElementById('mImport'))return;
     document.getElementById('mImport').classList.remove('open');
 };
 
 function log(msg,tipo='info') {
-    const b=document.getElementById('logBox');
+    var b=document.getElementById('logBox');
     b.classList.add('visible');
-    const c={ok:'log-ok',info:'log-info',warn:'log-warn',err:'log-err'}[tipo]||'log-info';
-    b.innerHTML+=`<div class="${c}">${msg}</div>`;
+    var c={ok:'log-ok',info:'log-info',warn:'log-warn',err:'log-err'}[tipo]||'log-info';
+    b.innerHTML+="<div class="" + (c) + "">" + (msg) + "</div>";
     b.scrollTop=b.scrollHeight;
 }
 
-window.recalc = () => {
-    const br=vn('eBruto'),aj=vn('eAjustes'),ta=vn('eTarifa'),ne=vn('eNeto');
-    const cl=br+aj+ta;
+window.recalc = function() {
+    var br=vn('eBruto'),aj=vn('eAjustes'),ta=vn('eTarifa'),ne=vn('eNeto');
+    var cl=br+aj+ta;
     document.getElementById('vCalc').textContent=R(cl);
     document.getElementById('vPDF').textContent=R(ne);
-    const d=cl-ne, dEl=document.getElementById('vDif');
-    if(!ne){dEl.textContent='—';dEl.className='verif-item__val';}
-    else if(Math.abs(d)<0.05){dEl.textContent='✅ Cuadra';dEl.className='verif-item__val verif-ok';}
+    var d=cl-ne, dEl=document.getElementById('vDif');
+    if(!ne){dEl.textContent=' ';dEl.className='verif-item__val';}
+    else if(Math.abs(d)<0.05){dEl.textContent='  Cuadra';dEl.className='verif-item__val verif-ok';}
     else{dEl.textContent=(d>0?'+':'')+R(d);dEl.className='verif-item__val verif-diff';}
-    document.getElementById('vPct').textContent=br?pct(ta,br)+' com':'—';
+    document.getElementById('vPct').textContent=br?pct(ta,br)+' com':' ';
 };
 
-window.recalcX = () => {
-    const br=vn('xBruto'),aj=vn('xAjustes'),ta=vn('xTarifa'),ne=vn('xNeto');
-    const cl=br+aj+ta;
+window.recalcX = function() {
+    var br=vn('xBruto'),aj=vn('xAjustes'),ta=vn('xTarifa'),ne=vn('xNeto');
+    var cl=br+aj+ta;
     document.getElementById('xvCalc').textContent=R(cl);
     document.getElementById('xvPDF').textContent=R(ne);
-    const d=cl-ne, dEl=document.getElementById('xvDif');
-    if(!ne){dEl.textContent='—';dEl.className='verif-item__val';}
-    else if(Math.abs(d)<0.05){dEl.textContent='✅';dEl.className='verif-item__val verif-ok';}
+    var d=cl-ne, dEl=document.getElementById('xvDif');
+    if(!ne){dEl.textContent=' ';dEl.className='verif-item__val';}
+    else if(Math.abs(d)<0.05){dEl.textContent=' ';dEl.className='verif-item__val verif-ok';}
     else{dEl.textContent=(d>0?'+':'')+R(d);dEl.className='verif-item__val verif-diff';}
 };
 
-window.updPeriodo = () => {
+window.updPeriodo = function() {
     document.getElementById('grpMes').style.display=
         document.getElementById('eTipo').value==='mensual'?'':'none';
 };
 
-// ── PROCESAR PDF → CLAUDE API ─────────────────────────────────
+//    PROCESAR PDF   CLAUDE API                                  
 window.procesarPDF = async function(file) {
     if(!file)return;
     document.getElementById('upZone').style.display='none';
@@ -657,30 +657,30 @@ window.procesarPDF = async function(file) {
     document.getElementById('prevCard').classList.remove('visible');
     document.getElementById('btnGuardar').disabled=true;
 
-    log(`📄 ${file.name} (${(file.size/1024).toFixed(0)} KB)`,'info');
-    log('🔄 Leyendo PDF...','info');
+    log("  " + (file.name) + " (" + ((file.size/1024).toFixed(0)) + " KB)",'info');
+    log('  Leyendo PDF...','info');
 
-    let b64;
+    var b64;
     try {
-        b64=await new Promise((res,rej)=>{
-            const r=new FileReader();
-            r.onload=()=>res(r.result.split(',')[1]);
-            r.onerror=()=>rej(new Error('Error leyendo archivo'));
+        b64=await new Promisefunction((res,rej) {
+            var r=new FileReader();
+            r.onload=(function() { return res(r.result.split(',')[1]); })();
+            r.onerror=(function() { return rej(new Error('Error leyendo archivo')); })();
             r.readAsDataURL(file);
         });
-    } catch(e){log('❌ '+e.message,'err');return;}
+    } catch(e){log('  '+e.message,'err');return;}
 
-    log('✅ PDF listo. Enviando a Gemini...','ok');
+    log('  PDF listo. Enviando a Gemini...','ok');
 
     // Lista de cuentas para que Gemini sugiera la cuenta receptora
-    const cuentasConocidas = cuentas.length
-        ? cuentas.map(c => '- "' + c.nombre + '" (' + c.moneda + ') → id: "' + c.id + '"').join('\n')
+    var cuentasConocidas = cuentas.length
+        ? cuentas.map(function(c) { return '- "' + c.nombre + '" (' + c.moneda + ')   id: "' + c.id + '"').join('\n'); }
         : '- Sin cuentas registradas aún';
 
-    const PROMPT=`Sos un extractor de datos de informes de ingresos de Airbnb en PDF.
+    var PROMPT="Sos un extractor de datos de informes de ingresos de Airbnb en PDF.
 Respondé ÚNICAMENTE con JSON válido, sin texto adicional, sin markdown, sin explicaciones.
 
-El PDF tiene estas secciones — extraé de TODAS:
+El PDF tiene estas secciones   extraé de TODAS:
 
 1. RESUMEN GLOBAL (al inicio): ingreso_bruto total, ajustes, tarifa_servicio total, total_neto.
 
@@ -713,33 +713,33 @@ Formato JSON:
       "tarifa_servicio": número NEGATIVO,
       "impuesto_airbnb": número,
       "total_neto": número,
-      "noches": número (de Estadísticas de desempeño — BUSCAR EN TODA LA PÁGINA incluida la ÚLTIMA),
+      "noches": número (de Estadísticas de desempeño   BUSCAR EN TODA LA PÁGINA incluida la ÚLTIMA),
       "promedio_noches": número
     }
   ]
 }
 
 REGLAS CRÍTICAS:
-- Números BRL: eliminar "R$" y puntos, cambiar coma por punto. "R$14.379,56" → 14379.56
-- Tarifas de servicio SIEMPRE negativas. "-R$695.15" → -695.15
+- Números BRL: eliminar "R$" y puntos, cambiar coma por punto. "R$14.379,56"   14379.56
+- Tarifas de servicio SIEMPRE negativas. "-R$695.15"   -695.15
 - Si un alojamiento tuvo R$0.00 ese período igualmente incluirlo con 0
 - Las noches están en "Estadísticas de desempeño" que puede estar en la ÚLTIMA PÁGINA del PDF
 - SIEMPRE incluir las 3 cabañas
-- No inventar valores — usar 0 si no aparece
+- No inventar valores   usar 0 si no aparece
 
 Mapeo de cabañas:
-- "Cabaña confortable y amplia rodeada de arboles" → caba_id: 1
-- "Departamento ideal para familias" → caba_id: 2
-- "Loft en Canasvieiras cerquita de la playa" → caba_id: 3
+- "Cabaña confortable y amplia rodeada de arboles"   caba_id: 1
+- "Departamento ideal para familias"   caba_id: 2
+- "Loft en Canasvieiras cerquita de la playa"   caba_id: 3
 
-Cuentas: ${cuentasConocidas}
-- "Maria Florencia de Tezanos Pinto" / "Ch 1550" → BTG Flor
-- "Mauro Gastaldello" / "Savings 0731" → BTG Mauro
-- "PayPal" → cuenta PayPal con esa moneda
-- Sin coincidencia → null`;
+Cuentas: " + (cuentasConocidas) + "
+- "Maria Florencia de Tezanos Pinto" / "Ch 1550"   BTG Flor
+- "Mauro Gastaldello" / "Savings 0731"   BTG Mauro
+- "PayPal"   cuenta PayPal con esa moneda
+- Sin coincidencia   null";
 
     try {
-        const res=await fetch('https://serene-scone-76bd4e.netlify.app/.netlify/functions/claude-proxy',{
+        var res=await fetch('https://serene-scone-76bd4e.netlify.app/.netlify/functions/claude-proxy',{
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({
@@ -756,18 +756,18 @@ Cuentas: ${cuentasConocidas}
         });
 
         if(!res.ok){
-            const er=await res.json().catch(()=>({error:{message:`HTTP ${res.status}`}}));
-            throw new Error(er.error?.message||`HTTP ${res.status}`);
+            var er=await res.json().catch((function() { return ({error:{message:"HTTP " + (res.status) + ""}})); })();
+            throw new Error(er.(error && error.message)||"HTTP " + (res.status) + "");
         }
 
-        const data=await res.json();
-        const raw=data.content.map(b=>b.text||'').join('').trim();
-        log('✅ Respuesta recibida. Interpretando...','ok');
+        var data=await res.json();
+        var raw=data.content.map(function(b) { return b.text||'').join('').trim(); };
+        log('  Respuesta recibida. Interpretando...','ok');
 
-        let ext;
-        try{ext=JSON.parse(raw.replace(/```json|```/g,'').trim());}
+        var ext;
+        try{ext=JSON.parse(raw.replace(/"""json|"""/g,'').trim());}
         catch(e){
-            log('❌ Error en JSON: '+e.message,'err');
+            log('  Error en JSON: '+e.message,'err');
             log('Respuesta: '+raw.slice(0,300),'warn');
             // Habilitar formulario manual de todos modos
             document.getElementById('prevCard').classList.add('visible');
@@ -775,11 +775,11 @@ Cuentas: ${cuentasConocidas}
             return;
         }
 
-        log('✅ Datos extraídos. Revisalos antes de guardar.','ok');
+        log('  Datos extraídos. Revisalos antes de guardar.','ok');
         poblarForm(ext);
 
     } catch(e){
-        log('❌ Error API: '+e.message,'err');
+        log('  Error API: '+e.message,'err');
         // Habilitar carga manual
         document.getElementById('prevCard').classList.add('visible');
         document.getElementById('btnGuardar').disabled=false;
@@ -794,9 +794,9 @@ function poblarForm(d) {
     sv('eBruto',d.ingreso_bruto||''); sv('eAjustes',d.ajustes||'');
     sv('eTarifa',d.tarifa_servicio||''); sv('eNeto',d.total_neto||'');
     sv('eImp',d.impuesto_airbnb||''); sv('eNoches',d.noches_reservadas||'');
-    const m={1:'c1',2:'c2',3:'c3'};
-    (d.cabanas||[]).forEach(c=>{
-        const p=m[c.caba_id];if(!p)return;
+    var m={1:'c1',2:'c2',3:'c3'};
+    (d.cabanas||[]).forEach(function(c) {
+        var p=m[c.caba_id];if(!p)return;
         sv(p+'b',c.ingreso_bruto||''); sv(p+'t',c.tarifa_servicio||'');
         sv(p+'n',c.total_neto||'');   sv(p+'i',c.impuesto_airbnb||'');
         sv(p+'no',c.noches||'');      sv(p+'pn',c.promedio_noches||'');
@@ -804,38 +804,38 @@ function poblarForm(d) {
     // Autoseleccionar cuenta receptora si Gemini sugirió una
     if (d.formas_cobro && d.formas_cobro.length > 0) {
         // Buscar la forma de cobro con mayor monto
-        const principal = d.formas_cobro.reduce((a,b) => (b.monto||0) > (a.monto||0) ? b : a, d.formas_cobro[0]);
+        var principal = d.formas_cobro.reduce((a,b) => (b.monto||0) > (a.monto||0) ? b : a, d.formas_cobro[0]);
         if (principal.cuenta_id_sugerida) {
-            const sel = document.getElementById('eCuenta');
+            var sel = document.getElementById('eCuenta');
             // Verificar que el id existe en el select
-            const opt = Array.from(sel.options).find(o => o.value === principal.cuenta_id_sugerida);
+            var opt = Array.from(sel.options).find(function(o) { return o.value === principal.cuenta_id_sugerida); };
             if (opt) {
                 sel.value = principal.cuenta_id_sugerida;
-                log('🏦 Cuenta autodetectada: ' + opt.text, 'ok');
+                log('  Cuenta autodetectada: ' + opt.text, 'ok');
             }
         }
     }
 
-    const tit=d.tipo==='anual'?`Año ${d.anio}`:`${MESES[d.mes]||''} ${d.anio}`;
-    document.getElementById('prevTitulo').textContent=`Datos extraídos — ${tit}`;
+    var tit=d.tipo==='anual'?"Año " + (d.anio) + "":"" + (MESES[d.mes]||'') + " " + (d.anio) + "";
+    document.getElementById('prevTitulo').textContent="Datos extraídos   " + (tit) + "";
     document.getElementById('prevCard').classList.add('visible');
     document.getElementById('btnGuardar').disabled=false;
     recalc();
 }
 
-// ── GUARDAR ───────────────────────────────────────────────────
+//    GUARDAR                                                    
 function buildDocData(prefix,periodo,tipo,anio,mes) {
-    const cab=(id,p)=>({
+    var cab=(id,p)=>({
         caba_id:id, nombre_airbnb:NOMB[id],
         ingreso_bruto:vn(p+id+'b'), tarifa_servicio:vn(p+id+'t'),
         total_neto:vn(p+id+'n'),   impuesto_airbnb:vn(p+id+'i'),
         noches:vn(p+id+'no'),      promedio_noches:vn(p+id+'pn')
     });
-    const ePfx=prefix==='e'?'e':'x';
+    var ePfx=prefix==='e'?'e':'x';
     return {
         tipo, periodo,
-        fecha_inicio:tipo==='mensual'?`${anio}-${mes}-01`:`${anio}-01-01`,
-        fecha_fin:tipo==='mensual'?`${anio}-${mes}-28`:`${anio}-12-31`,
+        fecha_inicio:tipo==='mensual'?"" + (anio) + "-" + (mes) + "-01":"" + (anio) + "-01-01",
+        fecha_fin:tipo==='mensual'?"" + (anio) + "-" + (mes) + "-28":"" + (anio) + "-12-31",
         anfitrion:document.getElementById('eAnf')?.value||'Florencia De Tezanos Pinto',
         airbnb_user_id:'305975988', moneda:'BRL',
         ingreso_bruto:vn(ePfx+'Bruto'), ajustes:vn(ePfx+'Ajustes'),
@@ -853,20 +853,20 @@ function buildDocData(prefix,periodo,tipo,anio,mes) {
 }
 
 window.guardar = async function() {
-    const tipo=document.getElementById('eTipo').value;
-    const anio=document.getElementById('eAnio').value;
-    const mes=document.getElementById('eMes').value;
-    const periodo=tipo==='mensual'?`${anio}-${mes}`:anio;
+    var tipo=document.getElementById('eTipo').value;
+    var anio=document.getElementById('eAnio').value;
+    var mes=document.getElementById('eMes').value;
+    var periodo=tipo==='mensual'?"" + (anio) + "-" + (mes) + "":anio;
     if(!vn('eBruto')){showImpErr('Ingresá el monto de ingresos brutos.');return;}
     if(!vn('eNeto')) {showImpErr('Ingresá el total neto recibido.');return;}
-    const existente = informes.find(function(i){ return i.periodo===periodo; });
+    var existente = informes.find(function(i){ return i.periodo===periodo; });
     if(existente){
         if(!confirm('Ya existe el informe ' + periodo + '.\n\n¿Sobreescribir con los datos nuevos del PDF?\n\nEsto reemplazara todos los valores actuales incluidos los datos por cabana.')){
             return;
         }
     }
-    const btn=document.getElementById('btnTxt');
-    btn.textContent='Guardando…';
+    var btn=document.getElementById('btnTxt');
+    btn.textContent='Guardando ';
     document.getElementById('btnGuardar').disabled=true;
     try {
         await db.collection('informes_airbnb').doc(periodo).set(buildDocData('e',periodo,tipo,anio,mes));
@@ -882,17 +882,17 @@ function showImpErr(m){
     document.getElementById('impErr').style.display='flex';
 }
 
-// ── EDITAR ────────────────────────────────────────────────────
+//    EDITAR                                                     
 window.abrirEditar = function(id) {
-    const inf=informes.find(i=>i.id===id);if(!inf)return;
+    var inf=informes.find(function(i) { return i.id===id); };if(!inf)return;
     document.getElementById('editId').value=id;
-    document.getElementById('editTit').textContent=`Editar — ${inf.periodo}`;
+    document.getElementById('editTit').textContent="Editar   " + (inf.periodo) + "";
     sv('xBruto',inf.ingreso_bruto||''); sv('xAjustes',inf.ajustes||'');
     sv('xTarifa',inf.tarifa_servicio||''); sv('xNeto',inf.total_neto||'');
     sv('xImp',inf.impuesto_airbnb||''); sv('xNoches',inf.noches_reservadas||'');
-    const m={1:'x1',2:'x2',3:'x3'};
-    (inf.cabanas||[]).forEach(c=>{
-        const p=m[c.caba_id];if(!p)return;
+    var m={1:'x1',2:'x2',3:'x3'};
+    (inf.cabanas||[]).forEach(function(c) {
+        var p=m[c.caba_id];if(!p)return;
         sv(p+'b',c.ingreso_bruto||''); sv(p+'t',c.tarifa_servicio||'');
         sv(p+'n',c.total_neto||'');   sv(p+'i',c.impuesto_airbnb||'');
         sv(p+'no',c.noches||'');      sv(p+'pn',c.promedio_noches||'');
@@ -903,12 +903,12 @@ window.abrirEditar = function(id) {
     recalcX();
     document.getElementById('mEditar').classList.add('open');
 };
-window.cEditar=(e)=>{if(e&&e.target!==document.getElementById('mEditar'))return;document.getElementById('mEditar').classList.remove('open');};
+window.cEditar=function(e) {if(e&&e.target!==document.getElementById('mEditar'))return;document.getElementById('mEditar').classList.remove('open');};
 
 window.actualizar = async function() {
-    const id=document.getElementById('editId').value;
-    const inf=informes.find(i=>i.id===id);if(!inf)return;
-    const cab=(n,p)=>({caba_id:n,nombre_airbnb:NOMB[n],ingreso_bruto:vn(p+'b'),tarifa_servicio:vn(p+'t'),total_neto:vn(p+'n'),impuesto_airbnb:vn(p+'i'),noches:vn(p+'no'),promedio_noches:vn(p+'pn')});
+    var id=document.getElementById('editId').value;
+    var inf=informes.find(function(i) { return i.id===id); };if(!inf)return;
+    var cab=(n,p)=>({caba_id:n,nombre_airbnb:NOMB[n],ingreso_bruto:vn(p+'b'),tarifa_servicio:vn(p+'t'),total_neto:vn(p+'n'),impuesto_airbnb:vn(p+'i'),noches:vn(p+'no'),promedio_noches:vn(p+'pn')});
     try {
         await db.collection('informes_airbnb').doc(id).update({
             ingreso_bruto:vn('xBruto'), ajustes:vn('xAjustes'),
@@ -927,9 +927,9 @@ window.actualizar = async function() {
 };
 
 window.eliminar = async function() {
-    const id=document.getElementById('editId').value;
-    const inf=informes.find(i=>i.id===id);
-    if(!inf||!confirm(`¿Eliminar informe ${inf.periodo}?`))return;
+    var id=document.getElementById('editId').value;
+    var inf=informes.find(function(i) { return i.id===id); };
+    if(!inf||!confirm("¿Eliminar informe " + (inf.periodo) + "?"))return;
     try {
         await db.collection('informes_airbnb').doc(id).delete();
         showToast('Eliminado.','warning');
@@ -938,14 +938,14 @@ window.eliminar = async function() {
     } catch(e){showToast('Error: '+e.message,'error');}
 };
 
-// ── Drag & drop ───────────────────────────────────────────────
-const zone=document.getElementById('upZone');
-zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag-over');});
-zone.addEventListener('dragleave',()=>zone.classList.remove('drag-over'));
-zone.addEventListener('drop',e=>{
+//    Drag & drop                                                
+var zone=document.getElementById('upZone');
+zone.addEventListener('dragover',function(e) {e.preventDefault();zone.classList.add('drag-over');});
+zone.addEventListener('dragleave', function() { zone.classList.remove('drag-over'); });
+zone.addEventListener('drop',function(e) {
     e.preventDefault();zone.classList.remove('drag-over');
-    const f=e.dataTransfer.files[0];
-    if(f?.type==='application/pdf')procesarPDF(f);
+    var f=e.dataTransfer.files[0];
+    if((f && f.type)==='application/pdf')procesarPDF(f);
     else showToast('Solo PDF.','error');
 });
 

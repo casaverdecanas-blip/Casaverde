@@ -371,75 +371,73 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="utils.js"></script>
 <script>
-(async () => {
-    const { user, userData } = await CVC.verificarAuth('admin');
+function(async () {
+    var { user, userData } = await CVC.verificarAuth('admin');
     document.getElementById('userName').textContent = userData.nombre || user.email;
     CVC.renderNav('presupuestos.html');
-    CVC.initAyuda('presupuestos.html');
 
     // Si viene desde acceso rápido con ?nuevo=1, hacer scroll al formulario
     if (new URLSearchParams(window.location.search).get('nuevo')) {
-        setTimeout(() => {
+        setTimeoutfunction(() {
             document.querySelector('.layout')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 300);
     }
 
-    const db = CVC.db;
-    const {
+    var db = CVC.db;
+    var {
         escapeHtml, calcularPrecio,
         verificarDisponibilidadCabana, mensajeConflicto,
         crearTareaLimpieza, sincronizarDisponibilidad,
         showEmpty, showError, showToast
     } = CVC;
 
-    let cabanasCache      = [];
-    let presupuestosCache = [];
-    let ultimoCalculo     = null;
-    let filtroActual      = 'todos';
+    var cabanasCache      = [];
+    var presupuestosCache = [];
+    var ultimoCalculo     = null;
+    var filtroActual      = 'todos';
 
-    // ── Init ──────────────────────────────────────────────────
+    //    Init                                                   
     try {
-        const [cabanasSnap, presSnap] = await Promise.all([
+        var [cabanasSnap, presSnap] = await Promise.all([
             db.collection('cabanas').get(),
             db.collection('presupuestos').get()
         ]);
 
         cabanasCache = cabanasSnap.docs
-            .map(d => ({ docId: d.id, ...d.data() }))
-            .filter(c => c.activa === true || c.activa === 'true' || c.activa === undefined)
+            .map(function(d) { return Object.assign({ docId: d.id }, d.data()); })
+            .filter(function(c) { return c.activa === true || c.activa === 'true' || c.activa === undefined); }
             .sort((a, b) => (a.orden || 0) - (b.orden || 0));
 
         presupuestosCache = presSnap.docs
-            .map(d => ({ id: d.id, ...d.data() }))
-            .sort((a, b) => (b.creadoEn?.toDate?.()?.getTime() || 0) - (a.creadoEn?.toDate?.()?.getTime() || 0));
+            .map(function(d) { return (Object.assign({ id: d.id }; }, d.data())))
+            .sort((a, b) => (b.(creadoEn && creadoEn.toDate)?.()?.getTime() || 0) - (a.(creadoEn && creadoEn.toDate)?.()?.getTime() || 0));
 
-        const select = document.getElementById('cabanaSelect');
+        var select = document.getElementById('cabanaSelect');
         select.innerHTML = cabanasCache.length
-            ? cabanasCache.map(c =>
-                `<option value="${c.id}">${escapeHtml(c.nombre?.es || `Cabaña ${c.id}`)}</option>`
+            ? cabanasCache.map(function(c) { return "<option value="" + (c.id) + "">${escapeHtml(c.(nombre && nombre.es) || "Cabaña ${c.id}")}</option>"; }
               ).join('')
             : '<option value="">Sin cabañas activas</option>';
 
         renderPresupuestos();
 
     } catch (e) {
-        showError('#presupuestosList', 'Error al cargar datos', e.message, () => location.reload());
+        showError('#presupuestosList', 'Error al cargar datos', e.message, (function() { return location.reload()); })();
     }
 
-    // ── Verificación de disponibilidad en tiempo real ─────────
+    //    Verificación de disponibilidad en tiempo real          
     //
     //  Al cambiar cabaña, check-in o check-out en el formulario,
     //  consultamos si ya hay una reserva confirmada en ese rango.
-    //  Solo es advertencia visual — el bloqueo real es al guardar.
+    //  Solo es advertencia visual   el bloqueo real es al guardar.
     //
-    let dispTimer = null;
+    var dispTimer = null;
     function verificarDisponibilidadLive() {
         clearTimeout(dispTimer);
-        dispTimer = setTimeout(async () => {
-            const cabaId   = parseInt(document.getElementById('cabanaSelect').value);
-            const checkIn  = document.getElementById('checkIn').value;
-            const checkOut = document.getElementById('checkOut').value;
-            const alerta   = document.getElementById('alertaDisponibilidad');
+        dispTimer = setTimeoutfunction(async () {
+            var cabaId   = parseInt(document.getElementById('cabanaSelect').value);
+            var checkIn  = document.getElementById('checkIn').value;
+            var checkOut = document.getElementById('checkOut').value;
+            var alerta   = document.getElementById('alertaDisponibilidad');
 
             if (!cabaId || !checkIn || !checkOut || checkOut <= checkIn) {
                 alerta.style.display = 'none';
@@ -447,7 +445,7 @@
             }
 
             try {
-                const { disponible, conflicto } = await verificarDisponibilidadCabana(
+                var { disponible, conflicto } = await verificarDisponibilidadCabana(
                     cabaId, checkIn, checkOut
                 );
                 if (!disponible) {
@@ -463,49 +461,46 @@
         }, 600); // debounce 600ms
     }
 
-    ['cabanaSelect', 'checkIn', 'checkOut'].forEach(id =>
-        document.getElementById(id).addEventListener('change', verificarDisponibilidadLive)
+    ['cabanaSelect', 'checkIn', 'checkOut'].forEach(function(id) { return document.getElementById(id).addEventListener('change'; }, verificarDisponibilidadLive)
     );
 
-    // ── Calcular precio ───────────────────────────────────────
+    //    Calcular precio                                        
     window.calcular = function() {
-        const cabaId   = parseInt(document.getElementById('cabanaSelect').value);
-        const checkIn  = document.getElementById('checkIn').value;
-        const checkOut = document.getElementById('checkOut').value;
-        const adultos  = parseInt(document.getElementById('adultos').value) || 0;
-        const ninos    = parseInt(document.getElementById('ninos').value)   || 0;
+        var cabaId   = parseInt(document.getElementById('cabanaSelect').value);
+        var checkIn  = document.getElementById('checkIn').value;
+        var checkOut = document.getElementById('checkOut').value;
+        var adultos  = parseInt(document.getElementById('adultos').value) || 0;
+        var ninos    = parseInt(document.getElementById('ninos').value)   || 0;
 
         document.getElementById('errorForm').style.display = 'none';
 
         if (!checkIn || !checkOut) { mostrarErrorForm('Ingresá las fechas primero.'); return; }
         if (checkOut <= checkIn)   { mostrarErrorForm('El check-out debe ser posterior al check-in.'); return; }
 
-        const cabana = cabanasCache.find(c => c.id == cabaId);
+        var cabana = cabanasCache.find(function(c) { return c.id == cabaId); };
         if (!cabana) { mostrarErrorForm('Seleccioná una cabaña válida.'); return; }
 
-        ultimoCalculo = {
-            ...calcularPrecio(cabana, checkIn, checkOut, adultos, ninos),
-            cabaId, checkIn, checkOut, adultos, ninos
-        };
+        var calc = calcularPrecio(cabana, checkIn, checkOut, adultos, ninos);
+        ultimoCalculo = Object.assign({}, calc, { cabaId: cabaId, checkIn: checkIn, checkOut: checkOut, adultos: adultos, ninos: ninos });
 
         document.getElementById('pNoches').textContent   = ultimoCalculo.noches;
-        document.getElementById('pSubtotal').textContent = `R$ ${ultimoCalculo.subtotal.toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
-        document.getElementById('pLimpieza').textContent = `R$ ${ultimoCalculo.limpieza.toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
-        document.getElementById('pTotal').textContent    = `R$ ${ultimoCalculo.total.toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
+        document.getElementById('pSubtotal').textContent = "R$ " + (ultimoCalculo.subtotal.toLocaleString('pt-BR',{minimumFractionDigits:2) + ")}";
+        document.getElementById('pLimpieza').textContent = "R$ " + (ultimoCalculo.limpieza.toLocaleString('pt-BR',{minimumFractionDigits:2) + ")}";
+        document.getElementById('pTotal').textContent    = "R$ " + (ultimoCalculo.total.toLocaleString('pt-BR',{minimumFractionDigits:2) + ")}";
         document.getElementById('precioBox').style.display = 'block';
     };
 
-    // ── Guardar presupuesto ───────────────────────────────────
+    //    Guardar presupuesto                                    
     window.guardarPresupuesto = async function() {
         document.getElementById('errorForm').style.display = 'none';
         if (!ultimoCalculo) { mostrarErrorForm('Calculá el precio primero.'); return; }
 
-        const btn  = document.getElementById('btnGuardar');
-        const text = document.getElementById('btnGuardarText');
+        var btn  = document.getElementById('btnGuardar');
+        var text = document.getElementById('btnGuardarText');
         btn.disabled = true; text.textContent = 'Guardando...';
 
         try {
-            const doc = await db.collection('presupuestos').add({
+            var doc = await db.collection('presupuestos').add({
                 caba:             ultimoCalculo.cabaId,
                 checkIn:          ultimoCalculo.checkIn,
                 checkOut:         ultimoCalculo.checkOut,
@@ -525,18 +520,12 @@
                 creadoPor:        user.uid
             });
 
-            presupuestosCache.unshift({
-                id:          doc.id,
-                estado:      'pendiente',
-                clienteNombre: document.getElementById('clienteNombre').value.trim() || 'Sin nombre',
-                ...ultimoCalculo
-            });
+            presupuestosCache.unshift(Object.assign({ id: doc.id, estado: 'pendiente', clienteNombre: document.getElementById('clienteNombre').value.trim() || 'Sin nombre' }, ultimoCalculo));
 
             showToast('Presupuesto guardado.', 'success');
 
             // Limpiar formulario
-            ['clienteNombre','clienteEmail','clienteTel','notas','checkIn','checkOut'].forEach(id =>
-                document.getElementById(id).value = '');
+            ['clienteNombre','clienteEmail','clienteTel','notas','checkIn','checkOut'].forEach(function(id) { return document.getElementById(id).value = ''); };
             document.getElementById('precioBox').style.display    = 'none';
             document.getElementById('alertaDisponibilidad').style.display = 'none';
             ultimoCalculo = null;
@@ -550,73 +539,73 @@
         }
     };
 
-    // ── Render listado ────────────────────────────────────────
+    //    Render listado                                         
     function renderPresupuestos() {
-        const lista = filtroActual === 'todos'
+        var lista = filtroActual === 'todos'
             ? presupuestosCache
-            : presupuestosCache.filter(p => p.estado === filtroActual);
+            : presupuestosCache.filter(function(p) { return p.estado === filtroActual); };
 
-        const container = document.getElementById('presupuestosList');
+        var container = document.getElementById('presupuestosList');
 
         if (!lista.length) {
             showEmpty(container, 'Sin presupuestos', 'Aún no hay presupuestos guardados.', 'request_quote');
             return;
         }
 
-        container.innerHTML = lista.map(p => {
-            const cabana       = cabanasCache.find(c => c.id == p.caba);
-            const nombreCabana = cabana
-                ? escapeHtml(cabana.nombre?.es || `Cabaña ${p.caba}`)
-                : `Cabaña ${p.caba}`;
-            const esConf = p.estado === 'confirmado';
+        container.innerHTML = lista.map(function(p) {
+            var cabana       = cabanasCache.find(function(c) { return c.id == p.caba); };
+            var nombreCabana = cabana
+                ? escapeHtml(cabana.(nombre && nombre.es) || "Cabaña " + (p.caba) + "")
+                : "Cabaña " + (p.caba) + "";
+            var esConf = p.estado === 'confirmado';
 
             // Badge de conflicto: se muestra si la cabaña ya tiene reserva en esas fechas
-            const conflictoBadge = p._tieneConflicto
-                ? `<div class="badge-conflicto">
+            var conflictoBadge = p._tieneConflicto
+                ? "<div class="badge-conflicto">
                     <span class="material-icons" style="font-size:11px;">event_busy</span>
                     Fechas ocupadas
-                   </div>`
+                   </div>"
                 : '';
 
-            return `
-            <div class="pres-card ${p.estado}">
+            return "
+            <div class="pres-card " + (p.estado) + "">
                 <div class="pres-header">
                     <div>
-                        <div class="pres-nombre">${escapeHtml(p.clienteNombre || 'Sin nombre')}</div>
+                        <div class="pres-nombre">" + (escapeHtml(p.clienteNombre || 'Sin nombre')) + "</div>
                         <div class="pres-detalle">
-                            ${nombreCabana}
-                            · ${p.checkIn} → ${p.checkOut}
-                            · ${p.noches || '?'} noches<br>
-                            ${p.adultos} adulto(s)${p.ninos ? `, ${p.ninos} niño(s)` : ''}
-                            ${p.email    ? `· ✉️ ${escapeHtml(p.email)}`    : ''}
-                            ${p.telefono ? `· 📱 ${escapeHtml(p.telefono)}` : ''}
-                            ${p.notas    ? `<br>📝 ${escapeHtml(p.notas)}`  : ''}
-                            ${esConf
-                                ? '<br><span style="color:var(--color-success);font-weight:600;">✅ Reserva generada</span>'
-                                : ''}
+                            " + (nombreCabana) + "
+                            · " + (p.checkIn) + "   " + (p.checkOut) + "
+                            · " + (p.noches || '?') + " noches<br>
+                            " + (p.adultos) + " adulto(s)${p.ninos ? ", ${p.ninos} niño(s)" : ''}
+                            ${p.email    ? "·    ${escapeHtml(p.email)}"    : ''}
+                            ${p.telefono ? "·   ${escapeHtml(p.telefono)}" : ''}
+                            ${p.notas    ? "<br>  ${escapeHtml(p.notas)}"  : ''}
+                            " + (esConf
+                                ? '<br><span style="color:var(--color-success);font-weight:600;">  Reserva generada</span>'
+                                : '') + "
                         </div>
-                        ${conflictoBadge}
+                        " + (conflictoBadge) + "
                     </div>
                     <div style="text-align:right;">
                         <div class="pres-total">
-                            R$ ${(p.totalBRL||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                            R$ " + ((p.totalBRL||0).toLocaleString('pt-BR',{minimumFractionDigits:2) + ")}
                         </div>
-                        <span class="badge ${esConf ? 'badge-confirmada' : 'badge-pendiente'}"
+                        <span class="badge " + (esConf ? 'badge-confirmada' : 'badge-pendiente') + ""
                             style="margin-top:4px;display:inline-block;">
-                            ${esConf ? 'Confirmado' : 'Pendiente'}
+                            " + (esConf ? 'Confirmado' : 'Pendiente') + "
                         </span>
                     </div>
                 </div>
                 <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-3);">
-                    ${!esConf ? `
+                    ${!esConf ? "
                     <button class="btn btn-primary btn-sm" onclick="abrirModalPago('${p.id}')">
                         <span class="material-icons">payments</span> Registrar pago y confirmar
-                    </button>` : ''}
-                    <button class="btn btn-danger btn-sm" onclick="eliminarPresupuesto('${p.id}', ${esConf})">
+                    </button>" : ''}
+                    <button class="btn btn-danger btn-sm" onclick="eliminarPresupuesto('" + (p.id) + "', " + (esConf) + ")">
                         <span class="material-icons">delete</span>
                     </button>
                 </div>
-            </div>`;
+            </div>";
         }).join('');
 
         // Verificar conflictos en segundo plano para los pendientes
@@ -626,12 +615,12 @@
     // Verificar disponibilidad de todos los presupuestos pendientes en segundo plano
     // y actualizar sus badges sin bloquear el render inicial
     async function verificarConflictosMasivos() {
-        const pendientes = presupuestosCache.filter(p => p.estado === 'pendiente');
-        for (const p of pendientes) {
+        var pendientes = presupuestosCache.filter(function(p) { return p.estado === 'pendiente'); };
+        for (var p of pendientes) {
             if (!p.checkIn || !p.checkOut || !p.caba) continue;
             try {
-                const { disponible } = await verificarDisponibilidadCabana(p.caba, p.checkIn, p.checkOut);
-                const anterior = p._tieneConflicto;
+                var { disponible } = await verificarDisponibilidadCabana(p.caba, p.checkIn, p.checkOut);
+                var anterior = p._tieneConflicto;
                 p._tieneConflicto = !disponible;
                 // Re-renderizar solo si cambió el estado de conflicto
                 if (anterior !== p._tieneConflicto) renderPresupuestos();
@@ -639,19 +628,19 @@
         }
     }
 
-    // ── Filtro tabs ───────────────────────────────────────────
-    document.querySelectorAll('.filtro-tab').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.filtro-tab').forEach(b => b.classList.remove('active'));
+    //    Filtro tabs                                            
+    document.querySelectorAll('.filtro-tab').forEachfunction(function(btn) {
+        btn.addEventListener('click', () {
+            document.querySelectorAll('.filtro-tab').forEach(function(b) { return b.classList.remove('active')); };
             btn.classList.add('active');
             filtroActual = btn.dataset.f;
             renderPresupuestos();
         });
     });
 
-    // ── Abrir modal de pago ───────────────────────────────────
+    //    Abrir modal de pago                                    
     window.abrirModalPago = async function(id) {
-        const p = presupuestosCache.find(x => x.id === id);
+        var p = presupuestosCache.find(function(x) { return x.id === id); };
         if (!p) return;
 
         document.getElementById('presupuestoId').value = id;
@@ -662,20 +651,20 @@
         document.getElementById('errorModal').style.display          = 'none';
         document.getElementById('alertaConflictoModal').style.display = 'none';
 
-        const cabana = cabanasCache.find(c => c.id == p.caba);
-        document.getElementById('resumenPago').innerHTML = `
-            <strong>Cliente:</strong> ${escapeHtml(p.clienteNombre || '—')}<br>
-            <strong>Cabaña:</strong> ${cabana ? escapeHtml(cabana.nombre?.es) : `Cabaña ${p.caba}`}<br>
-            <strong>Fechas:</strong> ${p.checkIn} → ${p.checkOut} (${p.noches} noches)<br>
-            <strong>Huéspedes:</strong> ${p.adultos} adulto(s)${p.ninos ? `, ${p.ninos} niño(s)` : ''}<br>
-            <strong>Total:</strong> R$ ${(p.totalBRL||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
+        var cabana = cabanasCache.find(function(c) { return c.id == p.caba); };
+        document.getElementById('resumenPago').innerHTML = "
+            <strong>Cliente:</strong> " + (escapeHtml(p.clienteNombre || ' ')) + "<br>
+            <strong>Cabaña:</strong> ${cabana ? escapeHtml(cabana.(nombre && nombre.es)) : "Cabaña ${p.caba}"}<br>
+            <strong>Fechas:</strong> " + (p.checkIn) + "   " + (p.checkOut) + " (" + (p.noches) + " noches)<br>
+            <strong>Huéspedes:</strong> " + (p.adultos) + " adulto(s)${p.ninos ? ", ${p.ninos} niño(s)" : ''}<br>
+            <strong>Total:</strong> R$ " + ((p.totalBRL||0).toLocaleString('pt-BR',{minimumFractionDigits:2) + ")}";
 
         document.getElementById('modalOverlay').style.display = 'flex';
 
         // Verificar disponibilidad al abrir el modal (consulta fresca)
         if (p.checkIn && p.checkOut && p.caba) {
             try {
-                const { disponible, conflicto } = await verificarDisponibilidadCabana(
+                var { disponible, conflicto } = await verificarDisponibilidadCabana(
                     p.caba, p.checkIn, p.checkOut
                 );
                 if (!disponible) {
@@ -692,13 +681,13 @@
         document.getElementById('modalOverlay').style.display = 'none';
     };
 
-    // ── Confirmar con pago ────────────────────────────────────
+    //    Confirmar con pago                                     
     window.confirmarConPago = async function() {
-        const presupuestoId = document.getElementById('presupuestoId').value;
-        const monto         = parseFloat(document.getElementById('montoPago').value);
-        const metodo        = document.getElementById('metodoPago').value;
-        const tipo          = document.getElementById('tipoPago').value;
-        const obs           = document.getElementById('obsPago').value.trim();
+        var presupuestoId = document.getElementById('presupuestoId').value;
+        var monto         = parseFloat(document.getElementById('montoPago').value);
+        var metodo        = document.getElementById('metodoPago').value;
+        var tipo          = document.getElementById('tipoPago').value;
+        var obs           = document.getElementById('obsPago').value.trim();
 
         document.getElementById('errorModal').style.display = 'none';
 
@@ -707,19 +696,19 @@
             return;
         }
 
-        const p = presupuestosCache.find(x => x.id === presupuestoId);
+        var p = presupuestosCache.find(function(x) { return x.id === presupuestoId); };
         if (!p) return;
 
-        const btn  = document.getElementById('btnConfirmar');
-        const text = document.getElementById('btnConfirmarText');
+        var btn  = document.getElementById('btnConfirmar');
+        var text = document.getElementById('btnConfirmarText');
         btn.disabled = true; text.textContent = 'Verificando disponibilidad...';
 
         try {
-            // ── Verificación de solapamiento ANTES de crear la reserva ──
+            //    Verificación de solapamiento ANTES de crear la reserva   
             //    Esta es la validación real que previene el double-booking.
             //    La verificación live del modal es solo informativa.
             if (p.checkIn && p.checkOut && p.caba) {
-                const { disponible, conflicto } = await verificarDisponibilidadCabana(
+                var { disponible, conflicto } = await verificarDisponibilidadCabana(
                     p.caba, p.checkIn, p.checkOut
                 );
                 if (!disponible) {
@@ -731,7 +720,7 @@
 
             text.textContent = 'Creando reserva...';
 
-            const reservaData = {
+            var reservaData = {
                 caba:             p.caba,
                 nombre:           p.clienteNombre || 'Sin nombre',
                 email:            p.email         || '',
@@ -755,7 +744,7 @@
             };
 
             // Crear la reserva
-            const reservaRef = await db.collection('reservas').add(reservaData);
+            var reservaRef = await db.collection('reservas').add(reservaData);
 
             // Registrar el pago como ingreso
             await db.collection('pagos').add({
@@ -790,8 +779,8 @@
             document.getElementById('modalOverlay').style.display = 'none';
 
             // Redirigir a reservas para completar datos del huésped
-            setTimeout(() => {
-                window.location.href = `reservas.html?id=${reservaRef.id}&nuevo=1`;
+            setTimeoutfunction(() {
+                window.location.href = "reservas.html?id=" + (reservaRef.id) + "&nuevo=1";
             }, 1200);
 
         } catch (e) {
@@ -800,16 +789,16 @@
         }
     };
 
-    // ── Eliminar presupuesto ──────────────────────────────────
+    //    Eliminar presupuesto                                   
     window.eliminarPresupuesto = async function(id, esConfirmado) {
-        const msg = esConfirmado
-            ? '⚠️ Este presupuesto tiene una reserva asociada. ¿Eliminar igual?'
+        var msg = esConfirmado
+            ? '   Este presupuesto tiene una reserva asociada. ¿Eliminar igual?'
             : '¿Eliminar este presupuesto?';
         if (!confirm(msg)) return;
 
         try {
             await db.collection('presupuestos').doc(id).delete();
-            presupuestosCache = presupuestosCache.filter(p => p.id !== id);
+            presupuestosCache = presupuestosCache.filter(function(p) { return p.id !== id); };
             renderPresupuestos();
             showToast('Presupuesto eliminado.', 'warning');
         } catch(e) {
@@ -817,12 +806,12 @@
         }
     };
 
-    // ── Helpers ───────────────────────────────────────────────
+    //    Helpers                                                
     async function recargarPresupuestos() {
-        const snap        = await db.collection('presupuestos').get();
+        var snap        = await db.collection('presupuestos').get();
         presupuestosCache = snap.docs
-            .map(d => ({ id: d.id, ...d.data() }))
-            .sort((a, b) => (b.creadoEn?.toDate?.()?.getTime() || 0) - (a.creadoEn?.toDate?.()?.getTime() || 0));
+            .map(function(d) { return (Object.assign({ id: d.id }; }, d.data())))
+            .sort((a, b) => (b.(creadoEn && creadoEn.toDate)?.()?.getTime() || 0) - (a.(creadoEn && creadoEn.toDate)?.()?.getTime() || 0));
         renderPresupuestos();
     }
 
