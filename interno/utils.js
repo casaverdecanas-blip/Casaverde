@@ -320,19 +320,19 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
     var proximoHuesped = null;
     try {
         var proxSnap = await db.collection('reservas').where('caba', '==', reservaData.caba).get();
-        var proxima = proxSnap.docs
-            .map(function(d) { return Object.assign({ id: d.id }, d.data()); }
-            .filter(function(r) {
-                if (!['confirmada', 'pendiente'].includes(r.estado)) return false;
-                if (r.id === reservaId) return false;
-                var ci = (r.checkIn && r.checkIn.toDate) ? r.checkIn.toDate() : new Date(r.checkIn);
-                return ci >= checkOut;
-            })
-            .sort(function(a, b) {
-                var ca = (a.checkIn && a.checkIn.toDate) ? a.checkIn.toDate() : new Date(a.checkIn);
-                var cb = (b.checkIn && b.checkIn.toDate) ? b.checkIn.toDate() : new Date(b.checkIn);
-                return ca - cb;
-            })[0];
+        var _proxDocs = proxSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+        _proxDocs = _proxDocs.filter(function(r) {
+            if (!['confirmada', 'pendiente'].includes(r.estado)) return false;
+            if (r.id === reservaId) return false;
+            var ci = (r.checkIn && r.checkIn.toDate) ? r.checkIn.toDate() : new Date(r.checkIn);
+            return ci >= checkOut;
+        });
+        _proxDocs.sort(function(a, b) {
+            var ca = (a.checkIn && a.checkIn.toDate) ? a.checkIn.toDate() : new Date(a.checkIn);
+            var cb = (b.checkIn && b.checkIn.toDate) ? b.checkIn.toDate() : new Date(b.checkIn);
+            return ca - cb;
+        });
+        var proxima = _proxDocs[0];
 
         if (proxima) {
             var ci = (proxima.checkIn && proxima.checkIn.toDate) ? proxima.checkIn.toDate() : new Date(proxima.checkIn);
