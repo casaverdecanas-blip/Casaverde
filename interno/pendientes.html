@@ -382,12 +382,10 @@ var esAdmin = userData.rol === 'admin';
 var yo      = { uid: user.uid, nombre: userData.nombre || user.email };
 var { escapeHtml, showEmpty, showError, showToast, formatFecha } = CVC;
 
-// Si no es admin, ocultar campos de visibilidad
 if (!esAdmin) {
   ['fgVisibilidad','filtrosVis'].forEach(function(id) { var el = document.getElementById(id); if(el) el.style.display='none'; });
 }
 
-//    USUARIOS                                                                  
 var usuarios = [];
 async function cargarUsuarios() {
   try {
@@ -402,14 +400,13 @@ async function cargarUsuarios() {
 }
 
 function poblarSelects() {
-  var opts = usuarios.map(function(u) { return "<option value="" + (u.uid) + "">" + (escapeHtml(u.nombre)) + "</option>").join(''); };
+  var opts = usuarios.map(function(u) { return '<option value="' + u.uid + '">' + escapeHtml(u.nombre) + '</option>'; }).join('');
   ['nuevoAsignar','editAsignar'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.innerHTML = opts;
   });
 }
 
-//    DATOS                                                                      
 var cache         = [];
 var filtroSem     = 'todos';
 var filtroVis     = 'todos';
@@ -419,8 +416,8 @@ var tabActual     = 'general';
 async function cargar() {
   try {
     var snap = await db.collection('pendientes').orderBy('creadoEn','desc').get();
-    cache = snap.docs.map(function(d) { return (Object.assign({ id: d.id }; }, d.data())))
-      .filter(function(p) { return esAdmin || p.visibilidad !== 'admin'); };
+    cache = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
+      .filter(function(p) { return esAdmin || p.visibilidad !== 'admin'; });
   } catch(e) { showToast('Error cargando pendientes: ' + e.message, 'error'); return; }
   actualizarContadores();
   if (tabActual === 'general')     renderGeneral();
@@ -429,18 +426,16 @@ async function cargar() {
 }
 
 function actualizarContadores() {
-  var activos   = cache.filter(function(p) { return !p.realizado).length; };
-  var hist      = cache.filter(function(p) { return p.realizado).length; };
+  var activos   = cache.filter(function(p) { return !p.realizado; }).length;
+  var hist      = cache.filter(function(p) { return p.realizado; }).length;
   document.getElementById('cntGeneral').textContent    = activos;
   document.getElementById('cntPorUsuario').textContent = activos;
   document.getElementById('cntHistorial').textContent  = hist;
 }
 
-//    TABS                                                                       
 window.mostrarTab = function(id, btn) {
-  ['general','por-usuario','historial'].forEach(function(t) { return document.getElementById('tab-' + t).style.display = t === id ? 'block' : 'none'; }
-  );
-  document.querySelectorAll('.main-tab').forEach(function(b) { return b.classList.remove('active')); };
+  ['general','por-usuario','historial'].forEach(function(t) { document.getElementById('tab-' + t).style.display = t === id ? 'block' : 'none'; });
+  document.querySelectorAll('.main-tab').forEach(function(b) { b.classList.remove('active'); });
   btn.classList.add('active');
   tabActual = id;
   if (id === 'general')     renderGeneral();
@@ -448,24 +443,23 @@ window.mostrarTab = function(id, btn) {
   if (id === 'historial')   renderHistorial();
 };
 
-//    FILTROS                                                                    
 window.filtrarSem = function(val, btn) {
   filtroSem = val;
-  document.querySelectorAll('.sem-btn').forEach(function(b) { return b.classList.remove('active')); };
+  document.querySelectorAll('.sem-btn').forEach(function(b) { b.classList.remove('active'); });
   btn.classList.add('active');
   renderGeneral();
 };
 
 window.filtrarVis = function(val, btn) {
   filtroVis = val;
-  document.querySelectorAll('#filtrosVis .filtro-chip').forEach(function(b) { return b.classList.remove('active')); };
+  document.querySelectorAll('#filtrosVis .filtro-chip').forEach(function(b) { b.classList.remove('active'); });
   btn.classList.add('active');
   renderGeneral();
 };
 
 window.filtrarHist = function(val, btn) {
   filtroHist = val;
-  document.querySelectorAll('.filtro-chip').forEach(function(b) { return b.classList.remove('active')); };
+  document.querySelectorAll('.filtro-chip').forEach(function(b) { b.classList.remove('active'); });
   btn.classList.add('active');
   renderHistorial();
 };
@@ -481,12 +475,10 @@ function aplicarFiltros(lista) {
   });
 }
 
-//    RENDER GENERAL                                                             
 function renderGeneral() {
   if (esAdmin) document.getElementById('filtrosVis').style.display = 'flex';
-  var activos = cache.filter(function(p) { return !p.realizado); };
+  var activos = cache.filter(function(p) { return !p.realizado; });
   var filtrados = aplicarFiltros(activos);
-  // Ordenar: rojo primero
   var orden = { rojo:1, amarillo:2, verde:3, gris:4 };
   filtrados.sort((a,b) => (orden[a.semaforo||'gris']||4) - (orden[b.semaforo||'gris']||4));
   var cont = document.getElementById('listaGeneral');
@@ -494,15 +486,13 @@ function renderGeneral() {
     showEmpty(cont, 'Sin pendientes', 'No hay pendientes con ese filtro.', 'task_alt');
     return;
   }
-  cont.innerHTML = filtrados.map(function(p) { return renderItem(p; }, false)).join('');
+  cont.innerHTML = filtrados.map(function(p) { return renderItem(p, false); }).join('');
 }
 
-//    RENDER POR USUARIO                                                         
 function renderPorUsuario() {
-  var activos = cache.filter(function(p) { return !p.realizado); };
+  var activos = cache.filter(function(p) { return !p.realizado; });
   var cont    = document.getElementById('listaPorUsuario');
 
-  // Agrupar
   var grupos  = {};
   var sinAsig = [];
 
@@ -517,140 +507,107 @@ function renderPorUsuario() {
 
   var html = '';
 
-  // Cada usuario con pendientes asignados
   Object.values(grupos).forEach(function(g) {
     var orden = { rojo:1, amarillo:2, verde:3, gris:4 };
     g.items.sort((a,b) => (orden[a.semaforo||'gris']||4) - (orden[b.semaforo||'gris']||4));
-    html += "
-      <div class="usuario-section">
-        <div class="usuario-section__header">
-          <span class="material-icons" style="font-size:18px">person</span>
-          " + (escapeHtml(g.nombre)) + "
-          <span style="margin-left:auto;background:var(--color-primary);color:white;border-radius:99px;padding:1px 10px;font-size:11px;">" + (g.items.length) + "</span>
-        </div>
-        <div class="usuario-section__body pend-list">
-          " + (g.items.map(function(p) { return renderItem(p; ) + ", false)).join('')}
-        </div>
-      </div>";
+    html += '<div class="usuario-section">' +
+        '<div class="usuario-section__header">' +
+          '<span class="material-icons" style="font-size:18px">person</span> ' + escapeHtml(g.nombre) +
+          '<span style="margin-left:auto;background:var(--color-primary);color:white;border-radius:99px;padding:1px 10px;font-size:11px;">' + g.items.length + '</span>' +
+        '</div>' +
+        '<div class="usuario-section__body pend-list">' +
+          g.items.map(function(p) { return renderItem(p, false); }).join('') +
+        '</div>' +
+      '</div>';
   });
 
-  // Sin asignar
   if (sinAsig.length) {
     var orden2 = { rojo:1, amarillo:2, verde:3, gris:4 };
     sinAsig.sort((a,b) => (orden2[a.semaforo||'gris']||4) - (orden2[b.semaforo||'gris']||4));
-    html += "
-      <div class="usuario-section">
-        <div class="usuario-section__header" style="background:#f3f4f6;color:#6b7280">
-          <span class="material-icons" style="font-size:18px">person_outline</span>
-          Sin asignar
-          <span style="margin-left:auto;background:#9ca3af;color:white;border-radius:99px;padding:1px 10px;font-size:11px;">" + (sinAsig.length) + "</span>
-        </div>
-        <div class="usuario-section__body pend-list">
-          " + (sinAsig.map(function(p) { return renderItem(p; ) + ", false)).join('')}
-        </div>
-      </div>";
+    html += '<div class="usuario-section">' +
+        '<div class="usuario-section__header" style="background:#f3f4f6;color:#6b7280">' +
+          '<span class="material-icons" style="font-size:18px">person_outline</span> Sin asignar' +
+          '<span style="margin-left:auto;background:#9ca3af;color:white;border-radius:99px;padding:1px 10px;font-size:11px;">' + sinAsig.length + '</span>' +
+        '</div>' +
+        '<div class="usuario-section__body pend-list">' +
+          sinAsig.map(function(p) { return renderItem(p, false); }).join('') +
+        '</div>' +
+      '</div>';
   }
 
   if (!html) { showEmpty(cont, 'Sin pendientes', '', 'task_alt'); return; }
   cont.innerHTML = html;
 }
 
-//    RENDER HISTORIAL                                                           
 function renderHistorial() {
-  var hist = cache.filter(function(p) { return p.realizado); };
-  if (filtroHist === 'mios') hist = hist.filter(function(p) { return p.realizadoUid === user.uid); };
+  var hist = cache.filter(function(p) { return p.realizado; });
+  if (filtroHist === 'mios') hist = hist.filter(function(p) { return p.realizadoUid === user.uid; });
   var cont = document.getElementById('listaHistorial');
   if (!hist.length) { showEmpty(cont, 'Sin realizados', '', 'history'); return; }
-  cont.innerHTML = hist.map(function(p) { return renderItem(p; }, true)).join('');
+  cont.innerHTML = hist.map(function(p) { return renderItem(p, true); }).join('');
 }
 
-//    RENDER ITEM                                                                
 function renderItem(p, esHistorial) {
   var sem    = p.semaforo || 'gris';
-  var emojis = { rojo:' ', amarillo:' ', verde:' ', gris:' ' };
+  var emojis = { rojo:'🔴', amarillo:'🟡', verde:'🟢', gris:'⚫' };
   var labels = { rojo:'Urgente', amarillo:'Atención', verde:'Normal', gris:'Sin prioridad' };
 
-  var badgeSem = "<span class="badge-sem " + (sem) + "">" + (emojis[sem]) + " " + (labels[sem]) + "</span>";
+  var badgeSem = '<span class="badge-sem ' + sem + '">' + emojis[sem] + ' ' + labels[sem] + '</span>';
 
   var badgeVis = '';
   if (esAdmin) {
-    var visLabel = { todos:'  Todos', admin:'  Admin', usuario:'  Usuario' };
+    var visLabel = { todos:'👥 Todos', admin:'🔒 Admin', usuario:'👤 Usuario' };
     var visClass = p.visibilidad === 'admin' ? 'admin' : p.visibilidad === 'usuario' ? 'usuario' : 'todos';
-    badgeVis = "<span class="badge-vis " + (visClass) + "">" + (visLabel[p.visibilidad] || '  Todos') + "</span>";
+    badgeVis = '<span class="badge-vis ' + visClass + '">' + (visLabel[p.visibilidad] || '👥 Todos') + '</span>';
   }
 
   var badgeAsig = p.asignadoNom
-    ? "<span class="badge-asig"><span class="material-icons" style="font-size:11px">person</span>" + (escapeHtml(p.asignadoNom)) + "</span>"
+    ? '<span class="badge-asig"><span class="material-icons" style="font-size:11px">person</span>' + escapeHtml(p.asignadoNom) + '</span>'
     : '';
 
-  var fechaCreado = p.(creadoEn && creadoEn.toDate) ? p.creadoEn.toDate().toLocaleDateString('es-AR') : ' ';
+  var fechaCreado = p.creadoEn && p.creadoEn.toDate ? p.creadoEn.toDate().toLocaleDateString('es-AR') : '—';
 
   var metaRealizado = '';
   if (esHistorial && p.realizadoPor) {
-    metaRealizado = "<span style="color:var(--color-success)">  " + (escapeHtml(p.realizadoPor)) + " · " + (p.(realizadoEn && realizadoEn.toDate) ? p.realizadoEn.toDate().toLocaleDateString('es-AR') : ' ') + "</span>";
+    metaRealizado = '<span style="color:var(--color-success)">✓ ' + escapeHtml(p.realizadoPor) + ' · ' + (p.realizadoEn && p.realizadoEn.toDate ? p.realizadoEn.toDate().toLocaleDateString('es-AR') : '—') + '</span>';
   }
 
   var puedeModificar = esAdmin || (!p.realizadoPor || p.realizadoUid === user.uid);
 
   var btnCheck = puedeModificar
-    ? "<div class="pend-check " + (p.realizado ? 'checked' : '') + "" onclick="toggleRealizado('" + (p.id) + "'," + (!p.realizado) + ")" title="" + (p.realizado ? 'Marcar pendiente' : 'Marcar realizado') + ""></div>"
-    : "<div class="pend-check " + (p.realizado ? 'checked' : '') + "" style="cursor:default"></div>";
+    ? '<div class="pend-check ' + (p.realizado ? 'checked' : '') + '" onclick="toggleRealizado(\'' + p.id + '\',' + (!p.realizado) + ')" title="' + (p.realizado ? 'Marcar pendiente' : 'Marcar realizado') + '"></div>'
+    : '<div class="pend-check ' + (p.realizado ? 'checked' : '') + '" style="cursor:default"></div>';
 
   var btnEditar = (esAdmin || p.autorId === user.uid) && !p.realizado
-    ? "<button class="btn btn-ghost btn-sm" onclick="abrirEditar('" + (p.id) + "')" title="Editar"><span class="material-icons">edit</span></button>"
+    ? '<button class="btn btn-ghost btn-sm" onclick="abrirEditar(\'' + p.id + '\')" title="Editar"><span class="material-icons">edit</span></button>'
     : '';
   var btnEliminar = esAdmin
-    ? "<button class="btn btn-danger btn-sm" onclick="eliminar('" + (p.id) + "')" title="Eliminar"><span class="material-icons">delete</span></button>"
+    ? '<button class="btn btn-danger btn-sm" onclick="eliminar(\'' + p.id + '\')" title="Eliminar"><span class="material-icons">delete</span></button>'
     : '';
 
-  // Botón "Trabajar en esto"   convierte el pendiente en tarea cronometrada
   var btnTrabajar = !p.realizado
-    ? "<button class="btn btn-ghost btn-sm" onclick="trabajarEnPendiente('" + (p.id) + "')"
-          title="Iniciar cronómetro   registra tiempo trabajado en este pendiente"
-          style="color:var(--color-primary);border-color:var(--color-primary-light);">
-          <span class="material-icons" style="font-size:15px;">play_circle</span>
-       </button>"
+    ? '<button class="btn btn-ghost btn-sm" onclick="trabajarEnPendiente(\'' + p.id + '\')" title="Iniciar cronómetro — registra tiempo trabajado en este pendiente" style="color:var(--color-primary);border-color:var(--color-primary-light);"><span class="material-icons" style="font-size:15px;">play_circle</span></button>'
     : '';
 
-  return "
-  <div class="pend-item " + (p.realizado ? 'realizado' : '') + " sem-" + (sem) + "" id="pi-" + (p.id) + "">
-    " + (btnCheck) + "
-    <div class="pend-body">
-      <div class="pend-texto">" + (escapeHtml(p.texto)) + "</div>
-      <div class="pend-meta">
-        " + (badgeSem) + "
-        " + (badgeVis) + "
-        " + (badgeAsig) + "
-        <span style="color:var(--color-text-muted)">  " + (fechaCreado) + "</span>
-        <span style="color:var(--color-text-muted)">  " + (escapeHtml(p.autorNombre || ' ')) + "</span>
-        " + (metaRealizado) + "
-      </div>
-    </div>
-    <div class="pend-acciones">
-      " + (btnTrabajar) + "
-      " + (btnEditar) + "
-      " + (btnEliminar) + "
-    </div>
-  </div>";
+  return '<div class="pend-item ' + (p.realizado ? 'realizado' : '') + ' sem-' + sem + '" id="pi-' + p.id + '">' +
+    btnCheck +
+    '<div class="pend-body">' +
+      '<div class="pend-texto">' + escapeHtml(p.texto) + '</div>' +
+      '<div class="pend-meta">' +
+        badgeSem + badgeVis + badgeAsig +
+        '<span style="color:var(--color-text-muted)">📅 ' + fechaCreado + '</span>' +
+        '<span style="color:var(--color-text-muted)">👤 ' + escapeHtml(p.autorNombre || '—') + '</span>' +
+        metaRealizado +
+      '</div>' +
+    '</div>' +
+    '<div class="pend-acciones">' + btnTrabajar + btnEditar + btnEliminar + '</div>' +
+  '</div>';
 }
 
-//    AGREGAR                                                                    
-//    TRABAJAR EN UN PENDIENTE (cronómetro)                                     
-//
-// Crea una tarea temporal en la colección 'tareas' con:
-//   tipo: 'pendiente'
-//   pendienteId: id del pendiente original (para vincularlo)
-//   nombre: texto del pendiente
-//   estado: 'en_curso' inmediatamente
-//
-// Al finalizar la tarea, el historial registra el tiempo junto con las tareas.
-// El pendiente sigue activo hasta que se marque como realizado.
-//
 window.trabajarEnPendiente = async function(pendienteId) {
-  var p = cache.find(function(x) { return x.id === pendienteId); };
+  var p = cache.find(function(x) { return x.id === pendienteId; });
   if (!p) return;
 
-  // Verificar si ya hay una tarea activa para este pendiente
   var yaExiste;
   try {
     var existSnap = await db.collection('tareas')
@@ -663,11 +620,9 @@ window.trabajarEnPendiente = async function(pendienteId) {
   var tareaId;
 
   if (yaExiste) {
-    // Ya existe tarea para este pendiente   usar la existente
     tareaId = yaExiste.id;
     showToast('Continuando tarea de este pendiente...', 'info');
   } else {
-    // Crear tarea nueva vinculada al pendiente
     var docRef = await db.collection('tareas').add({
       nombre:       p.texto,
       tipo:         'pendiente',
@@ -684,21 +639,9 @@ window.trabajarEnPendiente = async function(pendienteId) {
     tareaId = docRef.id;
   }
 
-  // Iniciar la tarea inmediatamente
   try {
     await CVC.iniciarTarea(tareaId, { uid: user.uid, nombre: yo.nombre });
-    showToast('  Cronómetro iniciado   aparece en Tareas', 'success');
-
-    // Mostrar botón para ir a Tareas
-    var toast = document.querySelector('.toast-container');
-    if (toast) {
-      var link = document.createElement('a');
-      link.href = 'tareas.html';
-      link.style.cssText = 'display:block;margin-top:6px;font-size:12px;color:var(--color-primary);text-decoration:underline;';
-      link.textContent = 'Ir a Tareas  ';
-      var lastToast = toast.lastElementChild;
-      if (lastToast) lastToast.appendChild(link);
-    }
+    showToast('▶ Cronómetro iniciado — aparece en Tareas', 'success');
   } catch(e) {
     showToast(e.message, 'error');
   }
@@ -711,7 +654,7 @@ window.agregarPendiente = async function() {
   var asigUid = document.getElementById('nuevoAsignar').value;
   var asigNom = '';
   if (asigUid) {
-    var u = usuarios.find(function(x) { return x.uid === asigUid); };
+    var u = usuarios.find(function(x) { return x.uid === asigUid; });
     asigNom = u ? u.nombre : '';
   }
 
@@ -740,7 +683,6 @@ window.agregarPendiente = async function() {
   } catch(e) { showToast('Error: ' + e.message, 'error'); }
 };
 
-//    TOGGLE REALIZADO                                                           
 window.toggleRealizado = async function(id, realizado) {
   try {
     await db.collection('pendientes').doc(id).update({
@@ -749,48 +691,43 @@ window.toggleRealizado = async function(id, realizado) {
       realizadoUid: realizado ? user.uid  : null,
       realizadoEn:  realizado ? firebase.firestore.FieldValue.serverTimestamp() : null
     });
-    showToast(realizado ? '  Realizado.' : '   Marcado pendiente.', 'success');
+    showToast(realizado ? '✓ Realizado.' : '🕒 Marcado pendiente.', 'success');
     await cargar();
   } catch(e) { showToast('Error: ' + e.message, 'error'); }
 };
 
-//    EDITAR                                                                     
 window.abrirEditar = function(id) {
-  var p = cache.find(function(x) { return x.id === id); };
+  var p = cache.find(function(x) { return x.id === id; });
   if (!p) return;
 
   document.getElementById('editId').value          = id;
   document.getElementById('editTexto').value        = p.texto || '';
   document.getElementById('editVisibilidad').value  = p.visibilidad || 'todos';
 
-  // Semáforo
   var semVal = p.semaforo || 'gris';
   document.getElementById('editSemaforo').value = semVal;
   document.querySelectorAll('.sem-opt').forEach(function(b) {
     b.classList.toggle('selected', b.dataset.val === semVal);
   });
 
-  // Asignado
   var selAsig = document.getElementById('editAsignar');
   selAsig.value = p.asignadoA || '';
 
-  // Ocultar campos de admin si no es admin
   document.getElementById('editFgVis').style.display    = esAdmin ? '' : 'none';
   document.getElementById('editFgAsignar').style.display = esAdmin ? '' : 'none';
 
-  // Detalle
   var det = document.getElementById('editDetalle');
   det.style.display = 'block';
   det.innerHTML =
-    "<strong>Creado por:</strong> " + (escapeHtml(p.autorNombre||' ')) + "<br>" +
-    "<strong>Fecha:</strong> " + (p.(creadoEn && creadoEn.toDate) ? p.creadoEn.toDate().toLocaleDateString('es-AR') : ' ') + "<br>" +
-    (p.asignadoNom ? "<strong>Asignado a:</strong> " + (escapeHtml(p.asignadoNom)) + "<br>" : '');
+    "<strong>Creado por:</strong> " + escapeHtml(p.autorNombre||'—') + "<br>" +
+    "<strong>Fecha:</strong> " + (p.creadoEn && p.creadoEn.toDate ? p.creadoEn.toDate().toLocaleDateString('es-AR') : '—') + "<br>" +
+    (p.asignadoNom ? "<strong>Asignado a:</strong> " + escapeHtml(p.asignadoNom) + "<br>" : '');
 
   document.getElementById('modalOverlay').style.display = 'flex';
 };
 
 window.selSem = function(btn) {
-  document.querySelectorAll('.sem-opt').forEach(function(b) { return b.classList.remove('selected')); };
+  document.querySelectorAll('.sem-opt').forEach(function(b) { b.classList.remove('selected'); });
   btn.classList.add('selected');
   document.getElementById('editSemaforo').value = btn.dataset.val;
 };
@@ -803,7 +740,7 @@ window.guardarEdicion = async function() {
   var asigUid = document.getElementById('editAsignar').value;
   var asigNom = '';
   if (asigUid) {
-    var u = usuarios.find(function(x) { return x.uid === asigUid); };
+    var u = usuarios.find(function(x) { return x.uid === asigUid; });
     asigNom = u ? u.nombre : '';
   }
 
@@ -827,9 +764,8 @@ window.guardarEdicion = async function() {
   } catch(e) { showToast('Error: ' + e.message, 'error'); }
 };
 
-//    ELIMINAR                                                                   
 window.eliminar = async function(id) {
-  var p = cache.find(function(x) { return x.id === id); };
+  var p = cache.find(function(x) { return x.id === id; });
   if (!confirm('¿Eliminar "' + ((p && p.texto) || 'este pendiente') + '"?')) return;
   try {
     await db.collection('pendientes').doc(id).delete();
@@ -838,13 +774,11 @@ window.eliminar = async function(id) {
   } catch(e) { showToast('Error: ' + e.message, 'error'); }
 };
 
-//    MODAL                                                                      
 window.cerrarModal = function(e) {
   if (e && e.target !== document.getElementById('modalOverlay')) return;
   document.getElementById('modalOverlay').style.display = 'none';
 };
 
-//    INIT                                                                       
 await cargarUsuarios();
 await cargar();
 
