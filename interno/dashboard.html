@@ -441,8 +441,14 @@ function(async () {
     CVC.initAyuda('dashboard.html');
 
     var db = CVC.db;
-    var { escapeHtml, formatFecha, badgeEstado, badgePrioridad,
-            urgenciaTarea, showEmpty, showError, showToast } = CVC;
+    var escapeHtml    = CVC.escapeHtml;
+    var formatFecha   = CVC.formatFecha;
+    var badgeEstado   = CVC.badgeEstado;
+    var badgePrioridad = CVC.badgePrioridad;
+    var urgenciaTarea = CVC.urgenciaTarea;
+    var showEmpty     = CVC.showEmpty;
+    var showError     = CVC.showError;
+    var showToast     = CVC.showToast;
 
     var hoy = new Date(); hoy.setHours(0,0,0,0);
 
@@ -524,7 +530,7 @@ function(async () {
         }).join('');
         document.addEventListener('click', function() {
             document.querySelectorAll('.acceso-dropdown.open')
-                .forEach(function(d) { return d.classList.remove('open')); }
+                .forEach(function(d) { d.classList.remove('open'); })
         });
     }
 
@@ -534,7 +540,7 @@ function(async () {
         var btn  = document.getElementById('accGrupo' + gi).querySelector('.acceso-btn');
         var rect = btn.getBoundingClientRect();
         var estaAbierto = drop.classList.contains('open');
-        document.querySelectorAll('.acceso-dropdown.open').forEach(function(d) { return d.classList.remove('open')); }
+        document.querySelectorAll('.acceso-dropdown.open').forEach(function(d) { d.classList.remove('open'); })
         if (!estaAbierto) {
             drop.style.top  = (rect.bottom + 4) + 'px';
             drop.style.left = rect.left + 'px';
@@ -553,17 +559,17 @@ function(async () {
 
     try {
         var [resSnap, tarSnap, presSnap, pendSnap] = await Promise.all([
-            db.collection('reservas').get().catch(function() { return ({ docs:[] })),; }
-            db.collection('tareas').get().catch(function() { return ({ docs:[] })),; }
-            db.collection('presupuestos').get().catch(function() { return ({ docs:[] })),; }
-            esAdmin ? db.collection('pendientes').get().catch(function() { return ({ docs:[] })) : Promise.resolve({ docs:[] }),; }
+            db.collection('reservas').get().catch(function() { return { docs:[] }; }),
+            db.collection('tareas').get().catch(function() { return { docs:[] }; }),
+            db.collection('presupuestos').get().catch(function() { return { docs:[] }; }),
+            esAdmin ? db.collection('pendientes').get().catch(function() { return { docs:[] }; }) : Promise.resolve({ docs:[] }),
         ]);
 
-        reservas   = resSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data())); }
-        tareas     = tarSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data())); }
-        pendientes = pendSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data())); }
+        reservas   = resSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+        tareas     = tarSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+        pendientes = pendSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
 
-        var presupuestos = presSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data())); }
+        var presupuestos = presSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
 
         renderKPIs(reservas, tareas, pendientes);
         renderCheckins(reservas);
@@ -575,16 +581,16 @@ function(async () {
         if (esAdmin) cargarWidgetCuentas();
 
     } catch(e) {
-        showError('#kpiGrid', 'Error al cargar', e.message, function() { return location.reload()); }
+        showError('#kpiGrid', 'Error al cargar', e.message, function() { location.reload(); })
     }
 
     // -- KPIs --------------------------------------------------
     function renderKPIs(reservas, tareas, pendientes) {
-        var resActivas  = reservas.filter(function(r) { return ['confirmada','airbnb_activa','pendiente'].includes(r.estado)); }
-        var resPend     = reservas.filter(function(r) { return r.estado === 'pendiente'); }
-        var tarPend     = tareas.filter(function(t) { return t.estado !== 'finalizada' && t.activa !== false); }
-        var tarUrg      = tarPend.filter(function(t) { return urgenciaTarea(t).color === 'rojo'); }
-        var pendPend    = pendientes.filter(function(p) { return !p.completado); }
+        var resActivas  = reservas.filter(function(r) { return ['confirmada','airbnb_activa','pendiente'].includes(r.estado))
+        var resPend     = reservas.filter(function(r) { return r.estado === 'pendiente'; })
+        var tarPend     = tareas.filter(function(t) { return t.estado !== 'finalizada' && t.activa !== false; })
+        var tarUrg      = tarPend.filter(function(t) { return urgenciaTarea(t).color === 'rojo'; })
+        var pendPend    = pendientes.filter(function(p) { return !p.completado; })
 
         var mesActual   = new Date().toISOString().slice(0,7);
         // Ingresos del mes desde reservas confirmadas (estimado por totalBRL)
@@ -664,7 +670,7 @@ function(async () {
         var el = document.getElementById('pendientesContainer');
         // Campo: 'texto', semáforo: 'semaforo' (rojo/amarillo/verde/gris), asignado: 'asignadoNom'
         var activos = pendientes
-            .filter(function(p) { return !p.realizado); }
+            .filter(function(p) { return !p.realizado; })
             .sortfunction((a,b) {
                 var ord = { rojo:0, amarillo:1, verde:2, gris:3 };
                 return (ord[a.semaforo]||3) - (ord[b.semaforo]||3);
@@ -705,10 +711,10 @@ function(async () {
     // -- TAREAS URGENTES ---------------------------------------
     function renderTareasUrgentes(tareas) {
         var el = document.getElementById('tareasUrgentesContainer');
-        var activas = tareas.filter(function(t) { return t.estado !== 'finalizada' && t.activa !== false); }
+        var activas = tareas.filter(function(t) { return t.estado !== 'finalizada' && t.activa !== false; })
         var urgentes = activas
             .map(function(t) { return Object.assign({}, t, { urg: urgenciaTarea(t) })); }
-            .filter(function(t) { return t.urg.color === 'rojo' || t.urg.color === 'amarillo'); }
+            .filter(function(t) { return t.urg.color === 'rojo' || t.urg.color === 'amarillo'; })
             .sortfunction((a,b) {
                 var ord = { rojo:0, amarillo:1 };
                 return (ord[a.urg.color]||2) - (ord[b.urg.color]||2);
@@ -742,7 +748,7 @@ function(async () {
     function renderReservasPendientes(reservas) {
         var el = document.getElementById('reservasPendientesContainer');
         var pendConf = reservas
-            .filter(function(r) { return r.estado === 'pendiente'); }
+            .filter(function(r) { return r.estado === 'pendiente'; })
             .sortfunction((a,b) {
                 var da = a.checkIn?.toDate ? a.checkIn.toDate() : new Date(a.checkIn||0);
                 var db_ = b.checkIn?.toDate ? b.checkIn.toDate() : new Date(b.checkIn||0);
@@ -817,8 +823,8 @@ function(async () {
     async function cargarWidgetCuentas() {
         try {
             var snap    = await db.collection('cuentas').get();
-            var cuentas = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data())); }
-                .filter(function(c) { return c.activa !== false); }
+            var cuentas = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+                .filter(function(c) { return c.activa !== false; })
                 .sort((a,b) => (a.orden||99) - (b.orden||99));
             if (!cuentas.length) return;
 
@@ -858,7 +864,7 @@ function(async () {
             return ci >= hoy && ci <= hoy48;
         });
         for (var r of prox48) {
-            var tieneTask = tareas.some(function(t) { return t.reservaId === r.id && t.tipo === 'limpieza' && t.estado !== 'finalizada'); }
+            var tieneTask = tareas.some(function(t) { return t.reservaId === r.id && t.tipo === 'limpieza' && t.estado !== 'finalizada'; })
             if (!tieneTask) {
                 var ci   = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
                 var difH = Math.round((ci - hoy) / 3600000);
@@ -870,20 +876,20 @@ function(async () {
         }
 
         // Tareas rojas
-        var tarRojas = tareas.filter(function(t) { return t.estado !== 'finalizada' && t.activa !== false && urgenciaTarea(t).color === 'rojo'); }
+        var tarRojas = tareas.filter(function(t) { return t.estado !== 'finalizada' && t.activa !== false && urgenciaTarea(t).color === 'rojo'; });
         if (tarRojas.length) {
             alertas.push({ nivel:'critico', icon:'warning',
                 title: tarRojas.length + ' tarea' + (tarRojas.length > 1 ? 's' : '') + ' con atraso crítico',
-                desc: tarRojas.slice(0,3).map(function(t) { return t.nombre).join(' . ') + (tarRojas.length > 3 ? ' y más...' : ''),; }
+                desc: tarRojas.slice(0,3).map(function(t) { return t.nombre; }).join(' . ') + (tarRojas.length > 3 ? ' y mas...' : ''),
                 href:'tareas.html' });
         }
 
         // Honorarios viejos
         try {
             var honSnap = await db.collection('honorarios').where('estado','==','pendiente').get();
-            var viejos  = honSnap.docs.filter(function(d) { var f = d.data().creadoEn?.toDate?.(); return f && f < hace14; });
+            var viejos  = honSnap.docs.filter(function(d) { var cen = d.data().creadoEn; var f = cen && cen.toDate ? cen.toDate() : null; return f && f < hace14; });
             if (viejos.length) {
-                var total = viejos.reduce((s,d) => s + (d.data().monto||0), 0);
+                var total = viejos.reduce(function(s,d) { return s + (d.data().monto||0); }, 0);
                 alertas.push({ nivel:'atencion', icon:'payments',
                     title: viejos.length + ' honorario' + (viejos.length > 1 ? 's' : '') + ' pendiente' + (viejos.length > 1 ? 's' : '') + ' (+14 días)',
                     desc: 'Total: R$ ' + total.toLocaleString('pt-BR',{minimumFractionDigits:2}),
@@ -903,15 +909,16 @@ function(async () {
         } catch(e) {}
 
         if (!alertas.length) return;
-        document.getElementById('alertasList').innerHTML = alertas.map(function(a) { return '<a href="' + a.href + '" class="alerta-item ' + a.nivel + '">' +; }
+        document.getElementById('alertasList').innerHTML = alertas.map(function(a) {
+                return '<a href="' + a.href + '" class="alerta-item ' + a.nivel + '">' +
                 '<span class="material-icons alerta-item__icon">' + a.icon + '</span>' +
                 '<div>' +
                     '<div class="alerta-item__title">' + a.title + '</div>' +
                     (a.desc ? '<div class="alerta-item__desc">' + escapeHtml(a.desc) + '</div>' : '') +
                 '</div>' +
                 '<span class="material-icons" style="font-size:16px;opacity:.5;margin-left:auto;flex-shrink:0;">arrow_forward</span>' +
-            '</a>'
-        ).join('');
+                '</a>';
+            }).join('');
         document.getElementById('alertasPanel').classList.add('visible');
     }
 
@@ -930,9 +937,9 @@ function(async () {
         res.style.display = 'none';
         try {
             var snap    = await db.collection('cabanas').get();
-            var cabanas = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data())); }
-                .filter(function(c) { return c.google_calendar_id && c.google_calendar_id.includes('@')); }
-            var { creadas, canceladas, error } = await CVC.sincronizarDesdeGCal(GOOGLE_API_KEY, cabanas);
+            var cabanas = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); }).filter(function(c) { return c.google_calendar_id && c.google_calendar_id.includes('@'); });
+            var _sync = await CVC.sincronizarDesdeGCal(GOOGLE_API_KEY, cabanas);
+            var creadas = _sync.creadas || 0; var canceladas = _sync.canceladas || 0; var error = _sync.error || null;
             if (error) { mostrarSyncResult('warning','! ' + error); return; }
             var partes = [];
             if (creadas > 0)    partes.push(creadas + ' nueva' + (creadas !== 1 ? 's' : ''));
@@ -957,6 +964,8 @@ function(async () {
         el.innerHTML = '<span class="material-icons" style="font-size:15px;vertical-align:middle;margin-right:5px;">' + m[2] + '</span>' + msg;
         el.style.display = 'block';
     }
+
+}  // cierre sincronizarAirbnb scope
 
 })();
 </script>
