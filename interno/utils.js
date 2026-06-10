@@ -72,12 +72,12 @@ function badgePrioridad(prioridad) {
 // -- AUTENTICACION -------------------------------------------------------------
 function verificarAuth(rolesPermitidos) {
     var roles = Array.isArray(rolesPermitidos) ? rolesPermitidos : [rolesPermitidos];
-    return new Promisefunction((resolve, reject) {
-        var timer = setTimeoutfunction(() {
+    return new Promise(function(resolve, reject) {
+        var timer = setTimeout(function() {
             reject(new Error('Firebase no responde (timeout). Verifica tu conexion.'));
         }, 15000);
 
-        auth.onAuthStateChangedfunction(async (user) {
+        auth.onAuthStateChanged(async function(user) {
             clearTimeout(timer);
             if (!user) { window.location.href = 'index.html'; return; }
             try {
@@ -330,7 +330,7 @@ async function crearTareaLimpieza(reservaId, reservaData, creadoPor) {
                 var ci = r.(checkIn && checkIn.toDate) ? r.checkIn.toDate() : new Date(r.checkIn);
                 return ci >= checkOut;
             })
-            .sortfunction((a, b) {
+            .sort(function(a, b) {
                 var ca = a.(checkIn && checkIn.toDate) ? a.checkIn.toDate() : new Date(a.checkIn);
                 var cb = b.(checkIn && checkIn.toDate) ? b.checkIn.toDate() : new Date(b.checkIn);
                 return ca - cb;
