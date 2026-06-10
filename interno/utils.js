@@ -853,7 +853,7 @@ async function conciliarMovimientos(movimientos, cuentaId) {
 }
 
 async function importarMovimientosConfirmados(movimientos, opciones) {
-    var { cuentaId, moneda, importadoPor } = opciones;
+    var cuentaId = opciones.cuentaId; var moneda = opciones.moneda; var importadoPor = opciones.importadoPor;
     var CHUNK = 400;
     var importados = 0, saltados = 0;
     for (var i = 0; i < movimientos.length; i += CHUNK) {
@@ -982,8 +982,7 @@ function _descripcionContiene(descripcion, texto) {
 
 function matchMovimientoBancario(movBanco, registros, config) {
     var cfg = config || _CONCIL_DEFAULTS;
-    var { palabrasClaveAirbnb, toleranciaMontoPctA, toleranciaMontoPctB,
-            toleranciaFechaDiasA, toleranciaFechaDiasB } = cfg;
+    var palabrasClaveAirbnb = cfg.palabrasClaveAirbnb; var toleranciaMontoPctA = cfg.toleranciaMontoPctA; var toleranciaMontoPctB = cfg.toleranciaMontoPctB; var toleranciaFechaDiasA = cfg.toleranciaFechaDiasA; var toleranciaFechaDiasB = cfg.toleranciaFechaDiasB;
     var montoBanco = Math.abs(movBanco.monto);
     var esCreditoBanco = movBanco.monto >= 0;
     var mejorMatch = null, mejorNivel = 'C', mejorConfianza = 0;
