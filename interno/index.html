@@ -20,7 +20,6 @@ p{color:rgba(255,255,255,.6);font-family:Arial,sans-serif;font-size:.85rem;margi
 <div><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
 <p id="msg">Verificando sesión...</p>
 <script>
-// Init Firebase directamente — sin utils.js para evitar conflictos
 firebase.initializeApp({
   apiKey:    'AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4',
   authDomain:'casaverdecanas-199.firebaseapp.com',
@@ -31,31 +30,26 @@ var db   = firebase.firestore();
 db.settings({ experimentalForceLongPolling: true, merge: true });
 var msg  = document.getElementById('msg');
 
-// Timeout de seguridad: si Firebase no responde en 8s → login
 var timer = setTimeout(function() {
-  window.location.replace('index.html');
+  window.location.replace('login.html');
 }, 8000);
 
 firebase.auth().onAuthStateChanged(function(user) {
   if (!user) {
-    // Sin sesión → login
     clearTimeout(timer);
-    window.location.replace('index.html');
+    window.location.replace('login.html');
     return;
   }
-
-  // Hay sesión — verificar en Firestore
   msg.textContent = 'Cargando...';
   db.collection('usuarios').doc(user.uid).get()
     .then(function(doc) {
       clearTimeout(timer);
       if (!doc.exists || doc.data().activo === false) {
         firebase.auth().signOut().then(function() {
-          window.location.replace('index.html');
+          window.location.replace('login.html');
         });
         return;
       }
-      // Redirigir según rol
       if (doc.data().rol === 'admin') {
         window.location.replace('dashboard.html');
       } else {
@@ -64,7 +58,6 @@ firebase.auth().onAuthStateChanged(function(user) {
     })
     .catch(function(e) {
       clearTimeout(timer);
-      // Si Firestore falla pero hay sesión, ir al dashboard igual
       window.location.replace('dashboard.html');
     });
 });
