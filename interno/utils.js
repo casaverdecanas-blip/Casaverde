@@ -170,7 +170,7 @@ async function verificarDisponibilidadCabana(cabaId, checkIn, checkOut, editando
 }
 
 function mensajeConflicto(conflicto) {
-    var etiqueta = ESTADOS_RESERVA[conflicto.estado]?.label || conflicto.estado;
+    var etiqueta = (ESTADOS_RESERVA[conflicto.estado] && ESTADOS_RESERVA[conflicto.estado].label) || conflicto.estado;
     var ci  = conflicto.checkIn.split('-').reverse().join('/');
     var co  = conflicto.checkOut.split('-').reverse().join('/');
     return 'Fechas no disponibles -- ya existe una reserva ('
@@ -226,13 +226,11 @@ async function sincronizarDesdeGCal(googleApiKey, cabanasCache) {
                     return !t.includes('not available') && !t.includes('no disponible')
                         && !t.includes('indisponivel')  && !t.includes('unavailable');
                 })
-                .map(function(ev) { return (; }{
-                    googleId: ev.id,
-                    titulo:   ev.summary || 'Airbnb',
-                    inicio:   ev.start.date || ev.start.dateTime?.split('T')[0],
-                    fin:      ev.end.date   || ev.end.dateTime?.split('T')[0],
-                    cabaId
-                }));
+                .map(function(ev) {
+                    var ini = ev.start.date || (ev.start.dateTime && ev.start.dateTime.split('T')[0]);
+                    var fn  = ev.end.date   || (ev.end.dateTime   && ev.end.dateTime.split('T')[0]);
+                    return { googleId: ev.id, titulo: ev.summary || 'Airbnb', inicio: ini, fin: fn, cabaId: cabaId };
+                });
         } catch(e) { console.warn('GCal cabana ' + cabaId + ':', e.message); return []; }
     }
 
@@ -546,7 +544,7 @@ async function getHistorialTareas(tareaId) {
         }
         return {
             totalVeces: registros.length,
-            ultimaVez: registros[0]?.(finalizadoEn && finalizadoEn.toDate) ? registros[0].finalizadoEn.toDate() : null,
+            ultimaVez: (registros[0] && registros[0].finalizadoEn && registros[0].finalizadoEn.toDate) ? registros[0].finalizadoEn.toDate() : null,
             porUsuario: Object.values(porUid).sort(function(a, b) { return b.veces - a.veces; }),
             resumen: { totalHoras: parseFloat(totalHoras.toFixed(2)), totalMonto: parseFloat(totalMonto.toFixed(2)), colaboradoresUnicos: colaboradoresUnicos.size }
         };
