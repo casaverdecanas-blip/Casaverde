@@ -502,11 +502,11 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="utils.js"></script>
 <script>
-function(async () {
+(async () => {
     var { user, userData } = await CVC.verificarAuth(['admin', 'user']);
     document.getElementById('userName').textContent = userData.nombre || user.email;
     CVC.renderNav('tareas.html', userData.rol);
-    CVC.initAyuda('tareas.html');
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('tareas.html');
 
     var db = CVC.db;
     var {
@@ -524,8 +524,8 @@ function(async () {
     var filtroActual   = 'pendiente';
     var tareaModal     = null;
     var cronometros    = {};
-    var tareaActivaId  = null;   // ID de la card expandida inline
-    var verificarId    = null;   // tarea pendiente de confirmar "no necesaria"
+    var tareaActivaId  = null;
+    var verificarId    = null;
 
     var ORDEN_URGENCIA = { rojo: 1, amarillo: 2, verde: 3, gris: 4 };
 
@@ -701,7 +701,6 @@ function(async () {
         html += '</div>';
         container.innerHTML = html;
 
-        // Iniciar cronómetros para tareas en curso donde yo participo
         for (var j = 0; j < ordenadas.length; j++) {
             var t = ordenadas[j];
             if (t.estado === 'en_curso') {
@@ -727,7 +726,6 @@ function(async () {
             : urgencia === 'verde' ? 'Hoy'
             : calcDiasAtraso(t) + 'd de atraso';
 
-        // Chips de quién trabaja
         var workingChips = '';
         if (activos.length > 0) {
             workingChips = '<div class="task-card__working">';
@@ -741,7 +739,6 @@ function(async () {
             workingChips += '</div>';
         }
 
-        // Cronómetro
         var cronHtml = yoActivo
             ? '<div class="cronometro" id="crono-' + t.id + '">'
             + '<span class="material-icons">timer</span>'
@@ -749,7 +746,6 @@ function(async () {
             + '</div>'
             : '';
 
-        // Monto estimado
         var montoHtml = t.monto > 0
             ? '<div class="monto-chip">'
             + '<span class="material-icons" style="font-size:14px;">payments</span>'
@@ -757,7 +753,6 @@ function(async () {
             + '</div>'
             : '';
 
-        // Botones según estado   en cards no activas
         var accionesHtml = '';
         if (!esActiva) {
             if (estado === 'pendiente') {
@@ -796,7 +791,6 @@ function(async () {
                 + '</button>';
         }
 
-        // Panel de contexto inline (solo cuando está activa)
         var contextHtml = '';
         if (esActiva) {
             contextHtml = '<div class="task-context">'
@@ -865,14 +859,12 @@ function(async () {
 
         var html = '';
 
-        //    Limpieza: mostrar info completa de la reserva      
         if (t.tipo === 'limpieza' && t.reservaId) {
             try {
                 var rdoc = await db.collection('reservas').doc(t.reservaId).get();
                 if (rdoc.exists) {
                     var r = rdoc.data();
 
-                    // Construir nombre de cabaña
                     var cabNombre = 'Cabaña ' + r.caba;
                     try {
                         var cabDoc = await db.collection('cabanas').doc(String(r.caba)).get();
@@ -882,7 +874,6 @@ function(async () {
                         }
                     } catch(e) {}
 
-                    // Alertas especiales
                     var alertas = '';
                     if (r.mascotas === 'si') {
                         alertas += '<span class="alerta-chip"><span class="material-icons">pets</span>Mascota</span>';
@@ -891,7 +882,6 @@ function(async () {
                         alertas += '<span class="alerta-chip"><span class="material-icons">child_care</span>Niño pequeño</span>';
                     }
 
-                    // Check-in del próximo huésped (huésped que viene)
                     var proximoHtml = '';
                     if (r.proximoHuesped) {
                         var ph = r.proximoHuesped;
@@ -955,17 +945,15 @@ function(async () {
                     }
 
                 } else {
-                    html += renderContextoGeneral(t);
+                    html += await renderContextoGeneral(t);
                 }
             } catch(e) {
-                html += renderContextoGeneral(t);
+                html += await renderContextoGeneral(t);
             }
         } else {
-            //    Tareas no-limpieza: historial                  
             html += await renderContextoGeneral(t);
         }
 
-        // Botones de acción dentro del panel
         var estado   = t.estado || 'pendiente';
         var activos  = t.sesionesActivas || [];
         var yoActivo = activos.find(function(s) { return s.uid === currentUser.uid; });
@@ -1010,7 +998,6 @@ function(async () {
 
         ctxEl.innerHTML = html + botonesHtml;
 
-        // Iniciar cronómetro si corresponde
         if (yoActivo) {
             var sesActiva = activos.find(function(s) { return s.uid === currentUser.uid; });
             if (sesActiva) iniciarCronometro(t.id, sesActiva.inicio);
@@ -1021,7 +1008,6 @@ function(async () {
     async function renderContextoGeneral(t) {
         var html = '';
 
-        // Descripción si tiene
         if (t.descripcion) {
             html += '<div class="context-section">'
                 + '<div class="context-label"><span class="material-icons">description</span>Descripción</div>'
@@ -1029,7 +1015,6 @@ function(async () {
                 + '</div>';
         }
 
-        // Historial de últimas ejecuciones
         try {
             var histSnap = await db.collection('historial_tareas')
                 .where('tareaId', '==', t.id)
@@ -1053,7 +1038,6 @@ function(async () {
                 return html;
             }
 
-            // Calcular promedio de horas
             var totalHoras = 0, totalReg = 0;
             registros.forEach(function(r) {
                 if (r.totalHoras > 0) { totalHoras += r.totalHoras; totalReg++; }
@@ -1106,13 +1090,10 @@ function(async () {
     }
 
     //    ACCIONES                                              
-
-    // Iniciar tarea   expande la card en su lugar
     window.accionIniciar = async function(tareaId) {
         try {
             await iniciarTarea(tareaId, currentUser);
 
-            // Actualizar cache solo de esta tarea
             var snap = await db.collection('tareas').doc(tareaId).get();
             if (snap.exists) {
                 var idx = tareasCache.findIndex(function(x) { return x.id === tareaId; });
@@ -1121,7 +1102,6 @@ function(async () {
                 else tareasCache.push(updated);
             }
 
-            // Expandir la card en su lugar
             tareaActivaId = tareaId;
             actualizarCardSola(tareaId);
             await cargarContexto(tareaId);
@@ -1144,7 +1124,6 @@ function(async () {
                 if (idx >= 0) tareasCache[idx] = updated;
             }
 
-            // Colapsar panel y actualizar card
             if (tareaActivaId === tareaId) tareaActivaId = null;
             actualizarCardSola(tareaId);
             actualizarKPIs();
@@ -1171,7 +1150,6 @@ function(async () {
             }
             showToast(msg, 'success');
 
-            // Remover de cache y animar desaparición
             tareasCache = tareasCache.filter(function(x) { return x.id !== tareaId; });
             if (tareaActivaId === tareaId) tareaActivaId = null;
 
@@ -1209,7 +1187,7 @@ function(async () {
 
     window.confirmarVerificar = async function() {
         if (!verificarId) return;
-        var nota = document.getElementById('verificarNota').value.trim() || 'Revise   no era necesaria';
+        var nota = document.getElementById('verificarNota').value.trim() || 'Revise — no era necesaria';
         try {
             await verificarTarea(verificarId, currentUser, nota);
             showToast('Verificada y registrada', 'success');
@@ -1240,19 +1218,16 @@ function(async () {
         var card = document.getElementById('card-' + tareaId);
         if (!t || !card) return;
 
-        // Detener cronómetro si existía
         if (cronometros[tareaId]) {
             clearInterval(cronometros[tareaId]);
             delete cronometros[tareaId];
         }
 
-        // Reemplazar solo esta card
         var div = document.createElement('div');
         div.innerHTML = renderCard(t);
         var nuevoCard = div.firstElementChild;
         card.parentNode.replaceChild(nuevoCard, card);
 
-        // Re-iniciar cronómetro si en curso
         var activos = t.sesionesActivas || [];
         var sesActiva = activos.find(function(s) { return s.uid === currentUser.uid; });
         if (sesActiva) iniciarCronometro(tareaId, sesActiva.inicio);
@@ -1280,7 +1255,6 @@ function(async () {
             '<span class="material-icons">' + (tarea.tipo === 'limpieza' ? 'cleaning_services' : 'checklist') + '</span> '
             + escapeHtml(tarea.nombre);
 
-        // Info reserva (limpieza)
         var infoBox = document.getElementById('reservaInfoBox');
         if (tarea.tipo === 'limpieza' && tarea.reservaId) {
             try {
@@ -1299,14 +1273,12 @@ function(async () {
             } catch(e) { infoBox.style.display = 'none'; }
         } else { infoBox.style.display = 'none'; }
 
-        // Descripción
         var descBox = document.getElementById('modalDescBox');
         if (tarea.descripcion) {
             descBox.innerHTML = '<div class="task-card__desc">' + escapeHtml(tarea.descripcion) + '</div>';
             descBox.style.display = 'block';
         } else { descBox.style.display = 'none'; }
 
-        // Activos ahora
         var activosBox = document.getElementById('colabsActivosBox');
         if (activos.length) {
             document.getElementById('colabsActivosList').innerHTML = activos.map(function(s) {
@@ -1321,7 +1293,6 @@ function(async () {
             activosBox.style.display = 'block';
         } else { activosBox.style.display = 'none'; }
 
-        // Sesiones cerradas
         var histBox = document.getElementById('colabsHistBox');
         if (cerradas.length) {
             var porUid = {};
@@ -1341,7 +1312,6 @@ function(async () {
             histBox.style.display = 'block';
         } else { histBox.style.display = 'none'; }
 
-        // Acciones
         var accionesEl = document.getElementById('accionesModal');
         if (estado === 'pendiente') {
             accionesEl.innerHTML =
@@ -1378,7 +1348,6 @@ function(async () {
             }
         } else { accionesEl.innerHTML = ''; }
 
-        // Link admin
         var linkAdmin = document.getElementById('linkAdminDetalle');
         if (esAdmin) {
             linkAdmin.href = 'tareas-admin.html?tarea=' + tarea.id;
