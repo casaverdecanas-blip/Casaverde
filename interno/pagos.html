@@ -1104,6 +1104,9 @@
 <script src="utils.js"></script>
 <script>
 (async () => {
+    window.onerror = function(msg, src, line, col, err) {
+        console.error('PAGOS ERROR:', msg, 'linea:'+line, err ? err.message : '');
+    };
     const { user, userData } = await CVC.verificarAuth(['admin', 'user']);
     document.getElementById('userName').textContent = userData.nombre || user.email;
 
@@ -1257,7 +1260,18 @@
                 renderMiBalance(); renderHonorarios();
             }
         } catch(e) {
-            showError('#ingresosContainer', 'Error al cargar', e.message, cargarTodo);
+            console.error('cargarTodo error:', e);
+            // Mostrar error en el contenedor activo
+            var msg = 'Error: ' + (e.message || e.code || String(e));
+            var contenedores = ['#egresosContainer','#ingresosContainer','#honorariosContainer'];
+            contenedores.forEach(function(sel) {
+                var el = document.querySelector(sel);
+                if (el) el.innerHTML = '<div style="color:#A32D2D;padding:16px;font-size:13px;">'
+                    + '<strong>Error al cargar datos</strong><br>' + msg
+                    + '<br><br><button onclick="cargarTodo()" style="background:#2d6a2d;color:white;'
+                    + 'border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">Reintentar</button>'
+                    + '</div>';
+            });
         }
     }
 
