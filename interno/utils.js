@@ -1,6 +1,17 @@
 // ============================================================
-//  utils.js — Casa Verde Canas  v4.3 (puente de compatibilidad)
+//  utils.js — Casa Verde Canas  v4.4 (puente de compatibilidad)
 //  Funciones compartidas · /interno/
+//
+//  CAMBIOS v4.4:
+//  - [CRÍTICO] Restaurado el sistema completo de cronómetros de tareas:
+//              iniciarTarea/pausarTarea/finalizarTarea/verificarTarea ahora
+//              manejan sesiones (subcolección), sesionesActivas (array),
+//              reparto proporcional de honorarios y registro en
+//              historial_tareas + honorarios. finalizarTarea retorna el
+//              array de colaboradores que espera tareas.html.
+//              Las tareas "huérfanas" (iniciadas con la versión anterior,
+//              sin sesiones) se pueden finalizar igual — autosanado.
+//              Las tareas recurrentes se reprograman automáticamente.
 //
 //  CAMBIOS v4.3 (sobre la base estable v4.2):
 //  - [CRÍTICO] verificarAuth() ahora retorna Promise<{user, userData}>
@@ -372,30 +383,275 @@ function sincronizarDesdeGCal(apiKey, cabanas) {
 }
 
 
-// ── FLUJO OPERATIVO DE TAREAS ────────────────────────────────────────────────
-function iniciarTarea(id) {
-    return db.collection('tareas').doc(id).update({
+// ── FLUJO OPERATIVO DE TAREAS — Cronómetros y sesiones (v4.4) ───────────────
+//
+//  Modelo de datos:
+//  tareas/{id}                → estado, monto, recurrencia, fechaInicio,
+//                               sesionesActivas: [{ uid, nombre, inicio }]
+//  tareas/{id}/sesiones/{sid} → { uid, nombre, inicio, fin, invalidada? }
+//  historial_tareas           → un registro por cada finalización/verificación
+//  honorarios                 → un doc 'pendiente' por colaborador con monto
+//
+//  NOTA Firestore: serverTimestamp() NO está permitido dentro de arrays,
+//  por eso sesionesActivas usa Timestamp.now() (hora del dispositivo).
+
+function _tsAhora() {
+    return firebase.firestore.Timestamp.now();
+}
+
+function _aDateSeguro(v) {
+    if (!v) return null;
+    const d = v.toDate ? v.toDate() : new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+}
+
+function _sumarDiasISO(dias) {
+    const f = new Date();
+    f.setDate(f.getDate() + dias);
+    return f.toISOString().split('T')[0];
+}
+
+// Iniciar / Unirme a una tarea.
+//   iniciarTarea(id, {uid, nombre})  ← moderno: abre sesión con cronómetro
+//   iniciarTarea(id)                 ← legacy: solo cambia estado
+async function iniciarTarea(tareaId, user) {
+    if (!user || !user.uid) {
+        return db.collection('tareas').doc(tareaId).update({ estado: 'en_curso' });
+    }
+
+    const ref  = db.collection('tareas').doc(tareaId);
+    const snap = await ref.get();
+    if (!snap.exists) throw new Error('La tarea no existe.');
+    const t = snap.data();
+
+    const activas = (t.sesionesActivas || []).slice();
+    if (activas.some(function(s) { return s.uid === user.uid; })) {
+        return; // ya tiene una sesión abierta — no duplicar
+    }
+
+    const ahora = _tsAhora();
+
+    await ref.collection('sesiones').add({
+        uid:    user.uid,
+        nombre: user.nombre || '',
+        inicio: ahora,
+        fin:    null
+    });
+
+    activas.push({ uid: user.uid, nombre: user.nombre || '', inicio: ahora });
+
+    await ref.update({
         estado: 'en_curso',
-        timestampInicio: firebase.firestore.FieldValue.serverTimestamp()
+        sesionesActivas: activas
     });
 }
 
-function pausarTarea(id) {
-    return db.collection('tareas').doc(id).update({ estado: 'pausada' });
-}
+// Pausar mi participación en una tarea.
+//   pausarTarea(id, {uid, nombre})  ← moderno: cierra MI sesión
+//   pausarTarea(id)                 ← legacy: pausa total
+async function pausarTarea(tareaId, user) {
+    const ref = db.collection('tareas').doc(tareaId);
 
-function finalizarTarea(id) {
-    return db.collection('tareas').doc(id).update({
-        estado: 'finalizada',
-        timestampFin: firebase.firestore.FieldValue.serverTimestamp()
+    if (!user || !user.uid) {
+        return ref.update({ estado: 'pendiente', sesionesActivas: [] });
+    }
+
+    const ahora = _tsAhora();
+
+    // Cerrar mi sesión abierta en la subcolección
+    const sesSnap = await ref.collection('sesiones').get();
+    const batch = db.batch();
+    let huboCierre = false;
+    sesSnap.docs.forEach(function(d) {
+        const s = d.data();
+        const abierta = (s.fin === null || s.fin === undefined);
+        if (abierta && s.uid === user.uid) {
+            batch.update(d.ref, { fin: ahora });
+            huboCierre = true;
+        }
+    });
+    if (huboCierre) await batch.commit();
+
+    // Quitarme del array de activos
+    const snap = await ref.get();
+    if (!snap.exists) return;
+    const t = snap.data();
+    const restantes = (t.sesionesActivas || []).filter(function(s) {
+        return s.uid !== user.uid;
+    });
+
+    await ref.update({
+        sesionesActivas: restantes,
+        estado: restantes.length ? 'en_curso' : 'pendiente'
     });
 }
 
-function verificarTarea(id, aprobado, notas) {
-    return db.collection('tareas').doc(id).update({
-        estado: aprobado ? 'finalizada' : 'pendiente',
-        notasSupervisor: notas || ''
+// Cierra el ciclo de la tarea: si es recurrente la reprograma,
+// si no, la marca finalizada. Limpia sesiones y sesionesActivas.
+async function _cerrarCicloTarea(ref, t, sesDocs) {
+    const recurrencia = parseInt(t.recurrencia, 10) || 0;
+
+    // Limpiar la subcolección de sesiones para que el próximo ciclo
+    // arranque en cero (el historial ya quedó en historial_tareas)
+    if (sesDocs && sesDocs.length) {
+        const batch = db.batch();
+        sesDocs.forEach(function(d) { batch.delete(d.ref); });
+        await batch.commit();
+    }
+
+    if (recurrencia > 0) {
+        await ref.update({
+            estado: 'pendiente',
+            fechaInicio: _sumarDiasISO(recurrencia),
+            sesionesActivas: []
+        });
+    } else {
+        await ref.update({
+            estado: 'finalizada',
+            sesionesActivas: [],
+            finalizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    }
+}
+
+// Finalizar tarea con cálculo de honorarios proporcionales.
+// Retorna el array de colaboradores: [{ uid, nombre, horas, montoRecibido }]
+// — formato que espera tareas.html.
+// Si la tarea no tiene sesiones (huérfana de versiones anteriores),
+// se finaliza igual con colaboradores = [] — autosanado.
+async function finalizarTarea(tareaId, user) {
+    user = user || {};
+    const ref  = db.collection('tareas').doc(tareaId);
+    const snap = await ref.get();
+    if (!snap.exists) throw new Error('La tarea no existe.');
+    const t = snap.data();
+
+    const ahora = _tsAhora();
+
+    // 1. Leer sesiones y cerrar las que quedaron abiertas
+    const sesSnap = await ref.collection('sesiones').get();
+    const batchCierre = db.batch();
+    let huboAbiertas = false;
+    sesSnap.docs.forEach(function(d) {
+        const s = d.data();
+        if (s.fin === null || s.fin === undefined) {
+            batchCierre.update(d.ref, { fin: ahora });
+            huboAbiertas = true;
+        }
     });
+    if (huboAbiertas) await batchCierre.commit();
+
+    // 2. Calcular horas por colaborador (solo sesiones válidas)
+    const porUid = {};
+    sesSnap.docs.forEach(function(d) {
+        const s = d.data();
+        if (s.invalidada) return;
+        const ini = _aDateSeguro(s.inicio);
+        const fin = _aDateSeguro(s.fin) || _aDateSeguro(ahora);
+        if (!ini || !fin) return;
+        const horas = Math.max(0, (fin - ini) / 3600000);
+        if (!porUid[s.uid]) porUid[s.uid] = { uid: s.uid, nombre: s.nombre || '', horas: 0 };
+        porUid[s.uid].horas += horas;
+    });
+
+    const lista      = Object.keys(porUid).map(function(k) { return porUid[k]; });
+    const totalHoras = lista.reduce(function(sum, c) { return sum + c.horas; }, 0);
+    const montoTarea = t.monto || 0;
+
+    // 3. Reparto proporcional al tiempo trabajado
+    const colaboradores = lista.map(function(c) {
+        const proporcion = totalHoras > 0 ? (c.horas / totalHoras) : 0;
+        return {
+            uid:           c.uid,
+            nombre:        c.nombre,
+            horas:         Math.round(c.horas * 100) / 100,
+            montoRecibido: Math.round(montoTarea * proporcion * 100) / 100
+        };
+    });
+    const montoAsignado = colaboradores.reduce(function(s, c) { return s + c.montoRecibido; }, 0);
+
+    // 4. Precio de limpieza cobrado al cliente (best effort, no bloquea)
+    let costoLimpiezaBRL = 0;
+    if (t.reservaId) {
+        try {
+            const rSnap = await db.collection('reservas').doc(t.reservaId).get();
+            if (rSnap.exists) costoLimpiezaBRL = rSnap.data().costoLimpiezaBRL || 0;
+        } catch (e) { /* sin bloqueo */ }
+    }
+
+    // 5. Registro en historial_tareas (alimenta limpieza-stats)
+    await db.collection('historial_tareas').add({
+        tareaId:          tareaId,
+        nombre:           t.nombre || '',
+        tipo:             t.tipo || 'general',
+        cabana:           (t.cabana !== undefined && t.cabana !== null) ? t.cabana : null,
+        tipoRegistro:     'finalizada',
+        totalHoras:       Math.round(totalHoras * 100) / 100,
+        monto:            Math.round(montoAsignado * 100) / 100,
+        costoLimpiezaBRL: costoLimpiezaBRL,
+        colaboradores:    colaboradores,
+        finalizadoEn:     firebase.firestore.FieldValue.serverTimestamp(),
+        finalizadoNombre: user.nombre || '',
+        finalizadoPor:    user.uid || null
+    });
+
+    // 6. Crear honorarios pendientes (los ve pagos.html → Honorarios)
+    for (let i = 0; i < colaboradores.length; i++) {
+        const c = colaboradores[i];
+        if (c.montoRecibido <= 0) continue;
+        await db.collection('honorarios').add({
+            uid:      c.uid,
+            nombre:   c.nombre,
+            tareaId:  tareaId,
+            concepto: t.nombre || 'Tarea',
+            horas:    c.horas,
+            monto:    c.montoRecibido,
+            estado:   'pendiente',
+            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    }
+
+    // 7. Reprogramar (si es recurrente) o finalizar
+    await _cerrarCicloTarea(ref, t, sesSnap.docs);
+
+    return colaboradores;
+}
+
+// Verificar tarea ("OK / No era necesaria").
+//   verificarTarea(id, {uid, nombre}, nota)  ← moderno: registra en historial
+//   verificarTarea(id, true/false, notas)    ← legacy: solo cambia estado
+async function verificarTarea(tareaId, b, nota) {
+    if (typeof b === 'boolean') {
+        return db.collection('tareas').doc(tareaId).update({
+            estado: b ? 'finalizada' : 'pendiente',
+            notasSupervisor: nota || ''
+        });
+    }
+
+    const user = b || {};
+    const ref  = db.collection('tareas').doc(tareaId);
+    const snap = await ref.get();
+    if (!snap.exists) throw new Error('La tarea no existe.');
+    const t = snap.data();
+
+    const sesSnap = await ref.collection('sesiones').get();
+
+    await db.collection('historial_tareas').add({
+        tareaId:          tareaId,
+        nombre:           t.nombre || '',
+        tipo:             t.tipo || 'general',
+        cabana:           (t.cabana !== undefined && t.cabana !== null) ? t.cabana : null,
+        tipoRegistro:     'verificada',
+        nota:             nota || '',
+        totalHoras:       0,
+        monto:            0,
+        colaboradores:    [],
+        finalizadoEn:     firebase.firestore.FieldValue.serverTimestamp(),
+        finalizadoNombre: user.nombre || '',
+        finalizadoPor:    user.uid || null
+    });
+
+    await _cerrarCicloTarea(ref, t, sesSnap.docs);
 }
 
 // Firma dual:
