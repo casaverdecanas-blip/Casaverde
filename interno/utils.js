@@ -1,6 +1,12 @@
 // ============================================================
-//  utils.js — Casa Verde Canas  v4.4 (puente de compatibilidad)
+//  utils.js — Casa Verde Canas  v4.5 (puente de compatibilidad)
 //  Funciones compartidas · /interno/
+//
+//  CAMBIOS v4.5:
+//  - [NUEVO] Integración pendientes ↔ tareas: al finalizar o verificar una
+//            tarea vinculada a un pendiente (campo pendienteId), el pendiente
+//            se marca automáticamente como realizado, sin importar desde qué
+//            pantalla se finalice.
 //
 //  CAMBIOS v4.4:
 //  - [CRÍTICO] Restaurado el sistema completo de cronómetros de tareas:
@@ -614,6 +620,18 @@ async function finalizarTarea(tareaId, user) {
     // 7. Reprogramar (si es recurrente) o finalizar
     await _cerrarCicloTarea(ref, t, sesSnap.docs);
 
+    // 8. Si la tarea está vinculada a un pendiente, marcarlo realizado
+    if (t.pendienteId) {
+        try {
+            await db.collection('pendientes').doc(t.pendienteId).update({
+                realizado:    true,
+                realizadoPor: user.nombre || '',
+                realizadoUid: user.uid || null,
+                realizadoEn:  firebase.firestore.FieldValue.serverTimestamp()
+            });
+        } catch (e) { /* sin bloqueo */ }
+    }
+
     return colaboradores;
 }
 
@@ -652,6 +670,18 @@ async function verificarTarea(tareaId, b, nota) {
     });
 
     await _cerrarCicloTarea(ref, t, sesSnap.docs);
+
+    // Si está vinculada a un pendiente, marcarlo realizado también
+    if (t.pendienteId) {
+        try {
+            await db.collection('pendientes').doc(t.pendienteId).update({
+                realizado:    true,
+                realizadoPor: user.nombre || '',
+                realizadoUid: user.uid || null,
+                realizadoEn:  firebase.firestore.FieldValue.serverTimestamp()
+            });
+        } catch (e) { /* sin bloqueo */ }
+    }
 }
 
 // Firma dual:

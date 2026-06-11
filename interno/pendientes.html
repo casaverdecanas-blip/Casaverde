@@ -63,6 +63,17 @@
 .pend-item:hover { box-shadow: var(--shadow-sm); }
 .pend-item.realizado { opacity: .5; }
 .pend-item.realizado .pend-texto { text-decoration: line-through; color: var(--color-text-muted); }
+.crono-pend {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: #e3f2fd; color: #0277bd; border-radius: 99px;
+  padding: 2px 10px; font-weight: 700; font-size: 12px;
+  font-family: var(--font-mono);
+}
+.crono-pend .material-icons { font-size: 13px; }
+.pend-work-row {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap; margin-top: 6px;
+}
 
 /* Colores semáforo en borde */
 .pend-item.sem-rojo    { border-left-color: #dc2626; background: #fff8f8; }
@@ -407,7 +418,9 @@ function poblarSelects() {
   });
 }
 
-var cache         = [];
+var cache             = [];
+var tareasVinculadas  = {};   // pendienteId → tarea activa vinculada
+var cronosPend        = {};   // intervalos de cronómetros
 var filtroSem     = 'todos';
 var filtroVis     = 'todos';
 var filtroHist    = 'todos';
@@ -419,6 +432,19 @@ async function cargar() {
     cache = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
       .filter(function(p) { return esAdmin || p.visibilidad !== 'admin'; });
   } catch(e) { showToast('Error cargando pendientes: ' + e.message, 'error'); return; }
+
+  // Tareas vinculadas a pendientes (para cronómetro y controles de trabajo)
+  try {
+    var tSnap = await db.collection('tareas').where('tipo', '==', 'pendiente').get();
+    tareasVinculadas = {};
+    tSnap.docs.forEach(function(d) {
+      var t = Object.assign({ id: d.id }, d.data());
+      if (t.estado === 'finalizada' || t.activa === false) return;
+      if (!t.pendienteId) return;
+      tareasVinculadas[t.pendienteId] = t;
+    });
+  } catch(e) { tareasVinculadas = {}; }
+
   actualizarContadores();
   if (tabActual === 'general')     renderGeneral();
   if (tabActual === 'por-usuario') renderPorUsuario();
@@ -487,6 +513,7 @@ function renderGeneral() {
     return;
   }
   cont.innerHTML = filtrados.map(function(p) { return renderItem(p, false); }).join('');
+  arrancarCronosPend();
 }
 
 function renderPorUsuario() {
@@ -537,6 +564,7 @@ function renderPorUsuario() {
 
   if (!html) { showEmpty(cont, 'Sin pendientes', '', 'task_alt'); return; }
   cont.innerHTML = html;
+  arrancarCronosPend();
 }
 
 function renderHistorial() {
@@ -585,9 +613,45 @@ function renderItem(p, esHistorial) {
     ? '<button class="btn btn-danger btn-sm" onclick="eliminar(\'' + p.id + '\')" title="Eliminar"><span class="material-icons">delete</span></button>'
     : '';
 
-  var btnTrabajar = !p.realizado
-    ? '<button class="btn btn-ghost btn-sm" onclick="trabajarEnPendiente(\'' + p.id + '\')" title="Iniciar cronómetro — registra tiempo trabajado en este pendiente" style="color:var(--color-primary);border-color:var(--color-primary-light);"><span class="material-icons" style="font-size:15px;">play_circle</span></button>'
-    : '';
+  // ── Controles del ciclo de trabajo (cronómetro) ──
+  var tv        = (!esHistorial && !p.realizado) ? tareasVinculadas[p.id] : null;
+  var yoActivoP = tv ? (tv.sesionesActivas || []).find(function(s) { return s.uid === user.uid; }) : null;
+
+  var btnTrabajar = '';
+  var trabajoInfo = '';
+
+  if (!p.realizado) {
+    var btnPlay = function(titulo) {
+      return '<button class="btn btn-ghost btn-sm" onclick="trabajarEnPendiente(\'' + p.id + '\')" title="' + titulo + '" style="color:var(--color-primary);border-color:var(--color-primary-light);"><span class="material-icons" style="font-size:15px;">play_circle</span></button>';
+    };
+    var btnFin = '<button class="btn btn-ghost btn-sm" onclick="pendFinalizar(\'' + p.id + '\')" title="Finalizar — registra el tiempo trabajado y marca realizado" style="color:var(--color-success);border-color:var(--color-success-light);"><span class="material-icons" style="font-size:15px;">check_circle</span></button>';
+    var btnPausa = '<button class="btn btn-ghost btn-sm" onclick="pendPausar(\'' + p.id + '\')" title="Pausar mi cronómetro" style="color:var(--color-warning);border-color:var(--color-warning-light);"><span class="material-icons" style="font-size:15px;">pause</span></button>';
+
+    if (!tv) {
+      btnTrabajar = btnPlay('Iniciar cronómetro — registra el tiempo trabajado');
+    } else if (yoActivoP) {
+      btnTrabajar = btnPausa + btnFin;
+    } else if (tv.estado === 'en_curso') {
+      btnTrabajar = btnPlay('Unirme al trabajo en este pendiente') + (esAdmin ? btnFin : '');
+    } else {
+      btnTrabajar = btnPlay('Continuar el cronómetro') + btnFin;
+    }
+
+    if (tv) {
+      var partes = [];
+      if (yoActivoP) {
+        partes.push('<span class="crono-pend"><span class="material-icons">timer</span><span id="cronop-' + p.id + '">00:00:00</span></span>');
+      }
+      var otros = (tv.sesionesActivas || []).filter(function(s) { return s.uid !== user.uid; });
+      if (otros.length) {
+        partes.push('<span style="font-size:11px;color:var(--color-info);font-weight:600;">&#9654; Trabajando: ' + otros.map(function(s) { return escapeHtml(s.nombre); }).join(', ') + '</span>');
+      }
+      if (!yoActivoP && !otros.length && tv.estado !== 'en_curso') {
+        partes.push('<span style="font-size:11px;color:var(--color-text-muted);">&#9208; En pausa — tiempo ya registrado</span>');
+      }
+      if (partes.length) trabajoInfo = '<div class="pend-work-row">' + partes.join('') + '</div>';
+    }
+  }
 
   return '<div class="pend-item ' + (p.realizado ? 'realizado' : '') + ' sem-' + sem + '" id="pi-' + p.id + '">' +
     btnCheck +
@@ -599,6 +663,7 @@ function renderItem(p, esHistorial) {
         '<span style="color:var(--color-text-muted)">👤 ' + escapeHtml(p.autorNombre || '—') + '</span>' +
         metaRealizado +
       '</div>' +
+      trabajoInfo +
     '</div>' +
     '<div class="pend-acciones">' + btnTrabajar + btnEditar + btnEliminar + '</div>' +
   '</div>';
@@ -641,11 +706,83 @@ window.trabajarEnPendiente = async function(pendienteId) {
 
   try {
     await CVC.iniciarTarea(tareaId, { uid: user.uid, nombre: yo.nombre });
-    showToast('▶ Cronómetro iniciado — aparece en Tareas', 'success');
+    showToast('▶ Cronómetro iniciado — también visible en Tareas', 'success');
+    await cargar();
   } catch(e) {
     showToast(e.message, 'error');
   }
 };
+
+// ── Pausar mi cronómetro en un pendiente ──
+window.pendPausar = async function(pendienteId) {
+  var tv = tareasVinculadas[pendienteId];
+  if (!tv) return;
+  try {
+    await CVC.pausarTarea(tv.id, yo);
+    showToast('Cronómetro pausado — el tiempo quedó registrado.', 'warning');
+    await cargar();
+  } catch(e) { showToast(e.message, 'error'); }
+};
+
+// ── Finalizar pendiente: registra el tiempo y lo marca realizado ──
+window.pendFinalizar = async function(pendienteId) {
+  var p  = cache.find(function(x) { return x.id === pendienteId; });
+  var tv = tareasVinculadas[pendienteId];
+  if (!p) return;
+  if (!confirm('¿Finalizar "' + (p.texto || 'este pendiente') + '"?\n\nSe registrará el tiempo trabajado y quedará como realizado.')) return;
+  try {
+    var cols = [];
+    if (tv) cols = (await CVC.finalizarTarea(tv.id, yo)) || [];
+
+    // Asegurar el marcado (utils ya lo hace si hay tarea vinculada;
+    // esto cubre el caso de finalizar sin haber iniciado cronómetro)
+    await db.collection('pendientes').doc(pendienteId).update({
+      realizado:    true,
+      realizadoPor: yo.nombre,
+      realizadoUid: user.uid,
+      realizadoEn:  firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    var conHoras = cols.filter(function(c) { return c.horas > 0; });
+    var msg = '✓ Pendiente realizado';
+    if (conHoras.length) {
+      msg += ' · ' + conHoras.map(function(c) { return c.nombre + ': ' + CVC.formatHoras(c.horas); }).join(' / ');
+    }
+    showToast(msg, 'success');
+    await cargar();
+  } catch(e) { showToast(e.message, 'error'); }
+};
+
+// ── Cronómetros en vivo ──
+function limpiarCronosPend() {
+  Object.values(cronosPend).forEach(clearInterval);
+  cronosPend = {};
+}
+
+function arrancarCronosPend() {
+  limpiarCronosPend();
+  cache.forEach(function(p) {
+    if (p.realizado) return;
+    var tv = tareasVinculadas[p.id];
+    if (!tv) return;
+    var s = (tv.sesionesActivas || []).find(function(x) { return x.uid === user.uid; });
+    if (!s) return;
+    var el = document.getElementById('cronop-' + p.id);
+    if (!el) return;
+    var inicio = s.inicio && s.inicio.toDate ? s.inicio.toDate() : new Date(s.inicio);
+    var tick = function() {
+      var elNow = document.getElementById('cronop-' + p.id);
+      if (!elNow) return;
+      var diff = Math.max(0, Math.floor((new Date() - inicio) / 1000));
+      var h  = Math.floor(diff / 3600);
+      var m  = Math.floor((diff % 3600) / 60);
+      var sg = diff % 60;
+      elNow.textContent = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(sg).padStart(2,'0');
+    };
+    tick();
+    cronosPend[p.id] = setInterval(tick, 1000);
+  });
+}
 
 window.agregarPendiente = async function() {
   var texto = document.getElementById('nuevoPendiente').value.trim();
@@ -684,6 +821,9 @@ window.agregarPendiente = async function() {
 };
 
 window.toggleRealizado = async function(id, realizado) {
+  // Si tiene cronómetro/tarea vinculada, finalizar por el camino completo
+  // para no perder el tiempo registrado
+  if (realizado && tareasVinculadas[id]) { return pendFinalizar(id); }
   try {
     await db.collection('pendientes').doc(id).update({
       realizado,
