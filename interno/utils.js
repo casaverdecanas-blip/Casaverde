@@ -1,16 +1,32 @@
 // ============================================================
-//  utils.js — Casa Verde Canas  v4.2
+//  utils.js — Casa Verde Canas  v4.3 (puente de compatibilidad)
 //  Funciones compartidas · /interno/
 //
-//  CAMBIOS v4.2:
-//  - [FIX]   toggleNavDrop() — el panel ahora usa position:fixed
-//            en lugar de absolute, lo que corrige el problema de
-//            clipping cuando el nav tiene overflow:hidden o
-//            position:relative. Los paneles se despliegan sobre
-//            todo el contenido sin quedar cortados.
-//  - [NAV]   NAV_ADMIN_ITEMS actualizado:
-//            · Operaciones: agrega tareas-admin.html, pendientes.html
-//            · Nuevo grupo "Fiscal": fiscal.html, acceso-contador.html
+//  CAMBIOS v4.3 (sobre la base estable v4.2):
+//  - [CRÍTICO] verificarAuth() ahora retorna Promise<{user, userData}>
+//              compatible con el patrón moderno de las páginas:
+//              const { user, userData } = await CVC.verificarAuth(roles)
+//              · Lee el campo correcto "rol" (v4.2 leía "role" — inexistente)
+//              · Verifica activo === false
+//              · Timeout de seguridad 15s — nunca queda colgado
+//              · Redirige a index.html (que decide login o dashboard)
+//  - [NUEVO]  showEmpty() y showError() — las páginas las requieren
+//  - [NUEVO]  Sistema de ayuda contextual: initAyuda, mostrarAyuda,
+//             mostrarCelula, AYUDA_ITEMS — lee células de config/ayuda
+//             (campos planos "celulas.x.y"). Si falla, no bloquea nada.
+//  - [FIX]    showToast() usa las clases reales de design-system.css
+//  - [FIX]    badgeEstado() acepta un solo argumento (estado) — firma dual
+//  - [FIX]    formatHoras() acepta número decimal de horas — firma dual
+//  - [FIX]    urgenciaTarea(t) calcula {color,label} para el dashboard
+//             — firma dual (mantiene el modo legacy id+boolean)
+//  - [NAV]    Menús restaurados a las páginas reales del sistema
+//  - [NOTA]   sincronizarDesdeGCal es stub informativo — pendiente de
+//             restaurar la sincronización real con Google Calendar
+//
+//  REGLAS DEL PROYECTO RESPETADAS:
+//  - Sin template literals (backticks) — solo concatenación
+//  - Un solo window.CVC al final
+//  - db.settings() una sola vez (fix Firefox WebChannel)
 // ============================================================
 
 
@@ -28,140 +44,229 @@ const auth = firebase.auth();
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const ESTADOS_RESERVA = {
-    pendiente:        { label: 'Pendiente',        cssClass: 'badge-pendiente'  },
-    confirmada:       { label: 'Confirmada',        cssClass: 'badge-confirmada' },
-    check_in:         { label: 'Check-In',         cssClass: 'badge-checkin'    },
-    check_out:        { label: 'Check-Out',        cssClass: 'badge-checkout'   },
-    cancelada:        { label: 'Cancelada',        cssClass: 'badge-cancelada'  }
+    pendiente:     { label: 'Pendiente',  cssClass: 'badge-pendiente'  },
+    confirmada:    { label: 'Confirmada', cssClass: 'badge-confirmada' },
+    airbnb_activa: { label: 'Airbnb',     cssClass: 'badge-confirmada' },
+    anulada:       { label: 'Anulada',    cssClass: 'badge-anulada'    },
+    finalizada:    { label: 'Finalizada', cssClass: 'badge-finalizada' }
 };
 
 const ESTADOS_TAREA = {
-    pendiente:        { label: 'Pendiente',        cssClass: 'badge-t-pendiente',  icon: 'schedule'        },
-    en_progreso:      { label: 'En Progreso',     cssClass: 'badge-t-progreso',   icon: 'play_arrow'      },
-    pausada:          { label: 'Pausada',          cssClass: 'badge-t-pausada',    icon: 'pause'           },
-    completada:       { label: 'Completada',       cssClass: 'badge-t-completada', icon: 'check_circle'    },
-    verificada:       { label: 'Verificada',       cssClass: 'badge-t-verificada', icon: 'verified'        }
+    pendiente:  { label: 'Pendiente',  cssClass: 'badge-pendiente'  },
+    en_curso:   { label: 'En curso',   cssClass: 'badge-en_curso'   },
+    pausada:    { label: 'Pausada',    cssClass: 'badge-neutral'    },
+    finalizada: { label: 'Finalizada', cssClass: 'badge-completada' }
 };
 
 const PRIORIDADES = {
-    baja:             { label: 'Baja',             cssClass: 'prio-baja'    },
-    media:            { label: 'Media',            cssClass: 'prio-media'   },
-    alta:             { label: 'Alta',             cssClass: 'prio-alta'    },
-    urgente:          { label: 'Urgente',          cssClass: 'prio-urgente' }
+    alta:  { label: 'Alta',  cssClass: 'badge-alta'  },
+    media: { label: 'Media', cssClass: 'badge-media' },
+    baja:  { label: 'Baja',  cssClass: 'badge-baja'  }
 };
+
+// Estados que bloquean disponibilidad en el calendario público
+// NOTA: "pendiente" NO bloquea — solo las confirmadas reales
+const ESTADOS_BLOQUEANTES = ['confirmada', 'airbnb_activa'];
 
 const CALENDAR_IDS = {
-    reservas:         'reservas_main',
-    limpieza:         'tareas_limpieza',
-    mantenimiento:    'tareas_mantenimiento'
+    1: 'h5a1h0a8dg9rl0oufvq19hn05r4gbubg@import.calendar.google.com',
+    2: '8i3hl5ppqi6al50kf7casj5n5vl9sp1j@import.calendar.google.com',
+    3: '60n7foetdu2qvsn16mi7is8j6i4ugm66@import.calendar.google.com'
 };
-
-const ESTADOS_BLOQUEANTES = ['confirmada', 'check_in'];
 
 
 // ── MENÚS DE NAVEGACIÓN ───────────────────────────────────────────────────────
 const NAV_ADMIN_ITEMS = [
-    { href: 'dashboard.html',      label: 'Panel General',     icon: 'dashboard'       },
-    { href: 'calendario.html',     label: 'Calendario',        icon: 'calendar_today'  },
-    { href: 'reservas.html',       label: 'Reservas',          icon: 'book_online'     },
+
+    // Items directos
+    { href: 'dashboard.html',  icon: 'dashboard',      label: 'Dashboard'  },
+    { href: 'calendario.html', icon: 'calendar_month', label: 'Calendario' },
+
+    // Grupo: Reservas
+    {
+        group: 'Reservas',
+        icon:  'event',
+        items: [
+            { href: 'reservas.html',     icon: 'event',         label: 'Reservas'     },
+            { href: 'presupuestos.html', icon: 'request_quote', label: 'Presupuestos' },
+            { href: 'clientes.html',     icon: 'people',        label: 'Clientes'     }
+        ]
+    },
+
+    // Grupo: Finanzas
+    {
+        group: 'Finanzas',
+        icon:  'payments',
+        items: [
+            { href: 'panel-financiero.html', icon: 'monitoring',      label: 'Panel financiero'   },
+            { sep: true },
+            { href: 'pagos.html',            icon: 'payments',        label: 'Ingresos / Egresos' },
+            { href: 'informes-airbnb.html',  icon: 'summarize',       label: 'Informes Airbnb'    },
+            { sep: true },
+            { href: 'cuentas.html',          icon: 'account_balance', label: 'Cuentas'            },
+            { href: 'movimientos.html',      icon: 'receipt_long',    label: 'Movimientos'        },
+            { href: 'herramientas-btg.html', icon: 'compare_arrows',  label: 'BTG / Conciliación' },
+            { href: 'categorias.html',       icon: 'label',           label: 'Categorías'         }
+        ]
+    },
+
+    // Grupo: Operaciones
     {
         group: 'Operaciones',
-        icon:  'handyman',
+        icon:  'checklist',
         items: [
-            { href: 'tareas-admin.html', label: 'Gestión Tareas', icon: 'assignment' },
-            { href: 'pendientes.html',   label: 'Hojas de Ruta',  icon: 'fact_check' },
-            { href: 'limpieza.html',     label: 'Vista Personal', icon: 'cleaning_services' }
+            { href: 'tareas.html',         icon: 'checklist',            label: 'Tareas'             },
+            { href: 'tareas-admin.html',   icon: 'admin_panel_settings', label: 'Gestión tareas'     },
+            { href: 'pendientes.html',     icon: 'playlist_add_check',   label: 'Pendientes'         },
+            { sep: true },
+            { href: 'limpieza-stats.html', icon: 'cleaning_services',    label: 'Análisis limpiezas' }
         ]
     },
-    { href: 'finanzas.html',       label: 'Caja y Finanzas',   icon: 'payments'        },
+
+    // Grupo: Fiscal
     {
         group: 'Fiscal',
-        icon:  'account_balance',
+        icon:  'receipt',
         items: [
-            { href: 'fiscal.html',          label: 'Impuestos / Decl.', icon: 'gavel' },
-            { href: 'acceso-contador.html', label: 'Exportar Contador', icon: 'description' }
+            { href: 'fiscal.html',          icon: 'receipt',        label: 'Panel fiscal'    },
+            { href: 'acceso-contador.html', icon: 'person_outline', label: 'Acceso contador' }
         ]
     },
-    { href: 'config.html',         label: 'Configuración',     icon: 'settings'        }
+
+    // Grupo: Configuración
+    {
+        group: 'Config.',
+        icon:  'settings',
+        items: [
+            { href: 'cabanas-admin.html',  icon: 'cottage',         label: 'Cabañas'  },
+            { href: 'usuarios.html',       icon: 'manage_accounts', label: 'Usuarios' },
+            { sep: true },
+            { href: 'manual-sistema.html', icon: 'menu_book',       label: 'Manual'   }
+        ]
+    }
 ];
 
 const NAV_USER_ITEMS = [
-    { href: 'limpieza.html',     label: 'Mis Tareas',        icon: 'cleaning_services' },
-    { href: 'calendario.html',   label: 'Calendario',        icon: 'calendar_today'    }
+    { href: 'tareas.html',         icon: 'checklist', label: 'Tareas'     },
+    { href: 'pagos.html',          icon: 'payments',  label: 'Mis cobros' },
+    { href: 'manual-sistema.html', icon: 'menu_book', label: 'Manual'     }
 ];
 
 
 // ── AUXILIARES DE INTERFAZ (BADGES) ──────────────────────────────────────────
-function badgeEstado(tipo, key) {
-    const config = tipo === 'reserva' ? ESTADOS_RESERVA[key] : ESTADOS_TAREA[key];
-    if (!config) return '<span class="badge">' + key + '</span>';
-    return '<span class="badge ' + config.cssClass + '">' + config.label + '</span>';
+// Firma dual:
+//   badgeEstado(estado)         ← moderno (lo que usan las páginas)
+//   badgeEstado(tipo, estado)   ← legacy v4.2 (compatibilidad)
+function badgeEstado(a, b) {
+    const key = (b !== undefined && b !== null) ? b : a;
+    const e = ESTADOS_RESERVA[key] || ESTADOS_TAREA[key] || { label: key, cssClass: 'badge-neutral' };
+    return '<span class="badge ' + e.cssClass + '">' + e.label + '</span>';
 }
 
-function badgePrioridad(key) {
-    const p = PRIORIDADES[key];
-    if (!p) return '<span class="badge">' + key + '</span>';
+function badgePrioridad(prioridad) {
+    const p = PRIORIDADES[prioridad] || { label: prioridad, cssClass: 'badge-neutral' };
     return '<span class="badge ' + p.cssClass + '">' + p.label + '</span>';
 }
 
 
 // ── SEGURIDAD Y AUTENTICACIÓN ────────────────────────────────────────────────
-function verificarAuth(callbackRol) {
-    auth.onAuthStateChanged(function(user) {
-        if (!user) {
-            window.location.href = 'login.html';
-            return;
-        }
-        db.collection('usuarios').doc(user.uid).get()
-            .then(function(doc) {
-                if (doc.exists) {
-                    const data = doc.data();
-                    if (callbackRol) callbackRol(data.role || 'user', data);
-                } else {
-                    auth.signOut().then(function() { window.location.href = 'login.html'; });
-                }
-            })
-            .catch(function(err) {
-                console.error("Error verificando rol:", err);
-                window.location.href = 'login.html';
-            });
+// CORREGIDO v4.3: retorna Promise<{user, userData}> — patrón moderno.
+// Uso en las páginas:
+//   const { user, userData } = await CVC.verificarAuth(['admin','user']);
+function verificarAuth(rolesPermitidos) {
+    const roles = Array.isArray(rolesPermitidos) ? rolesPermitidos : [rolesPermitidos];
+    return new Promise(function(resolve, reject) {
+
+        // Timeout de seguridad: si Firebase no responde en 15s, rechazar
+        // para que la página pueda mostrar un error en vez de quedar colgada.
+        const timer = setTimeout(function() {
+            reject(new Error('Firebase no responde (timeout). Verificá tu conexión.'));
+        }, 15000);
+
+        auth.onAuthStateChanged(function(user) {
+            clearTimeout(timer);
+
+            if (!user) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            db.collection('usuarios').doc(user.uid).get()
+                .then(function(userDoc) {
+                    if (!userDoc.exists) {
+                        auth.signOut().then(function() {
+                            window.location.href = 'index.html';
+                        }).catch(function() {
+                            window.location.href = 'index.html';
+                        });
+                        return;
+                    }
+
+                    const userData = userDoc.data();
+
+                    // Solo bloquea si activo === false explícitamente
+                    if (userData.activo === false) {
+                        auth.signOut().then(function() {
+                            window.location.href = 'index.html';
+                        }).catch(function() {
+                            window.location.href = 'index.html';
+                        });
+                        return;
+                    }
+
+                    // Campo correcto: "rol" (NO "role")
+                    if (roles.indexOf(userData.rol) === -1) {
+                        // Sin permiso para esta página → redirigir a su home
+                        window.location.href = userData.rol === 'user' ? 'tareas.html' : 'dashboard.html';
+                        return;
+                    }
+
+                    resolve({ user: user, userData: userData });
+                })
+                .catch(function(err) {
+                    console.error('Error verificando usuario:', err);
+                    reject(err);
+                });
+        });
     });
 }
 
 function cerrarSesion() {
     return auth.signOut().then(function() {
-        window.location.href = 'login.html';
+        window.location.href = 'index.html';
+    }).catch(function() {
+        window.location.href = 'index.html';
     });
 }
 
 
-// ── MOTOR DE PRECIOS Y DISPONIBILIDAD ────────────────────────────────────────
+// ── MOTOR DE PRECIOS Y DISPONIBILIDAD (base v4.2 — revisar con presupuestos) ─
 function calcularPrecio(cabanaId, checkingStr, checkoutStr, callback) {
     if (!cabanaId || !checkingStr || !checkoutStr) return callback(0);
-    
+
     const p1 = db.collection('config_precios').doc(String(cabanaId)).get();
     const p2 = db.collection('config_precios').doc('global').get();
-    
+
     Promise.all([p1, p2]).then(function(results) {
         const resCabana = results[0].exists ? results[0].data() : {};
         const resGlobal = results[1].exists ? results[1].data() : {};
-        
+
         const ini = new Date(checkingStr + 'T12:00:00');
         const fin = new Date(checkoutStr + 'T12:00:00');
         let total = 0;
-        
+
         for (let d = new Date(ini); d < fin; d.setDate(d.getDate() + 1)) {
             const yyyy = d.getFullYear();
             const mm   = String(d.getMonth() + 1).padStart(2, '0');
             const dd   = String(d.getDate()).padStart(2, '0');
             const iso  = yyyy + '-' + mm + '-' + dd;
-            
+
             if (resCabana.fechasEspecificas && resCabana.fechasEspecificas[iso] !== undefined) {
                 total += Number(resCabana.fechasEspecificas[iso]);
             } else if (resGlobal.fechasEspecificas && resGlobal.fechasEspecificas[iso] !== undefined) {
                 total += Number(resGlobal.fechasEspecificas[iso]);
             } else {
-                const diaSemana = d.getDay(); 
+                const diaSemana = d.getDay();
                 if (diaSemana === 5 || diaSemana === 6) {
                     total += Number(resCabana.precioFinde || resGlobal.precioFinde || 0);
                 } else {
@@ -171,7 +276,7 @@ function calcularPrecio(cabanaId, checkingStr, checkoutStr, callback) {
         }
         callback(total);
     }).catch(function(e) {
-        console.error("Error calculando precio:", e);
+        console.error('Error calculando precio:', e);
         callback(0);
     });
 }
@@ -179,7 +284,7 @@ function calcularPrecio(cabanaId, checkingStr, checkoutStr, callback) {
 function verificarDisponibilidadCabana(cabanaId, checkinStr, checkoutStr, reservaIdEditar, callback) {
     const ini = new Date(checkinStr + 'T00:00:00');
     const fin = new Date(checkoutStr + 'T23:59:59');
-    
+
     db.collection('reservas')
       .where('caba', '==', Number(cabanaId))
       .where('estado', 'in', ESTADOS_BLOQUEANTES)
@@ -187,15 +292,15 @@ function verificarDisponibilidadCabana(cabanaId, checkinStr, checkoutStr, reserv
       .then(function(snap) {
           let disponible = true;
           let reservaConflictiva = null;
-          
+
           snap.forEach(function(doc) {
               if (reservaIdEditar && doc.id === reservaIdEditar) return;
               const data = doc.data();
               if (!data.checkIn || !data.checkOut) return;
-              
+
               const rIni = data.checkIn.toDate();
               const rFin = data.checkOut.toDate();
-              
+
               if (ini < rFin && fin > rIni) {
                   disponible = false;
                   reservaConflictiva = Object.assign({ id: doc.id }, data);
@@ -204,14 +309,14 @@ function verificarDisponibilidadCabana(cabanaId, checkinStr, checkoutStr, reserv
           callback(disponible, reservaConflictiva);
       })
       .catch(function(err) {
-          console.error("Error verificando disponibilidad:", err);
+          console.error('Error verificando disponibilidad:', err);
           callback(false, null);
       });
 }
 
 function mensajeConflicto(reserva) {
     if (!reserva) return '';
-    return 'Conflicto con Reserva de ' + (reserva.nombre || 'Huésped') + 
+    return 'Conflicto con Reserva de ' + (reserva.nombre || 'Huésped') +
            ' (' + formatFecha(reserva.checkIn) + ' al ' + formatFecha(reserva.checkOut) + ').';
 }
 
@@ -219,49 +324,58 @@ function mensajeConflicto(reserva) {
 // ── GESTIÓN AUTOMÁTICA DE LIMPIEZA ───────────────────────────────────────────
 function crearTareaLimpieza(reservaId, reservaData) {
     if (!reservaData.checkOut) return;
-    
+
     const checkOut = reservaData.checkOut.toDate ? reservaData.checkOut.toDate() : new Date(reservaData.checkOut);
     const tareaId  = 'limp-' + reservaId;
-    
+
     db.collection('cabanas').doc(String(reservaData.caba)).get().then(function(cDoc) {
         const cData = cDoc.exists ? cDoc.data() : {};
-        const nombreCabana = cData.nombre || ('Cabaña ' + reservaData.caba);
-        
+        const nombreCabana = (cData.nombre && cData.nombre.es) ? cData.nombre.es
+                           : (cData.nombre || ('Cabaña ' + reservaData.caba));
+
         db.collection('tareas').doc(tareaId).set({
-            tipo:         'limpieza',
-            titulo:       'Limpieza Check-Out — ' + nombreCabana,
-            cabana:       reservaData.caba,
-            reservaId:    reservaId,
-            estado:       'pendiente',
-            prioridad:    'media',
-            fechaInicio:  checkOut.toISOString().split('T')[0],
-            descripcion:  'Limpieza general por salida de ' + (reservaData.nombre || 'huésped') + '. ' + (reservaData.notas || ''),
-            creadoEn:     firebase.firestore.FieldValue.serverTimestamp()
+            tipo:        'limpieza',
+            nombre:      'Limpieza Check-Out — ' + nombreCabana,
+            titulo:      'Limpieza Check-Out — ' + nombreCabana,
+            cabana:      reservaData.caba,
+            reservaId:   reservaId,
+            estado:      'pendiente',
+            prioridad:   'media',
+            fechaInicio: checkOut.toISOString().split('T')[0],
+            descripcion: 'Limpieza general por salida de ' + (reservaData.nombre || 'huésped') + '. ' + (reservaData.notas || ''),
+            creadoEn:    firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true }).then(function() {
-            console.log("Tarea de limpieza automatizada vinculada: ", tareaId);
+            console.log('Tarea de limpieza automatizada vinculada:', tareaId);
         }).catch(function(err) {
-            console.error("Error al automatizar limpieza:", err);
+            console.error('Error al automatizar limpieza:', err);
         });
     });
 }
 
 
-// ── SINCRONIZADOR DE CANALES (SIMULADO / STUB) ───────────────────────────────
+// ── SINCRONIZADOR DE CANALES ─────────────────────────────────────────────────
 function sincronizarDisponibilidad() {
-    console.log("Sincronizando iCal / Airbnb / Booking Channels...");
+    console.log('Sincronizando iCal / Airbnb / Booking Channels...');
     return Promise.resolve({ procesados: 0, nuevos: 0 });
 }
 
-function sincronizarDesdeGCal() {
-    console.log("Consultando Google Calendar API v3...");
-    return Promise.resolve(true);
+// PENDIENTE v4.3: la sincronización real con Google Calendar se restaurará
+// en el próximo paso. Por ahora retorna un resultado informativo para que
+// el botón del dashboard muestre un aviso claro en vez de fallar.
+function sincronizarDesdeGCal(apiKey, cabanas) {
+    console.log('sincronizarDesdeGCal: función pendiente de restaurar en esta versión puente.');
+    return Promise.resolve({
+        creadas: 0,
+        canceladas: 0,
+        error: 'Sincronización Airbnb temporalmente deshabilitada — se restaura en el próximo paso.'
+    });
 }
 
 
-// ── FLUJO OPERATIVO DE TAREAS (MOCK / TRABAJADORES) ──────────────────────────
+// ── FLUJO OPERATIVO DE TAREAS ────────────────────────────────────────────────
 function iniciarTarea(id) {
     return db.collection('tareas').doc(id).update({
-        estado: 'en_progreso',
+        estado: 'en_curso',
         timestampInicio: firebase.firestore.FieldValue.serverTimestamp()
     });
 }
@@ -272,22 +386,52 @@ function pausarTarea(id) {
 
 function finalizarTarea(id) {
     return db.collection('tareas').doc(id).update({
-        estado: 'completada',
+        estado: 'finalizada',
         timestampFin: firebase.firestore.FieldValue.serverTimestamp()
     });
 }
 
 function verificarTarea(id, aprobado, notas) {
     return db.collection('tareas').doc(id).update({
-        estado: aprobado ? 'verificada' : 'pendiente',
+        estado: aprobado ? 'finalizada' : 'pendiente',
         notasSupervisor: notas || ''
     });
 }
 
-function urgenciaTarea(id, esUrgente) {
-    return db.collection('tareas').doc(id).update({
-        prioridad: esUrgente ? 'urgente' : 'media'
-    });
+// Firma dual:
+//   urgenciaTarea(tareaObjeto)        ← moderno: retorna { color, label }
+//                                       color: 'rojo' | 'amarillo' | 'verde' | 'gris'
+//   urgenciaTarea(id, esUrgente)      ← legacy v4.2: actualiza prioridad en DB
+function urgenciaTarea(t, esUrgente) {
+    // Modo legacy: primer argumento es un id (string)
+    if (typeof t === 'string') {
+        return db.collection('tareas').doc(t).update({
+            prioridad: esUrgente ? 'alta' : 'media'
+        });
+    }
+
+    // Modo moderno: cálculo de urgencia para dashboard / listados
+    if (!t || !t.fechaInicio) return { color: 'gris', label: 'Sin fecha' };
+
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const f = new Date(String(t.fechaInicio).slice(0, 10) + 'T00:00:00');
+    if (isNaN(f.getTime())) return { color: 'gris', label: 'Sin fecha' };
+
+    const dias  = Math.round((hoy - f) / 86400000);
+    const ciclo = parseInt(t.recurrenciaDias || t.recurrencia || 0, 10) || 0;
+
+    if (dias < 0)  return { color: 'verde',    label: 'En ' + Math.abs(dias) + 'd' };
+    if (dias === 0) return { color: 'amarillo', label: 'Hoy' };
+
+    // Con recurrencia definida: rojo si superó el ciclo
+    if (ciclo > 0) {
+        if (dias > ciclo) return { color: 'rojo', label: 'Atraso ' + dias + 'd' };
+        return { color: 'amarillo', label: 'Hace ' + dias + 'd' };
+    }
+
+    // Sin recurrencia: rojo a partir de 7 días de atraso
+    if (dias > 7) return { color: 'rojo', label: 'Atraso ' + dias + 'd' };
+    return { color: 'amarillo', label: 'Hace ' + dias + 'd' };
 }
 
 function getHistorialTareas(cabanaId, callback) {
@@ -304,33 +448,48 @@ function getHistorialTareas(cabanaId, callback) {
 }
 
 
-// ── MOTOR DE CONCILIACIÓN BANCARIA v4.0 ──────────────────────────────────────
+// ── MOTOR DE CONCILIACIÓN BANCARIA ───────────────────────────────────────────
 const BTG_CATEGORIAS = [
-    { id: 'alquiler',   labels: ['reserva', 'airbnb', 'booking', 'estadia', 'pago'], tipo: 'ingreso' },
-    { id: 'servicios',  labels: ['ose', 'ute', 'antel', 'internet', 'luz', 'agua'],  tipo: 'egreso'  },
-    { id: 'mantenim',   labels: ['barraca', 'ferreteria', 'madera', 'tornillo'],    tipo: 'egreso'  },
-    { id: 'limpieza',   labels: ['lavadero', 'blanqueria', 'cloro', 'limpiador'],   tipo: 'egreso'  },
-    { id: 'impuestos',  labels: ['bps', 'dgi', 'contribucion'],                     tipo: 'egreso'  }
+    'Alquiler / Ingresos', 'Servicios', 'Mantenimiento', 'Limpieza',
+    'Insumos', 'Impuestos', 'Honorarios', 'Transferencias propias',
+    'Personal / Retiro', 'Otros'
 ];
 
+const _BTG_REGLAS = [
+    { cat: 'Alquiler / Ingresos',     labels: ['reserva', 'airbnb', 'booking', 'estadia', 'aluguel'] },
+    { cat: 'Servicios',               labels: ['celesc', 'casan', 'internet', 'luz', 'agua', 'claro', 'vivo', 'tim'] },
+    { cat: 'Mantenimiento',           labels: ['ferreteria', 'ferragem', 'madeira', 'material', 'construcao', 'tinta'] },
+    { cat: 'Limpieza',                labels: ['lavanderia', 'limpeza', 'cloro', 'limpiador', 'produtos'] },
+    { cat: 'Impuestos',               labels: ['darf', 'iptu', 'receita', 'prefeitura', 'tributo'] },
+    { cat: 'Honorarios',              labels: ['honorario', 'diarista', 'jardineiro', 'jardin'] },
+    { cat: 'Transferencias propias',  labels: ['transferencia propia', 'entre cuentas'] }
+];
+
+// Retorna { cat, etiqueta } — formato que espera herramientas-btg.html
 function inferirCategoria(concepto) {
-    if (!concepto) return 'otros';
-    const txt = concepto.toLowerCase();
-    for (let i = 0; i < BTG_CATEGORIAS.length; i++) {
-        const cat = BTG_CATEGORIAS[i];
-        for (let j = 0; j < cat.labels.length; j++) {
-            if (txt.indexOf(cat.labels[j]) !== -1) return cat.id;
+    if (!concepto) return { cat: '', etiqueta: '' };
+    const txt = String(concepto).toLowerCase();
+    for (let i = 0; i < _BTG_REGLAS.length; i++) {
+        const regla = _BTG_REGLAS[i];
+        for (let j = 0; j < regla.labels.length; j++) {
+            if (txt.indexOf(regla.labels[j]) !== -1) {
+                return { cat: regla.cat, etiqueta: regla.labels[j] };
+            }
         }
     }
-    return 'otros';
+    return { cat: '', etiqueta: '' };
 }
 
-function fingerprintMovimiento(mov) {
-    const f = mov.fecha || '';
-    const m = String(mov.monto || 0);
-    const c = mov.concepto || '';
+// fingerprint(fecha, monto, descripcion) o fingerprint(objetoMovimiento)
+function fingerprintMovimiento(a, b, c) {
+    let f, m, d;
+    if (typeof a === 'object' && a !== null) {
+        f = a.fecha || ''; m = String(a.monto || 0); d = a.descripcion || a.concepto || '';
+    } else {
+        f = a || ''; m = String(b || 0); d = c || '';
+    }
     let hash = 0;
-    const str = f + '_' + m + '_' + c;
+    const str = f + '_' + m + '_' + d;
     for (let i = 0; i < str.length; i++) {
         hash = (hash << 5) - hash + str.charCodeAt(i);
         hash |= 0;
@@ -338,101 +497,89 @@ function fingerprintMovimiento(mov) {
     return 'fp_' + Math.abs(hash);
 }
 
-// Retorna array de objetos { banco: mov, interno: match u null, confianza: 0-100 }
-function conciliarMovimientos(movimientosBancarios, registrosInternos) {
-    const asignados = [];
-    movimientosBancarios.forEach(function(m) {
-        let mejorMatch = null;
-        let maxScore = 0;
-        
-        registrosInternos.forEach(function(r) {
-            if (r._conciliado) return;
-            let score = 0;
-            
-            // Regla 1: Montos idénticos absolutos (Ignoramos signo por diferencias de criterio ingreso/egreso)
-            if (Math.abs(Number(m.monto)) === Math.abs(Number(r.monto))) score += 50;
-            
-            // Regla 2: Proximidad de fechas (Mismo día = Full score, +/- 2 días = parcial)
-            if (m.fecha && r.fecha) {
-                if (r.fecha === m.fecha) {
-                    score += 30;
-                } else {
-                    const dM = new Date(m.fecha + 'T12:00:00');
-                    const dR = new Date(r.fecha + 'T12:00:00');
-                    const diff = Math.abs(dM - dR) / (1000 * 60 * 60 * 24);
-                    if (diff <= 2) score += 15;
-                }
+// Concilia movimientos parseados contra los ya existentes en Firestore.
+// Retorna los mismos movimientos con estado: 'nuevo' | 'duplicado' | 'posible_duplicado'
+// — formato que espera herramientas-btg.html
+async function conciliarMovimientos(movsParseados, cuentaId) {
+    const snap = await db.collection('movimientos')
+        .where('cuentaId', '==', cuentaId)
+        .get();
+    const existentes = snap.docs.map(function(doc) { return doc.data(); });
+
+    return movsParseados.map(function(m) {
+        let estado = 'nuevo';
+        for (let i = 0; i < existentes.length; i++) {
+            const e = existentes[i];
+            const mismaFecha = e.fecha === m.fecha;
+            const mismoMonto = Math.abs((e.monto || 0) - m.monto) < 0.01;
+            if (mismaFecha && mismoMonto) {
+                const d1 = String(e.descripcion || '').slice(0, 15);
+                const d2 = String(m.descripcion || '').slice(0, 15);
+                estado = (d1 === d2) ? 'duplicado' : 'posible_duplicado';
+                if (estado === 'duplicado') break;
             }
-            
-            // Regla 3: Coincidencia parcial de palabras clave en concepto
-            if (m.concepto && r.concepto) {
-                const wordsM = m.concepto.toLowerCase().split(/\s+/);
-                const txtR   = r.concepto.toLowerCase();
-                let matches  = 0;
-                wordsM.forEach(function(w) {
-                    if (w.length > 3 && txtR.indexOf(w) !== -1) matches++;
-                });
-                if (matches > 0) score += Math.min(20, matches * 7);
-            }
-            
-            if (score > maxScore) {
-                maxScore = score;
-                mejorMatch = r;
-            }
+        }
+        return Object.assign({}, m, {
+            estado: estado,
+            fingerprint: fingerprintMovimiento(m.fecha, m.monto, m.descripcion)
         });
-        
-        if (maxScore >= 50 && mejorMatch) {
-            mejorMatch._conciliado = true;
-            asignados.push({ banco: m, interno: mejorMatch, confianza: maxScore });
-        } else {
-            asignados.push({ banco: m, interno: null, confianza: 0 });
-        }
     });
-    return asignados;
 }
 
-function importarMovimientosConfirmados(listaConciliados) {
-    const batch = db.batch();
-    listaConciliados.forEach(function(item) {
-        // Solo guardamos en Firestore lo que viene del banco y NO tiene correlación interna previa (evitar duplicados)
-        if (!item.interno) {
-            const id = fingerprintMovimiento(item.banco);
-            const ref = db.collection('caja').doc(id);
+// Importa los movimientos seleccionados a la colección 'movimientos'.
+// opts = { cuentaId, moneda, importadoPor }
+// Retorna { importados, saltados } — formato que espera herramientas-btg.html
+async function importarMovimientosConfirmados(seleccionados, opts) {
+    opts = opts || {};
+    let importados = 0;
+    let saltados = 0;
+
+    const CHUNK = 400;
+    for (let i = 0; i < seleccionados.length; i += CHUNK) {
+        const batch = db.batch();
+        const slice = seleccionados.slice(i, i + CHUNK);
+
+        slice.forEach(function(m) {
+            if (m.estado === 'duplicado') { saltados++; return; }
+            const ref = db.collection('movimientos').doc();
             batch.set(ref, {
-                fecha:    item.banco.fecha,
-                monto:    Number(item.banco.monto),
-                concepto: item.banco.concepto,
-                cat:      inferirCategoria(item.banco.concepto),
-                origen:   'banco_importado',
-                estado:   'verificado',
-                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+                cuentaId:     opts.cuentaId || null,
+                moneda:       opts.moneda || 'BRL',
+                fecha:        m.fecha,
+                descripcion:  m.descripcion,
+                monto:        m.monto,
+                tipo:         m.tipo || (m.monto >= 0 ? 'credito' : 'debito'),
+                saldoPost:    (m.saldoPost !== undefined) ? m.saldoPost : null,
+                categoriaId:  null,
+                etiqueta:     '',
+                reservaId:    null,
+                tareaId:      null,
+                fingerprint:  m.fingerprint || fingerprintMovimiento(m.fecha, m.monto, m.descripcion),
+                importadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
+                importadoPor: opts.importadoPor || null
             });
-        } else {
-            // Si hay match interno, actualizamos el registro de caja interno marcándolo como verificado/conciliado
-            const ref = db.collection('caja').doc(item.interno.id);
-            batch.update(ref, {
-                estado: 'verificado',
-                conciliadoConId: fingerprintMovimiento(item.banco),
-                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
-            });
-        }
-    });
-    return batch.commit();
+            importados++;
+        });
+        await batch.commit();
+    }
+
+    return { importados: importados, saltados: saltados };
 }
 
-function matchMovimientoBancario(monto, fecha, concepto) { console.log("Legacy match call"); return null; }
+// Stubs legacy — mantenidos para no romper destructuraciones antiguas
+function matchMovimientoBancario() { return null; }
 function conciliarContraRegistros() { return Promise.resolve(); }
 function guardarConciliacion() { return Promise.resolve(); }
 function cargarConfigConciliacion() { return Promise.resolve({}); }
 
 
-// ── NAV CENTRALIZADA v4.2 REPARADA ─────────────────────────────────────────────
+// ── NAV CENTRALIZADA ──────────────────────────────────────────────────────────
 function renderNav(paginaActiva, rol) {
     rol = rol || 'admin';
     const el = document.getElementById('appNav') || document.querySelector('.admin-nav');
     if (!el) return;
     const items = rol === 'admin' ? NAV_ADMIN_ITEMS : NAV_USER_ITEMS;
-    
+
     el.innerHTML = items.map(function(item, gi) {
         if (item.href) {
             const activo = item.href === paginaActiva;
@@ -442,7 +589,7 @@ function renderNav(paginaActiva, rol) {
         if (item.group) {
             const grupoId     = 'navdrop-' + gi;
             const tieneActivo = (item.items || []).some(function(sub) {
-                return sub.href && (sub.href === paginaActiva || sub.href.replace('.html', '') === paginaActiva);
+                return sub.href && (sub.href === paginaActiva || (sub.href || '').replace('.html', '') === paginaActiva);
             });
             const panelItems = (item.items || []).map(function(sub) {
                 if (sub.sep) return '<div class="nav-dropdown__sep"></div>';
@@ -450,7 +597,7 @@ function renderNav(paginaActiva, rol) {
                 return '<a href="' + sub.href + '" class="nav-dropdown__item' + (esActivo ? ' active' : '') + '">'
                     + '<span class="material-icons">' + sub.icon + '</span> ' + sub.label + '</a>';
             }).join('');
-            
+
             return '<div class="nav-dropdown' + (tieneActivo ? ' has-active' : '') + '" id="' + grupoId + '">'
                 + '<button class="nav-dropdown__trigger" onclick="toggleNavDrop(event,\'' + grupoId + '\')">'
                 + '<span class="material-icons">' + item.icon + '</span> ' + item.group
@@ -466,87 +613,108 @@ function renderNav(paginaActiva, rol) {
     document.addEventListener('click', _cerrarDropdowns);
 }
 
-function toggleNavDrop(event, id) {
-    event.stopPropagation();
-    const drop = document.getElementById(id);
-    if (!drop) return;
-    const panel = drop.querySelector('.nav-dropdown__panel');
-    const trigger = drop.querySelector('.nav-dropdown__trigger');
-    const yaAbierto = drop.classList.contains('open');
-    
-    _cerrarDropdowns();
-    
-    if (!yaAbierto) {
-        drop.classList.add('open');
-        if (panel && trigger) {
-            const rect = trigger.getBoundingClientRect();
-            panel.style.position = 'fixed';
-            panel.style.top = rect.bottom + 'px';
-            panel.style.left = rect.left + 'px';
-            panel.style.zIndex = '9999';
-        }
+function toggleNavDrop(e, id) {
+    e.stopPropagation();
+
+    const dropEl = document.getElementById(id);
+    if (!dropEl) return;
+
+    const estaAbierto = dropEl.classList.contains('open');
+
+    // Cerrar todos los dropdowns abiertos
+    document.querySelectorAll('.nav-dropdown.open').forEach(function(d) {
+        d.classList.remove('open');
+        const p = d.querySelector('.nav-dropdown__panel');
+        if (p) { p.style.top = ''; p.style.left = ''; }
+    });
+
+    if (estaAbierto) return;
+
+    // Posicionar el panel con fixed (escapa del overflow del nav)
+    const trigger = dropEl.querySelector('.nav-dropdown__trigger');
+    const rect    = trigger.getBoundingClientRect();
+    const panel   = dropEl.querySelector('.nav-dropdown__panel');
+
+    panel.style.top  = (rect.bottom + 2) + 'px';
+    panel.style.left = rect.left + 'px';
+
+    dropEl.classList.add('open');
+
+    // Ajustar si se sale por la derecha de la pantalla
+    const panelRect = panel.getBoundingClientRect();
+    if (panelRect.right > window.innerWidth - 8) {
+        panel.style.left = (rect.right - panelRect.width) + 'px';
     }
 }
 
 function _cerrarDropdowns() {
-    const drops = document.querySelectorAll('.nav-dropdown.open');
-    drops.forEach(function(d) {
+    document.querySelectorAll('.nav-dropdown.open').forEach(function(d) {
         d.classList.remove('open');
         const p = d.querySelector('.nav-dropdown__panel');
-        if (p) {
-            p.style.position = '';
-            p.style.top = '';
-            p.style.left = '';
-        }
+        if (p) { p.style.top = ''; p.style.left = ''; }
     });
 }
 
 window.toggleNavDrop = toggleNavDrop;
 
 
-// ── UTILS FORMATO Y ESCAPE GENERAL ───────────────────────────────────────────
+// ── UTILS DE FORMATO Y ESCAPE ────────────────────────────────────────────────
 function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/&/g, '&amp;')
-              .replace(/</g, '&lt;')
-              .replace(/>/g, '&gt;')
-              .replace(/"/g, '&quot;')
-              .replace(/'/g, '&#039;');
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
 
 function formatFecha(timestamp) {
-    if (!timestamp) return '-';
+    if (!timestamp) return '—';
     const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    if (isNaN(d.getTime())) return '-';
+    if (isNaN(d.getTime())) return '—';
     const dd = String(d.getDate()).padStart(2, '0');
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     return dd + '/' + mm + '/' + d.getFullYear();
 }
 
 function formatFechaHora(timestamp) {
-    if (!timestamp) return '-';
+    if (!timestamp) return '—';
     const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    if (isNaN(d.getTime())) return '-';
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const hh = String(d.getHours()).padStart(2, '0');
+    if (isNaN(d.getTime())) return '—';
+    const dd  = String(d.getDate()).padStart(2, '0');
+    const mm  = String(d.getMonth() + 1).padStart(2, '0');
+    const hh  = String(d.getHours()).padStart(2, '0');
     const min = String(d.getMinutes()).padStart(2, '0');
     return dd + '/' + mm + ' ' + hh + ':' + min + 'hs';
 }
 
-// Retorna diferencia legible en horas/minutos entre dos timestamps de Firebase
-function formatHoras(tsInicio, tsFin) {
-    if (!tsInicio || !tsFin) return '-';
-    const t1 = tsInicio.toDate ? tsInicio.toDate() : new Date(tsInicio);
-    const t2 = tsFin.toDate ? tsFin.toDate() : new Date(tsFin);
-    const difMs = t2 - t1;
-    if (difMs < 0 || isNaN(difMs)) return '-';
-    
-    const totMin = Math.floor(difMs / 60000);
-    const hrs = Math.floor(totMin / 60);
+// Firma dual:
+//   formatHoras(horasDecimal)        ← moderno: formatHoras(3.5) → "3h 30m"
+//   formatHoras(tsInicio, tsFin)     ← legacy v4.2: diferencia entre timestamps
+function formatHoras(a, b) {
+    // Modo legacy: dos timestamps
+    if (b !== undefined && b !== null) {
+        if (!a) return '—';
+        const t1 = a.toDate ? a.toDate() : new Date(a);
+        const t2 = b.toDate ? b.toDate() : new Date(b);
+        const difMs = t2 - t1;
+        if (difMs < 0 || isNaN(difMs)) return '—';
+        const totMinL = Math.floor(difMs / 60000);
+        const hrsL  = Math.floor(totMinL / 60);
+        const minsL = totMinL % 60;
+        if (hrsL === 0) return minsL + ' min';
+        return hrsL + 'h ' + minsL + 'm';
+    }
+
+    // Modo moderno: número decimal de horas
+    const n = parseFloat(a);
+    if (isNaN(n) || n < 0) return '—';
+    const totMin = Math.round(n * 60);
+    const hrs  = Math.floor(totMin / 60);
     const mins = totMin % 60;
-    
     if (hrs === 0) return mins + ' min';
+    if (mins === 0) return hrs + 'h';
     return hrs + 'h ' + mins + 'm';
 }
 
@@ -554,105 +722,254 @@ function colorCabana(num) {
     const colores = {
         1: '#2ec4b6',
         2: '#e71d36',
-        3: '#ff9f1c',
-        4: '#011627',
-        5: '#9b5de5'
+        3: '#ff9f1c'
     };
     return colores[num] || '#6c757d';
 }
 
 
-// ── MODAL DINÁMICO DE CÉLULAS ────────────────────────────────────────────────
-function mostrarCelula(celulaId, event) {
-    if (event) event.stopPropagation();
-    
-    let overlay = document.getElementById('_celulaModal');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.id = '_celulaModal';
-        overlay.className = 'celula-modal-overlay';
-        overlay.innerHTML = 
-            '<div class="celula-modal-card">' +
-                '<div class="celula-modal-header">' +
-                    '<h4 id="_celCtxTitulo">Detalle del Registro</h4>' +
-                    '<button class="celula-modal-close" onclick="cerrarCelula()">&times;</button>' +
-                '</div>' +
-                '<div class="celula-modal-body">' +
-                    '<p class="celula-meta-main" id="_celCtxMeta"></p>' +
-                    '<div class="celula-content-box" id="_celCtxResumen"></div>' +
-                    '<div class="celula-expanded-area" id="_celCtxDetalle" style="display:none;"></div>' +
-                '</div>' +
-            '</div>';
-        document.body.appendChild(overlay);
-    }
-    
-    const elOriginal = document.querySelector('[data-celula-id="' + celulaId + '"]');
-    if (!elOriginal) return;
-    
-    try {
-        const celula = JSON.parse(decodeURIComponent(elOriginal.getAttribute('data-celula-obj') || '{}'));
-        
-        const titEl     = document.getElementById('_celCtxTitulo');
-        const metaEl    = document.getElementById('_celCtxMeta');
-        const resumenEl = document.getElementById('_celCtxResumen');
-        const detalleEl = document.getElementById('_celCtxDetalle');
-        
-        titEl.textContent   = celula.titulo || 'Registro';
-        metaEl.textContent  = celula.subtitulo || '';
-        resumenEl.textContent = celula.resumen || '';
-        
-        if (celula.contenido && celula.contenido.trim()) {
-            detalleEl.style.display   = 'block';
-            detalleEl.textContent     = celula.contenido;
-        } else {
-            detalleEl.style.display   = 'none';
+// ── ESTADOS DE UI (loading / empty / error / toast) ─────────────────────────
+function _resolverContainer(container) {
+    if (!container) return null;
+    return typeof container === 'string' ? document.querySelector(container) : container;
+}
+
+// Firma dual:
+//   showLoading(container, mensaje)  ← moderno: renderiza state-loading
+//   showLoading(true/false)          ← legacy: overlay global
+function showLoading(container, mensaje) {
+    if (typeof container === 'boolean') {
+        let spin = document.getElementById('appGlobalSpinner');
+        if (!spin && container) {
+            spin = document.createElement('div');
+            spin.id = 'appGlobalSpinner';
+            spin.style.cssText = 'position:fixed;inset:0;background:rgba(255,255,255,.6);'
+                + 'display:flex;align-items:center;justify-content:center;z-index:9000;';
+            spin.innerHTML = '<div class="spinner"></div>';
+            document.body.appendChild(spin);
         }
-        
-        overlay.style.display = 'flex';
-        document.body.style.overflow = 'hidden';
-        
-    } catch(e) {
-        console.error("Error al decodificar la célula de datos:", e);
+        if (spin) spin.style.display = container ? 'flex' : 'none';
+        return;
     }
+    const el = _resolverContainer(container);
+    if (!el) return;
+    el.innerHTML = '<div class="state-loading"><div class="spinner"></div>'
+        + '<span>' + escapeHtml(mensaje || 'Cargando...') + '</span></div>';
+}
+
+function showEmpty(container, titulo, descripcion, icono) {
+    const el = _resolverContainer(container);
+    if (!el) return;
+    el.innerHTML = '<div class="state-empty">'
+        + '<span class="material-icons">' + (icono || 'inbox') + '</span>'
+        + '<div class="state-empty__title">' + escapeHtml(titulo || 'Sin datos') + '</div>'
+        + (descripcion ? '<div class="state-empty__desc">' + escapeHtml(descripcion) + '</div>' : '')
+        + '</div>';
+}
+
+function showError(container, titulo, descripcion, onRetry) {
+    const el = _resolverContainer(container);
+    if (!el) return;
+    const retryId = onRetry ? 'retry-' + Date.now() : null;
+    el.innerHTML = '<div class="state-error"><span class="material-icons">error_outline</span>'
+        + '<div class="state-error__title">' + escapeHtml(titulo || 'Error') + '</div>'
+        + (descripcion ? '<div class="state-error__desc">' + escapeHtml(descripcion) + '</div>' : '')
+        + (retryId ? '<button class="btn btn-secondary" id="' + retryId + '"><span class="material-icons">refresh</span> Reintentar</button>' : '')
+        + '</div>';
+    if (retryId) {
+        const btn = document.getElementById(retryId);
+        if (btn) btn.addEventListener('click', onRetry);
+    }
+}
+
+function showToast(mensaje, tipo) {
+    tipo = tipo || 'success';
+    const iconos = { success: 'check_circle', error: 'error', warning: 'warning', info: 'info' };
+    let wrap = document.getElementById('cvc-toasts');
+    if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.id        = 'cvc-toasts';
+        wrap.className = 'toast-container';
+        document.body.appendChild(wrap);
+    }
+    const toast     = document.createElement('div');
+    toast.className = 'toast toast-' + tipo;
+    toast.innerHTML = '<span class="material-icons">' + (iconos[tipo] || 'info') + '</span>'
+        + '<span>' + escapeHtml(mensaje) + '</span>';
+    wrap.appendChild(toast);
+    setTimeout(function() { toast.remove(); }, 3300);
+}
+
+
+// ── SISTEMA DE AYUDA CONTEXTUAL ──────────────────────────────────────────────
+//  Lee las células desde config/ayuda en Firestore.
+//  Las células están guardadas como campos PLANOS con notación de puntos:
+//  "celulas.reservas.pagina" → { titulo, resumen, contenido, paginas, boton }
+//
+//  Todas las funciones de ayuda fallan en silencio: si Firestore no
+//  responde o no hay células, la página sigue funcionando normal.
+
+var AYUDA_ITEMS   = {};   // células agrupadas por página: { 'reservas.html': [cel, ...] }
+var AYUDA_CELULAS = {};   // células por id: { 'reservas.pagina': cel }
+var _ayudaPromise = null;
+
+function _cargarAyudaFirestore() {
+    if (_ayudaPromise) return _ayudaPromise;
+    _ayudaPromise = db.collection('config').doc('ayuda').get()
+        .then(function(snap) {
+            if (!snap.exists) return;
+            const data = snap.data();
+
+            function registrarCelula(id, cel) {
+                if (!cel || typeof cel !== 'object') return;
+                AYUDA_CELULAS[id] = cel;
+                (cel.paginas || []).forEach(function(p) {
+                    if (!AYUDA_ITEMS[p]) AYUDA_ITEMS[p] = [];
+                    AYUDA_ITEMS[p].push(Object.assign({ id: id }, cel));
+                });
+            }
+
+            // Caso 1: campos planos "celulas.x.y"
+            Object.keys(data).forEach(function(k) {
+                if (k.indexOf('celulas.') !== 0) return;
+                registrarCelula(k.slice(8), data[k]);
+            });
+
+            // Caso 2 (defensa): mapa anidado celulas: { x: { y: {...} } }
+            if (data.celulas && typeof data.celulas === 'object') {
+                Object.keys(data.celulas).forEach(function(grupo) {
+                    const sub = data.celulas[grupo];
+                    if (!sub || typeof sub !== 'object') return;
+                    if (sub.titulo || sub.resumen) {
+                        registrarCelula(grupo, sub);
+                    } else {
+                        Object.keys(sub).forEach(function(sk) {
+                            registrarCelula(grupo + '.' + sk, sub[sk]);
+                        });
+                    }
+                });
+            }
+        })
+        .catch(function(e) {
+            console.warn('Ayuda contextual no disponible:', e.message);
+        });
+    return _ayudaPromise;
+}
+
+function _crearPanelAyuda() {
+    let overlay = document.getElementById('cvcAyudaOverlay');
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.id = 'cvcAyudaOverlay';
+    overlay.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(15,25,14,.45);'
+        + 'z-index:9500;align-items:flex-end;justify-content:center;';
+    overlay.innerHTML = '<div id="cvcAyudaCard" style="background:#fff;width:100%;max-width:560px;'
+        + 'max-height:75vh;overflow-y:auto;border-radius:16px 16px 0 0;padding:20px;'
+        + 'box-shadow:0 -8px 32px rgba(0,0,0,.2);">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'
+        + '<strong id="cvcAyudaTitulo" style="font-size:16px;color:#1e3f1a;">Ayuda</strong>'
+        + '<button onclick="CVC.cerrarAyuda()" style="border:none;background:none;cursor:pointer;'
+        + 'font-size:22px;color:#8a9e88;line-height:1;">&times;</button>'
+        + '</div>'
+        + '<div id="cvcAyudaBody"></div>'
+        + '</div>';
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) cerrarAyuda();
+    });
+    document.body.appendChild(overlay);
+    return overlay;
+}
+
+function _renderCelulasEnPanel(celulas, titulo) {
+    const overlay = _crearPanelAyuda();
+    document.getElementById('cvcAyudaTitulo').textContent = titulo || 'Ayuda';
+
+    const body = document.getElementById('cvcAyudaBody');
+    body.innerHTML = celulas.map(function(cel, i) {
+        const detId = 'cvcAyudaDet' + i;
+        let html = '<div style="border:1px solid #e0e6de;border-radius:10px;padding:14px;margin-bottom:10px;">'
+            + '<div style="font-weight:700;font-size:14px;margin-bottom:6px;color:#1a2e18;">'
+            + escapeHtml(cel.titulo || 'Sección') + '</div>';
+        if (cel.resumen) {
+            html += '<div style="font-size:13px;color:#5a6e58;line-height:1.55;">'
+                + escapeHtml(cel.resumen) + '</div>';
+        }
+        if (cel.contenido && String(cel.contenido).trim()) {
+            html += '<button onclick="CVC._toggleAyudaDetalle(\'' + detId + '\', this)" '
+                + 'style="margin-top:8px;border:1px solid #e0e6de;background:#f8faf7;border-radius:6px;'
+                + 'padding:5px 12px;font-size:12px;cursor:pointer;color:#2d5a27;font-weight:600;">'
+                + 'Ver pasos detallados</button>'
+                + '<div id="' + detId + '" style="display:none;margin-top:10px;font-size:13px;'
+                + 'color:#1a2e18;line-height:1.65;white-space:pre-line;border-top:1px solid #edf0ec;'
+                + 'padding-top:10px;">' + escapeHtml(cel.contenido) + '</div>';
+        }
+        html += '</div>';
+        return html;
+    }).join('');
+
+    overlay.style.display = 'flex';
+}
+
+function _toggleAyudaDetalle(id, btn) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const abierto = el.style.display !== 'none';
+    el.style.display = abierto ? 'none' : 'block';
+    if (btn) btn.textContent = abierto ? 'Ver pasos detallados' : 'Ocultar detalle';
+}
+
+function initAyuda(paginaActual) {
+    try {
+        _cargarAyudaFirestore().then(function() {
+            if (!AYUDA_ITEMS[paginaActual] || !AYUDA_ITEMS[paginaActual].length) return;
+            if (document.getElementById('cvcAyudaFab')) return;
+
+            const fab = document.createElement('button');
+            fab.id = 'cvcAyudaFab';
+            fab.title = 'Ayuda de esta página';
+            fab.style.cssText = 'position:fixed;bottom:20px;right:20px;width:48px;height:48px;'
+                + 'border-radius:50%;background:#2d5a27;color:#fff;border:none;cursor:pointer;'
+                + 'font-size:20px;font-weight:700;box-shadow:0 4px 16px rgba(45,90,39,.35);'
+                + 'z-index:997;font-family:inherit;';
+            fab.textContent = '?';
+            fab.onclick = function() { mostrarAyuda(paginaActual); };
+            document.body.appendChild(fab);
+        });
+    } catch (e) {
+        console.warn('initAyuda:', e.message);
+    }
+}
+
+function mostrarAyuda(pagina) {
+    _cargarAyudaFirestore().then(function() {
+        const celulas = AYUDA_ITEMS[pagina];
+        if (!celulas || !celulas.length) {
+            showToast('No hay ayuda disponible para esta sección.', 'info');
+            return;
+        }
+        _renderCelulasEnPanel(celulas, 'Ayuda — ' + pagina.replace('.html', ''));
+    });
+}
+
+function mostrarCelula(celulaId) {
+    _cargarAyudaFirestore().then(function() {
+        const cel = AYUDA_CELULAS[celulaId];
+        if (!cel) {
+            showToast('No hay ayuda disponible para esta acción.', 'info');
+            return;
+        }
+        _renderCelulasEnPanel([cel], cel.titulo || 'Ayuda');
+    });
+}
+
+function cerrarAyuda() {
+    const overlay = document.getElementById('cvcAyudaOverlay');
+    if (overlay) overlay.style.display = 'none';
 }
 
 function cerrarCelula() {
-    var overlay = document.getElementById('_celulaModal');
-    if (overlay) overlay.style.display = 'none';
-    document.body.style.overflow = '';
+    cerrarAyuda();
 }
-
-window.mostrarCelula = mostrarCelula;
-window.cerrarCelula  = cerrarCelula;
-
-
-// ── CONTROL DE SPINNER GLOBAL ────────────────────────────────────────────────
-function showLoading(mostrar) {
-    let spin = document.getElementById('appGlobalSpinner');
-    if (!spin && mostrar) {
-        spin = document.createElement('div');
-        spin.id = 'appGlobalSpinner';
-        spin.className = 'app-spinner-overlay';
-        spin.innerHTML = '<div class="spinner-core"></div>';
-        document.body.appendChild(spin);
-    }
-    if (spin) spin.style.display = mostrar ? 'flex' : 'none';
-}
-
-function showToast(msg, tipo) {
-    const box = document.createElement('div');
-    box.className = 'app-toast toast-' + (tipo || 'info');
-    box.textContent = msg;
-    document.body.appendChild(box);
-    setTimeout(function() { box.classList.add('show'); }, 50);
-    setTimeout(function() {
-        box.classList.remove('show');
-        setTimeout(function() { box.remove(); }, 300);
-    }, 3500);
-}
-
-window.showLoading = showLoading;
-window.showToast   = showToast;
 
 
 // ── EXPORTAR ──────────────────────────────────────────────────────────────────
@@ -668,13 +985,15 @@ window.CVC = {
     crearTareaLimpieza,
     sincronizarDisponibilidad,
     sincronizarDesdeGCal,
-    iniciarTarea, pausarTarea, finalizarTarea, urgenciaTarea,
+    iniciarTarea, pausarTarea, finalizarTarea, verificarTarea, urgenciaTarea,
     getHistorialTareas,
     BTG_CATEGORIAS, inferirCategoria, fingerprintMovimiento,
     conciliarMovimientos, importarMovimientosConfirmados,
     matchMovimientoBancario, conciliarContraRegistros,
     guardarConciliacion, cargarConfigConciliacion,
-    verificarTarea,
     escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
-    showLoading, showToast
+    showLoading, showEmpty, showError, showToast,
+    AYUDA_ITEMS, initAyuda, mostrarAyuda, cerrarAyuda,
+    mostrarCelula, cerrarCelula,
+    _toggleAyudaDetalle
 };
