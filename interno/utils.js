@@ -1,7 +1,11 @@
 // ============================================================
-//  utils.js — Casa Verde Canas  v4.5 (puente de compatibilidad)
+//  utils.js — Casa Verde Canas  v4.6 (puente de compatibilidad)
 //  Funciones compartidas · /interno/
 //
+//  CAMBIOS v4.6:
+//  - Nav Finanzas en 3 capas: Registrar (ingresos/gastos/honorarios),
+//    Conciliar (cuentas/movimientos/BTG/categorías), Reportar (panel/informes).
+//  - pagos.html dividida en pagos + gastos + honorarios. 'Mis cobros' -> honorarios.html
 //  CAMBIOS v4.5:
 //  - [NUEVO] Integración pendientes ↔ tareas: al finalizar o verificar una
 //            tarea vinculada a un pendiente (campo pendienteId), el pendiente
@@ -115,15 +119,17 @@ const NAV_ADMIN_ITEMS = [
         group: 'Finanzas',
         icon:  'payments',
         items: [
-            { href: 'panel-financiero.html', icon: 'monitoring',      label: 'Panel financiero'   },
-            { sep: true },
-            { href: 'pagos.html',            icon: 'payments',        label: 'Ingresos / Egresos' },
-            { href: 'informes-airbnb.html',  icon: 'summarize',       label: 'Informes Airbnb'    },
+            { href: 'pagos.html',            icon: 'trending_up',     label: 'Ingresos reservas'  },
+            { href: 'gastos.html',           icon: 'trending_down',   label: 'Gastos y retiros'   },
+            { href: 'honorarios.html',       icon: 'engineering',     label: 'Honorarios'         },
             { sep: true },
             { href: 'cuentas.html',          icon: 'account_balance', label: 'Cuentas'            },
             { href: 'movimientos.html',      icon: 'receipt_long',    label: 'Movimientos'        },
             { href: 'herramientas-btg.html', icon: 'compare_arrows',  label: 'BTG / Conciliación' },
-            { href: 'categorias.html',       icon: 'label',           label: 'Categorías'         }
+            { href: 'categorias.html',       icon: 'label',           label: 'Categorías'         },
+            { sep: true },
+            { href: 'panel-financiero.html', icon: 'monitoring',      label: 'Panel financiero'   },
+            { href: 'informes-airbnb.html',  icon: 'summarize',       label: 'Informes Airbnb'    }
         ]
     },
 
@@ -165,7 +171,7 @@ const NAV_ADMIN_ITEMS = [
 
 const NAV_USER_ITEMS = [
     { href: 'tareas.html',         icon: 'checklist', label: 'Tareas'     },
-    { href: 'pagos.html',          icon: 'payments',  label: 'Mis cobros' },
+    { href: 'honorarios.html',     icon: 'payments',  label: 'Mis cobros' },
     { href: 'manual-sistema.html', icon: 'menu_book', label: 'Manual'     }
 ];
 

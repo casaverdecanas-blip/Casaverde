@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ingresos · Casa Verde Canas</title>
+    <title>Gastos · Casa Verde Canas</title>
     <link rel="stylesheet" href="design-system.css">
     <style>
         input[type="number"].form-control {
@@ -209,8 +209,6 @@
 
 <main class="admin-content">
 
-    <div id="balanceHeader" class="balance-header" style="display:none;"></div>
-
     <div class="filtro-mes" id="filtroMes" style="display:none;">
         <label>
             <span class="material-icons" style="font-size:16px;vertical-align:middle;">filter_list</span>
@@ -219,19 +217,150 @@
         <select id="selectMes" onchange="aplicarFiltroMes()"></select>
     </div>
 
-    <!-- Tab: Ingresos -->
-    <div id="tabIngresos">
+    <!-- Acción principal + tabs -->
+    <div style="margin-bottom:var(--space-5);">
+
+        <!-- Botón principal prominente -->
+        <button onclick="abrirNuevoGasto()"
+            style="width:100%;padding:var(--space-4);background:var(--color-primary);color:white;border:none;border-radius:var(--radius-lg);font-size:var(--text-md);font-weight:800;font-family:var(--font-body);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:var(--space-3);margin-bottom:var(--space-4);box-shadow:0 4px 14px rgba(45,90,39,0.25);">
+            <span class="material-icons" style="font-size:22px;">add_shopping_cart</span>
+            Registrar gasto
+        </button>
+
+        <!-- Tabs como botones visuales -->
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-2);">
+            <button class="tab-btn-card active" data-tab="egresos" id="tabBtnEgresos"
+                style="padding:var(--space-3) var(--space-2);border-radius:var(--radius-md);border:2px solid var(--color-primary);background:var(--color-primary-xlight);cursor:pointer;font-family:var(--font-body);display:flex;flex-direction:column;align-items:center;gap:4px;">
+                <span class="material-icons" style="font-size:20px;color:var(--color-primary);">trending_down</span>
+                <span style="font-size:var(--text-xs);font-weight:700;color:var(--color-primary);">Gastos</span>
+            </button>
+            <button class="tab-btn-card" data-tab="retiros" id="tabBtnRetiros"
+                style="padding:var(--space-3) var(--space-2);border-radius:var(--radius-md);border:2px solid var(--color-border);background:var(--color-surface-2);cursor:pointer;font-family:var(--font-body);display:flex;flex-direction:column;align-items:center;gap:4px;">
+                <span class="material-icons" style="font-size:20px;color:var(--color-text-muted);">person</span>
+                <span style="font-size:var(--text-xs);font-weight:700;color:var(--color-text-muted);">Personal</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtro por país (jurisdicción fiscal) -->
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:var(--space-4);flex-wrap:wrap;">
+        <span style="font-size:11px;font-weight:700;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em;">País:</span>
+        <button class="chip-pais" onclick="filtrarPais('', this)" style="background:var(--color-primary);color:white;border:1px solid var(--color-border);border-radius:99px;padding:4px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Todos</button>
+        <button class="chip-pais" onclick="filtrarPais('BR', this)" style="background:var(--color-surface);color:var(--color-text-secondary);border:1px solid var(--color-border);border-radius:99px;padding:4px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🇧🇷 Brasil</button>
+        <button class="chip-pais" onclick="filtrarPais('UY', this)" style="background:var(--color-surface);color:var(--color-text-secondary);border:1px solid var(--color-border);border-radius:99px;padding:4px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🇺🇾 Uruguay</button>
+    </div>
+
+    <!-- Tab: Egresos -->
+    <div id="tabEgresos">
         <div class="card">
             <div class="card__header">
                 <h2 class="card__title">
-                    <span class="material-icons">trending_up</span>
-                    Ingresos — cobros a huéspedes
+                    <span class="material-icons">trending_down</span>
+                    Gastos operativos
                 </h2>
-                <button class="btn btn-primary" onclick="abrirModalIngreso()">
-                    <span class="material-icons">add</span> Registrar ingreso
+            </div>
+            <div id="egresosContainer">
+                <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Retiros y personal -->
+    <div id="tabRetiros" style="display:none;">
+        <div class="card" style="margin-bottom:var(--space-4);">
+            <div class="card__header">
+                <h2 class="card__title">
+                    <span class="material-icons">add_circle_outline</span>
+                    Registrar retiro personal
+                </h2>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Persona <span class="required">*</span></label>
+                    <select id="rUsuario" class="form-control">
+                        <option value="">— Seleccionar —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Fecha</label>
+                    <input type="date" id="rFecha" class="form-control">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Monto <span class="required">*</span></label>
+                    <input type="number" id="rMonto" class="form-control" step="0.01" min="0.01" placeholder="0,00">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Moneda</label>
+                    <select id="rMoneda" class="form-control">
+                        <option value="BRL">BRL (R$)</option>
+                        <option value="UYU">UYU ($U)</option>
+                        <option value="USD">USD (US$)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Concepto <span class="required">*</span></label>
+                <input type="text" id="rConcepto" class="form-control"
+                    placeholder="Ej: Gastos personales semana, compras supermercado...">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Tipo de fondo</label>
+                    <select id="rTipoFondo" class="form-control">
+                        <option value="propio">Fondos propios</option>
+                        <option value="uy">Fondos desde Uruguay</option>
+                        <option value="prestamo">Préstamo / familiar</option>
+                    </select>
+                    <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <label style="font-size:11px;color:var(--color-text-muted);font-weight:600;">País:</label>
+                        <select id="rPais" style="font-size:12px;padding:3px 8px;border:1px solid var(--color-border);border-radius:6px;font-family:inherit;">
+                            <option value="BR">🇧🇷 Brasil</option>
+                            <option value="UY">🇺🇾 Uruguay</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Destino</label>
+                    <select id="rDestino" class="form-control">
+                        <option value="uso_personal">Uso personal</option>
+                        <option value="prestamo_externo">Préstamo a tercero</option>
+                        <option value="ahorro">Ahorro</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Comprobante (opcional)</label>
+                <div class="comp-zone">
+                    <input type="file" id="rComprobanteInput" accept="image/*" capture="environment"
+                        onchange="previsualizarComprobanteRetiro(this)">
+                    <span class="material-icons" style="font-size:22px;color:var(--color-text-muted);display:block;margin-bottom:2px;">photo_camera</span>
+                    <div style="font-size:12px;color:var(--color-text-secondary);">Foto de ticket / recibo (opcional)</div>
+                </div>
+                <div id="rComprobantePreview" style="display:none;margin-top:6px;text-align:center;">
+                    <img id="rComprobanteImg" style="max-width:100%;max-height:120px;border-radius:var(--radius-md);border:1px solid var(--color-border);">
+                </div>
+            </div>
+            <div style="margin-top:var(--space-3);">
+                <button class="btn btn-primary" id="rBtnGuardar" onclick="guardarRetiro()">
+                    <span class="material-icons">save</span>
+                    <span id="rBtnText">Registrar retiro</span>
                 </button>
             </div>
-            <div id="ingresosContainer">
+        </div>
+        <div class="card">
+            <div class="card__header">
+                <h2 class="card__title">
+                    <span class="material-icons">history</span>
+                    Historial de retiros
+                </h2>
+                <button class="btn btn-ghost btn-sm" onclick="cargarRetiros()">
+                    <span class="material-icons">refresh</span>
+                </button>
+            </div>
+            <div id="retirosContainer">
                 <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
             </div>
         </div>
@@ -241,83 +370,537 @@
 
 
 <!-- ── MODAL: Registrar ingreso ───────────────────────────────── -->
-<div class="modal-overlay" id="modalIngreso" style="display:none;" onclick="cerrarModalIngreso(event)">
-    <div class="modal" onclick="event.stopPropagation()">
+<div class="modal-overlay" id="modalEgreso" style="display:none;" onclick="cerrarModalEgreso(event)">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:620px;">
         <div class="modal__header">
             <div class="modal__title">
-                <span class="material-icons">trending_up</span>
-                Registrar ingreso
+                <span class="material-icons">trending_down</span>
+                Registrar gasto
             </div>
-            <button class="modal__close" onclick="cerrarModalIngreso()">
+            <button class="modal__close" onclick="cerrarModalEgreso()">
                 <span class="material-icons">close</span>
             </button>
         </div>
         <div class="modal__body">
+
             <div class="form-group">
-                <label class="form-label">Reserva <span class="required">*</span></label>
-                <select id="iReserva" class="form-control" onchange="actualizarSaldo()">
-                    <option value="">— Seleccionar reserva —</option>
-                </select>
+                <label class="form-label">Tipo de gasto <span class="required">*</span></label>
+                <div class="circuito-radio">
+                    <label>
+                        <input type="radio" name="eCircuito" value="fiscal" checked onchange="actualizarCamposCircuito()">
+                        <span class="material-icons" style="font-size:15px;color:#1D9E75;">receipt_long</span>
+                        Fiscal Casa Verde
+                    </label>
+                    <label>
+                        <input type="radio" name="eCircuito" value="personal" onchange="actualizarCamposCircuito()">
+                        <span class="material-icons" style="font-size:15px;color:#378ADD;">person</span>
+                        Retiro personal
+                    </label>
+                    <label>
+                        <input type="radio" name="eCircuito" value="mixto" onchange="actualizarCamposCircuito()">
+                        <span class="material-icons" style="font-size:15px;color:#EF9F27;">call_split</span>
+                        Mixto
+                    </label>
+                </div>
             </div>
-            <div class="saldo-box" id="saldoBox">
-                <div>Total reserva: <strong id="saldoTotal">—</strong></div>
-                <div>Ya pagado: <strong id="saldoPagado">—</strong></div>
-                <div>Pendiente: <span class="saldo-pendiente" id="saldoPendiente">—</span></div>
+
+            <div class="form-group">
+                <label class="form-label">Concepto <span class="required">*</span></label>
+                <input type="text" id="eConcepto" class="form-control"
+                    placeholder="Ej: Gas octubre, reparación calefón...">
             </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Categoría <span class="required">*</span></label>
+                    <select id="eCategoria" class="form-control">
+                        <option value="limpieza">Limpieza / insumos</option>
+                        <option value="mantenimiento">Mantenimiento</option>
+                        <option value="servicios">Servicios</option>
+                        <option value="jardineria">Jardinería</option>
+                        <option value="administrativo">Administrativo</option>
+                        <option value="alimentacion">Alimentación</option>
+                        <option value="transporte">Transporte</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Fecha <span class="required">*</span></label>
+                    <input type="date" id="eFecha" class="form-control">
+                </div>
+            </div>
+
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Monto <span class="required">*</span></label>
-                    <input type="number" id="iMonto" class="form-control" step="0.01" min="0.01">
+                    <input type="number" id="eMonto" class="form-control" step="0.01" min="0.01"
+                        oninput="actualizarMontoMixto()">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Moneda</label>
-                    <select id="iMoneda" class="form-control">
+                    <select id="eMoneda" class="form-control">
                         <option value="BRL">BRL (R$)</option>
                         <option value="USD">USD (US$)</option>
+                        <option value="UYU">UYU ($U)</option>
                         <option value="ARS">ARS ($)</option>
                     </select>
                 </div>
             </div>
+
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Método</label>
-                    <select id="iMetodo" class="form-control">
+                    <label class="form-label">Responsable</label>
+                    <select id="eResponsable" class="form-control">
+                        <option value="">— Quién pagó —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Cuenta de origen</label>
+                    <select id="eCuentaOrigen" class="form-control">
+                        <option value="">— Cuenta usada —</option>
+                    </select>
+                    <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <label style="font-size:11px;color:var(--color-text-muted);font-weight:600;">País del gasto:</label>
+                        <select id="ePais" style="font-size:12px;padding:3px 8px;border:1px solid var(--color-border);border-radius:6px;font-family:inherit;">
+                            <option value="BR">🇧🇷 Brasil</option>
+                            <option value="UY">🇺🇾 Uruguay</option>
+                        </select>
+                        <span style="font-size:10px;color:var(--color-text-muted);">Se ajusta solo al elegir cuenta</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Tipo de fondo</label>
+                    <select id="eTipoFondo" class="form-control">
+                        <option value="casa_verde">Fondos de Casa Verde</option>
+                        <option value="propio">Fondos propios</option>
+                        <option value="uy">Fondos desde Uruguay</option>
+                        <option value="prestamo">Préstamo / familiar</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Método de pago</label>
+                    <select id="eMetodo" class="form-control">
                         <option value="pix">PIX</option>
-                        <option value="transferencia">Transferencia</option>
                         <option value="efectivo">Efectivo</option>
+                        <option value="transferencia">Transferencia</option>
                         <option value="tarjeta">Tarjeta</option>
                     </select>
                 </div>
+            </div>
+
+            <!-- Campos solo fiscal/mixto -->
+            <div id="camposFiscal">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Proveedor</label>
+                        <input type="text" id="eProveedor" class="form-control" placeholder="Nombre del proveedor">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">¿Deducible IRPF?</label>
+                        <select id="eDeducible" class="form-control">
+                            <option value="true">Sí, deducible</option>
+                            <option value="false">No deducible</option>
+                        </select>
+                    </div>
+                </div>
                 <div class="form-group">
-                    <label class="form-label">Tipo</label>
-                    <select id="iTipo" class="form-control">
-                        <option value="seña">Seña</option>
-                        <option value="parcial">Parcial</option>
-                        <option value="total">Total</option>
-                    </select>
+                    <label class="form-label">N° factura / referencia</label>
+                    <input type="text" id="eReferencia" class="form-control" placeholder="Opcional">
                 </div>
             </div>
-            <div class="form-group">
-                <label class="form-label">Observaciones</label>
-                <input type="text" id="iObs" class="form-control" placeholder="Opcional">
+
+            <!-- Slider mixto -->
+            <div id="camposMixto" style="display:none;background:var(--color-surface-2);border-radius:var(--radius-md);padding:12px 14px;border:1px solid var(--color-border);margin-bottom:var(--space-3);">
+                <p style="font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;">
+                    ¿Qué porcentaje es imputable a Casa Verde?
+                </p>
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <input type="range" id="ePctFiscal" min="0" max="100" value="50" style="flex:1;"
+                        oninput="actualizarMontoMixto()">
+                    <span id="ePctFiscalLabel" style="font-size:14px;font-weight:700;min-width:36px;text-align:right;">50%</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:12px;">
+                    <div style="color:#1D9E75;">Fiscal: <strong id="eMontoFiscalLabel">—</strong></div>
+                    <div style="color:#378ADD;">Personal: <strong id="eMontoPersonalLabel">—</strong></div>
+                </div>
             </div>
-            <div class="alert alert-error" id="iError" style="display:none;">
+
+            <div class="form-group">
+                <label class="form-label">Notas</label>
+                <input type="text" id="eNotas" class="form-control" placeholder="Opcional">
+            </div>
+
+            <div class="form-group" id="camposNotasPersonales" style="display:none;">
+                <label class="form-label">Notas personales</label>
+                <input type="text" id="eNotasPersonales" class="form-control"
+                    placeholder="Solo visible para admin — no aparece en vista de contadora">
+            </div>
+
+            <!-- Comprobante -->
+            <div class="form-group">
+                <label class="form-label">Comprobante (foto de factura / recibo)</label>
+                <div class="comp-zone">
+                    <input type="file" id="eComprobanteInput" accept="image/*" capture="environment"
+                        onchange="previsualizarComprobante(this)">
+                    <span class="material-icons" style="font-size:28px;color:var(--color-text-muted);display:block;margin-bottom:4px;">photo_camera</span>
+                    <div style="font-size:12px;color:var(--color-text-secondary);">Tocar para sacar foto o elegir imagen</div>
+                    <div style="font-size:11px;color:var(--color-text-muted);margin-top:2px;">Se comprime automáticamente · JPG · máx 10 MB original</div>
+                </div>
+                <div id="eComprobantePreview" style="display:none;margin-top:8px;text-align:center;">
+                    <img id="eComprobanteImg" style="max-width:100%;max-height:160px;border-radius:var(--radius-md);border:1px solid var(--color-border);">
+                    <div style="font-size:11px;color:#1D9E75;margin-top:4px;">
+                        <span class="material-icons" style="font-size:12px;vertical-align:-2px;">check_circle</span>
+                        Imagen lista para guardar
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert alert-error" id="eError" style="display:none;">
                 <span class="material-icons">error_outline</span>
-                <span id="iErrorText"></span>
+                <span id="eErrorText"></span>
             </div>
         </div>
         <div class="modal__footer">
-            <button class="btn btn-ghost" onclick="cerrarModalIngreso()">Cancelar</button>
-            <button class="btn btn-primary" id="iBtnGuardar" onclick="guardarIngreso()">
+            <button class="btn btn-ghost" onclick="cerrarModalEgreso()">Cancelar</button>
+            <button class="btn btn-primary" id="eBtnGuardar" onclick="guardarEgreso()">
                 <span class="material-icons">save</span>
-                <span id="iBtnText">Guardar</span>
+                <span id="eBtnText">Guardar</span>
             </button>
         </div>
     </div>
 </div>
 
 
-<!-- ── MODAL: Registrar gasto (EXTENDIDO v4.3) ──────────────── -->
+<!-- ── MODAL: Honorario manual ────────────────────────────────── -->
+<div class="modal-overlay" id="modalNuevoGasto" style="display:none;" onclick="cerrarNuevoGasto(event)">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:480px;">
+        <div class="modal__header">
+            <div class="modal__title">
+                <span class="material-icons">add_shopping_cart</span>
+                Registrar gasto
+            </div>
+            <button class="modal__close" onclick="cerrarNuevoGasto()">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+            <!-- Selector modo -->
+            <div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-4);">
+                <button id="modoRapidoBtn" onclick="setModoGasto('rapido')"
+                    style="flex:1;padding:var(--space-3);border-radius:var(--radius-md);border:2px solid var(--color-primary);background:var(--color-primary);color:white;font-family:var(--font-body);font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:var(--space-2);">
+                    <span class="material-icons" style="font-size:18px;">edit</span> Rapido
+                </button>
+                <button id="modoFotoBtn" onclick="setModoGasto('foto')"
+                    style="flex:1;padding:var(--space-3);border-radius:var(--radius-md);border:2px solid var(--color-border);background:var(--color-surface-2);color:var(--color-text-secondary);font-family:var(--font-body);font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:var(--space-2);">
+                    <span class="material-icons" style="font-size:18px;">document_scanner</span> Con foto IA
+                </button>
+            </div>
+
+            <!-- MODO RAPIDO -->
+            <div id="seccionRapida">
+                <div class="form-group" style="margin-bottom:var(--space-3);">
+                    <label class="form-label">Monto (R$) *</label>
+                    <input type="number" id="ngMonto" class="form-control" step="0.01" min="0" placeholder="0,00"
+                        style="font-size:var(--text-xl);font-weight:700;text-align:right;">
+                </div>
+                <div class="form-group" style="margin-bottom:var(--space-3);">
+                    <label class="form-label">De donde salio *</label>
+                    <select id="ngCuenta" class="form-control">
+                        <option value="">-- Pendiente de asignar --</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:var(--space-3);">
+                    <label class="form-label">Para que *</label>
+                    <input type="text" id="ngConcepto" class="form-control"
+                        placeholder="Materiales, limpieza, nafta...">
+                </div>
+                <!-- Opcionales colapsados -->
+                <div id="ngOpcionales" style="display:none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Fecha</label>
+                            <input type="date" id="ngFecha" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Metodo de pago</label>
+                            <select id="ngMetodo" class="form-control">
+                                <option value="pix">PIX</option>
+                                <option value="efectivo">Efectivo</option>
+                                <option value="debito">Debito</option>
+                                <option value="credito">Credito</option>
+                                <option value="transferencia">Transferencia</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Circuito fiscal</label>
+                        <select id="ngCircuito" class="form-control">
+                            <option value="fiscal">Fiscal (gasto del negocio)</option>
+                            <option value="personal">Personal (fondos propios)</option>
+                            <option value="mixto">Mixto</option>
+                            <option value="">Sin clasificar -- revisar despues</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Proveedor</label>
+                        <input type="text" id="ngProveedor" class="form-control" placeholder="Nombre del comercio">
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Foto del comprobante</label>
+                        <input type="file" id="ngComprobanteInput" accept="image/*" capture="environment"
+                            style="display:none;" onchange="ngPreviewFoto(this)">
+                        <button class="btn btn-secondary btn-sm"
+                            onclick="document.getElementById('ngComprobanteInput').click()">
+                            <span class="material-icons">photo_camera</span> Agregar foto
+                        </button>
+                        <img id="ngComprobantePreview" src=""
+                            style="display:none;width:100%;border-radius:var(--radius-md);margin-top:var(--space-2);">
+                    </div>
+                </div>
+                <button onclick="toggleNgOpcionales()" id="ngToggleBtn"
+                    style="background:none;border:none;color:var(--color-primary);font-size:var(--text-sm);cursor:pointer;padding:0;font-family:var(--font-body);margin-bottom:var(--space-3);">
+                    + Mas detalles (opcional)
+                </button>
+            </div>
+
+            <!-- MODO FOTO IA -->
+            <div id="seccionFoto" style="display:none;">
+                <div id="ngUpZone"
+                    style="border:2px dashed var(--color-border);border-radius:var(--radius-lg);padding:var(--space-6);text-align:center;cursor:pointer;margin-bottom:var(--space-3);"
+                    onclick="document.getElementById('ngFotoInput').click()">
+                    <span class="material-icons" style="font-size:36px;color:var(--color-text-muted);">document_scanner</span>
+                    <div style="font-weight:700;color:var(--color-text-secondary);margin-top:var(--space-2);">
+                        Toma o selecciona una foto de la factura
+                    </div>
+                    <div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-top:4px;">
+                        La IA extrae todos los datos automaticamente
+                    </div>
+                    <input type="file" id="ngFotoInput" accept="image/*" capture="environment"
+                        style="display:none;" onchange="ngProcesarFoto(this)">
+                </div>
+                <img id="ngFotoPreview" src=""
+                    style="display:none;width:100%;border-radius:var(--radius-md);margin-bottom:var(--space-3);">
+                <div id="ngFotoLog"
+                    style="display:none;background:#1a1a2e;border-radius:var(--radius-md);padding:var(--space-3);font-size:11px;font-family:monospace;color:#a8ffa8;max-height:80px;overflow-y:auto;margin-bottom:var(--space-3);"></div>
+                <div id="ngFotoExtraido" style="display:none;">
+                    <div style="background:var(--color-success-bg);border:1px solid rgba(29,158,117,0.2);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);font-size:var(--text-sm);color:var(--color-success);margin-bottom:var(--space-3);display:flex;align-items:center;gap:var(--space-2);">
+                        <span class="material-icons" style="font-size:15px;">auto_fix_high</span>
+                        Datos extraidos por IA -- revisa y completa lo que falta
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Monto (R$) *</label>
+                        <input type="number" id="ngFMonto" class="form-control" step="0.01" min="0"
+                            style="font-size:var(--text-xl);font-weight:700;text-align:right;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">De donde salio *</label>
+                        <select id="ngFCuenta" class="form-control">
+                            <option value="">-- Pendiente de asignar --</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Concepto *</label>
+                        <input type="text" id="ngFConcepto" class="form-control">
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Proveedor</label>
+                        <input type="text" id="ngFProveedor" class="form-control">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Fecha</label>
+                            <input type="date" id="ngFFecha" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Metodo</label>
+                            <select id="ngFMetodo" class="form-control">
+                                <option value="pix">PIX</option>
+                                <option value="efectivo">Efectivo</option>
+                                <option value="debito">Debito</option>
+                                <option value="credito">Credito</option>
+                                <option value="transferencia">Transferencia</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Circuito fiscal</label>
+                        <select id="ngFCircuito" class="form-control">
+                            <option value="fiscal">Fiscal (gasto del negocio)</option>
+                            <option value="personal">Personal</option>
+                            <option value="mixto">Mixto</option>
+                            <option value="">Sin clasificar -- revisar despues</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Items de la compra</label>
+                        <textarea id="ngFItems" class="form-control" rows="3" style="font-size:11px;"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">N factura</label>
+                            <input type="text" id="ngFReferencia" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Categoria</label>
+                            <select id="ngFCategoria" class="form-control">
+                                <option value="materiales">Materiales</option>
+                                <option value="limpieza">Limpieza / insumos</option>
+                                <option value="mantenimiento">Mantenimiento</option>
+                                <option value="servicios">Servicios</option>
+                                <option value="administrativo">Administrativo</option>
+                                <option value="alimentos">Alimentos</option>
+                                <option value="transporte">Transporte</option>
+                                <option value="otro">Otro</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert alert-error" id="ngError" style="display:none;">
+                <span class="material-icons">error_outline</span>
+                <span id="ngErrorText"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarNuevoGasto()">Cancelar</button>
+            <button class="btn btn-primary" id="ngBtnGuardar" onclick="guardarNuevoGasto()">
+                <span class="material-icons">save</span>
+                <span id="ngBtnTxt">Guardar gasto</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ── MODAL: Importar factura con IA ─────────────────────────── -->
+<div class="modal-overlay" id="modalFactura" style="display:none;" onclick="cerrarModalFactura(event)">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:640px;">
+        <div class="modal__header">
+            <div class="modal__title">
+                <span class="material-icons">document_scanner</span>
+                Importar factura — IA
+            </div>
+            <button class="modal__close" onclick="cerrarModalFactura()">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+            <p style="font-size:var(--text-xs);color:var(--color-text-muted);margin-bottom:var(--space-4)">
+                Tomá una foto de la factura o seleccioná una imagen. La IA extrae los datos automáticamente.
+            </p>
+            <div id="fUpZone" style="border:2px dashed var(--color-primary-light);border-radius:var(--radius-md);padding:var(--space-6);text-align:center;cursor:pointer;background:var(--color-primary-xlight);position:relative;margin-bottom:var(--space-4);">
+                <input type="file" id="fImgInput" accept="image/*" capture="environment"
+                    style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;"
+                    onchange="procesarFactura(this.files[0])">
+                <span class="material-icons" style="font-size:36px;color:var(--color-primary);margin-bottom:8px;display:block;">photo_camera</span>
+                <div style="font-size:var(--text-sm);font-weight:700;color:var(--color-primary-dark)">Sacar foto o seleccionar imagen</div>
+                <div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-top:4px">JPG, PNG · se redimensiona automáticamente antes de enviar</div>
+            </div>
+            <div id="fImgPreview" style="display:none;margin-bottom:var(--space-4);text-align:center;">
+                <img id="fImgEl" style="max-width:100%;max-height:200px;border-radius:var(--radius-md);border:1px solid var(--color-border);">
+            </div>
+            <div id="fLogBox" style="background:#0f172a;color:#e2e8f0;border-radius:var(--radius-md);padding:var(--space-3);font-family:var(--font-mono);font-size:11px;line-height:1.8;margin-bottom:var(--space-4);display:none;max-height:120px;overflow-y:auto;"></div>
+            <div id="fCampos" style="display:none;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Proveedor</label>
+                        <input type="text" id="fProveedor" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Fecha</label>
+                        <input type="date" id="fFecha" class="form-control">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Monto</label>
+                        <input type="number" id="fMonto" class="form-control" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Moneda</label>
+                        <select id="fMoneda" class="form-control">
+                            <option value="BRL">BRL</option>
+                            <option value="USD">USD</option>
+                            <option value="UYU">UYU</option>
+                            <option value="ARS">ARS</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Categoría</label>
+                        <select id="fCategoria" class="form-control">
+                            <option value="limpieza">Limpieza / insumos</option>
+                            <option value="mantenimiento">Mantenimiento</option>
+                            <option value="servicios">Servicios</option>
+                            <option value="jardineria">Jardinería</option>
+                            <option value="administrativo">Administrativo</option>
+                            <option value="otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Método de pago</label>
+                        <select id="fMetodo" class="form-control">
+                            <option value="pix">PIX</option>
+                            <option value="efectivo">Efectivo</option>
+                            <option value="transferencia">Transferencia</option>
+                            <option value="tarjeta">Tarjeta</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom:var(--space-3);">
+                    <label class="form-label">Concepto</label>
+                    <input type="text" id="fConcepto" class="form-control" placeholder="Descripción del gasto">
+                </div>
+                <div class="form-group" style="margin-bottom:var(--space-3);">
+                    <label class="form-label">Nº factura / referencia</label>
+                    <input type="text" id="fReferencia" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Ítems de la compra</label>
+                    <textarea id="fItems" class="form-control" rows="3" style="font-size:11px;"
+                        placeholder="Se completa automáticamente con los productos detectados"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Cuenta de origen</label>
+                        <select id="fCuentaOrigen" class="form-control">
+                            <option value="">— Pendiente de asignar —</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Circuito fiscal</label>
+                        <select id="fCircuito" class="form-control">
+                            <option value="fiscal">Fiscal (gasto del negocio)</option>
+                            <option value="personal">Personal (fondos propios)</option>
+                            <option value="mixto">Mixto (parte fiscal + parte personal)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="alert alert-error" id="fError" style="display:none;">
+                <span class="material-icons">error_outline</span>
+                <span id="fErrorText"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModalFactura()">Cancelar</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('fImgInput').click()">
+                <span class="material-icons">photo_camera</span> Nueva foto
+            </button>
+            <button class="btn btn-primary" id="fBtnGuardar" onclick="guardarDesdeFactura()" style="display:none;">
+                <span class="material-icons">save</span>
+                <span id="fBtnTxt">Guardar gasto</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+
+<!-- Firebase + Storage + utils -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -325,7 +908,7 @@
 <script>
 (async () => {
     window.onerror = function(msg, src, line, col, err) {
-        console.error('INGRESOS ERROR:', msg, 'linea:'+line, err ? err.message : '');
+        console.error('GASTOS ERROR:', msg, 'linea:'+line, err ? err.message : '');
     };
     // CORREGIDO: usar await correctamente
     var { user, userData } = await CVC.verificarAuth(['admin', 'user']);
@@ -336,24 +919,54 @@
     var { escapeHtml, formatFecha, formatHoras, showEmpty, showError, showToast,
             subirComprobante, abrirComprobante } = CVC;
 
-    CVC.renderNav('pagos.html', userData.rol);
-    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('pagos.html');
+    CVC.renderNav('gastos.html', userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('gastos.html');
 
-    // -- Compatibilidad con links viejos (pagos.html era la página unificada)
-    var urlParams = new URLSearchParams(window.location.search);
-    var _tabLegacy = urlParams.get('tab');
-    if (_tabLegacy === 'egresos' || _tabLegacy === 'retiros') {
-        var _q = urlParams.get('accion') === 'importar' ? '?accion=importar'
-               : (_tabLegacy === 'retiros' ? '?tab=retiros' : '');
-        window.location.replace('gastos.html' + _q);
-        return;
+    // -- Jurisdicción fiscal (país) ------------------------------
+    var PAIS_FLAG = { BR: '\uD83C\uDDE7\uD83C\uDDF7', UY: '\uD83C\uDDFA\uD83C\uDDFE', AR: '\uD83C\uDDE6\uD83C\uDDF7' };
+    function paisDeCuenta(cuentaId) {
+        var c = (cuentasCache || []).find(function(x) { return x.id === cuentaId; });
+        return (c && c.pais) || 'BR';
     }
-    if (_tabLegacy === 'honorarios') { window.location.replace('honorarios.html'); return; }
+    function chipPais(p) {
+        p = p || 'BR';
+        return '<span style="font-size:10px;background:var(--color-surface-2);border:1px solid var(--color-border);padding:1px 6px;border-radius:99px;white-space:nowrap;">' + (PAIS_FLAG[p] || '') + ' ' + p + '</span>';
+    }
+    var filtroPais = '';
+    window.filtrarPais = function(p, btn) {
+        filtroPais = p;
+        document.querySelectorAll('.chip-pais').forEach(function(b) {
+            b.style.background = 'var(--color-surface)';
+            b.style.color = 'var(--color-text-secondary)';
+        });
+        if (btn) { btn.style.background = 'var(--color-primary)'; btn.style.color = 'white'; }
+        renderEgresos();
+        renderRetiros();
+    };
+
+
+    // -- Acceso directo por URL params --------------------------
+    // Dashboard -> "Registrar gasto con foto" llega acá (vía pagos.html o directo)
+    var urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('tab') === 'retiros') {
+        var _tbR = document.getElementById('tabBtnRetiros');
+        if (_tbR) _tbR.click();
+    }
+    if (urlParams.get('accion') === 'importar') {
+        setTimeout(function() {
+            abrirNuevoGasto().then(function() { setModoGasto('foto'); });
+        }, 400);
+    }
 
     // -- Visibilidad por rol -----------------------------------
     if (!esAdmin) { window.location.replace('honorarios.html'); return; }
-    document.getElementById('balanceHeader').style.display = 'grid';
-    document.getElementById('filtroMes').style.display     = 'flex';
+    document.getElementById('filtroMes').style.display = 'flex';
+    cargarRetiros();
+    var _selCtaOr = document.getElementById('eCuentaOrigen');
+    if (_selCtaOr) _selCtaOr.addEventListener('change', function() {
+        var pe = document.getElementById('ePais');
+        if (pe && this.value) pe.value = paisDeCuenta(this.value);
+    });
 
     // -- Estado local ------------------------------------------
     var reservasCache     = [];
@@ -417,7 +1030,7 @@
 
     window.aplicarFiltroMes = function() {
         mesFiltro = document.getElementById('selectMes').value || null;
-        renderIngresos(); renderBalance();
+        renderEgresos();
     };
 
     function enMes(item) {
@@ -431,33 +1044,18 @@
     async function cargarTodo() {
         try {
             if (esAdmin) {
-                var [resS, ingS, egS, honS, presS, cuentS] = await Promise.all([
-                    db.collection('reservas').get(),
-                    db.collection('pagos').get(),
+                var [egS, cuentS] = await Promise.all([
                     db.collection('gastos').get(),
-                    db.collection('honorarios').get(),
-                    db.collection('presupuestos').get(),
                     db.collection('cuentas').get()
                 ]);
                 var sortDesc = function(a, b) {
                     return (b.creadoEn && b.creadoEn.toDate ? b.creadoEn.toDate().getTime() : 0)
                          - (a.creadoEn && a.creadoEn.toDate ? a.creadoEn.toDate().getTime() : 0);
                 };
-                reservasCache = resS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
-                    .filter(function(r) { return ['confirmada','pendiente','finalizada'].includes(r.estado); })
-                    .sort(function(a, b) {
-                        return (b.checkIn && b.checkIn.toDate ? b.checkIn.toDate().getTime() : 0)
-                             - (a.checkIn && a.checkIn.toDate ? a.checkIn.toDate().getTime() : 0);
-                    });
-                presupuestosCache = presS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
-                ingresosCache     = ingS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); }).sort(sortDesc);
-                egresosCache      = egS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); }).sort(sortDesc);
-                honorariosCache   = honS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
-                    .filter(function(h) { return h.estado !== 'pagado'; }).sort(sortDesc);
-                cuentasCache      = cuentS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+                egresosCache = egS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); }).sort(sortDesc);
+                cuentasCache = cuentS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
                 poblarSelectMes();
-                renderBalance(); renderIngresos();
-                poblarSelectIngreso();
+                renderEgresos();
             } else {
                 var honS = await db.collection('honorarios')
                     .where('uid', '==', user.uid).get();
@@ -529,7 +1127,7 @@
     // -- Render: Egresos ---------------------------------------
     function renderEgresos() {
         var container = document.getElementById('egresosContainer');
-        var lista     = egresosCache.filter(enMes);
+        var lista     = egresosCache.filter(enMes).filter(function(g) { return !filtroPais || (g.pais || 'BR') === filtroPais; });
         if (!lista.length) { showEmpty(container, 'Sin gastos', 'No hay gastos en este período.', 'trending_down'); return; }
         var sumaBRL = lista.filter(function(g) { return g.moneda === 'BRL' && (g.circuito || 'fiscal') === 'fiscal'; })
             .reduce(function(a, g) { return a + (g.monto || 0); }, 0);
@@ -546,7 +1144,7 @@
                 : '';
             return '<tr>' +
                 '<td>' + escapeHtml(g.fecha || '--') + '</td>' +
-                '<td><strong>' + escapeHtml(g.concepto || '--') + '</strong> ' + circBadge + '</td>' +
+                '<td><strong>' + escapeHtml(g.concepto || '--') + '</strong> ' + circBadge + ' ' + chipPais(g.pais) + '</td>' +
                 '<td>' + escapeHtml(CATS[g.categoria] || g.categoria || '--') + '</td>' +
                 '<td class="fila-monto fila-egreso">' + sim + ' ' + (g.monto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td>' +
                 '<td>' + escapeHtml(g.metodo || '--') + '</td>' +
@@ -589,9 +1187,10 @@
     // -- Render: Retiros ---------------------------------------
     function renderRetiros() {
         var container = document.getElementById('retirosContainer');
-        if (!retirosCache.length) { showEmpty(container, 'Sin retiros', 'No hay retiros personales registrados.', 'person'); return; }
+        var listaR = retirosCache.filter(function(r) { return !filtroPais || (r.pais || 'BR') === filtroPais; });
+        if (!listaR.length) { showEmpty(container, 'Sin retiros', 'No hay retiros personales registrados.', 'person'); return; }
         var balancePorPersona = {};
-        retirosCache.forEach(function(r) {
+        listaR.forEach(function(r) {
             var nom = r.usuarioNom || 'Sin asignar';
             if (!balancePorPersona[nom]) balancePorPersona[nom] = { total: 0, cant: 0 };
             balancePorPersona[nom].total += r.monto || 0;
@@ -602,7 +1201,7 @@
                 Math.round(entry[1].total).toLocaleString('pt-BR') + '</div>' +
                 '<div class="stat-chip__label">' + escapeHtml(entry[0]) + ' (' + entry[1].cant + ')</div></div>';
         }).join('');
-        var rows = retirosCache.map(function(r) {
+        var rows = listaR.map(function(r) {
             var mon = r.moneda === 'UYU' ? '$U ' : r.moneda === 'USD' ? 'US$ ' : 'R$ ';
             var tieneComp = !!r.comprobanteUrl;
             var compBtn = tieneComp
@@ -611,7 +1210,7 @@
             var reclasif = r.reclasificado
                 ? '<span style="font-size:11px;background:#E1F5EE;color:#0F6E56;padding:2px 7px;border-radius:3px;">Reclasificado ' + (r.pctReclasif || 0) + '%</span>'
                 : '';
-            return '<tr><td>' + escapeHtml(r.fecha || '--') + '</td>' +
+            return '<tr><td>' + escapeHtml(r.fecha || '--') + ' ' + chipPais(r.pais) + '</td>' +
                 '<td><strong>' + escapeHtml(r.usuarioNom || '--') + '</strong></td>' +
                 '<td>' + escapeHtml(r.concepto || '--') + '</td>' +
                 '<td style="text-align:right;font-family:var(--font-mono);">' + mon + (r.monto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td>' +
@@ -856,6 +1455,7 @@
                 proveedor:   document.getElementById('eProveedor').value.trim(),
                 notas:       document.getElementById('eNotas').value.trim(),
                 fecha, circuito, responsableId, responsableNom, cuentaOrigenId, cuentaOrigenNom,
+                pais: cuentaOrigenId ? paisDeCuenta(cuentaOrigenId) : (document.getElementById('ePais') ? document.getElementById('ePais').value : 'BR'),
                 tipoFondo:   document.getElementById('eTipoFondo').value,
                 deducible:   circuito === 'fiscal' ? document.getElementById('eDeducible').value === 'true' : false,
                 referenciaComprobante: document.getElementById('eReferencia').value.trim(),
@@ -881,6 +1481,7 @@
                     concepto: concepto + ' (parte personal)', destino: 'uso_personal',
                     tipoFondo: docData.tipoFondo, comprobanteUrl: null,
                     gastoFiscalId: docRef.id, reclasificado: false, pctReclasif: pctFiscal,
+                    pais: docData.pais,
                     creadoEn: firebase.firestore.FieldValue.serverTimestamp(), creadoPor: user.uid
                 });
             }
@@ -922,6 +1523,7 @@
                 destino:    document.getElementById('rDestino').value,
                 tipoFondo:  document.getElementById('rTipoFondo').value,
                 cuentaOrigenId: '', cuentaOrigenNom: '',
+                pais: document.getElementById('rPais') ? document.getElementById('rPais').value : 'BR',
                 comprobanteUrl: null, reclasificado: false,
                 creadoEn: firebase.firestore.FieldValue.serverTimestamp(), creadoPor: user.uid
             };
@@ -1208,6 +1810,7 @@
                 deducible:            circuito === 'fiscal' || circuito === 'mixto',
                 cuentaOrigenId:       cuentaId,
                 cuentaOrigenNom:      cuentaNom,
+                pais:                 cuentaId ? paisDeCuenta(cuentaId) : 'BR',
                 referenciaComprobante: ref,
                 origen:               'factura_ia',
                 creadoEn:             firebase.firestore.FieldValue.serverTimestamp(),
@@ -1506,6 +2109,7 @@
                 categoria: cat,
                 cuentaOrigenId:  cuentaId,
                 cuentaOrigenNom: cuentaNom,
+                pais: cuentaId ? paisDeCuenta(cuentaId) : 'BR',
                 sinCuenta: !cuentaId,
                 items:     items,
                 referenciaComprobante: ref,

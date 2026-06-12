@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ingresos · Casa Verde Canas</title>
+    <title>Honorarios · Casa Verde Canas</title>
     <link rel="stylesheet" href="design-system.css">
     <style>
         input[type="number"].form-control {
@@ -209,29 +209,27 @@
 
 <main class="admin-content">
 
-    <div id="balanceHeader" class="balance-header" style="display:none;"></div>
-
-    <div class="filtro-mes" id="filtroMes" style="display:none;">
-        <label>
-            <span class="material-icons" style="font-size:16px;vertical-align:middle;">filter_list</span>
-            Mes:
-        </label>
-        <select id="selectMes" onchange="aplicarFiltroMes()"></select>
+    <div id="miBalanceBox" style="display:none;">
+        <div class="mi-balance">
+            <div class="mi-balance__label">Mis honorarios pendientes de cobro</div>
+            <div class="mi-balance__monto" id="miBalanceMonto">R$ 0</div>
+            <div class="mi-balance__sub"   id="miBalanceSub">—</div>
+        </div>
     </div>
 
-    <!-- Tab: Ingresos -->
-    <div id="tabIngresos">
+    <!-- Tab: Honorarios -->
+    <div id="tabHonorarios">
         <div class="card">
             <div class="card__header">
                 <h2 class="card__title">
-                    <span class="material-icons">trending_up</span>
-                    Ingresos — cobros a huéspedes
+                    <span class="material-icons">engineering</span>
+                    Honorarios a colaboradores
                 </h2>
-                <button class="btn btn-primary" onclick="abrirModalIngreso()">
-                    <span class="material-icons">add</span> Registrar ingreso
+                <button class="btn btn-primary" id="btnNuevoHonorario" onclick="abrirModalHonorario()" style="display:none;">
+                    <span class="material-icons">add</span> Nuevo honorario
                 </button>
             </div>
-            <div id="ingresosContainer">
+            <div id="honorariosContainer">
                 <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
             </div>
         </div>
@@ -241,83 +239,60 @@
 
 
 <!-- ── MODAL: Registrar ingreso ───────────────────────────────── -->
-<div class="modal-overlay" id="modalIngreso" style="display:none;" onclick="cerrarModalIngreso(event)">
+<div class="modal-overlay" id="modalHonorario" style="display:none;" onclick="cerrarModalHonorario(event)">
     <div class="modal" onclick="event.stopPropagation()">
         <div class="modal__header">
             <div class="modal__title">
-                <span class="material-icons">trending_up</span>
-                Registrar ingreso
+                <span class="material-icons">engineering</span>
+                Registrar honorario
             </div>
-            <button class="modal__close" onclick="cerrarModalIngreso()">
+            <button class="modal__close" onclick="cerrarModalHonorario()">
                 <span class="material-icons">close</span>
             </button>
         </div>
         <div class="modal__body">
             <div class="form-group">
-                <label class="form-label">Reserva <span class="required">*</span></label>
-                <select id="iReserva" class="form-control" onchange="actualizarSaldo()">
-                    <option value="">— Seleccionar reserva —</option>
-                </select>
-            </div>
-            <div class="saldo-box" id="saldoBox">
-                <div>Total reserva: <strong id="saldoTotal">—</strong></div>
-                <div>Ya pagado: <strong id="saldoPagado">—</strong></div>
-                <div>Pendiente: <span class="saldo-pendiente" id="saldoPendiente">—</span></div>
+                <label class="form-label">Colaborador <span class="required">*</span></label>
+                <select id="hColaborador" class="form-control"></select>
             </div>
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Monto <span class="required">*</span></label>
-                    <input type="number" id="iMonto" class="form-control" step="0.01" min="0.01">
+                    <input type="number" id="hMonto" class="form-control" step="0.01" min="0.01">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Moneda</label>
-                    <select id="iMoneda" class="form-control">
-                        <option value="BRL">BRL (R$)</option>
-                        <option value="USD">USD (US$)</option>
-                        <option value="ARS">ARS ($)</option>
-                    </select>
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Método</label>
-                    <select id="iMetodo" class="form-control">
-                        <option value="pix">PIX</option>
-                        <option value="transferencia">Transferencia</option>
-                        <option value="efectivo">Efectivo</option>
-                        <option value="tarjeta">Tarjeta</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Tipo</label>
-                    <select id="iTipo" class="form-control">
-                        <option value="seña">Seña</option>
-                        <option value="parcial">Parcial</option>
-                        <option value="total">Total</option>
-                    </select>
+                    <label class="form-label">Horas</label>
+                    <input type="number" id="hHoras" class="form-control" step="0.25" min="0">
                 </div>
             </div>
             <div class="form-group">
-                <label class="form-label">Observaciones</label>
-                <input type="text" id="iObs" class="form-control" placeholder="Opcional">
+                <label class="form-label">Concepto <span class="required">*</span></label>
+                <input type="text" id="hConcepto" class="form-control" placeholder="Descripción del trabajo">
             </div>
-            <div class="alert alert-error" id="iError" style="display:none;">
+            <div class="form-group">
+                <label class="form-label">Estado</label>
+                <select id="hEstado" class="form-control">
+                    <option value="pendiente">Pendiente de pago</option>
+                    <option value="pagado">Pagado</option>
+                </select>
+            </div>
+            <div class="alert alert-error" id="hError" style="display:none;">
                 <span class="material-icons">error_outline</span>
-                <span id="iErrorText"></span>
+                <span id="hErrorText"></span>
             </div>
         </div>
         <div class="modal__footer">
-            <button class="btn btn-ghost" onclick="cerrarModalIngreso()">Cancelar</button>
-            <button class="btn btn-primary" id="iBtnGuardar" onclick="guardarIngreso()">
+            <button class="btn btn-ghost" onclick="cerrarModalHonorario()">Cancelar</button>
+            <button class="btn btn-primary" id="hBtnGuardar" onclick="guardarHonorario()">
                 <span class="material-icons">save</span>
-                <span id="iBtnText">Guardar</span>
+                <span id="hBtnText">Guardar honorario</span>
             </button>
         </div>
     </div>
 </div>
 
 
-<!-- ── MODAL: Registrar gasto (EXTENDIDO v4.3) ──────────────── -->
+<!-- ══ MODAL: NUEVO GASTO UNIFICADO ═══════════════════════════════════════ -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -325,7 +300,7 @@
 <script>
 (async () => {
     window.onerror = function(msg, src, line, col, err) {
-        console.error('INGRESOS ERROR:', msg, 'linea:'+line, err ? err.message : '');
+        console.error('HONORARIOS ERROR:', msg, 'linea:'+line, err ? err.message : '');
     };
     // CORREGIDO: usar await correctamente
     var { user, userData } = await CVC.verificarAuth(['admin', 'user']);
@@ -336,24 +311,17 @@
     var { escapeHtml, formatFecha, formatHoras, showEmpty, showError, showToast,
             subirComprobante, abrirComprobante } = CVC;
 
-    CVC.renderNav('pagos.html', userData.rol);
-    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('pagos.html');
+    CVC.renderNav('honorarios.html', userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('honorarios.html');
 
-    // -- Compatibilidad con links viejos (pagos.html era la página unificada)
-    var urlParams = new URLSearchParams(window.location.search);
-    var _tabLegacy = urlParams.get('tab');
-    if (_tabLegacy === 'egresos' || _tabLegacy === 'retiros') {
-        var _q = urlParams.get('accion') === 'importar' ? '?accion=importar'
-               : (_tabLegacy === 'retiros' ? '?tab=retiros' : '');
-        window.location.replace('gastos.html' + _q);
-        return;
-    }
-    if (_tabLegacy === 'honorarios') { window.location.replace('honorarios.html'); return; }
+    // (sin parámetros de URL en esta página)
 
     // -- Visibilidad por rol -----------------------------------
-    if (!esAdmin) { window.location.replace('honorarios.html'); return; }
-    document.getElementById('balanceHeader').style.display = 'grid';
-    document.getElementById('filtroMes').style.display     = 'flex';
+    if (esAdmin) {
+        document.getElementById('btnNuevoHonorario').style.display = 'inline-flex';
+    } else {
+        document.getElementById('miBalanceBox').style.display = 'block';
+    }
 
     // -- Estado local ------------------------------------------
     var reservasCache     = [];
@@ -417,7 +385,7 @@
 
     window.aplicarFiltroMes = function() {
         mesFiltro = document.getElementById('selectMes').value || null;
-        renderIngresos(); renderBalance();
+        renderIngresos(); renderEgresos(); renderBalance();
     };
 
     function enMes(item) {
@@ -431,33 +399,14 @@
     async function cargarTodo() {
         try {
             if (esAdmin) {
-                var [resS, ingS, egS, honS, presS, cuentS] = await Promise.all([
-                    db.collection('reservas').get(),
-                    db.collection('pagos').get(),
-                    db.collection('gastos').get(),
-                    db.collection('honorarios').get(),
-                    db.collection('presupuestos').get(),
-                    db.collection('cuentas').get()
-                ]);
-                var sortDesc = function(a, b) {
-                    return (b.creadoEn && b.creadoEn.toDate ? b.creadoEn.toDate().getTime() : 0)
-                         - (a.creadoEn && a.creadoEn.toDate ? a.creadoEn.toDate().getTime() : 0);
-                };
-                reservasCache = resS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
-                    .filter(function(r) { return ['confirmada','pendiente','finalizada'].includes(r.estado); })
+                var honSA = await db.collection('honorarios').get();
+                honorariosCache = honSA.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
+                    .filter(function(h) { return h.estado !== 'pagado'; })
                     .sort(function(a, b) {
-                        return (b.checkIn && b.checkIn.toDate ? b.checkIn.toDate().getTime() : 0)
-                             - (a.checkIn && a.checkIn.toDate ? a.checkIn.toDate().getTime() : 0);
+                        return (b.creadoEn && b.creadoEn.toDate ? b.creadoEn.toDate().getTime() : 0)
+                             - (a.creadoEn && a.creadoEn.toDate ? a.creadoEn.toDate().getTime() : 0);
                     });
-                presupuestosCache = presS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
-                ingresosCache     = ingS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); }).sort(sortDesc);
-                egresosCache      = egS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); }).sort(sortDesc);
-                honorariosCache   = honS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
-                    .filter(function(h) { return h.estado !== 'pagado'; }).sort(sortDesc);
-                cuentasCache      = cuentS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
-                poblarSelectMes();
-                renderBalance(); renderIngresos();
-                poblarSelectIngreso();
+                renderHonorarios();
             } else {
                 var honS = await db.collection('honorarios')
                     .where('uid', '==', user.uid).get();
