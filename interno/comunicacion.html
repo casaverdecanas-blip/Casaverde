@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comunicación · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .cm-toolbar { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; margin-bottom: var(--space-4); }
+        .cm-chip {
+            border: 1.5px solid var(--color-border); background: var(--color-surface);
+            color: var(--color-text-secondary); border-radius: 99px; padding: 5px 14px;
+            font-size: var(--text-xs); font-weight: 700; cursor: pointer; font-family: inherit;
+        }
+        .cm-chip.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+        .cm-thread {
+            background: var(--color-surface); border: 1px solid var(--color-border);
+            border-radius: var(--radius-md); margin-bottom: var(--space-3); overflow: hidden;
+        }
+        .cm-thread.unread { border-left: 3px solid var(--color-info); }
+        .cm-head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); cursor: pointer; }
+        .cm-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .cm-dot.rojo { background: var(--color-danger); }
+        .cm-dot.amarillo { background: var(--color-warning); }
+        .cm-dot.verde { background: var(--color-success); }
+        .cm-head__main { flex: 1; min-width: 0; }
+        .cm-title { font-weight: 600; font-size: var(--text-base); }
+        .cm-meta { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 2px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .cm-badge { font-size: 10px; padding: 1px 7px; border-radius: 99px; background: var(--color-surface-2); border: 1px solid var(--color-border); white-space: nowrap; }
+        .cm-unread-pill { background: var(--color-info); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 99px; }
+        .cm-body { display: none; border-top: 1px solid var(--color-border-light); padding: var(--space-3) var(--space-4) var(--space-4); background: var(--color-surface-2); }
+        .cm-body.open { display: block; }
+        .cm-msgs { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); max-height: 320px; overflow-y: auto; }
+        .cm-msg { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); font-size: var(--text-sm); }
+        .cm-msg.mine { background: var(--color-primary-xlight); border-color: var(--color-primary-light); }
+        .cm-msg__who { font-size: 10px; font-weight: 700; color: var(--color-text-muted); margin-bottom: 2px; }
+        .cm-reply { display: flex; gap: var(--space-2); }
+        .cm-reply textarea { flex: 1; resize: vertical; min-height: 38px; font-family: inherit; font-size: var(--text-sm); padding: 8px var(--space-3); border: 1.5px solid var(--color-border); border-radius: var(--radius-md); }
+        .cm-input { width: 100%; box-sizing: border-box; font-family: inherit; font-size: var(--text-base); padding: 10px var(--space-3); border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-2); margin-bottom: var(--space-3); }
+        .cm-input:focus, .cm-reply textarea:focus { outline: none; border-color: var(--color-primary); background: var(--color-surface); }
+        .cm-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: flex-start; justify-content: center; padding: var(--space-4); overflow-y: auto; }
+        .cm-modal.open { display: flex; }
+        .cm-modal__card { background: var(--color-surface); border-radius: var(--radius-lg); max-width: 480px; width: 100%; padding: var(--space-5); margin-top: 40px; }
+        .cm-modal__card label { display: block; font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-muted); margin-bottom: var(--space-2); }
+        .cm-prio-pick { display: grid; grid-template-columns: repeat(3,1fr); gap: var(--space-2); margin-bottom: var(--space-3); }
+        .cm-prio-pick button { border: 1.5px solid var(--color-border); background: var(--color-surface); border-radius: var(--radius-md); padding: 8px; font-family: inherit; font-size: var(--text-xs); font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; }
+        .cm-prio-pick button.active { border-color: var(--color-primary); background: var(--color-primary-xlight); }
+    </style>
+</head>
+<body>
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">cottage</span>
+        Casa Verde Canas
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip">
+            <span class="material-icons">person</span>
+            <span id="userName">—</span>
+        </div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons">logout</span>
+            Salir
+        </button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+
+    <div class="db-section-head" style="margin-bottom:var(--space-4);">
+        <div class="db-section-title">
+            <span class="material-icons" style="color:var(--color-primary);">forum</span>
+            Comunicación
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="abrirNueva()">
+            <span class="material-icons">add</span> Nueva conversación
+        </button>
+    </div>
+
+    <div class="cm-toolbar">
+        <button class="cm-chip active" id="fTodos"      onclick="filtrar('todos', this)">Todas</button>
+        <button class="cm-chip"        id="fNoLeidas"   onclick="filtrar('no_leidas', this)">No leídas</button>
+        <button class="cm-chip"        id="fSugerencias" onclick="filtrar('sitio', this)">💡 Sugerencias</button>
+        <button class="cm-chip"        id="fUrgentes"   onclick="filtrar('rojo', this)">🔴 Urgentes</button>
+    </div>
+
+    <div id="listaHilos">
+        <div class="state-loading"><div class="spinner"></div><span>Cargando…</span></div>
+    </div>
+
+</main>
+
+<!-- Modal nueva conversación -->
+<div class="cm-modal" id="modalNueva">
+    <div class="cm-modal__card">
+        <div class="db-section-title" style="margin-bottom:var(--space-4);">
+            <span class="material-icons">edit</span> Nueva conversación
+        </div>
+
+        <div style="margin-bottom:var(--space-3);">
+            <label for="nTitulo">Asunto</label>
+            <input type="text" id="nTitulo" class="cm-input" placeholder="Ej: Foto del baño C2 no carga">
+        </div>
+
+        <div style="margin-bottom:var(--space-3);">
+            <label>Prioridad</label>
+            <div class="cm-prio-pick">
+                <button id="pVerde" class="active" onclick="setPrio('verde')"><span class="cm-dot verde"></span> Normal</button>
+                <button id="pAmarillo" onclick="setPrio('amarillo')"><span class="cm-dot amarillo"></span> Media</button>
+                <button id="pRojo" onclick="setPrio('rojo')"><span class="cm-dot rojo"></span> Urgente</button>
+            </div>
+        </div>
+
+        <div style="margin-bottom:var(--space-3);">
+            <label for="nAudiencia">¿Con quién?</label>
+            <select id="nAudiencia" class="cm-input" onchange="onAudiencia()"></select>
+            <select id="nDestinatario" class="cm-input hidden" style="display:none;"></select>
+        </div>
+
+        <div style="margin-bottom:var(--space-3);">
+            <label for="nRefTipo">Se refiere a</label>
+            <select id="nRefTipo" class="cm-input">
+                <option value="general">General / sugerencia libre</option>
+                <option value="sitio">Sitio público (contenido)</option>
+                <option value="tarea">Tareas</option>
+                <option value="reserva">Reservas</option>
+                <option value="finanzas">Finanzas</option>
+                <option value="compra">Compras / gastos</option>
+            </select>
+            <input type="text" id="nRefLabel" class="cm-input" style="margin-top:var(--space-2);" placeholder="Detalle opcional (ej: Cabaña C2, reserva García…)">
+        </div>
+
+        <div style="margin-bottom:var(--space-4);">
+            <label for="nMensaje">Mensaje</label>
+            <textarea id="nMensaje" class="cm-input" style="min-height:80px;resize:vertical;" placeholder="Escribí el primer mensaje…"></textarea>
+        </div>
+
+        <div id="nError" style="display:none;color:var(--color-danger);font-size:var(--text-sm);margin-bottom:var(--space-3);"></div>
+
+        <div style="display:flex;gap:var(--space-2);justify-content:flex-end;">
+            <button class="btn btn-ghost" onclick="cerrarNueva()">Cancelar</button>
+            <button class="btn btn-primary" id="nBtnCrear" onclick="crearHilo()">Crear conversación</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async function() {
+    var sesion = await CVC.verificarAuth(['admin', 'user']);
+    var user = sesion.user, userData = sesion.userData;
+    var esAdmin = userData.rol === 'admin';
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+    CVC.renderNav('comunicacion.html', userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('comunicacion.html');
+
+    var db = CVC.db;
+    var escapeHtml = CVC.escapeHtml;
+    var showToast  = CVC.showToast;
+    var miNombre   = userData.nombre || user.email;
+
+    var AUD_LABEL = {
+        todos: '👥 Todos',
+        solo_admin: '🛡️ Con administradores',
+        un_usuario: '👤 Privada',
+        solo_colaboradores: '🧹 Colaboradores',
+        entre_admins: '🛡️ Entre admins'
+    };
+    var REF_LABEL = {
+        general: 'General', sitio: '💡 Sitio público', tarea: 'Tareas',
+        reserva: 'Reservas', finanzas: 'Finanzas', compra: 'Compras'
+    };
+
+    var _prio   = 'verde';
+    var _filtro = 'todos';
+    var _hilos  = [];
+    var _vistos = {};         // { hiloId: lastSeenMillis }
+    var _abierto = null;      // id del hilo expandido
+
+    // -- Opciones de audiencia según rol --------------------------------
+    (function poblarAudiencia() {
+        var sel = document.getElementById('nAudiencia');
+        var opciones = esAdmin
+            ? ['todos', 'solo_colaboradores', 'un_usuario', 'entre_admins']
+            : ['todos', 'solo_admin', 'solo_colaboradores', 'un_usuario'];
+        sel.innerHTML = opciones.map(function(a) {
+            return '<option value="' + a + '">' + AUD_LABEL[a] + '</option>';
+        }).join('');
+    })();
+
+    // -- Usuarios (para audiencia "una persona") ------------------------
+    var _usuarios = [];
+    db.collection('usuarios').get().then(function(snap) {
+        _usuarios = snap.docs.map(function(d) { return Object.assign({ uid: d.id }, d.data()); })
+            .filter(function(u) { return u.activo !== false && u.uid !== user.uid; });
+        var sel = document.getElementById('nDestinatario');
+        sel.innerHTML = '<option value="">Elegí a la persona…</option>' + _usuarios.map(function(u) {
+            return '<option value="' + u.uid + '" data-nom="' + escapeHtml(u.nombre || u.email) + '">' + escapeHtml(u.nombre || u.email) + '</option>';
+        }).join('');
+    }).catch(function() {});
+
+    // -- Lecturas (no-leídos) -------------------------------------------
+    async function cargarVistos() {
+        try {
+            var doc = await db.collection('comunicaciones_lecturas').doc(user.uid).get();
+            _vistos = (doc.exists && doc.data().vistos) ? doc.data().vistos : {};
+        } catch (e) { _vistos = {}; }
+    }
+    async function marcarVisto(hiloId) {
+        _vistos[hiloId] = Date.now();
+        try {
+            await db.collection('comunicaciones_lecturas').doc(user.uid).set({ vistos: _vistos }, { merge: true });
+        } catch (e) {}
+    }
+    function esNoLeido(h) {
+        var ult = h.ultimaActividad && h.ultimaActividad.toDate ? h.ultimaActividad.toDate().getTime() : 0;
+        return ult > (_vistos[h.id] || 0);
+    }
+
+    // -- Visibilidad por rol (a nivel interfaz) -------------------------
+    function puedeVer(h) {
+        if (esAdmin) return true;                       // el admin ve todo
+        if (h.creadoPor === user.uid) return true;
+        if (h.audiencia === 'todos') return true;
+        if (h.audiencia === 'solo_colaboradores') return true;
+        if (h.audiencia === 'solo_admin') return false; // dirigido a admins
+        if (h.audiencia === 'entre_admins') return false;
+        if (h.audiencia === 'un_usuario') return h.destinatarioUid === user.uid;
+        return false;
+    }
+
+    // -- Cargar hilos ----------------------------------------------------
+    async function cargar() {
+        await cargarVistos();
+        try {
+            var snap = await db.collection('comunicaciones').get();
+            _hilos = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
+                .filter(puedeVer)
+                .sort(function(a, b) {
+                    var ta = a.ultimaActividad && a.ultimaActividad.toDate ? a.ultimaActividad.toDate().getTime() : 0;
+                    var tb = b.ultimaActividad && b.ultimaActividad.toDate ? b.ultimaActividad.toDate().getTime() : 0;
+                    return tb - ta;
+                });
+            render();
+        } catch (e) {
+            document.getElementById('listaHilos').innerHTML = '<div style="color:var(--color-danger);">Error al cargar: ' + escapeHtml(e.message) + '</div>';
+        }
+    }
+
+    window.filtrar = function(f, btn) {
+        _filtro = f;
+        document.querySelectorAll('.cm-chip').forEach(function(c) { c.classList.remove('active'); });
+        if (btn) btn.classList.add('active');
+        render();
+    };
+
+    function aplicarFiltro(lista) {
+        if (_filtro === 'no_leidas') return lista.filter(esNoLeido);
+        if (_filtro === 'sitio')     return lista.filter(function(h) { return h.refTipo === 'sitio'; });
+        if (_filtro === 'rojo')      return lista.filter(function(h) { return h.prioridad === 'rojo'; });
+        return lista;
+    }
+
+    function render() {
+        var cont = document.getElementById('listaHilos');
+        var lista = aplicarFiltro(_hilos);
+        if (!lista.length) {
+            cont.innerHTML = '<div style="text-align:center;color:var(--color-text-muted);padding:var(--space-6);">No hay conversaciones para este filtro.</div>';
+            return;
+        }
+        cont.innerHTML = lista.map(function(h) {
+            var noLeido = esNoLeido(h);
+            var fecha = h.ultimaActividad && h.ultimaActividad.toDate ? h.ultimaActividad.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) : '';
+            return '<div class="cm-thread' + (noLeido ? ' unread' : '') + '" id="hilo-' + h.id + '">' +
+                '<div class="cm-head" onclick="toggleHilo(\'' + h.id + '\')">' +
+                    '<span class="cm-dot ' + (h.prioridad || 'verde') + '"></span>' +
+                    '<div class="cm-head__main">' +
+                        '<div class="cm-title">' + escapeHtml(h.titulo || '(sin asunto)') + '</div>' +
+                        '<div class="cm-meta">' +
+                            '<span class="cm-badge">' + (AUD_LABEL[h.audiencia] || h.audiencia || '') + '</span>' +
+                            (h.refTipo && h.refTipo !== 'general' ? '<span class="cm-badge">' + (REF_LABEL[h.refTipo] || h.refTipo) + (h.refLabel ? ': ' + escapeHtml(h.refLabel) : '') + '</span>' : '') +
+                            '<span>' + escapeHtml(h.creadoPorNombre || '') + '</span>' +
+                            '<span>· ' + fecha + '</span>' +
+                        '</div>' +
+                    '</div>' +
+                    (noLeido ? '<span class="cm-unread-pill">nuevo</span>' : '') +
+                '</div>' +
+                '<div class="cm-body" id="body-' + h.id + '"></div>' +
+            '</div>';
+        }).join('');
+    }
+
+    // -- Abrir / cerrar hilo + cargar mensajes --------------------------
+    window.toggleHilo = async function(id) {
+        var body = document.getElementById('body-' + id);
+        if (!body) return;
+        var abrir = !body.classList.contains('open');
+        // cerrar otros
+        document.querySelectorAll('.cm-body.open').forEach(function(b) { b.classList.remove('open'); });
+        if (!abrir) { _abierto = null; return; }
+        body.classList.add('open');
+        _abierto = id;
+        body.innerHTML = '<div class="state-loading"><div class="spinner"></div><span>Cargando…</span></div>';
+        await renderMensajes(id);
+        await marcarVisto(id);
+        var hiloEl = document.getElementById('hilo-' + id);
+        if (hiloEl) hiloEl.classList.remove('unread');
+        var pill = hiloEl ? hiloEl.querySelector('.cm-unread-pill') : null;
+        if (pill) pill.remove();
+    };
+
+    async function renderMensajes(id) {
+        var body = document.getElementById('body-' + id);
+        var msgs = [];
+        try {
+            var snap = await db.collection('comunicaciones').doc(id).collection('mensajes').get();
+            msgs = snap.docs.map(function(d) { return d.data(); }).sort(function(a, b) {
+                var ta = a.creadoEn && a.creadoEn.toDate ? a.creadoEn.toDate().getTime() : 0;
+                var tb = b.creadoEn && b.creadoEn.toDate ? b.creadoEn.toDate().getTime() : 0;
+                return ta - tb;
+            });
+        } catch (e) {}
+
+        var html = '<div class="cm-msgs" id="msgs-' + id + '">';
+        if (!msgs.length) {
+            html += '<div style="color:var(--color-text-muted);font-size:var(--text-sm);">Sin mensajes todavía.</div>';
+        } else {
+            html += msgs.map(function(m) {
+                var mio = m.autorUid === user.uid;
+                var hora = m.creadoEn && m.creadoEn.toDate ? m.creadoEn.toDate().toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+                return '<div class="cm-msg' + (mio ? ' mine' : '') + '">' +
+                    '<div class="cm-msg__who">' + escapeHtml(m.autorNombre || '') + ' · ' + hora + '</div>' +
+                    escapeHtml(m.texto || '') +
+                '</div>';
+            }).join('');
+        }
+        html += '</div>';
+        html += '<div class="cm-reply">' +
+            '<textarea id="reply-' + id + '" placeholder="Escribí una respuesta…"></textarea>' +
+            '<button class="btn btn-primary" onclick="responder(\'' + id + '\')"><span class="material-icons">send</span></button>' +
+        '</div>';
+        body.innerHTML = html;
+    }
+
+    window.responder = async function(id) {
+        var ta = document.getElementById('reply-' + id);
+        var texto = ta.value.trim();
+        if (!texto) return;
+        ta.disabled = true;
+        try {
+            await db.collection('comunicaciones').doc(id).collection('mensajes').add({
+                texto: texto,
+                autorUid: user.uid,
+                autorNombre: miNombre,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            await db.collection('comunicaciones').doc(id).update({
+                ultimaActividad: firebase.firestore.FieldValue.serverTimestamp(),
+                ultimoMensaje: texto.slice(0, 80)
+            });
+            await renderMensajes(id);
+            await marcarVisto(id);
+        } catch (e) {
+            showToast('No se pudo enviar: ' + e.message, 'error');
+            ta.disabled = false;
+        }
+    };
+
+    // -- Nueva conversación ---------------------------------------------
+    window.abrirNueva = function() { document.getElementById('modalNueva').classList.add('open'); };
+    window.cerrarNueva = function() { document.getElementById('modalNueva').classList.remove('open'); };
+    window.setPrio = function(p) {
+        _prio = p;
+        ['Verde', 'Amarillo', 'Rojo'].forEach(function(n) {
+            document.getElementById('p' + n).classList.toggle('active', n.toLowerCase() === p);
+        });
+    };
+    window.onAudiencia = function() {
+        var es = document.getElementById('nAudiencia').value === 'un_usuario';
+        var sel = document.getElementById('nDestinatario');
+        sel.style.display = es ? 'block' : 'none';
+    };
+
+    window.crearHilo = async function() {
+        var titulo = document.getElementById('nTitulo').value.trim();
+        var mensaje = document.getElementById('nMensaje').value.trim();
+        var audiencia = document.getElementById('nAudiencia').value;
+        var refTipo = document.getElementById('nRefTipo').value;
+        var refLabel = document.getElementById('nRefLabel').value.trim();
+        var err = document.getElementById('nError');
+        err.style.display = 'none';
+
+        if (!titulo)  { err.textContent = 'Poné un asunto.'; err.style.display = 'block'; return; }
+        if (!mensaje) { err.textContent = 'Escribí el primer mensaje.'; err.style.display = 'block'; return; }
+
+        var destinatarioUid = '', destinatarioNombre = '';
+        if (audiencia === 'un_usuario') {
+            var sel = document.getElementById('nDestinatario');
+            destinatarioUid = sel.value;
+            if (!destinatarioUid) { err.textContent = 'Elegí a la persona.'; err.style.display = 'block'; return; }
+            var opt = sel.options[sel.selectedIndex];
+            destinatarioNombre = opt ? (opt.dataset.nom || '') : '';
+        }
+
+        var btn = document.getElementById('nBtnCrear');
+        btn.disabled = true; btn.textContent = 'Creando…';
+        try {
+            var ref = await db.collection('comunicaciones').add({
+                titulo: titulo,
+                audiencia: audiencia,
+                destinatarioUid: destinatarioUid || null,
+                destinatarioNombre: destinatarioNombre || null,
+                prioridad: _prio,
+                refTipo: refTipo,
+                refLabel: refLabel || null,
+                creadoPor: user.uid,
+                creadoPorNombre: miNombre,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                ultimaActividad: firebase.firestore.FieldValue.serverTimestamp(),
+                ultimoMensaje: mensaje.slice(0, 80)
+            });
+            await ref.collection('mensajes').add({
+                texto: mensaje,
+                autorUid: user.uid,
+                autorNombre: miNombre,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            showToast('Conversación creada.', 'success');
+            // reset
+            document.getElementById('nTitulo').value = '';
+            document.getElementById('nMensaje').value = '';
+            document.getElementById('nRefLabel').value = '';
+            setPrio('verde');
+            cerrarNueva();
+            await cargar();
+        } catch (e) {
+            err.textContent = 'Error: ' + e.message; err.style.display = 'block';
+        } finally {
+            btn.disabled = false; btn.textContent = 'Crear conversación';
+        }
+    };
+
+    cargar();
+})();
+</script>
+</body>
+</html>

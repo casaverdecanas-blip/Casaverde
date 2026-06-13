@@ -1,6 +1,27 @@
 // ============================================================
-//  utils.js — Casa Verde Canas  v4.7 (puente de compatibilidad)
+//  utils.js — Casa Verde Canas  v4.10 (puente de compatibilidad)
 //  Funciones compartidas · /interno/
+//
+//  CAMBIOS v4.10:
+//  - [RESTAURADO] subirComprobante(file, carpeta, docId) y abrirComprobante(url),
+//    que las páginas vivas (pagos/gastos/informes-airbnb) invocan desde CVC
+//    y que la reconstrucción había perdido. Subida a Cloudinary sin firma
+//    (preset-comprobantes). abrirComprobante también queda en window para
+//    los onclick. Esto repara la subida de comprobantes del admin.
+//
+//  CAMBIOS v4.9:
+//  - Nuevo módulo Comunicación (comunicacion.html) agregado a la nav de
+//    ambos roles. Hilos con audiencia, prioridad (semáforo), referencia
+//    a secciones del sitio, no-leídos y mensajes. Sugerencias = filtro.
+//
+//  CAMBIOS v4.8:
+//  - Nav del colaborador: agregado "Gastos" (gastos-mantenimiento.html)
+//    para registro de gastos de mantenimiento con foto IA / manual y
+//    lógica de reembolso (genera honorario tipo 'reembolso' si paga
+//    con fondos propios).
+//  - PENDIENTE: restaurar CVC.subirComprobante / abrirComprobante, que
+//    las páginas vivas (pagos/gastos/informes-airbnb) invocan desde CVC
+//    pero faltan en esta reconstrucción. Requiere el utils.js del servidor.
 //
 //  CAMBIOS v4.7:
 //  - Nav del colaborador ampliada: Inicio, Tareas, Pendientes, Reservas,
@@ -109,6 +130,7 @@ const NAV_ADMIN_ITEMS = [
     // Items directos
     { href: 'dashboard.html',  icon: 'dashboard',      label: 'Dashboard'  },
     { href: 'calendario.html', icon: 'calendar_month', label: 'Calendario' },
+    { href: 'comunicacion.html', icon: 'forum',        label: 'Comunicación' },
 
     // Grupo: Reservas
     {
@@ -183,6 +205,8 @@ const NAV_USER_ITEMS = [
     { href: 'reservas.html',       icon: 'event',              label: 'Reservas'     },
     { href: 'presupuestos.html',   icon: 'request_quote',      label: 'Presupuestos' },
     { href: 'calendario.html',     icon: 'calendar_month',     label: 'Calendario'   },
+    { href: 'gastos-mantenimiento.html', icon: 'receipt_long',  label: 'Gastos'       },
+    { href: 'comunicacion.html',   icon: 'forum',              label: 'Comunicación' },
     { href: 'honorarios.html',     icon: 'payments',           label: 'Mis cobros'   },
     { href: 'manual-sistema.html', icon: 'menu_book',          label: 'Manual'       }
 ];
@@ -980,6 +1004,32 @@ function _cerrarDropdowns() {
 
 window.toggleNavDrop = toggleNavDrop;
 
+// ============================================================
+//  COMPROBANTES (Cloudinary, unsigned)  — restaurado en v4.10
+//  Subida de imágenes/PDF de comprobantes y apertura para verlos.
+//  cloud: dnwfu8ffn · preset sin firma: preset-comprobantes
+// ============================================================
+function subirComprobante(file, carpeta, docId) {
+    var fd = new FormData();
+    fd.append('file', file);
+    fd.append('upload_preset', 'preset-comprobantes');
+    if (carpeta) fd.append('folder', carpeta);
+    if (docId)   fd.append('tags', docId);
+    return fetch('https://api.cloudinary.com/v1_1/dnwfu8ffn/auto/upload', { method: 'POST', body: fd })
+        .then(function(r) {
+            if (!r.ok) throw new Error('Cloudinary ' + r.status);
+            return r.json();
+        })
+        .then(function(d) { return d.secure_url || d.url; });
+}
+
+function abrirComprobante(url) {
+    if (!url) return;
+    window.open(url, '_blank');
+}
+
+window.abrirComprobante = abrirComprobante;
+
 
 // ── UTILS DE FORMATO Y ESCAPE ────────────────────────────────────────────────
 function escapeHtml(str) {
@@ -1316,6 +1366,7 @@ window.CVC = {
     matchMovimientoBancario, conciliarContraRegistros,
     guardarConciliacion, cargarConfigConciliacion,
     escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
+    subirComprobante, abrirComprobante,
     showLoading, showEmpty, showError, showToast,
     AYUDA_ITEMS, initAyuda, mostrarAyuda, cerrarAyuda,
     mostrarCelula, cerrarCelula,
