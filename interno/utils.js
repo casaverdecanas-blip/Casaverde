@@ -1,6 +1,13 @@
 // ============================================================
-//  utils.js — Casa Verde Canas  v4.6 (puente de compatibilidad)
+//  utils.js — Casa Verde Canas  v4.7 (puente de compatibilidad)
 //  Funciones compartidas · /interno/
+//
+//  CAMBIOS v4.7:
+//  - Nav del colaborador ampliada: Inicio, Tareas, Pendientes, Reservas,
+//    Presupuestos, Calendario, Mis cobros, Manual (antes solo 3 items).
+//  - [NUEVO] CVC.puede(seccion, rol): control de acceso centralizado.
+//    Secciones solo-admin: fiscal, cuentas, movimientos, BTG, panel
+//    financiero, categorías, pagos, informes, gastos, config y gestión.
 //
 //  CAMBIOS v4.6:
 //  - Nav Finanzas en 3 capas: Registrar (ingresos/gastos/honorarios),
@@ -170,10 +177,34 @@ const NAV_ADMIN_ITEMS = [
 ];
 
 const NAV_USER_ITEMS = [
-    { href: 'tareas.html',         icon: 'checklist', label: 'Tareas'     },
-    { href: 'honorarios.html',     icon: 'payments',  label: 'Mis cobros' },
-    { href: 'manual-sistema.html', icon: 'menu_book', label: 'Manual'     }
+    { href: 'dashboard.html',      icon: 'dashboard',          label: 'Inicio'       },
+    { href: 'tareas.html',         icon: 'checklist',          label: 'Tareas'       },
+    { href: 'pendientes.html',     icon: 'playlist_add_check', label: 'Pendientes'   },
+    { href: 'reservas.html',       icon: 'event',              label: 'Reservas'     },
+    { href: 'presupuestos.html',   icon: 'request_quote',      label: 'Presupuestos' },
+    { href: 'calendario.html',     icon: 'calendar_month',     label: 'Calendario'   },
+    { href: 'honorarios.html',     icon: 'payments',           label: 'Mis cobros'   },
+    { href: 'manual-sistema.html', icon: 'menu_book',          label: 'Manual'       }
 ];
+
+// ============================================================
+//  PERMISOS POR ROL  (v4.7)
+//  Punto único de control de acceso por sección. Cada página ya
+//  valida con verificarAuth(); este mapa centraliza qué ve cada
+//  rol para construir la nav y los accesos del dashboard.
+//  Uso:  CVC.puede('fiscal', userData.rol)  ->  true | false
+// ============================================================
+var SECCIONES_SOLO_ADMIN = [
+    'panel-financiero', 'fiscal', 'cuentas', 'movimientos',
+    'herramientas-btg', 'categorias', 'pagos', 'informes-airbnb',
+    'acceso-contador', 'cabanas-admin', 'usuarios', 'tareas-admin', 'gastos'
+];
+function puede(seccion, rol) {
+    rol = rol || 'admin';
+    if (rol === 'admin') return true;
+    var s = (seccion || '').replace('.html', '');
+    return SECCIONES_SOLO_ADMIN.indexOf(s) === -1;
+}
 
 
 // ── AUXILIARES DE INTERFAZ (BADGES) ──────────────────────────────────────────
@@ -1269,6 +1300,7 @@ window.CVC = {
     db, auth,
     ESTADOS_RESERVA, ESTADOS_TAREA, PRIORIDADES, CALENDAR_IDS, ESTADOS_BLOQUEANTES,
     NAV_ADMIN_ITEMS, NAV_USER_ITEMS, renderNav,
+    SECCIONES_SOLO_ADMIN, puede,
     badgeEstado, badgePrioridad,
     verificarAuth, cerrarSesion,
     calcularPrecio,

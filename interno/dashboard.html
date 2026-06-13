@@ -508,7 +508,20 @@
 
     function renderAccesos() {
         var nav = document.getElementById('accesosNav');
-        nav.innerHTML = ACCESOS.map(function(grupo, gi) {
+        var rol = esAdmin ? 'admin' : 'user';
+        var grupos = ACCESOS.map(function(g) {
+            var items = (g.items || []).filter(function(it) {
+                return it.sep ? true : CVC.puede(it.href, rol);
+            }).filter(function(it, i, arr) {
+                if (!it.sep) return true;
+                var prev = arr[i - 1];
+                return prev && !prev.sep && i < arr.length - 1;  // sin separadores colgados
+            });
+            return { label: g.label, icon: g.icon, page: g.page, items: items };
+        }).filter(function(g) {
+            return g.items.some(function(it) { return !it.sep; });
+        });
+        nav.innerHTML = grupos.map(function(grupo, gi) {
             var subItems = grupo.items.map(function(item) {
                 if (item.sep) return '<div class="acceso-sep"></div>';
                 return '<a href="' + item.href + '" class="acceso-sub">' +
@@ -556,11 +569,12 @@
     var reservas = [], tareas = [], pendientes = [];
 
     try {
-        var [resSnap, tarSnap, presSnap, pendSnap] = await Promise.all([
+        var [resSnap, tarSnap, presSnap, pendSnap, honSnap] = await Promise.all([
             db.collection('reservas').get().catch(function() { return { docs:[] }; }),
             db.collection('tareas').get().catch(function() { return { docs:[] }; }),
             db.collection('presupuestos').get().catch(function() { return { docs:[] }; }),
-            esAdmin ? db.collection('pendientes').get().catch(function() { return { docs:[] }; }) : Promise.resolve({ docs:[] }),
+            db.collection('pendientes').get().catch(function() { return { docs:[] }; }),
+            esAdmin ? Promise.resolve({ docs:[] }) : db.collection('honorarios').where('uid', '==', user.uid).get().catch(function() { return { docs:[] }; }),
         ]);
 
         reservas   = resSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
@@ -568,14 +582,30 @@
         pendientes = pendSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
         var presupuestos = presSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
 
-        renderKPIs(reservas, tareas, pendientes);
-        renderCheckins(reservas);
-        renderPendientes(pendientes);
-        renderTareasUrgentes(tareas);
-        renderReservasPendientes(reservas);
-        renderPresupuestos(presupuestos);
-        cargarAlertas(reservas, tareas);
-        if (esAdmin) cargarWidgetCuentas();
+        if (esAdmin) {
+            renderKPIs(reservas, tareas, pendientes);
+            renderCheckins(reservas);
+            renderPendientes(pendientes);
+            renderTareasUrgentes(tareas);
+            renderReservasPendientes(reservas);
+            renderPresupuestos(presupuestos);
+            cargarAlertas(reservas, tareas);
+            cargarWidgetCuentas();
+        } else {
+            // -- Vista del colaborador: tareas, sus pendientes y saldo ----
+            var misPendientes = pendientes.filter(function(p) {
+                if (p.visibilidad === 'admin') return false;   // privado del admin
+                if (p.visibilidad === 'todos') return true;     // general
+                return p.asignadoA === user.uid;                // asignado a mí
+            });
+            prepararVistaColaborador();
+            renderSaldoColaborador(honSnap);
+            renderTareasUrgentes(tareas);
+            renderPendientes(misPendientes);
+            renderCheckins(reservas);
+            renderKPIs(reservas, tareas, misPendientes);
+            cargarAlertas(reservas, tareas);
+        }
 
     } catch(e) {
         showError('#kpiGrid', 'Error al cargar', e.message, function() { location.reload(); })
@@ -607,7 +637,7 @@
               ayuda:'Estimado basado en el total de reservas confirmadas con check-in en el mes actual. Para el balance real usá el Panel Financiero.' },
         ];
 
-        document.getElementById('kpiGrid').innerHTML = kpiData.map(function(k) { return '<a href="' + k.href + '" class="kpi-card ' + k.cls + '">' +
+        document.getElementById('kpiGrid').innerHTML = kpiData.filter(function(k) { return esAdmin || k.cls !== 'ingresos'; }).map(function(k) { return '<a href="' + k.href + '" class="kpi-card ' + k.cls + '">' +
                 '<span class="kpi-help" onclick="event.preventDefault();event.stopPropagation();' +
                     'CVC.mostrarAyuda(\'' + k.href + '\')" title="¿Cómo se calcula esto?">?</span>' +
                 '<span class="material-icons kpi-icon">' + k.icon + '</span>' +
@@ -946,11 +976,72 @@
         el.style.display = 'block';
     }
 
+    // ── VISTA DEL COLABORADOR ───────────────────────────────────
+    function prepararVistaColaborador() {
+        // Ocultar worklists y widgets que son de administración
+        ['seccionReservasPend', 'seccionPresupuestos', 'seccionCuentas'].forEach(function(id) {
+            var s = document.getElementById(id);
+            if (s) s.style.display = 'none';
+        });
+        var fab = document.getElementById('fabGasto');
+        if (fab) fab.style.display = 'none';
+
+        var main = document.querySelector('.admin-content');
+        if (!main) return;
+
+        // Tarjeta de saldo (se rellena en renderSaldoColaborador)
+        if (!document.getElementById('seccionSaldo')) {
+            var sec = document.createElement('div');
+            sec.className = 'db-section';
+            sec.id = 'seccionSaldo';
+            main.appendChild(sec);
+        }
+
+        // Priorizar: Saldo, Tareas y Pendientes arriba (antes de check-ins)
+        var ancla = document.getElementById('seccionCheckins');
+        if (ancla && ancla.parentNode) {
+            ['seccionSaldo', 'seccionTareas', 'seccionPendientes'].forEach(function(id) {
+                var s = document.getElementById(id);
+                if (s) ancla.parentNode.insertBefore(s, ancla);
+            });
+        }
+    }
+
+    function renderSaldoColaborador(honSnap) {
+        var sec = document.getElementById('seccionSaldo');
+        if (!sec) return;
+        var docs = (honSnap && honSnap.docs) ? honSnap.docs : [];
+        var pend = docs.map(function(d) { return d.data(); })
+                       .filter(function(h) { return h.estado !== 'pagado'; });
+        var totHon   = pend.filter(function(h) { return h.tipo !== 'reembolso'; })
+                           .reduce(function(s, h) { return s + (h.monto || 0); }, 0);
+        var totReemb = pend.filter(function(h) { return h.tipo === 'reembolso'; })
+                           .reduce(function(s, h) { return s + (h.monto || 0); }, 0);
+        var total = totHon + totReemb;
+        var fmt = function(n) { return 'R$ ' + (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+
+        sec.innerHTML =
+            '<div class="db-section-head">' +
+                '<div class="db-section-title">' +
+                    '<span class="material-icons" style="color:var(--color-primary);">account_balance_wallet</span>' +
+                    'Mi saldo a percibir' +
+                '</div>' +
+                '<a href="honorarios.html" class="action-link">Ver detalle <span class="material-icons" style="font-size:14px;">arrow_forward</span></a>' +
+            '</div>' +
+            '<a href="honorarios.html" class="card" style="display:block;text-decoration:none;color:inherit;padding:var(--space-4);">' +
+                '<div style="font-family:var(--font-mono);font-size:26px;font-weight:700;color:var(--color-primary-dark);">' + fmt(total) + '</div>' +
+                '<div style="font-size:12px;color:var(--color-text-muted);margin-top:4px;">' +
+                    'Honorarios ' + fmt(totHon) + ' &nbsp;·&nbsp; Reembolsos ' + fmt(totReemb) +
+                '</div>' +
+            '</a>';
+    }
+
 })();
 </script>
 
 <!-- ── BOTÓN FLOTANTE: Registrar gasto rápido ──────────────────── -->
 <a href="pagos.html?tab=egresos&accion=importar"
+   id="fabGasto"
    title="Registrar gasto"
    style="position:fixed;bottom:80px;right:20px;width:56px;height:56px;background:#d97706;color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(217,119,6,0.35);z-index:998;text-decoration:none;transition:transform .15s,box-shadow .15s;"
    onmouseenter="this.style.transform='scale(1.1)';this.style.boxShadow='0 6px 20px rgba(217,119,6,0.45)'"
