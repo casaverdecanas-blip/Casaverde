@@ -135,6 +135,9 @@
         <div style="margin-bottom:var(--space-4);">
             <label for="nMensaje">Mensaje</label>
             <textarea id="nMensaje" class="cm-input" style="min-height:80px;resize:vertical;" placeholder="Escribí el primer mensaje…"></textarea>
+            <input type="file" id="nFoto" accept="image/*" capture="environment" style="display:none;" onchange="onNuevaFoto(this.files[0])">
+            <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('nFoto').click()"><span class="material-icons">photo_camera</span> Adjuntar foto</button>
+            <span id="nFotoThumb" style="display:none;font-size:11px;color:var(--color-primary);margin-left:8px;">imagen adjunta · <a href="#" onclick="quitarNuevaFoto();return false;">quitar</a></span>
         </div>
 
         <div id="nError" style="display:none;color:var(--color-danger);font-size:var(--text-sm);margin-bottom:var(--space-3);"></div>
@@ -163,6 +166,20 @@
     var escapeHtml = CVC.escapeHtml;
     var showToast  = CVC.showToast;
     var miNombre   = userData.nombre || user.email;
+    var _replyFile = null;   // imagen adjunta a la respuesta del hilo abierto
+    var _nuevaFile = null;   // imagen adjunta al primer mensaje (nueva conversación)
+
+    // Subida de imagen a Cloudinary (autocontenida)
+    async function subirImagen(file) {
+        var fd = new FormData();
+        fd.append('file', file);
+        fd.append('upload_preset', 'preset-comprobantes');
+        fd.append('folder', 'comunicacion');
+        var r = await fetch('https://api.cloudinary.com/v1_1/dnwfu8ffn/image/upload', { method: 'POST', body: fd });
+        if (!r.ok) throw new Error('Cloudinary ' + r.status);
+        var d = await r.json();
+        return d.secure_url || d.url;
+    }
 
     var AUD_LABEL = {
         todos: '👥 Todos',
@@ -333,36 +350,63 @@
             html += msgs.map(function(m) {
                 var mio = m.autorUid === user.uid;
                 var hora = m.creadoEn && m.creadoEn.toDate ? m.creadoEn.toDate().toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+                var img = m.imagenUrl
+                    ? '<img src="' + m.imagenUrl + '" onclick="window.open(\'' + m.imagenUrl + '\',\'_blank\')" style="display:block;max-width:100%;max-height:200px;border-radius:8px;margin-top:6px;cursor:pointer;">'
+                    : '';
                 return '<div class="cm-msg' + (mio ? ' mine' : '') + '">' +
                     '<div class="cm-msg__who">' + escapeHtml(m.autorNombre || '') + ' · ' + hora + '</div>' +
-                    escapeHtml(m.texto || '') +
+                    escapeHtml(m.texto || '') + img +
                 '</div>';
             }).join('');
         }
         html += '</div>';
+        _replyFile = null;
+        html += '<div id="replyThumb-' + id + '" style="display:none;font-size:11px;color:var(--color-primary);margin-bottom:6px;"><span class="material-icons" style="font-size:13px;vertical-align:middle;">image</span> imagen adjunta · <a href="#" onclick="quitarReplyFoto(\'' + id + '\');return false;">quitar</a></div>';
         html += '<div class="cm-reply">' +
             '<textarea id="reply-' + id + '" placeholder="Escribí una respuesta…"></textarea>' +
+            '<input type="file" id="replyFoto-' + id + '" accept="image/*" capture="environment" style="display:none;" onchange="onReplyFoto(\'' + id + '\', this.files[0])">' +
+            '<button class="btn btn-ghost" onclick="document.getElementById(\'replyFoto-' + id + '\').click()" title="Adjuntar foto"><span class="material-icons">photo_camera</span></button>' +
             '<button class="btn btn-primary" onclick="responder(\'' + id + '\')"><span class="material-icons">send</span></button>' +
         '</div>';
         body.innerHTML = html;
     }
 
+    window.onReplyFoto = function(id, file) {
+        _replyFile = file || null;
+        var t = document.getElementById('replyThumb-' + id);
+        if (t) t.style.display = _replyFile ? 'block' : 'none';
+    };
+    window.quitarReplyFoto = function(id) {
+        _replyFile = null;
+        var t = document.getElementById('replyThumb-' + id);
+        if (t) t.style.display = 'none';
+        var f = document.getElementById('replyFoto-' + id);
+        if (f) f.value = '';
+    };
+
     window.responder = async function(id) {
         var ta = document.getElementById('reply-' + id);
         var texto = ta.value.trim();
-        if (!texto) return;
+        if (!texto && !_replyFile) return;
         ta.disabled = true;
         try {
+            var imagenUrl = null;
+            if (_replyFile) {
+                try { imagenUrl = await subirImagen(_replyFile); }
+                catch (se) { showToast('No se pudo subir la imagen: ' + se.message, 'error'); }
+            }
             await db.collection('comunicaciones').doc(id).collection('mensajes').add({
                 texto: texto,
+                imagenUrl: imagenUrl,
                 autorUid: user.uid,
                 autorNombre: miNombre,
                 creadoEn: firebase.firestore.FieldValue.serverTimestamp()
             });
             await db.collection('comunicaciones').doc(id).update({
                 ultimaActividad: firebase.firestore.FieldValue.serverTimestamp(),
-                ultimoMensaje: texto.slice(0, 80)
+                ultimoMensaje: texto ? texto.slice(0, 80) : '📷 Imagen'
             });
+            _replyFile = null;
             await renderMensajes(id);
             await marcarVisto(id);
         } catch (e) {
@@ -374,6 +418,15 @@
     // -- Nueva conversación ---------------------------------------------
     window.abrirNueva = function() { document.getElementById('modalNueva').classList.add('open'); };
     window.cerrarNueva = function() { document.getElementById('modalNueva').classList.remove('open'); };
+    window.onNuevaFoto = function(file) {
+        _nuevaFile = file || null;
+        document.getElementById('nFotoThumb').style.display = _nuevaFile ? 'inline' : 'none';
+    };
+    window.quitarNuevaFoto = function() {
+        _nuevaFile = null;
+        document.getElementById('nFotoThumb').style.display = 'none';
+        document.getElementById('nFoto').value = '';
+    };
     window.setPrio = function(p) {
         _prio = p;
         ['Verde', 'Amarillo', 'Rojo'].forEach(function(n) {
@@ -424,14 +477,22 @@
                 ultimaActividad: firebase.firestore.FieldValue.serverTimestamp(),
                 ultimoMensaje: mensaje.slice(0, 80)
             });
+            var imagenUrl = null;
+            if (_nuevaFile) {
+                try { imagenUrl = await subirImagen(_nuevaFile); } catch (se) {}
+            }
             await ref.collection('mensajes').add({
                 texto: mensaje,
+                imagenUrl: imagenUrl,
                 autorUid: user.uid,
                 autorNombre: miNombre,
                 creadoEn: firebase.firestore.FieldValue.serverTimestamp()
             });
             showToast('Conversación creada.', 'success');
             // reset
+            _nuevaFile = null;
+            document.getElementById('nFotoThumb').style.display = 'none';
+            document.getElementById('nFoto').value = '';
             document.getElementById('nTitulo').value = '';
             document.getElementById('nMensaje').value = '';
             document.getElementById('nRefLabel').value = '';

@@ -1667,6 +1667,39 @@
         });
     }
 
+    // Parser tolerante: recupera datos aunque el JSON venga cortado
+    // (tickets largos que superan el límite de tokens del modelo).
+    function parseFacturaIA(raw) {
+        var bt = String.fromCharCode(96);
+        var s = (raw || '').split(bt).join('').replace(/^\s*json/i, '').trim();
+        var i = s.indexOf('{');
+        if (i > 0) s = s.slice(i);
+        try { return JSON.parse(s); } catch (e) {}
+        var lb = s.lastIndexOf('}');
+        if (lb > 0) { try { return JSON.parse(s.slice(0, lb + 1)); } catch (e) {} }
+        // Salvataje por regex (JSON truncado): escalares + ítems completos
+        var obj = {};
+        function gs(k) { var m = s.match(new RegExp('"' + k + '"\\s*:\\s*"([^"]*)"')); return m ? m[1] : undefined; }
+        function gn(k) { var m = s.match(new RegExp('"' + k + '"\\s*:\\s*([0-9]+(?:\\.[0-9]+)?)')); return m ? parseFloat(m[1]) : undefined; }
+        obj.proveedor = gs('proveedor');
+        obj.fecha = gs('fecha');
+        obj.monto_total = gn('monto_total');
+        obj.moneda = gs('moneda');
+        obj.concepto = gs('concepto');
+        obj.numero_factura = gs('numero_factura');
+        obj.categoria_sugerida = gs('categoria_sugerida');
+        obj.metodo_pago_sugerido = gs('metodo_pago_sugerido');
+        var items = [];
+        var re = /"descripcion"\s*:\s*"([^"]*)"(?:[^}]*?"cantidad"\s*:\s*([0-9]+(?:\.[0-9]+)?))?(?:[^}]*?"precio"\s*:\s*([0-9]+(?:\.[0-9]+)?))?/g;
+        var mm;
+        while ((mm = re.exec(s)) !== null) {
+            items.push({ descripcion: mm[1], cantidad: mm[2] ? parseFloat(mm[2]) : 1, precio: mm[3] ? parseFloat(mm[3]) : 0 });
+        }
+        if (items.length) obj.items = items;
+        obj._parcial = true;
+        return obj;
+    }
+
     window.procesarFactura = async function(file) {
         if (!file) return;
         document.getElementById('fUpZone').style.display     = 'none';
@@ -1708,7 +1741,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     model: 'gemini-2.5-flash-lite',
-                    max_tokens: 1000,
+                    max_tokens: 8000,
                     messages: [{
                         role: 'user',
                         content: [
@@ -1729,14 +1762,14 @@
             var raw  = data.content && data.content[0] ? data.content[0].text : '';
             fLog('Interpretando...', 'ok');
 
-            var ext;
-            try { var bt=String.fromCharCode(96); var cleanRaw=raw.split(bt).join('').split(bt+'json').join('').replace('json','').trim(); ext=JSON.parse(cleanRaw); }
-            catch(e) {
-                fLog('ERR Error en JSON: ' + e.message, 'err');
+            var ext = parseFacturaIA(raw);
+            if (!ext || (!ext.monto_total && !ext.concepto && !(ext.items && ext.items.length))) {
+                fLog('ERR No se pudo interpretar. Completá a mano.', 'err');
                 document.getElementById('fCampos').style.display     = 'block';
                 document.getElementById('fBtnGuardar').style.display = 'inline-flex';
                 return;
             }
+            if (ext._parcial) fLog('Comprobante largo: revisá los ítems extraídos.', 'err');
             fLog('OK Datos extraídos. Revisalos antes de guardar.', 'ok');
             poblarCamposFactura(ext);
         } catch(e) {
@@ -1987,7 +2020,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     model: 'gemini-2.5-flash-lite',
-                    max_tokens: 1500,
+                    max_tokens: 8000,
                     messages: [{
                         role: 'user',
                         content: [
@@ -2004,13 +2037,12 @@
             var raw = data.content && data.content[0] ? data.content[0].text : '';
             flog('Interpretando datos...', '#4ade80');
 
-            var ext;
-            try {
-                var bt=String.fromCharCode(96); var cleanRaw=raw.split(bt).join('').split(bt+'json').join('').replace('json','').trim(); ext=JSON.parse(cleanRaw);
-            } catch(e) {
-                flog('Error al interpretar JSON: ' + e.message, '#f87171');
+            var ext = parseFacturaIA(raw);
+            if (!ext || (!ext.monto_total && !ext.concepto && !(ext.items && ext.items.length))) {
+                flog('No se pudo interpretar el comprobante. Completá a mano.', '#f87171');
                 return;
             }
+            if (ext._parcial) flog('Comprobante largo: extraje lo que pude, revisá los ítems.', '#fbbf24');
 
             // Poblar campos
             if (ext.monto_total)  document.getElementById('ngFMonto').value    = ext.monto_total;

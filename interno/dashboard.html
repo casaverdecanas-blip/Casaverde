@@ -607,6 +607,8 @@
             cargarAlertas(reservas, tareas);
         }
 
+        cargarComunicacionDash();
+
     } catch(e) {
         showError('#kpiGrid', 'Error al cargar', e.message, function() { location.reload(); })
     }
@@ -1034,6 +1036,70 @@
                     'Honorarios ' + fmt(totHon) + ' &nbsp;·&nbsp; Reembolsos ' + fmt(totReemb) +
                 '</div>' +
             '</a>';
+    }
+
+    // ── Mensajes nuevos (Comunicación) en el dashboard ──────────
+    async function cargarComunicacionDash() {
+        try {
+            var snap = await db.collection('comunicaciones').get();
+            var vistos = {};
+            try {
+                var lec = await db.collection('comunicaciones_lecturas').doc(user.uid).get();
+                vistos = (lec.exists && lec.data().vistos) ? lec.data().vistos : {};
+            } catch (e) {}
+
+            var puedeVer = function(h) {
+                if (esAdmin) return true;
+                if (h.creadoPor === user.uid) return true;
+                if (h.audiencia === 'todos') return true;
+                if (h.audiencia === 'solo_colaboradores') return true;
+                if (h.audiencia === 'solo_admin') return false;
+                if (h.audiencia === 'entre_admins') return false;
+                if (h.audiencia === 'un_usuario') return h.destinatarioUid === user.uid;
+                return false;
+            };
+            var noLeidos = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
+                .filter(puedeVer)
+                .filter(function(h) {
+                    var ult = h.ultimaActividad && h.ultimaActividad.toDate ? h.ultimaActividad.toDate().getTime() : 0;
+                    return ult > (vistos[h.id] || 0);
+                })
+                .sort(function(a, b) {
+                    var ta = a.ultimaActividad && a.ultimaActividad.toDate ? a.ultimaActividad.toDate().getTime() : 0;
+                    var tb = b.ultimaActividad && b.ultimaActividad.toDate ? b.ultimaActividad.toDate().getTime() : 0;
+                    return tb - ta;
+                });
+            if (!noLeidos.length) return;
+
+            var main = document.querySelector('.admin-content');
+            if (!main) return;
+            var sec = document.getElementById('seccionComunicacionDash');
+            if (!sec) {
+                sec = document.createElement('div');
+                sec.className = 'db-section';
+                sec.id = 'seccionComunicacionDash';
+                main.insertBefore(sec, main.firstChild);
+            }
+            var PRIO = { rojo: 'var(--color-danger)', amarillo: 'var(--color-warning)', verde: 'var(--color-success)' };
+            sec.innerHTML =
+                '<div class="db-section-head">' +
+                    '<div class="db-section-title">' +
+                        '<span class="material-icons" style="color:var(--color-info);">mark_chat_unread</span>' +
+                        'Mensajes nuevos (' + noLeidos.length + ')' +
+                    '</div>' +
+                    '<a href="comunicacion.html" class="action-link">Abrir <span class="material-icons" style="font-size:14px;">arrow_forward</span></a>' +
+                '</div>' +
+                noLeidos.slice(0, 5).map(function(h) {
+                    return '<a href="comunicacion.html" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--color-surface);border:1px solid var(--color-border);border-left:3px solid var(--color-info);border-radius:var(--radius-md);margin-bottom:8px;text-decoration:none;color:inherit;">' +
+                        '<span style="width:9px;height:9px;border-radius:50%;background:' + (PRIO[h.prioridad] || PRIO.verde) + ';flex-shrink:0;"></span>' +
+                        '<div style="flex:1;min-width:0;">' +
+                            '<div style="font-weight:600;">' + escapeHtml(h.titulo || '(sin asunto)') + '</div>' +
+                            '<div style="font-size:11px;color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(h.ultimoMensaje || '') + '</div>' +
+                        '</div>' +
+                        '<span style="background:var(--color-info);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;">nuevo</span>' +
+                    '</a>';
+                }).join('');
+        } catch (e) { console.warn('Comunicación dash:', e.message); }
     }
 
 })();

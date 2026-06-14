@@ -149,6 +149,21 @@
                 </select>
             </div>
 
+            <div class="gm-field">
+                <label for="proveedor">Proveedor / comercio</label>
+                <input type="text" id="proveedor" class="gm-input" placeholder="Ej: Atacadista, Ferretería…">
+            </div>
+
+            <div class="gm-field">
+                <label for="referencia">Nº de comprobante (opcional)</label>
+                <input type="text" id="referencia" class="gm-input" placeholder="Nº de factura / ticket">
+            </div>
+
+            <div class="gm-field">
+                <label for="items">Detalle de la compra (ítems)</label>
+                <textarea id="items" class="gm-input" style="min-height:90px;resize:vertical;" placeholder="Un ítem por línea. La foto lo completa solo."></textarea>
+            </div>
+
             <!-- Fuente de los fondos -->
             <div class="gm-field">
                 <label>¿Con qué dinero pagaste?</label>
@@ -234,6 +249,35 @@
         document.getElementById('cuentaSelect').classList.toggle('hidden', f !== 'cuenta');
     };
 
+    // Parser tolerante a JSON truncado (tickets largos)
+    function parseFacturaIA(raw) {
+        var bt = String.fromCharCode(96);
+        var s = (raw || '').split(bt).join('').replace(/^\s*json/i, '').trim();
+        var i = s.indexOf('{');
+        if (i > 0) s = s.slice(i);
+        try { return JSON.parse(s); } catch (e) {}
+        var lb = s.lastIndexOf('}');
+        if (lb > 0) { try { return JSON.parse(s.slice(0, lb + 1)); } catch (e) {} }
+        var obj = {};
+        function gs(k) { var m = s.match(new RegExp('"' + k + '"\\s*:\\s*"([^"]*)"')); return m ? m[1] : undefined; }
+        function gn(k) { var m = s.match(new RegExp('"' + k + '"\\s*:\\s*([0-9]+(?:\\.[0-9]+)?)')); return m ? parseFloat(m[1]) : undefined; }
+        obj.proveedor = gs('proveedor');
+        obj.fecha = gs('fecha');
+        obj.monto_total = gn('monto_total');
+        obj.concepto = gs('concepto');
+        obj.numero_factura = gs('numero_factura');
+        obj.categoria_sugerida = gs('categoria_sugerida');
+        var items = [];
+        var re = /"descripcion"\s*:\s*"([^"]*)"(?:[^}]*?"cantidad"\s*:\s*([0-9]+(?:\.[0-9]+)?))?(?:[^}]*?"precio"\s*:\s*([0-9]+(?:\.[0-9]+)?))?/g;
+        var mm;
+        while ((mm = re.exec(s)) !== null) {
+            items.push({ descripcion: mm[1], cantidad: mm[2] ? parseFloat(mm[2]) : 1, precio: mm[3] ? parseFloat(mm[3]) : 0 });
+        }
+        if (items.length) obj.items = items;
+        obj._parcial = true;
+        return obj;
+    }
+
     // -- Redimensionar imagen (canvas) ----------------------------------
     function redimensionarImagen(file, maxLado, calidad) {
         return new Promise(function(resolve, reject) {
@@ -293,17 +337,20 @@
 
             log('Enviando a la IA…', 'ok');
             var PROMPT = 'Sos un extractor de datos de facturas y recibos de compra en Brasil.' +
-                ' Extraé los datos del comprobante y respondé UNICAMENTE con JSON valido, sin texto adicional ni markdown:' +
-                ' {"fecha":"YYYY-MM-DD","monto_total":0,"concepto":"","categoria_sugerida":""}.' +
-                ' Para monto_total: eliminar R$, puntos de miles, reemplazar coma decimal por punto. Ejemplo: R$1.234,56 -> 1234.56.' +
-                ' Para categoria_sugerida usar una de: Mantenimiento, Materiales, Servicios, Limpieza, Transporte, Otros.';
+                ' Extrae todos los datos posibles del comprobante y responde UNICAMENTE con JSON valido, sin texto adicional ni markdown:' +
+                ' {"proveedor":"","fecha":"YYYY-MM-DD","monto_total":0,"moneda":"BRL","concepto":"",' +
+                '"numero_factura":"","categoria_sugerida":"",' +
+                '"items":[{"descripcion":"","cantidad":1,"precio":0}]}.' +
+                ' Numeros BRL: eliminar R$, puntos de miles, cambiar coma por punto. R$1.234,56 -> 1234.56.' +
+                ' concepto: un resumen corto de la compra.' +
+                ' categoria_sugerida: una de Mantenimiento, Materiales, Servicios, Limpieza, Transporte, Otros.';
 
             var resp = await fetch('https://serene-scone-76bd4e.netlify.app/.netlify/functions/claude-proxy', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     model: 'gemini-2.5-flash-lite',
-                    max_tokens: 1000,
+                    max_tokens: 8000,
                     messages: [{
                         role: 'user',
                         content: [
@@ -317,18 +364,29 @@
             if (!resp.ok) { log('Error del proxy: ' + (data.error || resp.status), 'err'); return; }
             var raw = data.content && data.content[0] ? data.content[0].text : '';
 
-            var ext;
-            try {
-                var bt = String.fromCharCode(96);
-                var clean = raw.split(bt).join('').split('json').join('').trim();
-                ext = JSON.parse(clean);
-            } catch (e) { log('No se pudo interpretar el comprobante. Completá a mano.', 'err'); return; }
+            var ext = parseFacturaIA(raw);
+            if (!ext || (!ext.monto_total && !ext.concepto && !(ext.items && ext.items.length))) {
+                log('No se pudo interpretar el comprobante. Completá a mano.', 'err');
+                return;
+            }
 
-            if (ext.concepto)          document.getElementById('concepto').value  = ext.concepto;
-            if (ext.monto_total)       document.getElementById('monto').value     = ext.monto_total;
-            if (ext.fecha)             document.getElementById('fecha').value     = ext.fecha;
-            if (ext.categoria_sugerida) document.getElementById('categoria').value = ext.categoria_sugerida;
-            log('Datos extraídos. Revisalos antes de guardar.', 'ok');
+            if (ext.concepto)           document.getElementById('concepto').value   = ext.concepto;
+            if (ext.monto_total)        document.getElementById('monto').value      = ext.monto_total;
+            if (ext.fecha)              document.getElementById('fecha').value      = ext.fecha;
+            if (ext.categoria_sugerida) document.getElementById('categoria').value  = ext.categoria_sugerida;
+            if (ext.proveedor)          document.getElementById('proveedor').value  = ext.proveedor;
+            if (ext.numero_factura)     document.getElementById('referencia').value = ext.numero_factura;
+            if (ext.items && ext.items.length) {
+                document.getElementById('items').value = ext.items.map(function(it) {
+                    if (typeof it === 'string') return it;
+                    var p = [];
+                    if (it.descripcion || it.description) p.push(it.descripcion || it.description);
+                    if (it.cantidad && it.cantidad !== 1) p.push('x' + it.cantidad);
+                    if (it.precio) p.push('R$ ' + it.precio);
+                    return p.join(' - ');
+                }).filter(Boolean).join('\n');
+            }
+            log(ext._parcial ? 'Comprobante largo: extraje lo que pude, revisá los ítems.' : 'Datos extraídos. Revisalos antes de guardar.', ext._parcial ? 'err' : 'ok');
         } catch (e) {
             log('Error: ' + e.message, 'err');
         }
@@ -364,6 +422,10 @@
         var txt = document.getElementById('btnGuardarTxt');
         btn.disabled = true; txt.textContent = 'Guardando…';
 
+        var proveedor  = document.getElementById('proveedor').value.trim();
+        var items      = document.getElementById('items').value.trim();
+        var referencia = document.getElementById('referencia').value.trim();
+
         try {
             var docData = {
                 concepto: concepto,
@@ -373,14 +435,14 @@
                 metodo: _fuente === 'propio' ? 'fondos_propios' : 'cuenta',
                 circuito: null,
                 deducible: false,
-                proveedor: '',
+                proveedor: proveedor,
                 categoria: cat,
                 cuentaOrigenId: cuentaId,
                 cuentaOrigenNom: cuentaNom,
                 pais: pais,
                 sinCuenta: _fuente === 'propio',
-                items: '',
-                referenciaComprobante: '',
+                items: items,
+                referenciaComprobante: referencia,
                 notas: '',
                 comprobanteUrl: null,
                 origen: _modo === 'foto' ? 'mantenimiento_ia' : 'mantenimiento_manual',
@@ -425,6 +487,9 @@
             // Reset
             document.getElementById('concepto').value = '';
             document.getElementById('monto').value = '';
+            document.getElementById('proveedor').value = '';
+            document.getElementById('items').value = '';
+            document.getElementById('referencia').value = '';
             document.getElementById('categoria').value = 'Mantenimiento';
             document.getElementById('preview').style.display = 'none';
             document.getElementById('logBox').classList.remove('visible');
