@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Destinos · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .ds-grupo { font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-muted); margin: var(--space-5) 0 var(--space-2); }
+        .ds-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); margin-bottom: 8px; box-shadow: var(--shadow-xs); }
+        .ds-row.inactivo { opacity: .5; }
+        .ds-row__nom { font-weight: 600; flex: 1; min-width: 0; }
+        .ds-row__chip { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; color: #fff; }
+        .ds-row__user { font-size: 11px; color: var(--color-text-muted); }
+        .ds-row__btn { border: none; background: transparent; cursor: pointer; color: var(--color-text-muted); padding: 4px; }
+        .ds-row__btn .material-icons { font-size: 19px; }
+        .chip-negocio  { background: var(--color-primary); }
+        .chip-personal { background: #6366f1; }
+        .chip-ninos    { background: #ea9b3e; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; z-index: 1000; padding: var(--space-4); }
+        .modal { background: var(--color-surface); border-radius: var(--radius-lg); width: 100%; max-width: 440px; box-shadow: var(--shadow-lg); }
+        .modal__header { display: flex; justify-content: space-between; align-items: center; padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--color-border); }
+        .modal__title { font-weight: 700; }
+        .modal__close { border: none; background: transparent; cursor: pointer; }
+        .modal__body { padding: var(--space-5); }
+        .form-group { margin-bottom: var(--space-4); }
+        .form-label { display: block; font-size: var(--text-sm); font-weight: 600; margin-bottom: 6px; }
+        .form-control { width: 100%; font-family: inherit; font-size: var(--text-base); padding: 9px 12px; border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-2); }
+        .modal__footer { display: flex; gap: 10px; justify-content: flex-end; padding: var(--space-4) var(--space-5); border-top: 1px solid var(--color-border); }
+    </style>
+</head>
+<body>
+<header class="admin-header">
+    <div class="admin-header__brand"><span class="material-icons">cottage</span> Casa Verde Canas</div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span> <span id="userName">—</span></div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()"><span class="material-icons">logout</span> Salir</button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+    <div class="db-section-head" style="margin-bottom:var(--space-3);">
+        <div class="db-section-title">
+            <span class="material-icons" style="color:var(--color-primary);">flag</span>
+            Destinos / finalidad de los gastos
+        </div>
+        <button class="btn btn-primary" onclick="abrirModal()"><span class="material-icons">add</span> Nuevo destino</button>
+    </div>
+    <p style="font-size:var(--text-sm);color:var(--color-text-muted);margin-bottom:var(--space-3);">
+        El destino indica a qué o a quién se imputa un gasto, aparte de la categoría. Los de tipo
+        <b>personal</b> y <b>niños</b> sirven para llevar control sin registrar salida de caja.
+    </p>
+
+    <div id="lista"><div class="state-loading"><div class="spinner"></div><span>Cargando…</span></div></div>
+</main>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="cerrarModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <span class="modal__title" id="modalTitulo">Nuevo destino</span>
+            <button class="modal__close" onclick="cerrarModal()"><span class="material-icons">close</span></button>
+        </div>
+        <div class="modal__body">
+            <input type="hidden" id="dId">
+            <div class="form-group">
+                <label class="form-label">Nombre *</label>
+                <input type="text" id="dNombre" class="form-control" placeholder="Ej: Casa Verde – Mantenimiento">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Tipo *</label>
+                <select id="dTipo" class="form-control" onchange="onTipo()">
+                    <option value="negocio">Negocio (gasto real del complejo)</option>
+                    <option value="personal">Personal (control, sin salida de caja)</option>
+                    <option value="ninos">Niños (separado de todo lo demás)</option>
+                </select>
+            </div>
+            <div class="form-group" id="grpUsuario" style="display:none;">
+                <label class="form-label">¿De quién es? (personal)</label>
+                <select id="dUsuario" class="form-control"></select>
+            </div>
+            <div class="form-group">
+                <label class="form-label"><input type="checkbox" id="dActivo" checked> Activo</label>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+            <button class="btn btn-primary" id="btnGuardar" onclick="guardar()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async function() {
+    var sesion = await CVC.verificarAuth(['admin']);
+    document.getElementById('userName').textContent = sesion.userData.nombre || sesion.user.email;
+    CVC.renderNav('destinos.html', sesion.userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('destinos.html');
+
+    var db = CVC.db;
+    var escapeHtml = CVC.escapeHtml;
+    var showToast = CVC.showToast;
+
+    var _cache = [];
+    var _usuarios = [];
+
+    var DEFAULTS = [
+        { nombre: 'Casa Verde – Mantenimiento',     tipo: 'negocio',  orden: 1 },
+        { nombre: 'Casa Verde – Insumos huéspedes', tipo: 'negocio',  orden: 2 },
+        { nombre: 'Vehículo',                        tipo: 'negocio',  orden: 3 },
+        { nombre: 'Niños – Escuela',                 tipo: 'ninos',    orden: 4 },
+        { nombre: 'Niños – Actividades',             tipo: 'ninos',    orden: 5 },
+        { nombre: 'Niños – Transporte',              tipo: 'ninos',    orden: 6 },
+        { nombre: 'Florencia – Personal',            tipo: 'personal', orden: 7 },
+        { nombre: 'Mauro – Personal',                tipo: 'personal', orden: 8 }
+    ];
+
+    var TIPO_LABEL = { negocio: 'Negocio', personal: 'Personal', ninos: 'Niños' };
+
+    async function cargarUsuarios() {
+        try {
+            var snap = await db.collection('usuarios').get();
+            _usuarios = snap.docs.map(function(d) {
+                var x = d.data();
+                return { uid: d.id, nombre: x.nombre || x.email || d.id };
+            });
+        } catch (e) { _usuarios = []; }
+    }
+
+    async function cargar() {
+        try {
+            var snap = await db.collection('destinos').get();
+            if (snap.empty) {
+                var batch = db.batch();
+                DEFAULTS.forEach(function(d) {
+                    var ref = db.collection('destinos').doc();
+                    batch.set(ref, {
+                        nombre: d.nombre, tipo: d.tipo, orden: d.orden,
+                        usuarioUid: '', usuarioNombre: '', activo: true,
+                        creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                });
+                await batch.commit();
+                return cargar();
+            }
+            _cache = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
+                .sort(function(a, b) { return (a.orden || 99) - (b.orden || 99); });
+            render();
+        } catch (e) {
+            CVC.showError('#lista', 'Error al cargar destinos', e.message, cargar);
+        }
+    }
+
+    function render() {
+        var cont = document.getElementById('lista');
+        if (!_cache.length) { cont.innerHTML = '<div style="color:var(--color-text-muted);">No hay destinos.</div>'; return; }
+        var orden = ['negocio', 'ninos', 'personal'];
+        var html = '';
+        orden.forEach(function(tp) {
+            var grupo = _cache.filter(function(d) { return d.tipo === tp; });
+            if (!grupo.length) return;
+            html += '<div class="ds-grupo">' + TIPO_LABEL[tp] + '</div>';
+            html += grupo.map(function(d) {
+                return '<div class="ds-row' + (d.activo === false ? ' inactivo' : '') + '">' +
+                    '<span class="ds-row__chip chip-' + d.tipo + '">' + TIPO_LABEL[d.tipo] + '</span>' +
+                    '<span class="ds-row__nom">' + escapeHtml(d.nombre) +
+                        (d.usuarioNombre ? ' <span class="ds-row__user">· ' + escapeHtml(d.usuarioNombre) + '</span>' : '') +
+                    '</span>' +
+                    '<button class="ds-row__btn" onclick="editar(\'' + d.id + '\')" title="Editar"><span class="material-icons">edit</span></button>' +
+                    '<button class="ds-row__btn" onclick="borrar(\'' + d.id + '\')" title="Eliminar"><span class="material-icons">delete</span></button>' +
+                '</div>';
+            }).join('');
+        });
+        cont.innerHTML = html;
+    }
+
+    function poblarUsuarios(sel) {
+        var s = document.getElementById('dUsuario');
+        s.innerHTML = '<option value="">— elegir —</option>' + _usuarios.map(function(u) {
+            return '<option value="' + u.uid + '"' + (u.uid === sel ? ' selected' : '') + '>' + escapeHtml(u.nombre) + '</option>';
+        }).join('');
+    }
+
+    window.onTipo = function() {
+        var es = document.getElementById('dTipo').value === 'personal';
+        document.getElementById('grpUsuario').style.display = es ? 'block' : 'none';
+    };
+
+    window.abrirModal = function() {
+        document.getElementById('dId').value = '';
+        document.getElementById('dNombre').value = '';
+        document.getElementById('dTipo').value = 'negocio';
+        document.getElementById('dActivo').checked = true;
+        poblarUsuarios('');
+        onTipo();
+        document.getElementById('modalTitulo').textContent = 'Nuevo destino';
+        document.getElementById('modalOverlay').style.display = 'flex';
+    };
+
+    window.editar = function(id) {
+        var d = _cache.filter(function(x) { return x.id === id; })[0];
+        if (!d) return;
+        document.getElementById('dId').value = d.id;
+        document.getElementById('dNombre').value = d.nombre || '';
+        document.getElementById('dTipo').value = d.tipo || 'negocio';
+        document.getElementById('dActivo').checked = d.activo !== false;
+        poblarUsuarios(d.usuarioUid || '');
+        onTipo();
+        document.getElementById('modalTitulo').textContent = 'Editar destino';
+        document.getElementById('modalOverlay').style.display = 'flex';
+    };
+
+    window.cerrarModal = function(ev) {
+        if (ev && ev.target !== document.getElementById('modalOverlay')) return;
+        document.getElementById('modalOverlay').style.display = 'none';
+    };
+
+    window.guardar = async function() {
+        var nombre = document.getElementById('dNombre').value.trim();
+        if (!nombre) { showToast('Poné un nombre.', 'error'); return; }
+        var tipo = document.getElementById('dTipo').value;
+        var usuarioUid = '', usuarioNombre = '';
+        if (tipo === 'personal') {
+            usuarioUid = document.getElementById('dUsuario').value;
+            var u = _usuarios.filter(function(x) { return x.uid === usuarioUid; })[0];
+            usuarioNombre = u ? u.nombre : '';
+        }
+        var activo = document.getElementById('dActivo').checked;
+        var id = document.getElementById('dId').value;
+        var btn = document.getElementById('btnGuardar');
+        btn.disabled = true;
+        try {
+            var datos = { nombre: nombre, tipo: tipo, usuarioUid: usuarioUid, usuarioNombre: usuarioNombre, activo: activo };
+            if (id) {
+                await db.collection('destinos').doc(id).update(datos);
+            } else {
+                datos.orden = (_cache.length ? Math.max.apply(null, _cache.map(function(d) { return d.orden || 0; })) : 0) + 1;
+                datos.creadoEn = firebase.firestore.FieldValue.serverTimestamp();
+                await db.collection('destinos').add(datos);
+            }
+            document.getElementById('modalOverlay').style.display = 'none';
+            await cargar();
+            showToast('Destino guardado.', 'success');
+        } catch (e) {
+            showToast('Error: ' + e.message, 'error');
+        }
+        btn.disabled = false;
+    };
+
+    window.borrar = async function(id) {
+        if (!confirm('¿Eliminar este destino? Los gastos ya imputados conservan el nombre guardado.')) return;
+        try {
+            await db.collection('destinos').doc(id).delete();
+            await cargar();
+            showToast('Destino eliminado.', 'success');
+        } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    await cargarUsuarios();
+    await cargar();
+})();
+</script>
+</body>
+</html>

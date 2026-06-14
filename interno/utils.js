@@ -1,6 +1,11 @@
 // ============================================================
-//  utils.js — Casa Verde Canas  v4.10 (puente de compatibilidad)
+//  utils.js — Casa Verde Canas  v4.11 (puente de compatibilidad)
 //  Funciones compartidas · /interno/
+//
+//  CAMBIOS v4.11:
+//  - Nuevo "Análisis de gastos" (analisis-gastos.html) en la capa Reportar
+//    del menú admin (solo-admin). Resumen de gastos por categoría con
+//    filtro de año/mes y país, con detalle desplegable por categoría.
 //
 //  CAMBIOS v4.10:
 //  - [RESTAURADO] subirComprobante(file, carpeta, docId) y abrirComprobante(url),
@@ -156,8 +161,10 @@ const NAV_ADMIN_ITEMS = [
             { href: 'movimientos.html',      icon: 'receipt_long',    label: 'Movimientos'        },
             { href: 'herramientas-btg.html', icon: 'compare_arrows',  label: 'BTG / Conciliación' },
             { href: 'categorias.html',       icon: 'label',           label: 'Categorías'         },
+            { href: 'destinos.html',         icon: 'flag',            label: 'Destinos'           },
             { sep: true },
             { href: 'panel-financiero.html', icon: 'monitoring',      label: 'Panel financiero'   },
+            { href: 'analisis-gastos.html',  icon: 'insights',        label: 'Análisis de gastos' },
             { href: 'informes-airbnb.html',  icon: 'summarize',       label: 'Informes Airbnb'    }
         ]
     },
@@ -221,7 +228,8 @@ const NAV_USER_ITEMS = [
 var SECCIONES_SOLO_ADMIN = [
     'panel-financiero', 'fiscal', 'cuentas', 'movimientos',
     'herramientas-btg', 'categorias', 'pagos', 'informes-airbnb',
-    'acceso-contador', 'cabanas-admin', 'usuarios', 'tareas-admin', 'gastos'
+    'acceso-contador', 'cabanas-admin', 'usuarios', 'tareas-admin', 'gastos',
+    'analisis-gastos'
 ];
 function puede(seccion, rol) {
     rol = rol || 'admin';
