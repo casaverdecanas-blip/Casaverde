@@ -1918,10 +1918,10 @@
         // Cargar cuentas si no estan cargadas
         if (_ngCuentasCache.length === 0) {
             try {
-                var snap = await db.collection('cuentas').where('activa','==',true).get();
+                var snap = await db.collection('cuentas').get();
                 _ngCuentasCache = snap.docs.map(function(d) {
-                    return { id: d.id, nombre: d.data().nombre || d.id, moneda: d.data().moneda || '' };
-                });
+                    return { id: d.id, nombre: d.data().nombre || d.id, moneda: d.data().moneda || '', activa: d.data().activa };
+                }).filter(function(c) { return c.activa !== false; });
             } catch(e) { _ngCuentasCache = []; }
         }
 
@@ -1937,6 +1937,11 @@
                 opt.textContent = c.nombre + ' (' + c.moneda + ')';
                 sel.appendChild(opt);
             });
+            var optP = document.createElement('option');
+            optP.value = '__propios__';
+            optP.dataset.nom = 'Fondos propios';
+            optP.textContent = 'Fondos propios (me lo reintegran)';
+            sel.appendChild(optP);
         });
 
         document.getElementById('modalNuevoGasto').style.display = 'flex';
@@ -2128,6 +2133,7 @@
         var selCta   = document.getElementById(esFoto ? 'ngFCuenta' : 'ngCuenta');
         var cuentaId  = selCta ? selCta.value : '';
         var cuentaNom = selCta && selCta.options[selCta.selectedIndex] ? (selCta.options[selCta.selectedIndex].dataset.nom || '') : '';
+        var esPropio  = (cuentaId === '__propios__');
 
         if (!monto || monto <= 0) {
             document.getElementById('ngErrorText').textContent = 'Ingresa un monto valido.';
@@ -2164,10 +2170,13 @@
                 deducible: circuito === 'fiscal' || circuito === 'mixto',
                 proveedor: proveedor,
                 categoria: cat,
-                cuentaOrigenId:  cuentaId,
-                cuentaOrigenNom: cuentaNom,
-                pais: cuentaId ? paisDeCuenta(cuentaId) : 'BR',
-                sinCuenta: !cuentaId,
+                cuentaOrigenId:  esPropio ? '' : cuentaId,
+                cuentaOrigenNom: esPropio ? 'Fondos propios' : cuentaNom,
+                pais: (esPropio || !cuentaId) ? 'BR' : paisDeCuenta(cuentaId),
+                sinCuenta: esPropio ? true : !cuentaId,
+                reembolso: esPropio,
+                reembolsoA: esPropio ? user.uid : null,
+                reembolsoNombre: esPropio ? (userData.nombre || user.email) : null,
                 items:     items,
                 itemsDetalle: itemsDet,
                 referenciaComprobante: ref,
@@ -2180,6 +2189,23 @@
 
             var docRef = await db.collection('gastos').add(docData);
 
+            // Si pagó con fondos propios -> deuda de honorarios (reembolso)
+            if (esPropio) {
+                await db.collection('honorarios').add({
+                    uid: user.uid,
+                    nombre: userData.nombre || user.email,
+                    tipo: 'reembolso',
+                    concepto: 'Reembolso: ' + concepto,
+                    monto: monto,
+                    moneda: 'BRL',
+                    horas: 0,
+                    estado: 'pendiente',
+                    gastoId: docRef.id,
+                    creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                    creadoPor: user.uid
+                });
+            }
+
             // Subir foto si hay
             var fotoFile = esFoto ? _ngFotoFile : _ngComprobanteFile;
             if (fotoFile) {
@@ -2190,7 +2216,7 @@
                 } catch(se) { console.warn('Foto:', se.message); }
             }
 
-            CVC.showToast('Gasto registrado.' + (!cuentaId ? ' Pendiente asignar cuenta.' : ''), 'success');
+            CVC.showToast(esPropio ? 'Gasto registrado. El reembolso quedó en honorarios a percibir.' : ('Gasto registrado.' + (!cuentaId ? ' Pendiente asignar cuenta.' : '')), 'success');
             document.getElementById('modalNuevoGasto').style.display = 'none';
             await cargarTodo();
 
