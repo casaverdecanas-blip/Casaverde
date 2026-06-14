@@ -334,7 +334,7 @@
             <div class="form-group">
                 <label class="form-label">Comprobante (opcional)</label>
                 <div class="comp-zone">
-                    <input type="file" id="rComprobanteInput" accept="image/*" capture="environment"
+                    <input type="file" id="rComprobanteInput" accept="image/*"
                         onchange="previsualizarComprobanteRetiro(this)">
                     <span class="material-icons" style="font-size:22px;color:var(--color-text-muted);display:block;margin-bottom:2px;">photo_camera</span>
                     <div style="font-size:12px;color:var(--color-text-secondary);">Foto de ticket / recibo (opcional)</div>
@@ -543,7 +543,7 @@
             <div class="form-group">
                 <label class="form-label">Comprobante (foto de factura / recibo)</label>
                 <div class="comp-zone">
-                    <input type="file" id="eComprobanteInput" accept="image/*" capture="environment"
+                    <input type="file" id="eComprobanteInput" accept="image/*"
                         onchange="previsualizarComprobante(this)">
                     <span class="material-icons" style="font-size:28px;color:var(--color-text-muted);display:block;margin-bottom:4px;">photo_camera</span>
                     <div style="font-size:12px;color:var(--color-text-secondary);">Tocar para sacar foto o elegir imagen</div>
@@ -650,7 +650,7 @@
                     </div>
                     <div class="form-group" style="margin-bottom:var(--space-3);">
                         <label class="form-label">Foto del comprobante</label>
-                        <input type="file" id="ngComprobanteInput" accept="image/*" capture="environment"
+                        <input type="file" id="ngComprobanteInput" accept="image/*"
                             style="display:none;" onchange="ngPreviewFoto(this)">
                         <button class="btn btn-secondary btn-sm"
                             onclick="document.getElementById('ngComprobanteInput').click()">
@@ -678,7 +678,7 @@
                     <div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-top:4px;">
                         La IA extrae todos los datos automaticamente
                     </div>
-                    <input type="file" id="ngFotoInput" accept="image/*" capture="environment"
+                    <input type="file" id="ngFotoInput" accept="image/*"
                         style="display:none;" onchange="ngProcesarFoto(this)">
                 </div>
                 <img id="ngFotoPreview" src=""
@@ -792,7 +792,7 @@
                 Tomá una foto de la factura o seleccioná una imagen. La IA extrae los datos automáticamente.
             </p>
             <div id="fUpZone" style="border:2px dashed var(--color-primary-light);border-radius:var(--radius-md);padding:var(--space-6);text-align:center;cursor:pointer;background:var(--color-primary-xlight);position:relative;margin-bottom:var(--space-4);">
-                <input type="file" id="fImgInput" accept="image/*" capture="environment"
+                <input type="file" id="fImgInput" accept="image/*"
                     style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;"
                     onchange="procesarFactura(this.files[0])">
                 <span class="material-icons" style="font-size:36px;color:var(--color-primary);margin-bottom:8px;display:block;">photo_camera</span>
@@ -1716,6 +1716,27 @@
         }).filter(function(x) { return x.descripcion; });
     }
 
+    // Consolida items repetidos por descripcion y valida contra el total.
+    // Detecta loops/degeneracion de la IA en listas largas (precio dos veces, items repetidos).
+    function consolidarValidar(ext) {
+        var items = normalizeItems(ext.items);
+        var mapa = {};
+        items.forEach(function(it) {
+            var k = it.descripcion.trim().toLowerCase();
+            if (!mapa[k]) mapa[k] = { descripcion: it.descripcion, cantidad: 0, precio: 0, categoria: it.categoria || '' };
+            mapa[k].cantidad += (it.cantidad || 1);
+            mapa[k].precio += (it.precio || 0);
+            if (!mapa[k].categoria && it.categoria) mapa[k].categoria = it.categoria;
+        });
+        var consol = Object.keys(mapa).map(function(k) { return mapa[k]; });
+        ext.items = consol;
+        var suma = consol.reduce(function(a, i) { return a + (i.precio || 0); }, 0);
+        ext._sumaItems = suma;
+        var total = ext.monto_total || 0;
+        ext._descuadre = total > 0 && consol.length > 0 && Math.abs(suma - total) > Math.max(2, total * 0.05);
+        return ext;
+    }
+
     window.procesarFactura = async function(file) {
         if (!file) return;
         document.getElementById('fUpZone').style.display     = 'none';
@@ -1747,7 +1768,9 @@
                 '"numero_factura":"","categoria_sugerida":"","metodo_pago_sugerido":"",' +
                 '"items":[{"descripcion":"","cantidad":1,"precio":0,"categoria":""}]}.' +
                 ' Para monto_total y precio: eliminar R$, puntos de miles, reemplazar coma decimal por punto. R$1.234,56 -> 1234.56.' +
-                ' precio = valor TOTAL del renglon (cantidad x unitario).' +
+                ' La lista tiene columnas: numero, codigo, descripcion, cantidad (Qt), unidad (Un), precio unitario (Vlr) y total del renglon (Tot); el precio figura DOS veces por linea.' +
+                ' AGRUPA los productos IGUALES (misma descripcion) en UN SOLO item, sumando cantidades y totales. NO repitas ni inventes lineas: cada producto distinto aparece una sola vez.' +
+                ' precio = suma del total (Tot) de ese producto, en reales. monto_total = Valor total de la factura (con descuentos).' +
                 ' categoria de cada item: etiqueta corta del tipo de producto (ej: Tornilleria, Herramientas, Pintura, Plomeria, Electrico, Madera, Alimentos, Bebidas, Limpieza, Descartables, Otros).' +
                 ' categoria_sugerida (de la factura entera): Materiales, Servicios, Limpieza, Mantenimiento, Alimentos, Transporte, Otros.' +
                 ' metodo_pago_sugerido: efectivo, debito, credito, pix, transferencia.';
@@ -1790,6 +1813,8 @@
             }
             if (ext._parcial) fLog('Comprobante largo: revisá los ítems extraídos.', 'err');
             fLog('OK Datos extraídos. Revisalos antes de guardar.', 'ok');
+            ext = consolidarValidar(ext);
+            if (ext._descuadre) fLog('ATENCION: los items suman R$' + ext._sumaItems.toFixed(2) + ' y el total es R$' + (ext.monto_total || 0).toFixed(2) + '. Revisa los items: pudo leer mal una lista larga.', 'err');
             poblarCamposFactura(ext);
         } catch(e) {
             fLog('ERR Error: ' + e.message, 'err');
@@ -2038,7 +2063,9 @@
                 '"numero_factura":"","categoria_sugerida":"","metodo_pago_sugerido":"",' +
                 '"items":[{"descripcion":"","cantidad":1,"precio":0,"categoria":""}]}.' +
                 ' Numeros BRL (monto_total y precio): eliminar R$, puntos de miles, cambiar coma por punto. R$1.234,56 -> 1234.56.' +
-                ' precio = valor TOTAL del renglon (cantidad x unitario).' +
+                ' La lista tiene columnas: numero, codigo, descripcion, cantidad (Qt), unidad (Un), precio unitario (Vlr) y total del renglon (Tot); el precio figura DOS veces por linea.' +
+                ' AGRUPA los productos IGUALES (misma descripcion) en UN SOLO item, sumando cantidades y totales. NO repitas ni inventes lineas: cada producto distinto aparece una sola vez.' +
+                ' precio = suma del total (Tot) de ese producto, en reales. monto_total = Valor total de la factura (con descuentos).' +
                 ' categoria de cada item: etiqueta corta del producto (ej: Tornilleria, Herramientas, Pintura, Plomeria, Electrico, Madera, Alimentos, Bebidas, Limpieza, Descartables, Otros).' +
                 ' metodo_pago_sugerido: pix, efectivo, debito, credito o transferencia.' +
                 ' categoria_sugerida (factura entera): Materiales, Limpieza, Mantenimiento, Servicios, Alimentos, Transporte u Otro.';
@@ -2071,6 +2098,8 @@
                 return;
             }
             if (ext._parcial) flog('Comprobante largo: extraje lo que pude, revisá los ítems.', '#fbbf24');
+            ext = consolidarValidar(ext);
+            if (ext._descuadre) flog('Atencion: los items suman R$' + ext._sumaItems.toFixed(2) + ' y el total es R$' + (ext.monto_total || 0).toFixed(2) + '. Revisa: pudo leer mal una lista larga.', '#fbbf24');
 
             // Poblar campos
             if (ext.monto_total)  document.getElementById('ngFMonto').value    = ext.monto_total;

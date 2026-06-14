@@ -113,7 +113,7 @@
                 <span class="material-icons">add_a_photo</span>
                 Tocá para sacar o subir la foto del comprobante
             </div>
-            <input type="file" id="fotoInput" accept="image/*" capture="environment" class="hidden" onchange="procesarFoto(this.files[0])">
+            <input type="file" id="fotoInput" accept="image/*" class="hidden" onchange="procesarFoto(this.files[0])">
             <div class="gm-log" id="logBox"></div>
             <img id="preview" class="gm-preview" alt="comprobante">
         </div>
@@ -263,6 +263,25 @@
         }).filter(function(x) { return x.descripcion; });
     }
 
+    function consolidarValidar(ext) {
+        var items = normalizeItems(ext.items);
+        var mapa = {};
+        items.forEach(function(it) {
+            var k = it.descripcion.trim().toLowerCase();
+            if (!mapa[k]) mapa[k] = { descripcion: it.descripcion, cantidad: 0, precio: 0, categoria: it.categoria || '' };
+            mapa[k].cantidad += (it.cantidad || 1);
+            mapa[k].precio += (it.precio || 0);
+            if (!mapa[k].categoria && it.categoria) mapa[k].categoria = it.categoria;
+        });
+        var consol = Object.keys(mapa).map(function(k) { return mapa[k]; });
+        ext.items = consol;
+        var suma = consol.reduce(function(a, i) { return a + (i.precio || 0); }, 0);
+        ext._sumaItems = suma;
+        var total = ext.monto_total || 0;
+        ext._descuadre = total > 0 && consol.length > 0 && Math.abs(suma - total) > Math.max(2, total * 0.05);
+        return ext;
+    }
+
     // Parser tolerante a JSON truncado (tickets largos)
     function parseFacturaIA(raw) {
         var bt = String.fromCharCode(96);
@@ -356,7 +375,9 @@
                 '"numero_factura":"","categoria_sugerida":"",' +
                 '"items":[{"descripcion":"","cantidad":1,"precio":0,"categoria":""}]}.' +
                 ' Numeros BRL (monto_total y precio): eliminar R$, puntos de miles, cambiar coma por punto. R$1.234,56 -> 1234.56.' +
-                ' precio = valor TOTAL del renglon (cantidad x unitario).' +
+                ' La lista tiene columnas: numero, codigo, descripcion, cantidad (Qt), unidad (Un), precio unitario (Vlr) y total del renglon (Tot); el precio figura DOS veces por linea.' +
+                ' AGRUPA los productos IGUALES (misma descripcion) en UN SOLO item, sumando cantidades y totales. NO repitas ni inventes lineas: cada producto distinto aparece una sola vez.' +
+                ' precio = suma del total (Tot) de ese producto, en reales. monto_total = Valor total de la factura (con descuentos).' +
                 ' categoria de cada item: etiqueta corta del producto (ej: Tornilleria, Herramientas, Pintura, Plomeria, Electrico, Madera, Alimentos, Bebidas, Limpieza, Descartables, Otros).' +
                 ' concepto: un resumen corto de la compra.' +
                 ' categoria_sugerida: una de Mantenimiento, Materiales, Servicios, Limpieza, Transporte, Otros.';
@@ -385,6 +406,7 @@
                 log('No se pudo interpretar el comprobante. Completá a mano.', 'err');
                 return;
             }
+            ext = consolidarValidar(ext);
 
             if (ext.concepto)           document.getElementById('concepto').value   = ext.concepto;
             if (ext.monto_total)        document.getElementById('monto').value      = ext.monto_total;
@@ -404,6 +426,7 @@
             }
             _itemsDetalle = normalizeItems(ext.items);
             log(ext._parcial ? 'Comprobante largo: extraje lo que pude, revisá los ítems.' : 'Datos extraídos. Revisalos antes de guardar.', ext._parcial ? 'err' : 'ok');
+            if (ext._descuadre) log('Atención: los ítems suman R$' + ext._sumaItems.toFixed(2) + ' y el total es R$' + (ext.monto_total || 0).toFixed(2) + '. Revisá los ítems: pudo leer mal una lista larga.', 'err');
         } catch (e) {
             log('Error: ' + e.message, 'err');
         }
