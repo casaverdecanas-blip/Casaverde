@@ -1700,6 +1700,22 @@
         return obj;
     }
 
+    // Normaliza el array de ítems de la IA a {descripcion, cantidad, precio, categoria}
+    var _fItemsDetalle  = [];   // flujo factura
+    var _ngItemsDetalle = [];   // flujo nuevo gasto
+    function normalizeItems(arr) {
+        if (!Array.isArray(arr)) return [];
+        return arr.map(function(it) {
+            if (typeof it === 'string') return { descripcion: it, cantidad: 1, precio: 0, categoria: '' };
+            return {
+                descripcion: (it.descripcion || it.description || it.nombre || it.item || '').toString(),
+                cantidad: parseFloat(it.cantidad || it.qty || it.qtde || 1) || 1,
+                precio: parseFloat(it.precio || it.price || it.valor || it.vl_total || 0) || 0,
+                categoria: (it.categoria || it.category || it.cat || '').toString().trim()
+            };
+        }).filter(function(x) { return x.descripcion; });
+    }
+
     window.procesarFactura = async function(file) {
         if (!file) return;
         document.getElementById('fUpZone').style.display     = 'none';
@@ -1728,10 +1744,13 @@
             var PROMPT = 'Sos un extractor de datos de facturas y recibos de compra en Brasil.' +
                 ' Extraé los datos del comprobante y respondé UNICAMENTE con JSON valido, sin texto adicional ni markdown:' +
                 ' {"proveedor":"","fecha":"YYYY-MM-DD","monto_total":0,"moneda":"BRL","concepto":"",' +
-                '"numero_factura":"","categoria_sugerida":"","metodo_pago_sugerido":"","items":""}.' +
-                ' Para monto_total: eliminar R$, puntos de miles, reemplazar coma decimal por punto. Ejemplo: R$1.234,56 -> 1234.56.' +
-                ' Para categoria_sugerida usar una de: Materiales, Servicios, Limpieza, Mantenimiento, Alimentos, Transporte, Otros.' +
-                ' Para metodo_pago_sugerido usar: efectivo, debito, credito, pix, transferencia.';
+                '"numero_factura":"","categoria_sugerida":"","metodo_pago_sugerido":"",' +
+                '"items":[{"descripcion":"","cantidad":1,"precio":0,"categoria":""}]}.' +
+                ' Para monto_total y precio: eliminar R$, puntos de miles, reemplazar coma decimal por punto. R$1.234,56 -> 1234.56.' +
+                ' precio = valor TOTAL del renglon (cantidad x unitario).' +
+                ' categoria de cada item: etiqueta corta del tipo de producto (ej: Tornilleria, Herramientas, Pintura, Plomeria, Electrico, Madera, Alimentos, Bebidas, Limpieza, Descartables, Otros).' +
+                ' categoria_sugerida (de la factura entera): Materiales, Servicios, Limpieza, Mantenimiento, Alimentos, Transporte, Otros.' +
+                ' metodo_pago_sugerido: efectivo, debito, credito, pix, transferencia.';
 
             // Llamar al proxy de Netlify (igual que informes-airbnb)
             var PROXY_URL = 'https://serene-scone-76bd4e.netlify.app/.netlify/functions/claude-proxy';
@@ -1810,6 +1829,7 @@
                 itemsTxt = JSON.stringify(d.items);
             }
             document.getElementById('fItems').value = itemsTxt;
+            _fItemsDetalle = normalizeItems(d.items);
         }
         document.getElementById('fCampos').style.display     = 'block';
         document.getElementById('fBtnGuardar').style.display = 'inline-flex';
@@ -1839,6 +1859,7 @@
                 proveedor:            document.getElementById('fProveedor').value.trim(),
                 notas:                ref ? 'Factura: ' + ref : '',
                 items:                items,
+                itemsDetalle:         _fItemsDetalle,
                 circuito:             circuito,
                 deducible:            circuito === 'fiscal' || circuito === 'mixto',
                 cuentaOrigenId:       cuentaId,
@@ -2010,10 +2031,12 @@
                 ' Extrae todos los datos posibles del comprobante y responde UNICAMENTE con JSON valido, sin texto adicional:' +
                 ' {"proveedor":"","fecha":"YYYY-MM-DD","monto_total":0,"moneda":"BRL","concepto":"",' +
                 '"numero_factura":"","categoria_sugerida":"","metodo_pago_sugerido":"",' +
-                '"items":[{"descripcion":"","cantidad":1,"precio":0}]}.' +
-                ' Numeros BRL: eliminar R$, puntos de miles, cambiar coma por punto. R$1.234,56 -> 1234.56.' +
+                '"items":[{"descripcion":"","cantidad":1,"precio":0,"categoria":""}]}.' +
+                ' Numeros BRL (monto_total y precio): eliminar R$, puntos de miles, cambiar coma por punto. R$1.234,56 -> 1234.56.' +
+                ' precio = valor TOTAL del renglon (cantidad x unitario).' +
+                ' categoria de cada item: etiqueta corta del producto (ej: Tornilleria, Herramientas, Pintura, Plomeria, Electrico, Madera, Alimentos, Bebidas, Limpieza, Descartables, Otros).' +
                 ' metodo_pago_sugerido: pix, efectivo, debito, credito o transferencia.' +
-                ' categoria_sugerida: Materiales, Limpieza, Mantenimiento, Servicios, Alimentos, Transporte u Otro.';
+                ' categoria_sugerida (factura entera): Materiales, Limpieza, Mantenimiento, Servicios, Alimentos, Transporte u Otro.';
 
             var resp = await fetch('https://serene-scone-76bd4e.netlify.app/.netlify/functions/claude-proxy', {
                 method: 'POST',
@@ -2086,6 +2109,7 @@
                 }
                 document.getElementById('ngFItems').value = itemsTxt;
             }
+            _ngItemsDetalle = normalizeItems(ext.items);
 
             flog('Datos extraidos correctamente', '#4ade80');
             document.getElementById('ngFotoExtraido').style.display = 'block';
@@ -2126,6 +2150,7 @@
             var circuito = (esFoto ? document.getElementById('ngFCircuito').value : document.getElementById('ngCircuito').value) || '';
             var proveedor = (esFoto ? document.getElementById('ngFProveedor').value : document.getElementById('ngProveedor').value || '').trim();
             var items    = esFoto ? (document.getElementById('ngFItems').value || '') : '';
+            var itemsDet = esFoto ? _ngItemsDetalle : [];
             var ref      = esFoto ? (document.getElementById('ngFReferencia').value || '') : '';
             var cat      = esFoto ? document.getElementById('ngFCategoria').value : 'otro';
 
@@ -2144,6 +2169,7 @@
                 pais: cuentaId ? paisDeCuenta(cuentaId) : 'BR',
                 sinCuenta: !cuentaId,
                 items:     items,
+                itemsDetalle: itemsDet,
                 referenciaComprobante: ref,
                 notas:     '',
                 comprobanteUrl: null,

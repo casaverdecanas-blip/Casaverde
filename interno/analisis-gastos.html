@@ -56,6 +56,9 @@
     </div>
 
     <div class="ag-filtros">
+        <button class="ag-chip active" id="vCat" onclick="setVista('categoria', this)">Por categoría</button>
+        <button class="ag-chip" id="vItem" onclick="setVista('item', this)">Por ítem</button>
+        <span style="width:10px;"></span>
         <select id="selAnio" onchange="aplicar()"></select>
         <select id="selMes" onchange="aplicar()">
             <option value="">Todo el año</option>
@@ -91,6 +94,7 @@
     var escapeHtml = CVC.escapeHtml;
     var _gastos = [];
     var _pais = '';
+    var _vista = 'categoria';
 
     function fmt(n) { return 'R$ ' + (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
     function capit(s) { s = s || ''; return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -120,6 +124,13 @@
         aplicar();
     };
 
+    window.setVista = function(v, btn) {
+        _vista = v;
+        document.getElementById('vCat').classList.toggle('active', v === 'categoria');
+        document.getElementById('vItem').classList.toggle('active', v === 'item');
+        aplicar();
+    };
+
     window.toggleCat = function(key) {
         var b = document.getElementById('body-' + key);
         if (b) b.classList.toggle('open');
@@ -142,6 +153,8 @@
             cont.innerHTML = '<div style="text-align:center;color:var(--color-text-muted);padding:var(--space-6);">No hay gastos en este período.</div>';
             return;
         }
+
+        if (_vista === 'item') { renderPorItem(lista, cont); return; }
 
         // Agrupar por categoría (normalizada)
         var grupos = {};
@@ -191,6 +204,54 @@
 
         cont.innerHTML = html;
     };
+
+    function renderPorItem(lista, cont) {
+        var grupos = {}, total = 0, conDetalle = 0;
+        lista.forEach(function(g) {
+            var det = Array.isArray(g.itemsDetalle) ? g.itemsDetalle : [];
+            if (det.length) conDetalle++;
+            det.forEach(function(it) {
+                var precio = it.precio || 0;
+                total += precio;
+                var key = (String(it.categoria || '').trim().toLowerCase()) || 'sin categoría';
+                if (!grupos[key]) grupos[key] = { nombre: key, total: 0, items: [] };
+                grupos[key].total += precio;
+                grupos[key].items.push({ it: it, gasto: g });
+            });
+        });
+        var arr = Object.keys(grupos).map(function(k) { return grupos[k]; })
+            .sort(function(a, b) { return b.total - a.total; });
+        if (!arr.length) {
+            cont.innerHTML = '<div style="text-align:center;color:var(--color-text-muted);padding:var(--space-6);">Ningún gasto de este período tiene detalle de ítems todavía.<br>Se va llenando a medida que cargues facturas con foto.</div>';
+            return;
+        }
+        var maxC = arr[0].total || 1;
+        var html = '<div class="ag-total"><div class="n">' + fmt(total) + '</div>' +
+            '<div class="s">' + conDetalle + ' de ' + lista.length + ' gasto(s) con detalle · ' + arr.length + ' tipos de ítem</div></div>';
+        html += arr.map(function(c) {
+            var key = 'i_' + c.nombre.replace(/[^a-z0-9]/g, '_');
+            var pct = total ? (c.total / total * 100) : 0;
+            var w = (c.total / maxC * 100);
+            var detalle = c.items.sort(function(a, b) { return (b.it.precio || 0) - (a.it.precio || 0); }).map(function(r) {
+                return '<div class="ag-det">' +
+                    '<div style="flex:1;min-width:0;">' + escapeHtml(r.it.descripcion || '--') +
+                        (r.it.cantidad && r.it.cantidad !== 1 ? ' <span style="color:var(--color-text-muted);">x' + r.it.cantidad + '</span>' : '') +
+                        ' <span style="color:var(--color-text-muted);font-size:11px;">· ' + escapeHtml(r.gasto.proveedor || r.gasto.concepto || '') + ' · ' + escapeHtml(r.gasto.fecha || '') + '</span>' +
+                    '</div>' +
+                    '<div class="ag-det__mono">' + fmt(r.it.precio) + '</div>' +
+                '</div>';
+            }).join('');
+            return '<div class="ag-cat">' +
+                '<div class="ag-cat__head" onclick="toggleCat(\'' + key + '\')">' +
+                    '<div class="ag-cat__top"><span class="ag-cat__nom">' + escapeHtml(capit(c.nombre)) + '</span><span class="ag-cat__val">' + fmt(c.total) + '</span></div>' +
+                    '<div class="ag-bar"><div class="ag-bar__fill" style="width:' + w + '%;"></div></div>' +
+                    '<div class="ag-cat__sub">' + pct.toFixed(1) + '% · ' + c.items.length + ' ítems · tocá para ver el detalle</div>' +
+                '</div>' +
+                '<div class="ag-cat__body" id="body-' + key + '">' + detalle + '</div>' +
+            '</div>';
+        }).join('');
+        cont.innerHTML = html;
+    }
 
     aplicar();
 })();

@@ -249,6 +249,20 @@
         document.getElementById('cuentaSelect').classList.toggle('hidden', f !== 'cuenta');
     };
 
+    var _itemsDetalle = [];
+    function normalizeItems(arr) {
+        if (!Array.isArray(arr)) return [];
+        return arr.map(function(it) {
+            if (typeof it === 'string') return { descripcion: it, cantidad: 1, precio: 0, categoria: '' };
+            return {
+                descripcion: (it.descripcion || it.description || it.nombre || it.item || '').toString(),
+                cantidad: parseFloat(it.cantidad || it.qty || 1) || 1,
+                precio: parseFloat(it.precio || it.price || it.valor || 0) || 0,
+                categoria: (it.categoria || it.category || it.cat || '').toString().trim()
+            };
+        }).filter(function(x) { return x.descripcion; });
+    }
+
     // Parser tolerante a JSON truncado (tickets largos)
     function parseFacturaIA(raw) {
         var bt = String.fromCharCode(96);
@@ -340,8 +354,10 @@
                 ' Extrae todos los datos posibles del comprobante y responde UNICAMENTE con JSON valido, sin texto adicional ni markdown:' +
                 ' {"proveedor":"","fecha":"YYYY-MM-DD","monto_total":0,"moneda":"BRL","concepto":"",' +
                 '"numero_factura":"","categoria_sugerida":"",' +
-                '"items":[{"descripcion":"","cantidad":1,"precio":0}]}.' +
-                ' Numeros BRL: eliminar R$, puntos de miles, cambiar coma por punto. R$1.234,56 -> 1234.56.' +
+                '"items":[{"descripcion":"","cantidad":1,"precio":0,"categoria":""}]}.' +
+                ' Numeros BRL (monto_total y precio): eliminar R$, puntos de miles, cambiar coma por punto. R$1.234,56 -> 1234.56.' +
+                ' precio = valor TOTAL del renglon (cantidad x unitario).' +
+                ' categoria de cada item: etiqueta corta del producto (ej: Tornilleria, Herramientas, Pintura, Plomeria, Electrico, Madera, Alimentos, Bebidas, Limpieza, Descartables, Otros).' +
                 ' concepto: un resumen corto de la compra.' +
                 ' categoria_sugerida: una de Mantenimiento, Materiales, Servicios, Limpieza, Transporte, Otros.';
 
@@ -386,6 +402,7 @@
                     return p.join(' - ');
                 }).filter(Boolean).join('\n');
             }
+            _itemsDetalle = normalizeItems(ext.items);
             log(ext._parcial ? 'Comprobante largo: extraje lo que pude, revisá los ítems.' : 'Datos extraídos. Revisalos antes de guardar.', ext._parcial ? 'err' : 'ok');
         } catch (e) {
             log('Error: ' + e.message, 'err');
@@ -442,6 +459,7 @@
                 pais: pais,
                 sinCuenta: _fuente === 'propio',
                 items: items,
+                itemsDetalle: _itemsDetalle,
                 referenciaComprobante: referencia,
                 notas: '',
                 comprobanteUrl: null,
@@ -490,6 +508,7 @@
             document.getElementById('proveedor').value = '';
             document.getElementById('items').value = '';
             document.getElementById('referencia').value = '';
+            _itemsDetalle = [];
             document.getElementById('categoria').value = 'Mantenimiento';
             document.getElementById('preview').style.display = 'none';
             document.getElementById('logBox').classList.remove('visible');
