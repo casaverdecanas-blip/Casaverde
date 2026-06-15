@@ -1114,22 +1114,93 @@ function enviarWhatsApp(text, to) {
       .catch(function (e) { return { ok: false, error: e.message }; });
 }
 
-// Email vía EmailJS. La config se guarda en Firestore config/integraciones.emailjs
-// { serviceId, templateId, publicKey }. Mientras no esté cargada, no envía (no rompe).
-function enviarMail(asunto, mensaje, paraEmail, extra) {
-    return firebase.firestore().collection('config').doc('integraciones').get().then(function (doc) {
-        var cfg = (doc.exists && doc.data().emailjs) ? doc.data().emailjs : {};
-        if (!cfg.serviceId || !cfg.templateId || !cfg.publicKey || !paraEmail) {
-            return { ok: false, error: 'EmailJS no configurado' };
-        }
-        var params = { asunto: asunto || 'Aviso', mensaje: mensaje || '', para_email: paraEmail };
-        if (extra) { for (var k in extra) { params[k] = extra[k]; } }
-        return fetch('https://api.emailjs.com/api/v1.0/email/send', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ service_id: cfg.serviceId, template_id: cfg.templateId, user_id: cfg.publicKey, template_params: params })
-        }).then(function (r) { return { ok: r.ok, status: r.status }; });
-    }).catch(function (e) { return { ok: false, error: e.message }; });
+// Email vía EmailJS (credenciales públicas por diseño; dominio en whitelist).
+// Variables del template: enviar_a, nombre_remitente, asunto, mensaje (acepta HTML).
+var EMAILJS = { serviceId: 'service_gmail', templateId: 'template_txtqg87', publicKey: 'v9IeaS5cXuzPAKCXh' };
+function enviarMail(asunto, mensaje, paraEmail, remitente) {
+    if (!paraEmail) return Promise.resolve({ ok: false, error: 'sin destinatario' });
+    var params = {
+        enviar_a: paraEmail,
+        nombre_remitente: remitente || 'Casa Verde Canas',
+        asunto: asunto || 'Aviso',
+        mensaje: mensaje || ''
+    };
+    return fetch('https://api.emailjs.com/api/v1.0/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ service_id: EMAILJS.serviceId, template_id: EMAILJS.templateId, user_id: EMAILJS.publicKey, template_params: params })
+    }).then(function (r) { return { ok: r.ok, status: r.status }; })
+      .catch(function (e) { return { ok: false, error: e.message }; });
+}
+
+// ---- Resumen diario por email -------------------------------
+// Cada cambio importante se registra en resumenes/{YYYY-MM-DD}.
+// Una vez por día (primer ingreso al sistema), se envía el resumen
+// del día anterior a todos los usuarios. EmailJS para email; el
+// WhatsApp queda para avisos instantáneos según preferencia.
+function _hoyISO() { return new Date().toISOString().slice(0, 10); }
+
+function registrarEvento(tipo, texto) {
+    try {
+        var fecha = _hoyISO();
+        return firebase.firestore().collection('resumenes').doc(fecha).set({
+            fecha: fecha,
+            eventos: firebase.firestore.FieldValue.arrayUnion({ tipo: tipo, texto: texto, hora: new Date().toISOString() })
+        }, { merge: true }).catch(function () {});
+    } catch (e) { return Promise.resolve(); }
+}
+
+function construirResumen(fecha) {
+    var LABEL = { reserva: 'Reservas', pago: 'Pagos', comunicacion: 'Mensajes', limpieza: 'Limpiezas / tareas', presupuesto: 'Presupuestos', gasto: 'Gastos' };
+    return firebase.firestore().collection('resumenes').doc(fecha).get().then(function (d) {
+        if (!d.exists) return null;
+        var evs = (d.data().eventos) || [];
+        if (!evs.length) return null;
+        var grupos = {};
+        evs.forEach(function (e) { (grupos[e.tipo] = grupos[e.tipo] || []).push(e); });
+        var html = '<div style="font-family:Arial,sans-serif;color:#2a2a2a;">' +
+            '<h2 style="color:#2d5a27;">Resumen Casa Verde · ' + fecha + '</h2>';
+        Object.keys(grupos).forEach(function (t) {
+            html += '<h3 style="margin:14px 0 4px;">' + (LABEL[t] || t) + ' (' + grupos[t].length + ')</h3><ul style="margin:0;padding-left:18px;">';
+            grupos[t].forEach(function (e) { html += '<li>' + (e.texto || '') + '</li>'; });
+            html += '</ul>';
+        });
+        html += '<p style="color:#888;font-size:12px;margin-top:18px;">Notificación automática de casaverdecanas.com.br</p></div>';
+        return { asunto: 'Resumen Casa Verde · ' + fecha + ' (' + evs.length + ' novedades)', html: html };
+    });
+}
+
+// Lazy-cron: se llama al cargar el dashboard. Manda 1 vez por día.
+function enviarResumenDiarioSiCorresponde() {
+    var db = firebase.firestore();
+    return db.collection('config').doc('notificaciones').get().then(function (doc) {
+        var hoy = _hoyISO();
+        var ultimo = (doc.exists && doc.data().ultimoResumen) ? doc.data().ultimoResumen : '';
+        if (ultimo >= hoy) return;
+        // Marcar primero para evitar doble envío si dos personas entran a la vez
+        return db.collection('config').doc('notificaciones').set({ ultimoResumen: hoy }, { merge: true }).then(function () {
+            var ayer = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+            return construirResumen(ayer).then(function (res) {
+                if (!res) return;
+                return db.collection('usuarios').get().then(function (snap) {
+                    snap.forEach(function (u) {
+                        var x = u.data();
+                        if (x.email && (!x.notif || x.notif.canalEmail !== false)) {
+                            enviarMail(res.asunto, res.html, x.email);
+                        }
+                    });
+                });
+            });
+        });
+    }).catch(function () {});
+}
+
+// Envía el resumen del día actual a un solo email (para probar).
+function enviarResumenPrueba(email) {
+    return construirResumen(_hoyISO()).then(function (res) {
+        if (!res) return enviarMail('Resumen Casa Verde (prueba)', '<p>Hoy todavía no hay novedades registradas. El resumen real se arma con los cambios del día.</p>', email);
+        return enviarMail(res.asunto + ' (prueba)', res.html, email);
+    });
 }
 
 // Despachador: notifica a un usuario (uid) o a 'admins' según sus preferencias.
@@ -1142,9 +1213,7 @@ function notificar(destino, evento, payload) {
     function paraUsuario(uid, data) {
         var n = data.notif || {};
         if (n[evento] === false) return;
-        if (n.canalEmail !== false && data.email) {
-            enviarMail(payload.asunto, payload.mensaje, data.email);
-        }
+        // El email se envía como resumen diario (no instantáneo). Acá solo WhatsApp.
         if (n.canalWhatsapp === true) {
             enviarWhatsApp(payload.mensaje || payload.asunto || '', uid);
         }
@@ -1498,6 +1567,7 @@ window.CVC = {
     escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
     subirComprobante, abrirComprobante, elegirFuenteFoto,
     enviarWhatsApp, enviarMail, notificar,
+    registrarEvento, enviarResumenDiarioSiCorresponde, enviarResumenPrueba,
     showLoading, showEmpty, showError, showToast,
     AYUDA_ITEMS, initAyuda, mostrarAyuda, cerrarAyuda,
     mostrarCelula, cerrarCelula,
