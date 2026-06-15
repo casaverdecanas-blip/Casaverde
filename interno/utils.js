@@ -1019,18 +1019,52 @@ window.toggleNavDrop = toggleNavDrop;
 //  Subida de imágenes/PDF de comprobantes y apertura para verlos.
 //  cloud: dnwfu8ffn · preset sin firma: preset-comprobantes
 // ============================================================
+// Comprime una imagen antes de subirla (comprobantes legibles pero livianos).
+// Solo imágenes; PDF u otros pasan sin tocar. Ante cualquier error, sube el original.
+function _comprimirImagen(file, maxPx, quality) {
+    return new Promise(function (resolve) {
+        if (!file || !file.type || file.type.indexOf('image/') !== 0) { resolve(file); return; }
+        try {
+            var url = URL.createObjectURL(file);
+            var img = new Image();
+            img.onload = function () {
+                try {
+                    URL.revokeObjectURL(url);
+                    var w = img.width, h = img.height;
+                    var mx = maxPx || 2000;
+                    if (w > mx || h > mx) {
+                        if (w >= h) { h = Math.round(h * mx / w); w = mx; }
+                        else { w = Math.round(w * mx / h); h = mx; }
+                    }
+                    var canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    canvas.toBlob(function (blob) {
+                        resolve(blob && blob.size < file.size ? blob : file);
+                    }, 'image/jpeg', quality || 0.85);
+                } catch (e) { resolve(file); }
+            };
+            img.onerror = function () { resolve(file); };
+            img.src = url;
+        } catch (e) { resolve(file); }
+    });
+}
+
 function subirComprobante(file, carpeta, docId) {
-    var fd = new FormData();
-    fd.append('file', file);
-    fd.append('upload_preset', 'preset-comprobantes');
-    if (carpeta) fd.append('folder', carpeta);
-    if (docId)   fd.append('tags', docId);
-    return fetch('https://api.cloudinary.com/v1_1/dnwfu8ffn/auto/upload', { method: 'POST', body: fd })
-        .then(function(r) {
-            if (!r.ok) throw new Error('Cloudinary ' + r.status);
-            return r.json();
-        })
-        .then(function(d) { return d.secure_url || d.url; });
+    return _comprimirImagen(file, 2000, 0.85).then(function (blob) {
+        var nombre = (blob !== file) ? 'comprobante.jpg' : ((file && file.name) || 'comprobante');
+        var fd = new FormData();
+        fd.append('file', blob, nombre);
+        fd.append('upload_preset', 'preset-comprobantes');
+        if (carpeta) fd.append('folder', carpeta);
+        if (docId)   fd.append('tags', docId);
+        return fetch('https://api.cloudinary.com/v1_1/dnwfu8ffn/auto/upload', { method: 'POST', body: fd })
+            .then(function (r) {
+                if (!r.ok) throw new Error('Cloudinary ' + r.status);
+                return r.json();
+            })
+            .then(function (d) { return d.secure_url || d.url; });
+    });
 }
 
 function abrirComprobante(url) {
