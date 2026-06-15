@@ -31,22 +31,34 @@ exports.handler = async function (event) {
             return { statusCode: 400, headers: headers, body: JSON.stringify({ ok: false, error: 'Falta el texto del mensaje' }) };
         }
 
-        // Destinatario: por defecto el del env; si viene 'to' y hay mapa, se busca ahí.
-        var phone = process.env.CALLMEBOT_PHONE;
-        var apikey = process.env.CALLMEBOT_APIKEY;
+        // Resolución de destinatario:
+        //  - Si viene 'to' (uid): SOLO se manda si ese uid está en CALLMEBOT_RECIPIENTS.
+        //    Así un aviso dirigido nunca cae en el número equivocado.
+        //  - Si NO viene 'to': se usa el número por defecto del admin (CALLMEBOT_PHONE).
+        var phone = '';
+        var apikey = '';
+        var to = (body.to || '').toString();
 
-        if (body.to && process.env.CALLMEBOT_RECIPIENTS) {
-            try {
-                var map = JSON.parse(process.env.CALLMEBOT_RECIPIENTS);
-                if (map[body.to] && map[body.to].phone && map[body.to].apikey) {
-                    phone = map[body.to].phone;
-                    apikey = map[body.to].apikey;
-                }
-            } catch (e) { /* mapa mal formado: se usa el default */ }
+        if (to) {
+            if (process.env.CALLMEBOT_RECIPIENTS) {
+                try {
+                    var map = JSON.parse(process.env.CALLMEBOT_RECIPIENTS);
+                    if (map[to] && map[to].phone && map[to].apikey) {
+                        phone = map[to].phone;
+                        apikey = map[to].apikey;
+                    }
+                } catch (e) { /* mapa mal formado */ }
+            }
+            if (!phone || !apikey) {
+                return { statusCode: 200, headers: headers, body: JSON.stringify({ ok: false, error: 'Ese usuario no tiene WhatsApp configurado (no está en CALLMEBOT_RECIPIENTS).' }) };
+            }
+        } else {
+            phone = process.env.CALLMEBOT_PHONE;
+            apikey = process.env.CALLMEBOT_APIKEY;
         }
 
         if (!phone || !apikey) {
-            return { statusCode: 500, headers: headers, body: JSON.stringify({ ok: false, error: 'WhatsApp no configurado para ese destinatario' }) };
+            return { statusCode: 500, headers: headers, body: JSON.stringify({ ok: false, error: 'WhatsApp no configurado (faltan variables de entorno).' }) };
         }
 
         // CallMeBot: GET con phone, text (encodeURIComponent) y apikey
