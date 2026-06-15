@@ -1142,21 +1142,36 @@ function enviarMail(asunto, mensaje, paraEmail, remitente) {
 // WhatsApp queda para avisos instantáneos según preferencia.
 function _hoyISO() { return new Date().toISOString().slice(0, 10); }
 
-function registrarEvento(tipo, texto) {
+// Registra un evento para el resumen, con su AUDIENCIA (a quién le concierne).
+// para: 'todos' | 'admins' | 'colaboradores' | array de uids.
+function registrarEvento(tipo, texto, para) {
     try {
         var fecha = _hoyISO();
         return firebase.firestore().collection('resumenes').doc(fecha).set({
             fecha: fecha,
-            eventos: firebase.firestore.FieldValue.arrayUnion({ tipo: tipo, texto: texto, hora: new Date().toISOString() })
+            eventos: firebase.firestore.FieldValue.arrayUnion({
+                tipo: tipo, texto: texto, hora: new Date().toISOString(), para: (para || 'todos')
+            })
         }, { merge: true }).catch(function () {});
     } catch (e) { return Promise.resolve(); }
 }
 
-function construirResumen(fecha) {
+// ¿Este evento le concierne a este usuario (uid + rol)?
+function _eventoAplica(ev, uid, rol) {
+    var para = ev.para || 'todos';
+    if (para === 'todos') return true;
+    if (para === 'admins') return rol === 'admin';
+    if (para === 'colaboradores') return rol === 'user';
+    if (Object.prototype.toString.call(para) === '[object Array]') return para.indexOf(uid) !== -1;
+    return false;
+}
+
+// Arma el resumen del día SOLO con los eventos que le conciernen a ese usuario.
+function construirResumen(fecha, uid, rol) {
     var LABEL = { reserva: 'Reservas', pago: 'Pagos', comunicacion: 'Mensajes', limpieza: 'Limpiezas / tareas', presupuesto: 'Presupuestos', gasto: 'Gastos' };
     return firebase.firestore().collection('resumenes').doc(fecha).get().then(function (d) {
         if (!d.exists) return null;
-        var evs = (d.data().eventos) || [];
+        var evs = ((d.data().eventos) || []).filter(function (e) { return _eventoAplica(e, uid, rol); });
         if (!evs.length) return null;
         var grupos = {};
         evs.forEach(function (e) { (grupos[e.tipo] = grupos[e.tipo] || []).push(e); });
@@ -1172,37 +1187,64 @@ function construirResumen(fecha) {
     });
 }
 
-// Lazy-cron: se llama al cargar el dashboard. Manda 1 vez por día.
+// Lazy-cron: 1 vez por día (al cargar el dashboard). Cada usuario recibe SU resumen.
 function enviarResumenDiarioSiCorresponde() {
     var db = firebase.firestore();
     return db.collection('config').doc('notificaciones').get().then(function (doc) {
         var hoy = _hoyISO();
         var ultimo = (doc.exists && doc.data().ultimoResumen) ? doc.data().ultimoResumen : '';
         if (ultimo >= hoy) return;
-        // Marcar primero para evitar doble envío si dos personas entran a la vez
         return db.collection('config').doc('notificaciones').set({ ultimoResumen: hoy }, { merge: true }).then(function () {
             var ayer = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-            return construirResumen(ayer).then(function (res) {
-                if (!res) return;
-                return db.collection('usuarios').get().then(function (snap) {
-                    snap.forEach(function (u) {
-                        var x = u.data();
-                        if (x.email && (!x.notif || x.notif.canalEmail !== false)) {
-                            enviarMail(res.asunto, res.html, x.email);
-                        }
-                    });
+            return db.collection('usuarios').get().then(function (snap) {
+                var tareas = [];
+                snap.forEach(function (u) {
+                    var x = u.data();
+                    if (x.activo === false) return;            // desactivado: no recibe
+                    if (!x.email) return;
+                    if (x.notif && x.notif.canalEmail === false) return;
+                    tareas.push(construirResumen(ayer, u.id, x.rol).then(function (res) {
+                        if (res) return enviarMail(res.asunto, res.html, x.email);
+                    }));
                 });
+                return Promise.all(tareas);
             });
         });
     }).catch(function () {});
 }
 
-// Envía el resumen del día actual a un solo email (para probar).
-function enviarResumenPrueba(email) {
-    return construirResumen(_hoyISO()).then(function (res) {
-        if (!res) return enviarMail('Resumen Casa Verde (prueba)', '<p>Hoy todavía no hay novedades registradas. El resumen real se arma con los cambios del día.</p>', email);
+// Envía el resumen de HOY (lo que le concierne a ese usuario) a un email, para probar.
+function enviarResumenPrueba(email, uid, rol) {
+    return construirResumen(_hoyISO(), uid, rol).then(function (res) {
+        if (!res) return enviarMail('Resumen Casa Verde (prueba)', '<p>Hoy todavía no hay novedades que te conciernan. El resumen real se arma con los cambios del día.</p>', email);
         return enviarMail(res.asunto + ' (prueba)', res.html, email);
     });
+}
+
+// AVISO de un evento: lo registra para el resumen (según audiencia) y manda
+// WhatsApp instantáneo a quienes les concierne y lo tengan activado.
+// evento: 'comunicacion' | 'reserva' | 'pago' | ...
+// para: 'todos' | 'admins' | 'colaboradores' | array de uids
+// excluirUid: uid a NO avisar (típicamente el autor de la acción)
+function avisar(evento, asunto, texto, para, excluirUid) {
+    registrarEvento(evento, texto, para);
+    return firebase.firestore().collection('usuarios').get().then(function (snap) {
+        snap.forEach(function (u) {
+            var x = u.data(), uid = u.id;
+            if (x.activo === false) return;             // desactivado: no recibe
+            if (excluirUid && uid === excluirUid) return;
+            var aplica = (para === 'todos') ||
+                (para === 'admins' && x.rol === 'admin') ||
+                (para === 'colaboradores' && x.rol === 'user') ||
+                (Object.prototype.toString.call(para) === '[object Array]' && para.indexOf(uid) !== -1);
+            if (!aplica) return;
+            var n = x.notif || {};
+            if (n[evento] === false) return;
+            if (n.canalWhatsapp === true) {
+                enviarWhatsApp((asunto ? asunto + ': ' : '') + texto, uid);
+            }
+        });
+    }).catch(function () {});
 }
 
 // Despachador: notifica a un usuario (uid) o a 'admins' según sus preferencias.
@@ -1568,7 +1610,7 @@ window.CVC = {
     guardarConciliacion, cargarConfigConciliacion,
     escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
     subirComprobante, abrirComprobante, elegirFuenteFoto,
-    enviarWhatsApp, enviarMail, notificar,
+    enviarWhatsApp, enviarMail, notificar, avisar,
     registrarEvento, enviarResumenDiarioSiCorresponde, enviarResumenPrueba,
     showLoading, showEmpty, showError, showToast,
     AYUDA_ITEMS, initAyuda, mostrarAyuda, cerrarAyuda,

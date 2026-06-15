@@ -120,7 +120,7 @@
 
     window.probarResumen = async function (btn) {
         btn.disabled = true;
-        var r = await CVC.enviarResumenPrueba(user.email);
+        var r = await CVC.enviarResumenPrueba(user.email, user.uid, userData.rol);
         showToast(r && r.ok ? 'Resumen de prueba enviado a tu email.' : ('No se pudo enviar: ' + ((r && r.error) || 'revisá EmailJS')), r && r.ok ? 'success' : 'error');
         btn.disabled = false;
     };
@@ -158,10 +158,11 @@
             'El WhatsApp gratuito (CallMeBot) necesita que tu número se dé de alta una vez. Por seguridad, tu clave la incorpora el administrador; no se guarda en la web.' +
             '<ol>' +
             '<li>Seguí los pasos de <b>callmebot.com</b> (sección "Free API to Send WhatsApp Messages") para obtener tu <b>API key</b> personal: agregás el número del bot, le mandás el mensaje que indican y te responde con tu key.</li>' +
-            '<li>Enviá esa <b>API key</b> y tu número al administrador por un canal privado y seguro (no la publiques).</li>' +
+            '<li>Enviá al administrador, por un canal privado y seguro: tu <b>número</b>, tu <b>API key</b> y tu <b>identificador (uid)</b> de acá abajo. No la publiques.</li>' +
             '<li>El administrador la incorpora al sistema y activás el canal WhatsApp acá arriba.</li>' +
             '<li>Probalo con el botón "Probar WhatsApp".</li>' +
             '</ol>' +
+            '<div style="margin-top:8px;padding:8px;background:var(--color-surface);border-radius:8px;font-size:13px;">Tu identificador (uid): <code style="word-break:break-all;">' + escapeHtml(user.uid) + '</code></div>' +
             '<div style="margin-top:8px;color:var(--color-text-muted);font-size:12px;">Nota: el plan gratis permite ~1 mensaje por minuto, así que los avisos de WhatsApp pueden espaciarse. El email no tiene ese límite.</div>' +
             '</div></div>';
 
@@ -169,6 +170,88 @@
     }
 
     render();
+
+    // -- Sección admin: armar el JSON de WhatsApp por usuario para Netlify --
+    window.copiarJson = function (btn) {
+        var ta = document.getElementById('jsonRecipients');
+        if (!ta) return;
+        ta.select();
+        try { document.execCommand('copy'); showToast('JSON copiado.', 'success'); }
+        catch (e) { if (navigator.clipboard) navigator.clipboard.writeText(ta.value).then(function () { showToast('JSON copiado.', 'success'); }); }
+    };
+
+    var _usuariosActivos = [];
+    window.probarTodos = async function (btn) {
+        if (!_usuariosActivos.length) { showToast('No hay usuarios activos con email.', 'info'); return; }
+        if (!confirm('Se enviará un email de prueba a ' + _usuariosActivos.length + ' usuario(s) activo(s). ¿Continuar?')) return;
+        btn.disabled = true; btn.textContent = 'Enviando…';
+        var ok = 0, fail = 0;
+        for (var i = 0; i < _usuariosActivos.length; i++) {
+            var u = _usuariosActivos[i];
+            var r = await CVC.enviarMail('Prueba de notificaciones · Casa Verde', '<p>Hola ' + escapeHtml(u.nombre) + ',</p><p>Si recibís este correo, tu email está bien configurado para las notificaciones de Casa Verde.</p>', u.email);
+            if (r && r.ok) ok++; else fail++;
+        }
+        showToast('Pruebas enviadas: ' + ok + ' ok' + (fail ? ', ' + fail + ' con error' : ''), fail ? 'error' : 'success');
+        btn.disabled = false; btn.innerHTML = '<span class="material-icons">forward_to_inbox</span> Probar email a todos';
+    };
+
+    if (userData.rol === 'admin') {
+        db.collection('usuarios').get().then(function (snap) {
+            var users = [];
+            snap.forEach(function (d) {
+                var x = d.data();
+                users.push({
+                    uid: d.id,
+                    nombre: (x.nombre || x.email || d.id),
+                    email: (x.email || ''),
+                    rol: (x.rol || 'user'),
+                    activo: (x.activo !== false),
+                    canalEmail: (!x.notif || x.notif.canalEmail !== false),
+                    canalWhatsapp: (x.notif && x.notif.canalWhatsapp === true)
+                });
+            });
+            _usuariosActivos = users.filter(function (u) { return u.activo && u.email; });
+
+            // --- Auditoría: a qué mail y por qué canal recibe cada uno ---
+            var filas = users.map(function (u) {
+                var estado = u.activo
+                    ? '<span style="color:var(--color-primary);font-weight:600;">activo</span>'
+                    : '<span style="color:var(--color-danger,#c0392b);font-weight:600;">desactivado · no recibe</span>';
+                var canales = u.activo
+                    ? ('Email: ' + (u.canalEmail && u.email ? 'sí' : 'no') + ' · WhatsApp: ' + (u.canalWhatsapp ? 'sí' : 'no'))
+                    : '—';
+                var op = u.activo ? '' : 'opacity:.55;';
+                return '<div class="nt-row" style="' + op + '"><div class="nt-row__txt">' +
+                    '<div class="nt-row__t">' + escapeHtml(u.nombre) + ' <span style="font-weight:400;color:var(--color-text-muted);">(' + escapeHtml(u.rol) + ')</span></div>' +
+                    '<div class="nt-row__d">' + escapeHtml(u.email || 'sin email') + '</div>' +
+                    '<div class="nt-row__d">' + estado + ' · ' + canales + '</div>' +
+                    '</div></div>';
+            }).join('');
+            var auditCard = '<div class="nt-card"><div class="nt-sub">Admin · A quién y a qué mail llega</div>' +
+                filas +
+                '<div style="margin-top:12px;"><button class="btn btn-ghost btn-sm" onclick="probarTodos(this)"><span class="material-icons">forward_to_inbox</span> Probar email a todos</button></div>' +
+                '<div style="margin-top:8px;color:var(--color-text-muted);font-size:12px;">Los desactivados no reciben ninguna notificación. "Probar email a todos" manda un correo de prueba a cada usuario activo, para confirmar que las casillas son correctas.</div>' +
+                '</div>';
+
+            // --- JSON de WhatsApp por usuario (solo activos) ---
+            var obj = {};
+            users.forEach(function (u) { if (u.activo) obj[u.uid] = { phone: '', apikey: '' }; });
+            var json = JSON.stringify(obj, null, 2);
+            var lista = users.filter(function (u) { return u.activo; }).map(function (u) {
+                return '<li><b>' + escapeHtml(u.nombre) + '</b> (' + escapeHtml(u.rol) + ') — uid: <code style="word-break:break-all;">' + escapeHtml(u.uid) + '</code></li>';
+            }).join('');
+            var jsonCard = '<div class="nt-card"><div class="nt-sub">Admin · WhatsApp por usuario (Netlify)</div>' +
+                '<div class="nt-help">' +
+                'Para que cada persona reciba en SU WhatsApp, cargá en Netlify la variable <b>CALLMEBOT_RECIPIENTS</b> con este formato (la clave de cada bloque es el uid del usuario). Completá <b>phone</b> y <b>apikey</b> de quienes te los pasaron; dejá vacíos los que no tengan WhatsApp.' +
+                '<ul style="margin:8px 0;padding-left:18px;">' + lista + '</ul>' +
+                '<textarea readonly id="jsonRecipients" style="width:100%;min-height:140px;font-family:monospace;font-size:12px;border:1px solid var(--color-border);border-radius:8px;padding:8px;box-sizing:border-box;">' + escapeHtml(json) + '</textarea>' +
+                '<div style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="copiarJson(this)"><span class="material-icons">content_copy</span> Copiar JSON</button></div>' +
+                '<div style="margin-top:8px;color:var(--color-text-muted);font-size:12px;">Tu número de admin (el 598) ponelo también en tu bloque. Quien no figure cae sin envío (no se manda a un número equivocado). Después de pegarlo en Netlify, redesplegá.</div>' +
+                '</div></div>';
+
+            document.getElementById('contenido').insertAdjacentHTML('beforeend', auditCard + jsonCard);
+        }).catch(function () {});
+    }
 })();
 </script>
 </body>
