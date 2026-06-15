@@ -395,6 +395,11 @@
         </a>
     </div>
 
+    <!-- Nueva tarea -->
+    <div style="margin-bottom:var(--space-4);">
+        <button class="btn btn-primary btn-sm" onclick="abrirNuevaTarea()"><span class="material-icons">add_task</span> Nueva tarea</button>
+    </div>
+
     <!-- Tabs -->
     <div class="tabs-bar">
         <button class="tab-btn active" data-filter="pendiente">
@@ -493,6 +498,55 @@
                 <span class="material-icons">check_circle_outline</span>
                 Confirmar
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Reportar tarea al administrador -->
+<div class="modal-overlay" id="modalReporte" style="display:none;" onclick="cerrarReporte(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <div class="modal__title"><span class="material-icons">campaign</span> Reportar al administrador</div>
+            <button class="modal__close" onclick="cerrarReporte()"><span class="material-icons">close</span></button>
+        </div>
+        <div class="modal__body">
+            <p style="font-size:13px;color:var(--color-text-muted);margin-bottom:8px;">Tarea: <b id="repTitulo">—</b></p>
+            <textarea id="repComentario" class="form-control" rows="4" placeholder="Escribí tu comentario para el administrador…"></textarea>
+            <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+                <button class="btn btn-ghost btn-sm" onclick="elegirFotoReporte()"><span class="material-icons">photo_camera</span> Adjuntar foto</button>
+                <span id="repThumb" style="display:none;font-size:12px;color:var(--color-text-muted);"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarReporte()">Cancelar</button>
+            <button class="btn btn-primary" onclick="enviarReporte(this)"><span class="material-icons">send</span> Enviar reporte</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Nueva tarea -->
+<div class="modal-overlay" id="modalNuevaTarea" style="display:none;" onclick="cerrarNuevaTarea(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <div class="modal__title"><span class="material-icons">add_task</span> Nueva tarea</div>
+            <button class="modal__close" onclick="cerrarNuevaTarea()"><span class="material-icons">close</span></button>
+        </div>
+        <div class="modal__body">
+            <label class="form-label">Nombre de la tarea</label>
+            <input type="text" id="ntNombre" class="form-control" placeholder="Ej: Revisar filtros de la pileta">
+            <label class="form-label" style="margin-top:12px;">Tipo</label>
+            <select id="ntTipo" class="form-control">
+                <option value="general">General</option>
+                <option value="limpieza">Limpieza</option>
+                <option value="mantenimiento">Mantenimiento</option>
+            </select>
+            <label class="form-label" style="margin-top:12px;">Descripción / nota para el admin (opcional)</label>
+            <textarea id="ntDesc" class="form-control" rows="3" placeholder="Contá qué viste o por qué la creás; lo recibe el administrador junto con la tarea."></textarea>
+            <p style="font-size:12px;color:var(--color-text-muted);margin-top:10px;">Se crea para hoy y se avisa al administrador para que defina si es recurrente y cada cuántos días.</p>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarNuevaTarea()">Cancelar</button>
+            <button class="btn btn-primary" onclick="crearNuevaTarea(this)"><span class="material-icons">add</span> Crear tarea</button>
         </div>
     </div>
 </div>
@@ -786,7 +840,10 @@
                 }
             }
             accionesHtml +=
-                '<button class="btn-accion detalle" onclick="abrirModal(\'' + t.id + '\')" title="Ver detalle">'
+                '<button class="btn-accion" onclick="abrirReporte(\'' + t.id + '\')" title="Reportar al admin">'
+                + '<span class="material-icons">campaign</span>'
+                + '</button>'
+                + '<button class="btn-accion detalle" onclick="abrirModal(\'' + t.id + '\')" title="Ver detalle">'
                 + '<span class="material-icons">info</span>'
                 + '</button>';
         }
@@ -991,7 +1048,10 @@
         }
 
         botonesHtml +=
-            '<button class="btn-accion detalle" onclick="abrirModal(\'' + t.id + '\')" title="Ver detalle completo">'
+            '<button class="btn-accion" onclick="abrirReporte(\'' + t.id + '\')" title="Reportar al admin">'
+            + '<span class="material-icons">campaign</span>'
+            + '</button>'
+            + '<button class="btn-accion detalle" onclick="abrirModal(\'' + t.id + '\')" title="Ver detalle completo">'
             + '<span class="material-icons">info</span>'
             + '</button>';
         botonesHtml += '</div>';
@@ -1140,7 +1200,7 @@
         if (!confirm('Finalizar "' + (t ? t.nombre : 'esta tarea') + '"?\n\nSe calcularán los honorarios proporcionales al tiempo trabajado.')) return;
 
         try {
-            var colaboradores = (await finalizarTarea(tareaId, currentUser)) || [];
+            var colaboradores = await finalizarTarea(tareaId, currentUser);
             var conMonto = colaboradores.filter(function(c) { return c.montoRecibido > 0; });
             var msg = 'Tarea finalizada';
             if (conMonto.length) {
@@ -1389,6 +1449,103 @@
         else if (_timer) { clearInterval(_timer); _timer = null; }
     });
     iniciarRefresh();
+
+    // ===== Reportar tarea al administrador (mensaje en Comunicación) =====
+    var _repTareaId = null, _repFoto = null;
+    function tareaPorId(id) {
+        for (var i = 0; i < tareasCache.length; i++) { if (tareasCache[i].id === id) return tareasCache[i]; }
+        return null;
+    }
+    window.abrirReporte = function (id) {
+        _repTareaId = id; _repFoto = null;
+        var t = tareaPorId(id);
+        document.getElementById('repTitulo').textContent = t ? (t.nombre || 'Tarea') : 'Tarea';
+        document.getElementById('repComentario').value = '';
+        var th = document.getElementById('repThumb'); th.style.display = 'none'; th.textContent = '';
+        document.getElementById('modalReporte').style.display = 'flex';
+    };
+    window.cerrarReporte = function () { document.getElementById('modalReporte').style.display = 'none'; };
+    window.elegirFotoReporte = function () {
+        CVC.elegirFuenteFoto(function (f) {
+            _repFoto = f;
+            var th = document.getElementById('repThumb');
+            th.style.display = 'inline'; th.textContent = '📎 ' + (f.name || 'foto adjunta');
+        });
+    };
+    window.enviarReporte = async function (btn) {
+        var comentario = document.getElementById('repComentario').value.trim();
+        if (!comentario && !_repFoto) { showToast('Escribí un comentario o adjuntá una foto.', 'info'); return; }
+        btn.disabled = true; btn.textContent = 'Enviando…';
+        try {
+            var t = tareaPorId(_repTareaId);
+            var nombreTarea = t ? (t.nombre || 'Tarea') : 'Tarea';
+            var ref = await db.collection('comunicaciones').add({
+                titulo: 'Reporte: ' + nombreTarea,
+                audiencia: 'solo_admin', prioridad: 'amarillo',
+                refTipo: 'tarea', refLabel: nombreTarea,
+                creadoPor: user.uid, creadoPorNombre: currentUser.nombre,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                ultimaActividad: firebase.firestore.FieldValue.serverTimestamp(),
+                ultimoMensaje: (comentario || '📷 foto').slice(0, 80)
+            });
+            var imagenUrl = null;
+            if (_repFoto) imagenUrl = await CVC.subirComprobante(_repFoto, 'comunicacion', ref.id);
+            await ref.collection('mensajes').add({
+                texto: comentario, imagenUrl: imagenUrl,
+                autorUid: user.uid, autorNombre: currentUser.nombre,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            if (CVC.avisar) CVC.avisar('comunicacion', 'Reporte de tarea', currentUser.nombre + ' reportó "' + nombreTarea + '": ' + (comentario || '📷 foto').slice(0, 120), 'admins', user.uid);
+            showToast('Reporte enviado al administrador.', 'success');
+            cerrarReporte();
+        } catch (e) { showToast('No se pudo enviar: ' + e.message, 'error'); }
+        btn.disabled = false; btn.innerHTML = '<span class="material-icons">send</span> Enviar reporte';
+    };
+
+    // ===== Nueva tarea (la crea + avisa al admin para hacerla recurrente) =====
+    window.abrirNuevaTarea = function () {
+        document.getElementById('ntNombre').value = '';
+        document.getElementById('ntTipo').value = 'general';
+        document.getElementById('modalNuevaTarea').style.display = 'flex';
+    };
+    window.cerrarNuevaTarea = function () { document.getElementById('modalNuevaTarea').style.display = 'none'; };
+    window.crearNuevaTarea = async function (btn) {
+        var nombre = document.getElementById('ntNombre').value.trim();
+        if (!nombre) { showToast('Poné un nombre a la tarea.', 'info'); return; }
+        var tipo = document.getElementById('ntTipo').value;
+        var desc = document.getElementById('ntDesc').value.trim();
+        btn.disabled = true; btn.textContent = 'Creando…';
+        try {
+            var hoy = new Date().toISOString().slice(0, 10);
+            await db.collection('tareas').add({
+                nombre: nombre, tipo: tipo, descripcion: desc, estado: 'pendiente', activa: true,
+                fechaInicio: hoy, recurrencia: 0,
+                creadoPor: user.uid, creadoPorNombre: currentUser.nombre,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            var cuerpo = currentUser.nombre + ' creó la tarea "' + nombre + '". Revisá si conviene hacerla recurrente y asignarle un ciclo de días.';
+            if (desc) cuerpo += '\n\nNota: ' + desc;
+            var ref = await db.collection('comunicaciones').add({
+                titulo: 'Nueva tarea: ' + nombre,
+                audiencia: 'solo_admin', prioridad: 'amarillo',
+                refTipo: 'tarea', refLabel: nombre,
+                creadoPor: user.uid, creadoPorNombre: currentUser.nombre,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                ultimaActividad: firebase.firestore.FieldValue.serverTimestamp(),
+                ultimoMensaje: (desc || 'Nueva tarea creada — definir recurrencia').slice(0, 80)
+            });
+            await ref.collection('mensajes').add({
+                texto: cuerpo,
+                imagenUrl: null, autorUid: user.uid, autorNombre: currentUser.nombre,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            if (CVC.avisar) CVC.avisar('comunicacion', 'Nueva tarea', currentUser.nombre + ' creó la tarea "' + nombre + '"' + (desc ? ': ' + desc.slice(0, 100) : '. Considerá hacerla recurrente.'), 'admins', user.uid);
+            showToast('Tarea creada y avisada al administrador.', 'success');
+            cerrarNuevaTarea();
+            await cargarTareas();
+        } catch (e) { showToast('No se pudo crear: ' + e.message, 'error'); }
+        btn.disabled = false; btn.innerHTML = '<span class="material-icons">add</span> Crear tarea';
+    };
 
 })();
 </script>

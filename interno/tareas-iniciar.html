@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar tareas · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .ti-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4); margin-bottom: var(--space-3); box-shadow: var(--shadow-xs); }
+        .ti-card.sinfecha { border-left: 4px solid #e0a800; }
+        .ti-nombre { font-weight: 600; }
+        .ti-meta { font-size: 12px; color: var(--color-text-muted); margin-top: 2px; }
+        .ti-warn { color: #b8860b; font-weight: 600; }
+        .ti-edit { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-top: 10px; }
+        .ti-edit label { font-size: 11px; color: var(--color-text-muted); display: flex; flex-direction: column; gap: 3px; }
+        .ti-edit input { font-size: 14px; padding: 7px 9px; border: 1px solid var(--color-border); border-radius: 8px; }
+        .ti-edit input[type=number] { width: 90px; }
+        .badge-mini { font-size: 10px; padding: 1px 7px; border-radius: 99px; background: var(--color-surface-2); color: var(--color-text-muted); }
+    </style>
+</head>
+<body>
+<header class="admin-header">
+    <div class="admin-header__brand"><span class="material-icons">cottage</span> Casa Verde Canas</div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span> <span id="userName">—</span></div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()"><span class="material-icons">logout</span> Salir</button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+    <div class="db-section-head" style="margin-bottom:var(--space-2);">
+        <div class="db-section-title">
+            <span class="material-icons" style="color:var(--color-primary);">event_available</span>
+            Iniciar tareas (fecha de inicio)
+        </div>
+    </div>
+    <p style="font-size:var(--text-sm);color:var(--color-text-muted);margin-bottom:var(--space-3);">
+        Las tareas <b>sin fecha de inicio</b> no entran en el cálculo de atraso (quedan en gris).
+        Asignales una fecha (y su recurrencia en días) para que empiecen a contar y avisen cuando se atrasan.
+    </p>
+
+    <div id="resumen" style="margin-bottom:var(--space-3);"></div>
+    <div id="lista"><div class="state-loading"><div class="spinner"></div><span>Cargando tareas…</span></div></div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async function () {
+    var sesion = await CVC.verificarAuth(['admin']);
+    document.getElementById('userName').textContent = sesion.userData.nombre || sesion.user.email;
+    CVC.renderNav('tareas-iniciar.html', sesion.userData.rol);
+
+    var db = CVC.db;
+    var escapeHtml = CVC.escapeHtml;
+    var showToast = CVC.showToast;
+
+    function hoyISO() { return new Date().toISOString().slice(0, 10); }
+    function diasAtraso(fi) {
+        if (!fi) return null;
+        var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+        return Math.floor((hoy - new Date(fi + 'T00:00:00')) / 86400000);
+    }
+
+    var tareas = [];
+
+    async function cargar() {
+        var snap = await db.collection('tareas').get();
+        tareas = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); })
+            .filter(function (t) { return t.activa !== false && t.estado !== 'finalizada'; });
+        // sin fecha primero, luego por nombre
+        tareas.sort(function (a, b) {
+            var sa = a.fechaInicio ? 1 : 0, sb = b.fechaInicio ? 1 : 0;
+            if (sa !== sb) return sa - sb;
+            return (a.nombre || '').localeCompare(b.nombre || '');
+        });
+        render();
+    }
+
+    function render() {
+        var sinFecha = tareas.filter(function (t) { return !t.fechaInicio; }).length;
+        var resumen = document.getElementById('resumen');
+        if (sinFecha > 0) {
+            resumen.innerHTML = '<div class="ti-card sinfecha" style="margin:0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">' +
+                '<span><b>' + sinFecha + '</b> tarea(s) sin fecha de inicio (no avisan atraso).</span>' +
+                '<button class="btn btn-secondary btn-sm" onclick="ponerHoyATodas(this)"><span class="material-icons">today</span> Poner hoy a todas las sin fecha</button>' +
+                '</div>';
+        } else {
+            resumen.innerHTML = '<div class="ti-card" style="margin:0;color:var(--color-primary);">✓ Todas las tareas tienen fecha de inicio.</div>';
+        }
+
+        var html = tareas.map(function (t) {
+            var d = diasAtraso(t.fechaInicio);
+            var estadoTxt;
+            if (!t.fechaInicio) estadoTxt = '<span class="ti-warn">⚠ sin fecha de inicio</span>';
+            else if (d < 0) estadoTxt = 'empieza en ' + (-d) + ' día(s)';
+            else if (d === 0) estadoTxt = 'empieza hoy';
+            else estadoTxt = d + ' día(s) de atraso';
+            var tipoBadge = '<span class="badge-mini">' + escapeHtml(t.tipo || 'general') + '</span>';
+            return '<div class="ti-card' + (t.fechaInicio ? '' : ' sinfecha') + '" id="row-' + t.id + '">' +
+                '<div class="ti-nombre">' + escapeHtml(t.nombre || '(sin nombre)') + ' ' + tipoBadge + '</div>' +
+                '<div class="ti-meta">Estado: ' + escapeHtml(t.estado || 'pendiente') + ' · ' + estadoTxt + '</div>' +
+                '<div class="ti-edit">' +
+                '<label>Fecha de inicio<input type="date" id="fi-' + t.id + '" value="' + (t.fechaInicio || hoyISO()) + '"></label>' +
+                '<label>Recurrencia (días)<input type="number" id="re-' + t.id + '" min="0" value="' + (t.recurrencia || 0) + '"></label>' +
+                '<button class="btn btn-primary btn-sm" onclick="guardar(\'' + t.id + '\', this)"><span class="material-icons">save</span> Guardar</button>' +
+                '</div></div>';
+        }).join('');
+        document.getElementById('lista').innerHTML = html || '<div class="ti-card">No hay tareas activas.</div>';
+    }
+
+    window.guardar = async function (id, btn) {
+        var fi = document.getElementById('fi-' + id).value;
+        var re = parseInt(document.getElementById('re-' + id).value, 10) || 0;
+        if (!fi) { showToast('Elegí una fecha de inicio.', 'info'); return; }
+        btn.disabled = true;
+        try {
+            await db.collection('tareas').doc(id).update({ fechaInicio: fi, recurrencia: re });
+            var t = tareas.filter(function (x) { return x.id === id; })[0];
+            if (t) { t.fechaInicio = fi; t.recurrencia = re; }
+            showToast('Tarea actualizada.', 'success');
+            render();
+        } catch (e) { showToast('Error: ' + e.message, 'error'); }
+        btn.disabled = false;
+    };
+
+    window.ponerHoyATodas = async function (btn) {
+        var sinFecha = tareas.filter(function (t) { return !t.fechaInicio; });
+        if (!sinFecha.length) return;
+        if (!confirm('Se va a poner la fecha de hoy a ' + sinFecha.length + ' tarea(s) sin fecha. ¿Continuar?')) return;
+        btn.disabled = true; btn.textContent = 'Aplicando…';
+        var hoy = hoyISO(), ok = 0;
+        for (var i = 0; i < sinFecha.length; i++) {
+            try { await db.collection('tareas').doc(sinFecha[i].id).update({ fechaInicio: hoy }); sinFecha[i].fechaInicio = hoy; ok++; } catch (e) {}
+        }
+        showToast(ok + ' tarea(s) iniciada(s) hoy.', 'success');
+        render();
+    };
+
+    await cargar();
+})();
+</script>
+</body>
+</html>
