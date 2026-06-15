@@ -1038,6 +1038,58 @@ function abrirComprobante(url) {
 
 window.abrirComprobante = abrirComprobante;
 
+// Menú "Cámara / Galería" para cargar una foto. Llama onPick(file).
+// Usa inputs reales (uno con capture, otro sin) por compatibilidad con Safari viejo.
+function elegirFuenteFoto(onPick) {
+    var ov = document.createElement('div');
+    ov.setAttribute('style', 'position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:4000;display:flex;align-items:flex-end;justify-content:center;');
+    var card = document.createElement('div');
+    card.setAttribute('style', 'background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:18px;');
+    var title = document.createElement('div');
+    title.setAttribute('style', 'font-weight:700;margin-bottom:14px;text-align:center;');
+    title.textContent = 'Agregar foto';
+    card.appendChild(title);
+    function mkBtn(label, icon) {
+        var b = document.createElement('button');
+        b.setAttribute('style', 'display:flex;align-items:center;gap:12px;width:100%;border:1.5px solid #e0e0e0;background:#fff;border-radius:12px;padding:14px;font-size:16px;font-family:inherit;margin-bottom:10px;cursor:pointer;');
+        var ic = document.createElement('span');
+        ic.className = 'material-icons';
+        ic.setAttribute('style', 'color:#2d5a27;');
+        ic.textContent = icon;
+        b.appendChild(ic);
+        b.appendChild(document.createTextNode(' ' + label));
+        return b;
+    }
+    var bCam = mkBtn('Cámara', 'photo_camera');
+    var bGal = mkBtn('Galería / Archivos', 'photo_library');
+    var bCan = mkBtn('Cancelar', 'close');
+    card.appendChild(bCam); card.appendChild(bGal); card.appendChild(bCan);
+    ov.appendChild(card);
+    document.body.appendChild(ov);
+    function cleanup() { if (ov.parentNode) ov.parentNode.removeChild(ov); }
+    function disparar(cam) {
+        var inp = document.createElement('input');
+        inp.type = 'file';
+        inp.accept = 'image/*';
+        if (cam) inp.setAttribute('capture', 'environment');
+        inp.setAttribute('style', 'position:fixed;left:-9999px;');
+        inp.onchange = function() {
+            var f = inp.files && inp.files[0] ? inp.files[0] : null;
+            cleanup();
+            if (inp.parentNode) inp.parentNode.removeChild(inp);
+            if (f && typeof onPick === 'function') onPick(f);
+        };
+        document.body.appendChild(inp);
+        inp.click();
+    }
+    bCam.onclick = function() { disparar(true); };
+    bGal.onclick = function() { disparar(false); };
+    bCan.onclick = cleanup;
+    ov.onclick = function(e) { if (e.target === ov) cleanup(); };
+}
+
+window.elegirFuenteFoto = elegirFuenteFoto;
+
 
 // ── UTILS DE FORMATO Y ESCAPE ────────────────────────────────────────────────
 function escapeHtml(str) {
@@ -1374,7 +1426,7 @@ window.CVC = {
     matchMovimientoBancario, conciliarContraRegistros,
     guardarConciliacion, cargarConfigConciliacion,
     escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
-    subirComprobante, abrirComprobante,
+    subirComprobante, abrirComprobante, elegirFuenteFoto,
     showLoading, showEmpty, showError, showToast,
     AYUDA_ITEMS, initAyuda, mostrarAyuda, cerrarAyuda,
     mostrarCelula, cerrarCelula,

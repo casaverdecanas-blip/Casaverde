@@ -333,8 +333,8 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Comprobante (opcional)</label>
-                <div class="comp-zone">
-                    <input type="file" id="rComprobanteInput" accept="image/*"
+                <div class="comp-zone" onclick="CVC.elegirFuenteFoto(function(f){ previsualizarComprobanteRetiro({ files: [f] }); })">
+                    <input type="file" id="rComprobanteInput" accept="image/*" style="display:none;"
                         onchange="previsualizarComprobanteRetiro(this)">
                     <span class="material-icons" style="font-size:22px;color:var(--color-text-muted);display:block;margin-bottom:2px;">photo_camera</span>
                     <div style="font-size:12px;color:var(--color-text-secondary);">Foto de ticket / recibo (opcional)</div>
@@ -542,8 +542,8 @@
             <!-- Comprobante -->
             <div class="form-group">
                 <label class="form-label">Comprobante (foto de factura / recibo)</label>
-                <div class="comp-zone">
-                    <input type="file" id="eComprobanteInput" accept="image/*"
+                <div class="comp-zone" onclick="CVC.elegirFuenteFoto(function(f){ previsualizarComprobante({ files: [f] }); })">
+                    <input type="file" id="eComprobanteInput" accept="image/*" style="display:none;"
                         onchange="previsualizarComprobante(this)">
                     <span class="material-icons" style="font-size:28px;color:var(--color-text-muted);display:block;margin-bottom:4px;">photo_camera</span>
                     <div style="font-size:12px;color:var(--color-text-secondary);">Tocar para sacar foto o elegir imagen</div>
@@ -653,7 +653,7 @@
                         <input type="file" id="ngComprobanteInput" accept="image/*"
                             style="display:none;" onchange="ngPreviewFoto(this)">
                         <button class="btn btn-secondary btn-sm"
-                            onclick="document.getElementById('ngComprobanteInput').click()">
+                            onclick="CVC.elegirFuenteFoto(function(f){ ngPreviewFoto({ files: [f] }); })">
                             <span class="material-icons">photo_camera</span> Agregar foto
                         </button>
                         <img id="ngComprobantePreview" src=""
@@ -670,7 +670,7 @@
             <div id="seccionFoto" style="display:none;">
                 <div id="ngUpZone"
                     style="border:2px dashed var(--color-border);border-radius:var(--radius-lg);padding:var(--space-6);text-align:center;cursor:pointer;margin-bottom:var(--space-3);"
-                    onclick="document.getElementById('ngFotoInput').click()">
+                    onclick="CVC.elegirFuenteFoto(function(f){ ngProcesarFoto({ files: [f] }); })">
                     <span class="material-icons" style="font-size:36px;color:var(--color-text-muted);">document_scanner</span>
                     <div style="font-weight:700;color:var(--color-text-secondary);margin-top:var(--space-2);">
                         Toma o selecciona una foto de la factura
@@ -888,7 +888,7 @@
         </div>
         <div class="modal__footer">
             <button class="btn btn-ghost" onclick="cerrarModalFactura()">Cancelar</button>
-            <button class="btn btn-secondary" onclick="document.getElementById('fImgInput').click()">
+            <button class="btn btn-secondary" onclick="CVC.elegirFuenteFoto(function(f){ procesarFactura(f); })">
                 <span class="material-icons">photo_camera</span> Nueva foto
             </button>
             <button class="btn btn-primary" id="fBtnGuardar" onclick="guardarDesdeFactura()" style="display:none;">
@@ -979,6 +979,7 @@
     var cuentasCache      = [];
     var mesFiltro         = null;
     var _eComprobanteFile = null;
+    var _rComprobanteFile = null;
 
     var fmt     = function(n) { return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2 }); };
     var CATS    = { limpieza:'Limpieza', mantenimiento:'Mantenimiento', servicios:'Servicios',
@@ -1318,6 +1319,7 @@
     window.previsualizarComprobanteRetiro = function(input) {
         var file = input.files[0];
         if (!file) return;
+        _rComprobanteFile = file;
         var reader = new FileReader();
         reader.onload = function(e) {
             document.getElementById('rComprobanteImg').src = e.target.result;
@@ -1528,11 +1530,10 @@
                 creadoEn: firebase.firestore.FieldValue.serverTimestamp(), creadoPor: user.uid
             };
             var docRef = await db.collection('retiros').add(docData);
-            var rFileInput = document.getElementById('rComprobanteInput');
-            if (rFileInput && rFileInput.files[0]) {
+            if (_rComprobanteFile) {
                 text.textContent = 'Subiendo foto...';
                 try {
-                    var url = await subirComprobante(rFileInput.files[0], 'retiros', docRef.id);
+                    var url = await subirComprobante(_rComprobanteFile, 'retiros', docRef.id);
                     await docRef.update({ comprobanteUrl: url });
                 } catch(se) { console.warn('Storage retiro:', se.message); }
             }
@@ -1540,6 +1541,7 @@
             document.getElementById('rMonto').value   = '';
             document.getElementById('rConcepto').value = '';
             document.getElementById('rComprobanteInput').value = '';
+        _rComprobanteFile = null;
             document.getElementById('rComprobantePreview').style.display = 'none';
             await cargarRetiros();
         } catch(e) { showToast('Error: ' + e.message, 'error'); }
