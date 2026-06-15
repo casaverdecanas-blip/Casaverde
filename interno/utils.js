@@ -199,6 +199,7 @@ const NAV_ADMIN_ITEMS = [
         items: [
             { href: 'cabanas-admin.html',  icon: 'cottage',         label: 'Cabañas'  },
             { href: 'usuarios.html',       icon: 'manage_accounts', label: 'Usuarios' },
+            { href: 'notificaciones.html', icon: 'notifications',   label: 'Notificaciones' },
             { sep: true },
             { href: 'manual-sistema.html', icon: 'menu_book',       label: 'Manual'   }
         ]
@@ -215,6 +216,7 @@ const NAV_USER_ITEMS = [
     { href: 'gastos-mantenimiento.html', icon: 'receipt_long',  label: 'Gastos'       },
     { href: 'comunicacion.html',   icon: 'forum',              label: 'Comunicación' },
     { href: 'honorarios.html',     icon: 'payments',           label: 'Mis cobros'   },
+    { href: 'notificaciones.html', icon: 'notifications',       label: 'Notificaciones' },
     { href: 'manual-sistema.html', icon: 'menu_book',          label: 'Manual'       }
 ];
 
@@ -1090,6 +1092,74 @@ function elegirFuenteFoto(onPick) {
 
 window.elegirFuenteFoto = elegirFuenteFoto;
 
+// ============================================================
+//  NOTIFICACIONES (email + WhatsApp)
+// ============================================================
+var NETLIFY_BASE = 'https://serene-scone-76bd4e.netlify.app/.netlify/functions';
+var _ultimoWhatsApp = 0;
+
+// WhatsApp vía la Netlify Function (CallMeBot). Gratis = máx 1 por minuto:
+// un guard simple evita reintentos masivos / clicks repetidos.
+function enviarWhatsApp(text, to) {
+    var ahora = Date.now();
+    if (ahora - _ultimoWhatsApp < 60000) {
+        return Promise.resolve({ ok: false, error: 'rate', detalle: 'Esperá 1 minuto entre WhatsApps (límite del plan gratis).' });
+    }
+    _ultimoWhatsApp = ahora;
+    return fetch(NETLIFY_BASE + '/notify-whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text, to: to || '' })
+    }).then(function (r) { return r.json(); })
+      .catch(function (e) { return { ok: false, error: e.message }; });
+}
+
+// Email vía EmailJS. La config se guarda en Firestore config/integraciones.emailjs
+// { serviceId, templateId, publicKey }. Mientras no esté cargada, no envía (no rompe).
+function enviarMail(asunto, mensaje, paraEmail, extra) {
+    return firebase.firestore().collection('config').doc('integraciones').get().then(function (doc) {
+        var cfg = (doc.exists && doc.data().emailjs) ? doc.data().emailjs : {};
+        if (!cfg.serviceId || !cfg.templateId || !cfg.publicKey || !paraEmail) {
+            return { ok: false, error: 'EmailJS no configurado' };
+        }
+        var params = { asunto: asunto || 'Aviso', mensaje: mensaje || '', para_email: paraEmail };
+        if (extra) { for (var k in extra) { params[k] = extra[k]; } }
+        return fetch('https://api.emailjs.com/api/v1.0/email/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ service_id: cfg.serviceId, template_id: cfg.templateId, user_id: cfg.publicKey, template_params: params })
+        }).then(function (r) { return { ok: r.ok, status: r.status }; });
+    }).catch(function (e) { return { ok: false, error: e.message }; });
+}
+
+// Despachador: notifica a un usuario (uid) o a 'admins' según sus preferencias.
+// evento: 'reserva' | 'pago' | 'comunicacion' | 'limpieza' | 'presupuesto' ...
+// payload: { asunto, mensaje }
+// Preferencias en usuarios/{uid}.notif = { <evento>:bool, canalEmail:bool, canalWhatsapp:bool }.
+// Por defecto: eventos ON, email ON, WhatsApp OFF (hasta registrar el número).
+function notificar(destino, evento, payload) {
+    payload = payload || {};
+    function paraUsuario(uid, data) {
+        var n = data.notif || {};
+        if (n[evento] === false) return;
+        if (n.canalEmail !== false && data.email) {
+            enviarMail(payload.asunto, payload.mensaje, data.email);
+        }
+        if (n.canalWhatsapp === true) {
+            enviarWhatsApp(payload.mensaje || payload.asunto || '', uid);
+        }
+    }
+    var db = firebase.firestore();
+    if (destino === 'admins') {
+        return db.collection('usuarios').get().then(function (snap) {
+            snap.forEach(function (d) { var x = d.data(); if (x.rol === 'admin') paraUsuario(d.id, x); });
+        }).catch(function () {});
+    }
+    return db.collection('usuarios').doc(destino).get().then(function (d) {
+        if (d.exists) paraUsuario(d.id, d.data());
+    }).catch(function () {});
+}
+
 
 // ── UTILS DE FORMATO Y ESCAPE ────────────────────────────────────────────────
 function escapeHtml(str) {
@@ -1427,6 +1497,7 @@ window.CVC = {
     guardarConciliacion, cargarConfigConciliacion,
     escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
     subirComprobante, abrirComprobante, elegirFuenteFoto,
+    enviarWhatsApp, enviarMail, notificar,
     showLoading, showEmpty, showError, showToast,
     AYUDA_ITEMS, initAyuda, mostrarAyuda, cerrarAyuda,
     mostrarCelula, cerrarCelula,

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notificaciones · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .nt-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4) var(--space-5); margin-bottom: var(--space-4); box-shadow: var(--shadow-xs); }
+        .nt-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--color-border-light); }
+        .nt-row:last-child { border-bottom: none; }
+        .nt-row__txt { flex: 1; min-width: 0; }
+        .nt-row__t { font-weight: 600; }
+        .nt-row__d { font-size: 12px; color: var(--color-text-muted); }
+        .switch { position: relative; width: 48px; height: 28px; flex-shrink: 0; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; inset: 0; background: var(--color-border); border-radius: 99px; transition: .2s; cursor: pointer; }
+        .slider:before { content: ''; position: absolute; height: 22px; width: 22px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; box-shadow: var(--shadow-sm); }
+        .switch input:checked + .slider { background: var(--color-primary); }
+        .switch input:checked + .slider:before { transform: translateX(20px); }
+        .nt-sub { font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-muted); margin: 0 0 var(--space-2); }
+        .nt-help { background: var(--color-surface-2); border-left: 3px solid var(--color-primary); border-radius: var(--radius-md); padding: var(--space-4); font-size: var(--text-sm); line-height: 1.55; }
+        .nt-help ol { margin: 8px 0 0; padding-left: 20px; }
+        .nt-help li { margin-bottom: 6px; }
+    </style>
+</head>
+<body>
+<header class="admin-header">
+    <div class="admin-header__brand"><span class="material-icons">cottage</span> Casa Verde Canas</div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span> <span id="userName">—</span></div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()"><span class="material-icons">logout</span> Salir</button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+    <div class="db-section-head" style="margin-bottom:var(--space-3);">
+        <div class="db-section-title">
+            <span class="material-icons" style="color:var(--color-primary);">notifications</span>
+            Mis notificaciones
+        </div>
+    </div>
+    <p style="font-size:var(--text-sm);color:var(--color-text-muted);margin-bottom:var(--space-4);">
+        Elegí de qué cambios querés que el sistema te avise y por dónde. Tus cambios se guardan solos.
+    </p>
+
+    <div id="contenido"><div class="state-loading"><div class="spinner"></div><span>Cargando…</span></div></div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async function () {
+    var sesion = await CVC.verificarAuth(['admin', 'user']);
+    var user = sesion.user;
+    var userData = sesion.userData;
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+    CVC.renderNav('notificaciones.html', userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('notificaciones.html');
+
+    var db = CVC.db;
+    var showToast = CVC.showToast;
+    var escapeHtml = CVC.escapeHtml;
+
+    var EVENTOS = [
+        { id: 'reserva',      t: 'Reservas',      d: 'Cuando se confirma una nueva reserva.' },
+        { id: 'pago',         t: 'Pagos',         d: 'Cuando se registra un pago o seña.' },
+        { id: 'comunicacion', t: 'Comunicación',  d: 'Mensajes nuevos dirigidos a vos o a tu grupo.' },
+        { id: 'limpieza',     t: 'Limpiezas / tareas', d: 'Cuando se te asigna o cambia una tarea.' },
+        { id: 'presupuesto',  t: 'Presupuestos',  d: 'Cuando se genera o aprueba un presupuesto.' }
+    ];
+
+    var notif = userData.notif || {};
+
+    function getEvento(id) { return notif[id] !== false; }      // default ON
+    function getEmail()    { return notif.canalEmail !== false; } // default ON
+    function getWa()       { return notif.canalWhatsapp === true; } // default OFF
+
+    async function guardar() {
+        try {
+            await db.collection('usuarios').doc(user.uid).set({ notif: notif }, { merge: true });
+        } catch (e) { showToast('No se pudo guardar: ' + e.message, 'error'); }
+    }
+
+    window.toggleEvento = function (id, el) { notif[id] = el.checked; guardar(); };
+    window.toggleCanal = function (canal, el) {
+        if (canal === 'email') notif.canalEmail = el.checked;
+        if (canal === 'whatsapp') notif.canalWhatsapp = el.checked;
+        guardar();
+        if (canal === 'whatsapp' && el.checked) {
+            showToast('Recordá registrar tu número (ver instrucciones abajo) para recibir WhatsApp.', 'info');
+        }
+    };
+
+    window.probarEmail = async function (btn) {
+        btn.disabled = true;
+        var r = await CVC.enviarMail('Prueba · Casa Verde', 'Esta es una notificación de prueba por email.', user.email);
+        showToast(r && r.ok ? 'Email de prueba enviado.' : ('Email no enviado: ' + ((r && r.error) || 'revisá la config de EmailJS')), r && r.ok ? 'success' : 'error');
+        btn.disabled = false;
+    };
+    window.probarWhatsApp = async function (btn) {
+        btn.disabled = true;
+        var r = await CVC.enviarWhatsApp('Prueba · Casa Verde: notificación de WhatsApp.', user.uid);
+        if (r && r.ok) showToast('WhatsApp de prueba enviado.', 'success');
+        else if (r && r.error === 'rate') showToast(r.detalle, 'info');
+        else showToast('WhatsApp no enviado: ' + ((r && r.error) || 'tu número puede no estar registrado'), 'error');
+        btn.disabled = false;
+    };
+
+    function sw(checked, fn) {
+        return '<label class="switch"><input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="' + fn + '"><span class="slider"></span></label>';
+    }
+
+    function render() {
+        var html = '';
+
+        // Canales
+        html += '<div class="nt-card"><div class="nt-sub">¿Por dónde querés los avisos?</div>';
+        html += '<div class="nt-row"><div class="nt-row__txt"><div class="nt-row__t">Email</div><div class="nt-row__d">A: ' + escapeHtml(user.email || '—') + '</div></div>' +
+                sw(getEmail(), "toggleCanal('email', this)") + '</div>';
+        html += '<div class="nt-row"><div class="nt-row__txt"><div class="nt-row__t">WhatsApp</div><div class="nt-row__d">Requiere registrar tu número (instrucciones abajo).</div></div>' +
+                sw(getWa(), "toggleCanal('whatsapp', this)") + '</div>';
+        html += '<div style="display:flex;gap:8px;margin-top:12px;">' +
+                '<button class="btn btn-ghost btn-sm" onclick="probarEmail(this)"><span class="material-icons">mail</span> Probar email</button>' +
+                '<button class="btn btn-ghost btn-sm" onclick="probarWhatsApp(this)"><span class="material-icons">chat</span> Probar WhatsApp</button>' +
+                '</div></div>';
+
+        // Eventos
+        html += '<div class="nt-card"><div class="nt-sub">¿De qué querés que te avise?</div>';
+        html += EVENTOS.map(function (ev) {
+            return '<div class="nt-row"><div class="nt-row__txt"><div class="nt-row__t">' + escapeHtml(ev.t) + '</div><div class="nt-row__d">' + escapeHtml(ev.d) + '</div></div>' +
+                sw(getEvento(ev.id), "toggleEvento('" + ev.id + "', this)") + '</div>';
+        }).join('');
+        html += '</div>';
+
+        // Cómo registrar WhatsApp
+        html += '<div class="nt-card"><div class="nt-sub">Cómo activar los avisos por WhatsApp</div>' +
+            '<div class="nt-help">' +
+            'El WhatsApp gratuito (CallMeBot) necesita que tu número se dé de alta una vez. Por seguridad, tu clave la incorpora el administrador; no se guarda en la web.' +
+            '<ol>' +
+            '<li>Seguí los pasos de <b>callmebot.com</b> (sección "Free API to Send WhatsApp Messages") para obtener tu <b>API key</b> personal: agregás el número del bot, le mandás el mensaje que indican y te responde con tu key.</li>' +
+            '<li>Enviá esa <b>API key</b> y tu número al administrador por un canal privado y seguro (no la publiques).</li>' +
+            '<li>El administrador la incorpora al sistema y activás el canal WhatsApp acá arriba.</li>' +
+            '<li>Probalo con el botón "Probar WhatsApp".</li>' +
+            '</ol>' +
+            '<div style="margin-top:8px;color:var(--color-text-muted);font-size:12px;">Nota: el plan gratis permite ~1 mensaje por minuto, así que los avisos de WhatsApp pueden espaciarse. El email no tiene ese límite.</div>' +
+            '</div></div>';
+
+        document.getElementById('contenido').innerHTML = html;
+    }
+
+    render();
+})();
+</script>
+</body>
+</html>
