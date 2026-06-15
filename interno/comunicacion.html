@@ -196,6 +196,19 @@
     var _prio   = 'verde';
     var _filtro = 'todos';
     var _hilos  = [];
+
+    // Resuelve a quién le concierne un aviso según la audiencia de la conversación.
+    // (avisar() ya excluye al autor.)
+    function destinoAviso(h) {
+        var aud = h.audiencia;
+        if (aud === 'solo_admin' || aud === 'entre_admins') return 'admins';
+        if (aud === 'solo_colaboradores') return 'colaboradores';
+        if (aud === 'un_usuario') {
+            var otro = (user.uid === h.creadoPor) ? h.destinatarioUid : h.creadoPor;
+            return otro ? [otro] : [];
+        }
+        return 'todos';
+    }
     var _vistos = {};         // { hiloId: lastSeenMillis }
     var _abierto = null;      // id del hilo expandido
 
@@ -407,7 +420,12 @@
                 ultimoMensaje: texto ? texto.slice(0, 80) : '📷 Imagen'
             });
             _replyFile = null;
-            if (CVC.registrarEvento) CVC.registrarEvento('comunicacion', miNombre + ' respondió en una conversación.');
+            var _h = null;
+            for (var _i = 0; _i < _hilos.length; _i++) { if (_hilos[_i].id === id) { _h = _hilos[_i]; break; } }
+            if (_h && CVC.avisar) {
+                var _txt = miNombre + ' escribió en "' + (_h.titulo || 'conversación') + '": ' + (texto ? texto.slice(0, 140) : '📷 imagen');
+                CVC.avisar('comunicacion', 'Nuevo mensaje', _txt, destinoAviso(_h), user.uid);
+            }
             await renderMensajes(id);
             await marcarVisto(id);
         } catch (e) {
@@ -489,7 +507,14 @@
                 creadoEn: firebase.firestore.FieldValue.serverTimestamp()
             });
             showToast('Conversación creada.', 'success');
-            if (CVC.registrarEvento) CVC.registrarEvento('comunicacion', miNombre + ' inició: ' + titulo);
+            if (CVC.avisar) {
+                var _para;
+                if (audiencia === 'un_usuario') _para = destinatarioUid ? [destinatarioUid] : [];
+                else if (audiencia === 'solo_admin' || audiencia === 'entre_admins') _para = 'admins';
+                else if (audiencia === 'solo_colaboradores') _para = 'colaboradores';
+                else _para = 'todos';
+                CVC.avisar('comunicacion', 'Nueva conversación', miNombre + ' inició "' + titulo + '": ' + mensaje.slice(0, 140), _para, user.uid);
+            }
             // reset
             _nuevaFile = null;
             document.getElementById('nFotoThumb').style.display = 'none';

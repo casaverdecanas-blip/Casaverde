@@ -1130,16 +1130,17 @@ window.elegirFuenteFoto = elegirFuenteFoto;
 //  NOTIFICACIONES (email + WhatsApp)
 // ============================================================
 var NETLIFY_BASE = 'https://serene-scone-76bd4e.netlify.app/.netlify/functions';
-var _ultimoWhatsApp = 0;
+var _ultimoWhatsApp = {};
 
-// WhatsApp vía la Netlify Function (CallMeBot). Gratis = máx 1 por minuto:
-// un guard simple evita reintentos masivos / clicks repetidos.
+// WhatsApp vía la Netlify Function (CallMeBot). Gratis = ~1 por minuto POR número:
+// el guard es por destinatario, así avisar a personas distintas no se bloquea entre sí.
 function enviarWhatsApp(text, to) {
+    var clave = to || '_default';
     var ahora = Date.now();
-    if (ahora - _ultimoWhatsApp < 60000) {
-        return Promise.resolve({ ok: false, error: 'rate', detalle: 'Esperá 1 minuto entre WhatsApps (límite del plan gratis).' });
+    if (_ultimoWhatsApp[clave] && (ahora - _ultimoWhatsApp[clave] < 60000)) {
+        return Promise.resolve({ ok: false, error: 'rate', detalle: 'Esperá 1 minuto entre WhatsApps al mismo destinatario (límite del plan gratis).' });
     }
-    _ultimoWhatsApp = ahora;
+    _ultimoWhatsApp[clave] = ahora;
     return fetch(NETLIFY_BASE + '/notify-whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
