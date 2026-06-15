@@ -1116,9 +1116,9 @@ function enviarWhatsApp(text, to) {
 
 // Email vía EmailJS (credenciales públicas por diseño; dominio en whitelist).
 // Variables del template: enviar_a, nombre_remitente, asunto, mensaje (acepta HTML).
-var EMAILJS = { serviceId: 'service_gmail', templateId: 'template_txtqg87', publicKey: 'v9IeaS5cXuzPAKCXh' };
+var EMAILJS = { serviceId: 'Mailcasaverde', templateId: 'template_txtqg87', publicKey: 'v9IeaS5cXuzPAKCXh' };
 function enviarMail(asunto, mensaje, paraEmail, remitente) {
-    if (!paraEmail) return Promise.resolve({ ok: false, error: 'sin destinatario' });
+    if (!paraEmail) return Promise.resolve({ ok: false, error: 'El usuario no tiene email cargado.' });
     var params = {
         enviar_a: paraEmail,
         nombre_remitente: remitente || 'Casa Verde Canas',
@@ -1129,8 +1129,10 @@ function enviarMail(asunto, mensaje, paraEmail, remitente) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ service_id: EMAILJS.serviceId, template_id: EMAILJS.templateId, user_id: EMAILJS.publicKey, template_params: params })
-    }).then(function (r) { return { ok: r.ok, status: r.status }; })
-      .catch(function (e) { return { ok: false, error: e.message }; });
+    }).then(function (r) {
+        if (r.ok) return { ok: true, status: r.status };
+        return r.text().then(function (t) { return { ok: false, status: r.status, error: (t || ('HTTP ' + r.status)) }; });
+    }).catch(function (e) { return { ok: false, error: e.message }; });
 }
 
 // ---- Resumen diario por email -------------------------------

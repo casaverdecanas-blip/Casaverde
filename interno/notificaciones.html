@@ -99,15 +99,22 @@
     window.probarEmail = async function (btn) {
         btn.disabled = true;
         var r = await CVC.enviarMail('Prueba · Casa Verde', 'Esta es una notificación de prueba por email.', user.email);
-        showToast(r && r.ok ? 'Email de prueba enviado.' : ('Email no enviado: ' + ((r && r.error) || 'revisá la config de EmailJS')), r && r.ok ? 'success' : 'error');
+        if (r && r.ok) {
+            showToast('Email de prueba enviado a ' + user.email, 'success');
+        } else {
+            showToast('Email NO enviado', 'error');
+            alert('EmailJS respondió:\n\n' + ((r && r.error) || 'sin detalle') + '\n\n(destinatario: ' + user.email + ')');
+        }
         btn.disabled = false;
     };
     window.probarWhatsApp = async function (btn) {
         btn.disabled = true;
         var r = await CVC.enviarWhatsApp('Prueba · Casa Verde: notificación de WhatsApp.', user.uid);
-        if (r && r.ok) showToast('WhatsApp de prueba enviado.', 'success');
-        else if (r && r.error === 'rate') showToast(r.detalle, 'info');
-        else showToast('WhatsApp no enviado: ' + ((r && r.error) || 'tu número puede no estar registrado'), 'error');
+        if (r && r.error === 'rate') { showToast(r.detalle, 'info'); btn.disabled = false; return; }
+        // CallMeBot devuelve HTTP 200 aun cuando rechaza: hay que leer la respuesta.
+        var resp = (r && r.respuesta) ? r.respuesta : ((r && r.error) || 'sin respuesta');
+        showToast('Respuesta de CallMeBot recibida', r && r.ok ? 'info' : 'error');
+        alert('CallMeBot respondió:\n\n' + resp);
         btn.disabled = false;
     };
 
