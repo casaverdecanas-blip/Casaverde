@@ -411,32 +411,184 @@ function mensajeConflicto(reserva) {
 
 // ── GESTIÓN AUTOMÁTICA DE LIMPIEZA ───────────────────────────────────────────
 function crearTareaLimpieza(reservaId, reservaData) {
-    if (!reservaData.checkOut) return;
+    // Por reserva se mantienen DOS tareas:
+    //  • limp-<id>  LIMPIEZA de ingreso → ventana [salida del anterior, check-in]; rojo desde 2 días antes.
+    //  • ctrl-<id>  CONTROL de salida   → habilitado desde el check-out, con info del que sale.
+    // Al guardar una reserva también se recalcula la ventana de la limpieza del SIGUIENTE huésped
+    // de esa cabaña (porque esta reserva pasa a ser su "salida anterior").
+    var aFecha = function(v) {
+        if (!v) return null;
+        var d = v.toDate ? v.toDate() : new Date(v);
+        return isNaN(d.getTime()) ? null : d;
+    };
+    var isoDate = function(d) { return d.toISOString().split('T')[0]; };
+    var ddmm    = function(d) { return d.getDate() + '/' + (d.getMonth() + 1); };
+    var mismaFecha = function(a, b) { return a && b && isoDate(a) === isoDate(b); };
 
-    const checkOut = reservaData.checkOut.toDate ? reservaData.checkOut.toDate() : new Date(reservaData.checkOut);
-    const tareaId  = 'limp-' + reservaId;
+    var caba = reservaData.caba;
+    if (caba === undefined || caba === null) return;
 
-    db.collection('cabanas').doc(String(reservaData.caba)).get().then(function(cDoc) {
-        const cData = cDoc.exists ? cDoc.data() : {};
-        const nombreCabana = (cData.nombre && cData.nombre.es) ? cData.nombre.es
-                           : (cData.nombre || ('Cabaña ' + reservaData.caba));
+    Promise.all([
+        db.collection('cabanas').doc(String(caba)).get(),
+        db.collection('reservas').where('caba', '==', caba).get()
+    ]).then(function(res) {
+        var cDoc  = res[0];
+        var rSnap = res[1];
+        var cData = cDoc.exists ? cDoc.data() : {};
+        var nombreCabana = (cData.nombre && cData.nombre.es) ? cData.nombre.es
+                         : (cData.nombre || ('Cabaña ' + caba));
 
-        db.collection('tareas').doc(tareaId).set({
-            tipo:        'limpieza',
-            nombre:      'Limpieza Check-Out — ' + nombreCabana,
-            titulo:      'Limpieza Check-Out — ' + nombreCabana,
-            cabana:      reservaData.caba,
-            reservaId:   reservaId,
-            estado:      'pendiente',
-            prioridad:   'media',
-            fechaInicio: checkOut.toISOString().split('T')[0],
-            descripcion: 'Limpieza general por salida de ' + (reservaData.nombre || 'huésped') + '. ' + (reservaData.notas || ''),
-            creadoEn:    firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true }).then(function() {
-            console.log('Tarea de limpieza automatizada vinculada:', tareaId);
-        }).catch(function(err) {
-            console.error('Error al automatizar limpieza:', err);
+        var reservas = [];
+        rSnap.forEach(function(d) {
+            var r = d.data();
+            if (r.estado === 'anulada') return;
+            reservas.push({ id: d.id, data: r, ci: aFecha(r.checkIn), co: aFecha(r.checkOut) });
         });
+        if (!reservas.some(function(x) { return x.id === reservaId; })) {
+            reservas.push({ id: reservaId, data: reservaData, ci: aFecha(reservaData.checkIn), co: aFecha(reservaData.checkOut) });
+        }
+
+        // Salida más tardía que sea <= ese check-in (la "reserva anterior").
+        var predecesorDe = function(targetId, ciDate) {
+            if (!ciDate) return null;
+            var mejor = null;
+            for (var i = 0; i < reservas.length; i++) {
+                var x = reservas[i];
+                if (x.id === targetId || !x.co) continue;
+                if (x.co.getTime() <= ciDate.getTime()) {
+                    if (!mejor || x.co.getTime() > mejor.co.getTime()) mejor = x;
+                }
+            }
+            return mejor;
+        };
+
+        // Campos de la tarea de limpieza (ingreso) para una reserva dada.
+        var camposLimpieza = function(item) {
+            var rd = item.data;
+            var ci = item.ci;
+            if (!ci) return null;
+            var pred      = predecesorDe(item.id, ci);
+            var horaEntra = rd.horaLlegada || '';
+            var horaSale  = pred ? (pred.data.horaSalida || '') : '';
+            var inicio;
+            if (pred) { inicio = pred.co; }
+            else { inicio = new Date(ci.getTime()); inicio.setDate(inicio.getDate() - 2); }
+            var mismoDia = pred ? mismaFecha(pred.co, ci) : false;
+            var personas = rd.huespedes || ((rd.adultos || 0) + (rd.ninos || 0)) || '—';
+
+            var lineas = [
+                '🧹 PREPARAR PARA INGRESO — ' + nombreCabana,
+                '   Entra: ' + (rd.nombre || 'huésped') + ' · ' + personas + ' personas',
+                '   Check-in: ' + ddmm(ci) + (horaEntra ? ' a las ' + horaEntra + 'hs' : ''),
+                pred ? ('   Se puede limpiar desde: ' + ddmm(pred.co) + (horaSale ? ' (salida ' + horaSale + 'hs)' : ' (check-out anterior)'))
+                     : '   Cabaña libre — limpiar dentro de los 2 días previos al ingreso.',
+                mismoDia ? ('\n⚡ MISMO DÍA — Sale ' + (horaSale || '¿?') + 'hs y entra ' + (horaEntra || '¿?') + 'hs. Ventana corta: máxima prioridad.') : '',
+                (rd.mascotas === 'si' || rd.niniosPequenos === 'si')
+                    ? ('\n⚠️ ' + [rd.mascotas === 'si' ? '🐾 MASCOTAS' : '', rd.niniosPequenos === 'si' ? '👶 NIÑOS PEQUEÑOS' : ''].filter(Boolean).join(' · '))
+                    : '',
+                rd.notas ? '   Notas: ' + rd.notas : ''
+            ];
+            var descripcion = lineas.filter(function(s) { return s !== null && s !== undefined && s !== ''; }).join('\n');
+
+            return {
+                base: {
+                    tipo:             'limpieza',
+                    rol:              'ingreso',
+                    nombre:           'Limpieza ingreso — ' + nombreCabana,
+                    titulo:           'Limpieza ingreso — ' + nombreCabana,
+                    cabana:           caba,
+                    reservaId:        item.id,
+                    recurrencia:      0,
+                    fechaInicio:      isoDate(inicio),
+                    fechaCheckIn:     isoDate(ci),
+                    horaCheckIn:      horaEntra,
+                    horaPuedeEmpezar: horaSale,
+                    mismoDia:         mismoDia,
+                    monto:            rd.costoLimpiezaBRL || 0,
+                    descripcion:      descripcion,
+                    actualizadoEn:    firebase.firestore.FieldValue.serverTimestamp()
+                },
+                soloCrear: {
+                    estado:    'pendiente',
+                    prioridad: 'media',
+                    creadoEn:  firebase.firestore.FieldValue.serverTimestamp()
+                }
+            };
+        };
+
+        // Upsert que NO pisa el estado de una tarea ya existente.
+        var upsert = function(docRef, base, soloCrear) {
+            return docRef.get().then(function(snap) {
+                if (snap.exists) return docRef.update(base);
+                return docRef.set(Object.assign({}, base, soloCrear));
+            });
+        };
+
+        var actual = null;
+        for (var k = 0; k < reservas.length; k++) { if (reservas[k].id === reservaId) { actual = reservas[k]; break; } }
+        if (!actual) return;
+
+        var tareas = db.collection('tareas');
+        var jobs = [];
+
+        // 1) Limpieza de la reserva actual.
+        var cl = camposLimpieza(actual);
+        if (cl) jobs.push(upsert(tareas.doc('limp-' + actual.id), cl.base, cl.soloCrear));
+
+        // 2) Control de salida de la reserva actual.
+        if (actual.co) {
+            var rd        = actual.data;
+            var personasC = rd.huespedes || ((rd.adultos || 0) + (rd.ninos || 0)) || '—';
+            var descCtrl  = [
+                '🔑 CONTROL DE SALIDA — ' + nombreCabana,
+                '   Sale: ' + (rd.nombre || 'huésped') + ' · ' + personasC + ' personas',
+                '   Check-out: ' + ddmm(actual.co) + (rd.horaSalida ? ' a las ' + rd.horaSalida + 'hs' : ''),
+                rd.notas ? '   Notas: ' + rd.notas : '',
+                '',
+                'Controlar inventario y estado: utensilios de cocina, toallas, sábanas; electrodomésticos (ventiladores, licuadora…); luces, espejos, inodoro.',
+                'Registrar faltantes/daños en la reserva y lanzar pendientes de mantenimiento para la próxima limpieza.'
+            ].filter(function(s) { return s !== null && s !== undefined && s !== ''; }).join('\n');
+            jobs.push(upsert(tareas.doc('ctrl-' + actual.id), {
+                tipo:          'control',
+                rol:           'salida',
+                nombre:        'Control de salida — ' + nombreCabana,
+                titulo:        'Control de salida — ' + nombreCabana,
+                cabana:        caba,
+                reservaId:     actual.id,
+                recurrencia:   0,
+                fechaInicio:   isoDate(actual.co),
+                fechaCheckOut: isoDate(actual.co),
+                descripcion:   descCtrl,
+                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            }, { estado: 'pendiente', prioridad: 'media', creadoEn: firebase.firestore.FieldValue.serverTimestamp() }));
+        }
+
+        // 3) Recalcular la ventana de la limpieza del SIGUIENTE huésped (solo si ya tiene su tarea).
+        if (actual.co) {
+            var follower = null;
+            for (var j = 0; j < reservas.length; j++) {
+                var x = reservas[j];
+                if (x.id === actual.id || !x.ci) continue;
+                if (x.ci.getTime() >= actual.co.getTime()) {
+                    if (!follower || x.ci.getTime() < follower.ci.getTime()) follower = x;
+                }
+            }
+            if (follower) {
+                var clf = camposLimpieza(follower);
+                if (clf) {
+                    var refF = tareas.doc('limp-' + follower.id);
+                    jobs.push(refF.get().then(function(snap) {
+                        if (snap.exists) return refF.update(clf.base);
+                    }));
+                }
+            }
+        }
+
+        return Promise.all(jobs).then(function() {
+            console.log('Tareas de ingreso/control sincronizadas para la reserva', reservaId);
+        });
+    }).catch(function(err) {
+        console.error('Error al sincronizar tareas de reserva:', err);
     });
 }
 
@@ -773,6 +925,17 @@ function urgenciaTarea(t, esUrgente) {
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
     const f = new Date(String(t.fechaInicio).slice(0, 10) + 'T00:00:00');
     if (isNaN(f.getTime())) return { color: 'gris', label: 'Sin fecha' };
+
+    // Limpieza de ingreso: rojo desde 2 días antes del check-in (ventana corta = urgente).
+    if (t.fechaCheckIn) {
+        const ciD = new Date(String(t.fechaCheckIn).slice(0, 10) + 'T00:00:00');
+        if (!isNaN(ciD.getTime())) {
+            if (hoy < f) return { color: 'gris', label: 'Próxima' };
+            const d2 = Math.round((ciD - hoy) / 86400000);
+            if (d2 <= 2) return { color: 'rojo', label: d2 < 0 ? 'Ingreso vencido' : (d2 === 0 ? 'Ingreso hoy' : 'Ingreso en ' + d2 + 'd') };
+            return { color: 'amarillo', label: 'Ingreso en ' + d2 + 'd' };
+        }
+    }
 
     const dias  = Math.round((hoy - f) / 86400000);
     const ciclo = parseInt(t.recurrenciaDias || t.recurrencia || 0, 10) || 0;

@@ -337,6 +337,28 @@
                 <div class="form-group"><input id="notaEn" class="form-control" placeholder="🇺🇸 Ex: Just 3 blocks from the beach..."></div>
             </div>
 
+            <!-- Lista base de inventario -->
+            <div style="margin-top:var(--space-5); padding-top:var(--space-4); border-top:1px solid var(--color-border);">
+                <h3 style="font-size:var(--text-md); font-weight:700; margin:0 0 4px;">
+                    <span class="material-icons" style="vertical-align:middle; color:var(--color-primary);">checklist</span>
+                    Lista base de inventario
+                </h3>
+                <p class="form-hint" style="margin-bottom:var(--space-3);">Componentes de la cabaña con su cantidad por defecto. Se usa en la limpieza de ingreso (se cargan cantidades) y en el control de salida (se verifican).</p>
+                <div id="ckRows"></div>
+                <div style="display:flex; gap:var(--space-2); flex-wrap:wrap; margin-top:var(--space-2);">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="ckAgregar()"><span class="material-icons">add</span> Agregar ítem</button>
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="ckSugeridos()"><span class="material-icons">auto_awesome</span> Cargar sugeridos</button>
+                </div>
+                <datalist id="ckCategorias">
+                    <option value="Cocina"></option>
+                    <option value="Ropa blanca"></option>
+                    <option value="Electrodomésticos"></option>
+                    <option value="Baño"></option>
+                    <option value="Iluminación"></option>
+                    <option value="Mobiliario"></option>
+                </datalist>
+            </div>
+
             <!-- Error -->
             <div class="alert alert-error" id="formError" style="display:none; margin-top:var(--space-3);">
                 <span class="material-icons">error_outline</span>
@@ -565,6 +587,7 @@
         validarCalendarId(document.getElementById('googleCalendarId'));
 
         actualizarPreviewFotos();
+        ckRender(c.checklistInventario || []);
         mostrarForm();
     };
 
@@ -661,6 +684,7 @@
                 },
                 airbnb_url:         document.getElementById('airbnbUrl').value.trim(),
                 google_calendar_id: document.getElementById('googleCalendarId').value.trim(),
+                checklistInventario: ckLeer(),
                 actualizadoEn:      firebase.firestore.FieldValue.serverTimestamp()
             };
 
@@ -768,6 +792,81 @@
     };
 
     // ── Helpers ───────────────────────────────────────────────
+    // ── Lista base de inventario ──────────────────────────────
+    function ckAgregar(nombre, categoria, cantidad) {
+        var cont = document.getElementById('ckRows');
+        var row = document.createElement('div');
+        row.className = 'ck-row';
+        row.style.cssText = 'display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap;';
+
+        var inNombre = document.createElement('input');
+        inNombre.className = 'form-control ck-nombre';
+        inNombre.placeholder = 'Ítem (ej: Vasos)';
+        inNombre.style.cssText = 'flex:2 1 140px;';
+        inNombre.value = nombre || '';
+
+        var inCat = document.createElement('input');
+        inCat.className = 'form-control ck-cat';
+        inCat.placeholder = 'Categoría';
+        inCat.setAttribute('list', 'ckCategorias');
+        inCat.style.cssText = 'flex:1 1 120px;';
+        inCat.value = categoria || '';
+
+        var inCant = document.createElement('input');
+        inCant.type = 'number';
+        inCant.min = '0';
+        inCant.className = 'form-control ck-cant';
+        inCant.placeholder = 'Cant.';
+        inCant.style.cssText = 'flex:0 0 80px; width:80px;';
+        inCant.value = (cantidad !== undefined && cantidad !== null) ? cantidad : '';
+
+        var del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'btn btn-ghost btn-sm';
+        del.innerHTML = '<span class="material-icons">delete</span>';
+        del.onclick = function() { row.parentNode.removeChild(row); };
+
+        row.appendChild(inNombre);
+        row.appendChild(inCat);
+        row.appendChild(inCant);
+        row.appendChild(del);
+        cont.appendChild(row);
+    }
+
+    function ckRender(items) {
+        document.getElementById('ckRows').innerHTML = '';
+        (items || []).forEach(function(it) {
+            ckAgregar(it.nombre, it.categoria, it.cantidadBase);
+        });
+    }
+
+    function ckLeer() {
+        var out = [];
+        var rows = document.querySelectorAll('#ckRows .ck-row');
+        for (var i = 0; i < rows.length; i++) {
+            var nombre = rows[i].querySelector('.ck-nombre').value.trim();
+            if (!nombre) continue;
+            var categoria = rows[i].querySelector('.ck-cat').value.trim() || 'General';
+            var cantidad = parseInt(rows[i].querySelector('.ck-cant').value, 10);
+            if (isNaN(cantidad) || cantidad < 0) cantidad = 0;
+            out.push({ nombre: nombre, categoria: categoria, cantidadBase: cantidad });
+        }
+        return out;
+    }
+
+    function ckSugeridos() {
+        var sug = [
+            ['Vasos', 'Cocina', 6], ['Platos', 'Cocina', 6], ['Juegos de cubiertos', 'Cocina', 6],
+            ['Tazas', 'Cocina', 6], ['Ollas', 'Cocina', 2], ['Sartén', 'Cocina', 1],
+            ['Juegos de sábanas', 'Ropa blanca', 2], ['Toallas', 'Ropa blanca', 4], ['Almohadas', 'Ropa blanca', 4],
+            ['Ventiladores grandes', 'Electrodomésticos', 1], ['Ventiladores chicos', 'Electrodomésticos', 1],
+            ['Licuadora', 'Electrodomésticos', 1], ['Pava eléctrica', 'Electrodomésticos', 1]
+        ];
+        sug.forEach(function(s) { ckAgregar(s[0], s[1], s[2]); });
+    }
+    window.ckAgregar = ckAgregar;
+    window.ckSugeridos = ckSugeridos;
+
     function limpiarForm() {
         ['idNum','orden','nombreEs','nombrePt','nombreEn',
          'descEs','descPt','descEn','notaEs','notaPt','notaEn',
@@ -786,6 +885,7 @@
         document.getElementById('fotosPreview').innerHTML = '';
         document.getElementById('precioPreview').style.display = 'none';
         document.getElementById('formError').style.display    = 'none';
+        ckRender([]);
     }
 
     function mostrarForm() {
