@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Limpieza de datos — Casa Verde Canas</title>
+<link rel="stylesheet" href="design-system.css">
+<style>
+  :root {
+    --rojo:    #e53935;
+    --naranja: #f57c00;
+    --verde:   #388e3c;
+    --azul:    #1565c0;
+    --gris:    #757575;
+    --bg:      #f5f5f5;
+    --card:    #ffffff;
+    --borde:   #e0e0e0;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         background: var(--bg); color: #212121; font-size: 14px; }
+
+  /* NAV placeholder — utils.js lo monta */
+  #nav-container { background: #1a1a2e; min-height: 52px; }
+
+  .page-header {
+    background: #fff;
+    border-bottom: 2px solid var(--rojo);
+    padding: 16px 16px 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .page-header h1 { font-size: 18px; font-weight: 700; color: #212121; }
+  .page-header .badge-danger {
+    background: var(--rojo); color: #fff;
+    font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px;
+  }
+
+  /* AVISO */
+  .aviso-peligro {
+    margin: 12px 12px 0;
+    background: #fff3e0; border: 1px solid #ffb300; border-radius: 8px;
+    padding: 10px 14px; display: flex; gap: 10px; align-items: flex-start;
+  }
+  .aviso-peligro .icon { font-size: 20px; flex-shrink: 0; }
+  .aviso-peligro p { font-size: 13px; line-height: 1.5; color: #5d4037; }
+  .aviso-peligro strong { color: #e65100; }
+
+  /* TABS COLECCIONES */
+  .tabs-wrap {
+    padding: 12px 12px 0;
+    overflow-x: auto; white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tabs-wrap::-webkit-scrollbar { height: 4px; }
+  .tabs-wrap::-webkit-scrollbar-thumb { background: #bbb; border-radius: 4px; }
+
+  .tab-btn {
+    display: inline-block; padding: 7px 14px; margin-right: 6px;
+    border-radius: 20px; border: 1px solid var(--borde);
+    background: #fff; color: var(--gris); font-size: 13px; font-weight: 500;
+    cursor: pointer; white-space: nowrap; transition: all .18s;
+  }
+  .tab-btn.activo {
+    background: #1a1a2e; color: #fff; border-color: #1a1a2e;
+  }
+
+  /* FILTROS */
+  .filtros-panel {
+    margin: 10px 12px 0;
+    background: #fff; border: 1px solid var(--borde); border-radius: 8px;
+    padding: 12px;
+  }
+  .filtros-panel h3 { font-size: 13px; font-weight: 700; color: var(--gris);
+    text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+  .filtros-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+  .filtro-item {
+    display: flex; align-items: center; gap: 8px;
+    background: #f9f9f9; border: 1px solid var(--borde);
+    border-radius: 6px; padding: 8px 10px; cursor: pointer;
+  }
+  .filtro-item input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
+  .filtro-item label { font-size: 12px; color: #444; cursor: pointer; line-height: 1.3; }
+  .filtro-item label strong { display: block; font-size: 13px; color: #212121; }
+
+  .filtros-fecha {
+    margin-top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  }
+  .filtros-fecha label { font-size: 13px; color: #444; }
+  .filtros-fecha input[type=date] {
+    border: 1px solid var(--borde); border-radius: 6px; padding: 6px 10px;
+    font-size: 13px; background: #fff;
+  }
+  .filtros-fecha input[type=text] {
+    flex: 1; min-width: 160px;
+    border: 1px solid var(--borde); border-radius: 6px; padding: 6px 10px;
+    font-size: 13px; background: #fff;
+  }
+
+  .btn-buscar {
+    width: 100%; margin-top: 10px;
+    background: #1a1a2e; color: #fff;
+    border: none; border-radius: 8px;
+    padding: 11px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .btn-buscar:active { opacity: .85; }
+  .btn-buscar:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* RESULTADOS */
+  .resultados-header {
+    margin: 12px 12px 0;
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+  }
+  .resultados-header .info { font-size: 13px; color: var(--gris); }
+  .resultados-header .info strong { color: var(--rojo); }
+
+  .acciones-lote {
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .btn-sel-todo, .btn-desel-todo {
+    padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;
+    border: 1px solid var(--borde); background: #fff; cursor: pointer;
+  }
+  .btn-eliminar-sel {
+    padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 700;
+    border: none; background: var(--rojo); color: #fff; cursor: pointer;
+  }
+  .btn-eliminar-sel:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* LISTA */
+  .lista-resultados { padding: 10px 12px 80px; }
+
+  .card-resultado {
+    background: #fff; border: 1px solid var(--borde); border-radius: 8px;
+    margin-bottom: 8px; overflow: hidden;
+  }
+  .card-resultado.seleccionada { border-color: var(--rojo); background: #fff8f8; }
+
+  .card-cabecera {
+    display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px;
+    cursor: pointer;
+  }
+  .card-cabecera input[type=checkbox] { width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px; cursor: pointer; }
+
+  .card-info { flex: 1; min-width: 0; }
+  .card-titulo { font-size: 14px; font-weight: 600; color: #212121;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-meta { font-size: 12px; color: var(--gris); margin-top: 2px; }
+  .card-meta span { margin-right: 10px; }
+
+  .tag-sospechoso {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 11px; font-weight: 700; margin-left: 6px;
+    background: #fce4ec; color: var(--rojo);
+  }
+
+  .btn-expand {
+    background: none; border: none; font-size: 18px; color: var(--gris);
+    cursor: pointer; padding: 4px; flex-shrink: 0;
+  }
+
+  .card-detalle {
+    display: none; padding: 0 12px 12px;
+    border-top: 1px solid var(--borde);
+  }
+  .card-detalle.abierto { display: block; }
+
+  .detalle-tabla { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .detalle-tabla td {
+    padding: 4px 6px; font-size: 12px; border-bottom: 1px solid #f5f5f5;
+    vertical-align: top;
+  }
+  .detalle-tabla td:first-child {
+    color: var(--gris); font-weight: 600; width: 38%; white-space: nowrap;
+  }
+  .detalle-tabla td:last-child { color: #212121; word-break: break-word; }
+
+  .btn-eliminar-uno {
+    margin-top: 10px; padding: 7px 16px;
+    background: var(--rojo); color: #fff; border: none;
+    border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
+    float: right;
+  }
+
+  /* ESTADOS vacío / cargando */
+  .estado-msg {
+    text-align: center; padding: 40px 20px; color: var(--gris);
+  }
+  .estado-msg .icon { font-size: 40px; margin-bottom: 10px; }
+  .estado-msg p { font-size: 14px; }
+
+  /* LOG */
+  .log-panel {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #1a1a2e; color: #a5d6a7;
+    font-size: 11px; font-family: monospace;
+    max-height: 90px; overflow-y: auto;
+    padding: 6px 12px;
+    z-index: 200;
+    border-top: 2px solid var(--verde);
+    display: none;
+  }
+  .log-panel.visible { display: block; }
+  .log-linea { margin-bottom: 2px; }
+  .log-linea.err { color: #ef9a9a; }
+  .log-linea.ok  { color: #a5d6a7; }
+  .log-linea.inf { color: #fff59d; }
+
+  /* MODAL CONFIRMACION */
+  .overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.55); z-index: 500;
+    align-items: center; justify-content: center;
+  }
+  .overlay.visible { display: flex; }
+  .modal {
+    background: #fff; border-radius: 12px; padding: 24px 20px;
+    width: min(92vw, 420px); box-shadow: 0 8px 32px rgba(0,0,0,.25);
+  }
+  .modal h2 { font-size: 17px; font-weight: 700; color: var(--rojo); margin-bottom: 10px; }
+  .modal p  { font-size: 14px; color: #444; line-height: 1.5; margin-bottom: 16px; }
+  .modal-lista {
+    max-height: 160px; overflow-y: auto;
+    background: #fafafa; border: 1px solid var(--borde);
+    border-radius: 6px; padding: 8px 10px; margin-bottom: 16px;
+    font-size: 12px; color: #444; line-height: 1.8;
+  }
+  .modal-acciones { display: flex; gap: 10px; justify-content: flex-end; }
+  .btn-modal-cancel {
+    padding: 9px 18px; border-radius: 6px; border: 1px solid var(--borde);
+    background: #fff; font-size: 14px; font-weight: 600; cursor: pointer; color: #444;
+  }
+  .btn-modal-ok {
+    padding: 9px 18px; border-radius: 6px; border: none;
+    background: var(--rojo); color: #fff; font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+
+  /* SPINNER */
+  .spinner {
+    display: inline-block; width: 18px; height: 18px;
+    border: 3px solid rgba(255,255,255,.3); border-top-color: #fff;
+    border-radius: 50%; animation: spin .7s linear infinite;
+    vertical-align: middle; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* BADGE CONTADOR */
+  .badge-count {
+    display: inline-block; background: var(--rojo); color: #fff;
+    border-radius: 10px; font-size: 11px; font-weight: 700;
+    padding: 1px 7px; margin-left: 6px;
+  }
+
+  @media (max-width: 400px) {
+    .filtros-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div id="nav-container"></div>
+
+<div class="page-header">
+  <span style="font-size:22px">🧹</span>
+  <h1>Limpieza de datos</h1>
+  <span class="badge-danger">ADMIN</span>
+</div>
+
+<div class="aviso-peligro">
+  <span class="icon">⚠️</span>
+  <p>
+    <strong>Esta herramienta elimina registros permanentemente de Firestore.</strong>
+    Revisá cada entrada antes de borrar. Las eliminaciones no se pueden deshacer desde la interfaz.
+  </p>
+</div>
+
+<!-- TABS -->
+<div class="tabs-wrap" id="tabsWrap"></div>
+
+<!-- FILTROS -->
+<div class="filtros-panel" id="filtrosPanel">
+  <h3>Filtros de detección</h3>
+  <div class="filtros-grid" id="filtrosGrid"></div>
+
+  <div class="filtros-fecha">
+    <label>Texto sospechoso:</label>
+    <input type="text" id="inputTexto" placeholder='ej: prueba, test, xxx, demo' />
+  </div>
+  <div class="filtros-fecha" style="margin-top:8px">
+    <label>Fecha antes de:</label>
+    <input type="date" id="inputFechaCorte" />
+    <label style="margin-left:4px">Fecha después de:</label>
+    <input type="date" id="inputFechaMax" />
+  </div>
+
+  <button class="btn-buscar" id="btnBuscar" onclick="window.ejecutarBusqueda()">
+    Buscar registros sospechosos
+  </button>
+</div>
+
+<!-- RESULTADOS HEADER -->
+<div class="resultados-header" id="resultadosHeader" style="display:none">
+  <div class="info" id="infoResultados"></div>
+  <div class="acciones-lote">
+    <button class="btn-sel-todo"    onclick="window.seleccionarTodos(true)">Sel. todos</button>
+    <button class="btn-desel-todo"  onclick="window.seleccionarTodos(false)">Quitar sel.</button>
+    <button class="btn-eliminar-sel" id="btnEliminarSel" disabled
+            onclick="window.pedirConfirmacionLote()">
+      🗑 Eliminar seleccionados
+    </button>
+  </div>
+</div>
+
+<!-- LISTA -->
+<div class="lista-resultados" id="listaResultados">
+  <div class="estado-msg">
+    <div class="icon">🔍</div>
+    <p>Elegí una colección y aplicá filtros para comenzar.</p>
+  </div>
+</div>
+
+<!-- LOG -->
+<div class="log-panel" id="logPanel"></div>
+
+<!-- MODAL CONFIRMACION -->
+<div class="overlay" id="overlayConfirm">
+  <div class="modal">
+    <h2>⚠️ Confirmar eliminación</h2>
+    <p id="modalTexto"></p>
+    <div class="modal-lista" id="modalLista"></div>
+    <div class="modal-acciones">
+      <button class="btn-modal-cancel" onclick="window.cerrarModal()">Cancelar</button>
+      <button class="btn-modal-ok"    id="btnModalOk">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+
+<script>
+(function() {
+
+  // ─── CONFIG ──────────────────────────────────────────────────────────────
+
+  var COLECCIONES = [
+    {
+      id: 'reservas',
+      label: 'Reservas',
+      icon: '🏠',
+      campos: {
+        titulo:  function(d) { return (d.nombre || '(sin nombre)') + ' — C' + (d.caba || '?'); },
+        fecha:   function(d) { return d.checkIn || d.creadoEn || null; },
+        extra:   function(d) {
+          return 'Estado: ' + (d.estado || '?') +
+                 ' · CheckIn: ' + (d.checkIn || '—') +
+                 ' · Monto: R$ ' + (d.totalBRL || 0);
+        }
+      },
+      filtrosDisponibles: ['texto', 'monto_cero', 'estado_prueba', 'fecha'],
+      camposDetalle: ['nombre','caba','checkIn','checkOut','adultos','ninos',
+                      'estado','origen','totalBRL','pagadoBRL','creadoEn','creadoPor']
+    },
+    {
+      id: 'tareas',
+      label: 'Tareas',
+      icon: '✅',
+      campos: {
+        titulo:  function(d) { return d.nombre || '(sin nombre)'; },
+        fecha:   function(d) { return d.fechaInicio || d.creadoEn || null; },
+        extra:   function(d) {
+          return 'Estado: ' + (d.estado || '?') +
+                 ' · Tipo: ' + (d.tipo || '—') +
+                 ' · Monto: R$ ' + (d.monto || 0);
+        }
+      },
+      filtrosDisponibles: ['texto', 'monto_cero', 'fecha', 'sin_cabaña'],
+      camposDetalle: ['nombre','tipo','estado','prioridad','fechaInicio',
+                      'monto','activa','reservaId','cabana','creadoEn','creadoPor','creadoPorNombre']
+    },
+    {
+      id: 'historial_tareas',
+      label: 'Historial tareas',
+      icon: '📋',
+      campos: {
+        titulo:  function(d) { return d.nombre || '(sin nombre)'; },
+        fecha:   function(d) { return d.finalizadoEn || d.creadoEn || null; },
+        extra:   function(d) {
+          return 'Horas: ' + (d.totalHoras || 0) +
+                 ' · Monto: R$ ' + (d.totalMonto || 0) +
+                 ' · Por: ' + (d.finalizadoNombre || '—');
+        }
+      },
+      filtrosDisponibles: ['texto', 'monto_cero', 'horas_irreales', 'fecha'],
+      camposDetalle: ['nombre','tipo','tipoRegistro','totalHoras','totalMonto',
+                      'finalizadoPor','finalizadoNombre','cabana','tareaId','finalizadoEn']
+    },
+    {
+      id: 'comunicaciones',
+      label: 'Comunicación',
+      icon: '💬',
+      campos: {
+        titulo:  function(d) { return d.titulo || '(sin título)'; },
+        fecha:   function(d) { return d.creadoEn || d.ultimaActividad || null; },
+        extra:   function(d) {
+          return 'Audiencia: ' + (d.audiencia || '?') +
+                 ' · Por: ' + (d.creadoPorNombre || '—') +
+                 ' · Ref: ' + (d.refTipo || '—');
+        }
+      },
+      filtrosDisponibles: ['texto', 'fecha'],
+      camposDetalle: ['titulo','audiencia','prioridad','refTipo','refLabel',
+                      'creadoPorNombre','creadoEn','ultimaActividad','ultimoMensaje']
+    },
+    {
+      id: 'movimientos',
+      label: 'Movimientos',
+      icon: '🏦',
+      campos: {
+        titulo:  function(d) { return d.descripcion || '(sin descripción)'; },
+        fecha:   function(d) { return d.fecha || null; },
+        extra:   function(d) {
+          return 'Monto: ' + (d.monto || 0) +
+                 ' · Cuenta: ' + (d.cuentaId || '—') +
+                 ' · Conciliado: ' + (d.conciliado ? 'Sí' : 'No');
+        }
+      },
+      filtrosDisponibles: ['texto', 'fecha', 'monto_cero'],
+      camposDetalle: ['descripcion','fecha','monto','cuentaId','categoriaId',
+                      'conciliado','conciliadoNivel','conciliadoConId']
+    },
+    {
+      id: 'gastos',
+      label: 'Gastos',
+      icon: '💸',
+      campos: {
+        titulo:  function(d) { return d.concepto || '(sin concepto)'; },
+        fecha:   function(d) { return d.fecha || null; },
+        extra:   function(d) {
+          return 'Monto: ' + (d.monto || 0) + ' ' + (d.moneda || '') +
+                 ' · Cat: ' + (d.categoria || '—') +
+                 ' · Circuito: ' + (d.circuito || '—');
+        }
+      },
+      filtrosDisponibles: ['texto', 'fecha', 'monto_cero'],
+      camposDetalle: ['concepto','categoria','monto','moneda','fecha','circuito',
+                      'deducible','origen','responsableNom','creadoEn']
+    },
+    {
+      id: 'pagos',
+      label: 'Pagos',
+      icon: '💳',
+      campos: {
+        titulo:  function(d) { return d.clienteNombre || '(sin cliente)'; },
+        fecha:   function(d) { return d.fecha || null; },
+        extra:   function(d) {
+          return 'Monto: ' + (d.monto || 0) + ' ' + (d.moneda || '') +
+                 ' · Tipo: ' + (d.tipo || '—') +
+                 ' · Reserva: ' + (d.reservaId || '—');
+        }
+      },
+      filtrosDisponibles: ['texto', 'fecha', 'monto_cero'],
+      camposDetalle: ['clienteNombre','monto','moneda','metodo','tipo','fecha','reservaId','creadoEn']
+    },
+    {
+      id: 'honorarios',
+      label: 'Honorarios',
+      icon: '👤',
+      campos: {
+        titulo:  function(d) { return (d.nombre || '?') + ' — ' + (d.concepto || d.tareaId || ''); },
+        fecha:   function(d) { return d.fecha || d.creadoEn || null; },
+        extra:   function(d) {
+          return 'Monto: ' + (d.monto || 0) + ' ' + (d.moneda || '') +
+                 ' · Estado: ' + (d.estado || '—') +
+                 ' · Horas: ' + (d.horas || 0);
+        }
+      },
+      filtrosDisponibles: ['texto', 'fecha', 'monto_cero', 'horas_irreales'],
+      camposDetalle: ['uid','nombre','tareaId','horas','monto','moneda','estado','tipo','fecha','creadoEn']
+    },
+    {
+      id: 'pendientes',
+      label: 'Pendientes',
+      icon: '📌',
+      campos: {
+        titulo:  function(d) { return d.texto || '(sin texto)'; },
+        fecha:   function(d) { return d.creadoEn || null; },
+        extra:   function(d) {
+          return 'Semáforo: ' + (d.semaforo || '—') +
+                 ' · Asignado: ' + (d.asignadoNom || 'todos') +
+                 ' · Realizado: ' + (d.realizado ? 'Sí' : 'No');
+        }
+      },
+      filtrosDisponibles: ['texto', 'fecha'],
+      camposDetalle: ['texto','semaforo','visibilidad','asignadoNom','realizado','origen','creadoEn']
+    },
+    {
+      id: 'presupuestos',
+      label: 'Presupuestos',
+      icon: '📝',
+      campos: {
+        titulo:  function(d) { return (d.nombre || '(sin nombre)') + ' — C' + (d.caba || '?'); },
+        fecha:   function(d) { return d.checkIn || d.creadoEn || null; },
+        extra:   function(d) {
+          return 'Estado: ' + (d.estado || '?') +
+                 ' · CheckIn: ' + (d.checkIn || '—') +
+                 ' · Total: R$ ' + (d.totalBRL || 0);
+        }
+      },
+      filtrosDisponibles: ['texto', 'monto_cero', 'estado_prueba', 'fecha'],
+      camposDetalle: ['nombre','caba','checkIn','checkOut','adultos','ninos',
+                      'estado','totalBRL','totalCalculadoBRL','descuentoAplicado','creadoEn']
+    }
+  ];
+
+  var FILTROS_DEF = {
+    texto: {
+      label: 'Nombre / texto sospechoso',
+      desc:  'Contiene: prueba, test, xxx, demo, borrar, temp…'
+    },
+    monto_cero: {
+      label: 'Monto cero o vacío',
+      desc:  'Registros con monto = 0 o campo ausente'
+    },
+    estado_prueba: {
+      label: 'Estado "prueba" o "test"',
+      desc:  'Campo estado con valores de test'
+    },
+    fecha: {
+      label: 'Fuera de rango de fechas',
+      desc:  'Anterior a la fecha corte o posterior al máximo'
+    },
+    horas_irreales: {
+      label: 'Horas irreales',
+      desc:  'Duración < 1 min o > 24 h por sesión/tarea'
+    },
+    sin_cabaña: {
+      label: 'Sin cabaña asignada',
+      desc:  'Campo cabana / caba vacío o nulo'
+    }
+  };
+
+  var PALABRAS_SOSPECHOSAS = [
+    'prueba','test','xxx','demo','borrar','eliminar','temp','fake',
+    'ficticio','ejemplo','aaa','bbb','ccc','asdf','qwerty','zzzz'
+  ];
+
+  // ─── ESTADO ──────────────────────────────────────────────────────────────
+
+  var estado = {
+    colActual:    'reservas',
+    resultados:   [],    // { id, coleccion, data, sospechoso, razones }
+    seleccionados: {},   // { id: bool }
+    buscando:     false
+  };
+
+  var db = null;
+
+  // ─── INIT ────────────────────────────────────────────────────────────────
+
+  document.addEventListener('DOMContentLoaded', function() {
+    esperarAuth();
+  });
+
+  function esperarAuth() {
+    var intentos = 0;
+    var iv = setInterval(function() {
+      intentos++;
+      if (window.CVC && window.CVC.db) {
+        clearInterval(iv);
+        db = window.CVC.db;
+        initPagina();
+      } else if (intentos > 40) {
+        clearInterval(iv);
+        mostrarError('No se pudo conectar con Firebase. Recargá la página.');
+      }
+    }, 150);
+  }
+
+  function initPagina() {
+    // Verificar rol admin
+    var user = window.CVC.currentUser;
+    if (!user || user.rol !== 'admin') {
+      document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#e53935;font-size:18px">⛔ Acceso solo para administradores</div>';
+      return;
+    }
+
+    montarTabs();
+    montarFiltros('reservas');
+    log('inf', 'Panel listo. Usuario: ' + user.email);
+  }
+
+  // ─── TABS ────────────────────────────────────────────────────────────────
+
+  function montarTabs() {
+    var wrap = document.getElementById('tabsWrap');
+    var html = '';
+    for (var i = 0; i < COLECCIONES.length; i++) {
+      var c = COLECCIONES[i];
+      var activo = c.id === estado.colActual ? ' activo' : '';
+      html += '<button class="tab-btn' + activo + '" onclick="window.cambiarColeccion(\'' + c.id + '\')">' +
+              c.icon + ' ' + c.label + '</button>';
+    }
+    wrap.innerHTML = html;
+  }
+
+  window.cambiarColeccion = function(colId) {
+    estado.colActual = colId;
+    estado.resultados = [];
+    estado.seleccionados = {};
+    montarTabs();
+    montarFiltros(colId);
+    document.getElementById('resultadosHeader').style.display = 'none';
+    document.getElementById('listaResultados').innerHTML =
+      '<div class="estado-msg"><div class="icon">🔍</div>' +
+      '<p>Aplicá filtros para buscar en <strong>' + colId + '</strong>.</p></div>';
+  };
+
+  // ─── FILTROS ─────────────────────────────────────────────────────────────
+
+  function montarFiltros(colId) {
+    var col = getColeccion(colId);
+    if (!col) return;
+    var grid = document.getElementById('filtrosGrid');
+    var html = '';
+    var filtros = col.filtrosDisponibles;
+    for (var i = 0; i < filtros.length; i++) {
+      var fid = filtros[i];
+      var def = FILTROS_DEF[fid];
+      if (!def) continue;
+      html += '<div class="filtro-item" onclick="toggleFiltro(\'' + fid + '\')">' +
+              '  <input type="checkbox" id="chk_' + fid + '" onclick="event.stopPropagation()">' +
+              '  <label for="chk_' + fid + '"><strong>' + def.label + '</strong>' + def.desc + '</label>' +
+              '</div>';
+    }
+    grid.innerHTML = html;
+  }
+
+  function toggleFiltro(fid) {
+    var chk = document.getElementById('chk_' + fid);
+    if (chk) chk.checked = !chk.checked;
+  }
+
+  function getFiltrosActivos() {
+    var activos = [];
+    var todos = Object.keys(FILTROS_DEF);
+    for (var i = 0; i < todos.length; i++) {
+      var chk = document.getElementById('chk_' + todos[i]);
+      if (chk && chk.checked) activos.push(todos[i]);
+    }
+    return activos;
+  }
+
+  // ─── BÚSQUEDA ─────────────────────────────────────────────────────────────
+
+  window.ejecutarBusqueda = function() {
+    if (estado.buscando) return;
+    var filtros = getFiltrosActivos();
+    var textoExtra = document.getElementById('inputTexto').value.trim().toLowerCase();
+    var fechaCorte = document.getElementById('inputFechaCorte').value;
+    var fechaMax   = document.getElementById('inputFechaMax').value;
+
+    if (filtros.length === 0 && !textoExtra && !fechaCorte && !fechaMax) {
+      alert('Activá al menos un filtro o ingresá un texto o rango de fechas.');
+      return;
+    }
+
+    var btn = document.getElementById('btnBuscar');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Buscando…';
+    estado.buscando = true;
+    estado.resultados = [];
+    estado.seleccionados = {};
+
+    log('inf', 'Buscando en colección: ' + estado.colActual);
+
+    db.collection(estado.colActual).get()
+      .then(function(snap) {
+        var docs = snap.docs;
+        log('inf', 'Documentos totales: ' + docs.length);
+
+        var resultados = [];
+        for (var i = 0; i < docs.length; i++) {
+          var doc = docs[i];
+          var d   = doc.data();
+          var razones = [];
+
+          // Filtro TEXTO (checkbox)
+          if (filtros.indexOf('texto') >= 0) {
+            var textoDoc = textoDocumento(d).toLowerCase();
+            for (var w = 0; w < PALABRAS_SOSPECHOSAS.length; w++) {
+              if (textoDoc.indexOf(PALABRAS_SOSPECHOSAS[w]) >= 0) {
+                razones.push('Texto sospechoso: "' + PALABRAS_SOSPECHOSAS[w] + '"');
+                break;
+              }
+            }
+          }
+
+          // Filtro TEXTO EXTRA (campo libre)
+          if (textoExtra) {
+            var palabras = textoExtra.split(',');
+            var textoDoc2 = textoDocumento(d).toLowerCase();
+            for (var p = 0; p < palabras.length; p++) {
+              var pal = palabras[p].trim();
+              if (pal && textoDoc2.indexOf(pal) >= 0) {
+                razones.push('Contiene: "' + pal + '"');
+                break;
+              }
+            }
+          }
+
+          // Filtro MONTO CERO
+          if (filtros.indexOf('monto_cero') >= 0) {
+            var monto = d.monto || d.totalBRL || d.montoFiscal || 0;
+            if (!monto || monto === 0) {
+              razones.push('Monto cero o vacío');
+            }
+          }
+
+          // Filtro ESTADO PRUEBA
+          if (filtros.indexOf('estado_prueba') >= 0) {
+            var est = (d.estado || '').toLowerCase();
+            if (est === 'prueba' || est === 'test' || est === 'demo') {
+              razones.push('Estado: "' + d.estado + '"');
+            }
+          }
+
+          // Filtro FECHA
+          if (filtros.indexOf('fecha') >= 0 || fechaCorte || fechaMax) {
+            var col = getColeccion(estado.colActual);
+            var fval = col ? col.campos.fecha(d) : null;
+            var fechaStr = extraerFechaStr(fval);
+            if (fechaStr) {
+              if (fechaCorte && fechaStr < fechaCorte) {
+                razones.push('Fecha anterior a ' + fechaCorte + ' (' + fechaStr + ')');
+              }
+              if (fechaMax && fechaStr > fechaMax) {
+                razones.push('Fecha posterior a ' + fechaMax + ' (' + fechaStr + ')');
+              }
+            }
+          }
+
+          // Filtro HORAS IRREALES
+          if (filtros.indexOf('horas_irreales') >= 0) {
+            var h = parseFloat(d.totalHoras || d.horas || 0);
+            if (h > 0 && (h < 0.017 || h > 24)) {
+              razones.push('Horas irreales: ' + h);
+            }
+          }
+
+          // Filtro SIN CABAÑA
+          if (filtros.indexOf('sin_cabaña') >= 0) {
+            if (!d.cabana && !d.caba) {
+              razones.push('Sin cabaña asignada');
+            }
+          }
+
+          if (razones.length > 0) {
+            resultados.push({
+              id:        doc.id,
+              coleccion: estado.colActual,
+              data:      d,
+              razones:   razones
+            });
+          }
+        }
+
+        estado.resultados = resultados;
+        renderResultados();
+        log(resultados.length > 0 ? 'inf' : 'ok',
+          'Encontrados: ' + resultados.length + ' registros sospechosos');
+      })
+      .catch(function(err) {
+        log('err', 'Error al buscar: ' + err.message);
+        mostrarError('Error al consultar Firestore: ' + err.message);
+      })
+      .then(function() {
+        estado.buscando = false;
+        btn.disabled = false;
+        btn.innerHTML = 'Buscar registros sospechosos';
+      });
+  };
+
+  // ─── RENDER RESULTADOS ────────────────────────────────────────────────────
+
+  function renderResultados() {
+    var lista = document.getElementById('listaResultados');
+    var header = document.getElementById('resultadosHeader');
+    var info   = document.getElementById('infoResultados');
+    var r = estado.resultados;
+
+    if (r.length === 0) {
+      header.style.display = 'none';
+      lista.innerHTML =
+        '<div class="estado-msg"><div class="icon">✅</div>' +
+        '<p>No se encontraron registros sospechosos con los filtros aplicados.</p></div>';
+      return;
+    }
+
+    header.style.display = 'flex';
+    info.innerHTML = 'Se encontraron <strong>' + r.length + '</strong> registros sospechosos';
+    actualizarBtnEliminar();
+
+    var html = '';
+    var col = getColeccion(estado.colActual);
+
+    for (var i = 0; i < r.length; i++) {
+      var item = r[i];
+      var d    = item.data;
+      var sel  = estado.seleccionados[item.id] ? ' seleccionada' : '';
+      var titulo = col ? col.campos.titulo(d) : item.id;
+      var extra  = col ? col.campos.extra(d)  : '';
+
+      var razonesHtml = '';
+      for (var j = 0; j < item.razones.length; j++) {
+        razonesHtml += '<span class="tag-sospechoso">' + item.razones[j] + '</span>';
+      }
+
+      html += '<div class="card-resultado' + sel + '" id="card_' + item.id + '">' +
+              '  <div class="card-cabecera">' +
+              '    <input type="checkbox" id="chkr_' + item.id + '"' +
+              (estado.seleccionados[item.id] ? ' checked' : '') +
+              '      onclick="window.toggleSeleccion(\'' + item.id + '\')">' +
+              '    <div class="card-info" onclick="window.toggleDetalle(\'' + item.id + '\')">' +
+              '      <div class="card-titulo">' + escHtml(titulo) + razonesHtml + '</div>' +
+              '      <div class="card-meta"><span>' + escHtml(extra) + '</span></div>' +
+              '    </div>' +
+              '    <button class="btn-expand" onclick="window.toggleDetalle(\'' + item.id + '\')" title="Ver detalle">⌄</button>' +
+              '  </div>' +
+              '  <div class="card-detalle" id="det_' + item.id + '">' +
+              renderDetalle(item, col) +
+              '  </div>' +
+              '</div>';
+    }
+
+    lista.innerHTML = html;
+  }
+
+  function renderDetalle(item, col) {
+    var d = item.data;
+    var campos = col ? col.camposDetalle : Object.keys(d).slice(0, 12);
+    var rows = '';
+    for (var i = 0; i < campos.length; i++) {
+      var k = campos[i];
+      var v = d[k];
+      if (v === undefined) continue;
+      var vs = formatValor(v);
+      rows += '<tr><td>' + escHtml(k) + '</td><td>' + escHtml(vs) + '</td></tr>';
+    }
+    return '<table class="detalle-tabla"><tbody>' + rows + '</tbody></table>' +
+           '<button class="btn-eliminar-uno" ' +
+           'onclick="window.pedirConfirmacionUno(\'' + item.id + '\')">🗑 Eliminar este</button>' +
+           '<div style="clear:both"></div>';
+  }
+
+  // ─── SELECCIÓN ────────────────────────────────────────────────────────────
+
+  window.toggleSeleccion = function(id) {
+    estado.seleccionados[id] = !estado.seleccionados[id];
+    var card = document.getElementById('card_' + id);
+    if (card) {
+      if (estado.seleccionados[id]) card.classList.add('seleccionada');
+      else card.classList.remove('seleccionada');
+    }
+    actualizarBtnEliminar();
+  };
+
+  window.seleccionarTodos = function(sel) {
+    for (var i = 0; i < estado.resultados.length; i++) {
+      var id = estado.resultados[i].id;
+      estado.seleccionados[id] = sel;
+      var card = document.getElementById('card_' + id);
+      var chk  = document.getElementById('chkr_' + id);
+      if (card) {
+        if (sel) card.classList.add('seleccionada');
+        else card.classList.remove('seleccionada');
+      }
+      if (chk) chk.checked = sel;
+    }
+    actualizarBtnEliminar();
+  };
+
+  function actualizarBtnEliminar() {
+    var count = 0;
+    var keys = Object.keys(estado.seleccionados);
+    for (var i = 0; i < keys.length; i++) {
+      if (estado.seleccionados[keys[i]]) count++;
+    }
+    var btn = document.getElementById('btnEliminarSel');
+    btn.disabled = count === 0;
+    btn.innerHTML = '🗑 Eliminar seleccionados' + (count > 0 ? ' (' + count + ')' : '');
+  }
+
+  // ─── DETALLE TOGGLE ───────────────────────────────────────────────────────
+
+  window.toggleDetalle = function(id) {
+    var det = document.getElementById('det_' + id);
+    if (det) det.classList.toggle('abierto');
+  };
+
+  // ─── CONFIRMACIÓN Y ELIMINACIÓN ──────────────────────────────────────────
+
+  window.pedirConfirmacionUno = function(id) {
+    var item = getResultado(id);
+    if (!item) return;
+    var col  = getColeccion(item.coleccion);
+    var titulo = col ? col.campos.titulo(item.data) : id;
+    mostrarModal(
+      '¿Eliminar este registro de <strong>' + item.coleccion + '</strong>?',
+      [titulo],
+      function() { eliminarIds([id]); }
+    );
+  };
+
+  window.pedirConfirmacionLote = function() {
+    var ids = [];
+    var keys = Object.keys(estado.seleccionados);
+    for (var i = 0; i < keys.length; i++) {
+      if (estado.seleccionados[keys[i]]) ids.push(keys[i]);
+    }
+    if (ids.length === 0) return;
+
+    var col = getColeccion(estado.colActual);
+    var nombres = [];
+    for (var j = 0; j < ids.length; j++) {
+      var item = getResultado(ids[j]);
+      if (item) nombres.push(col ? col.campos.titulo(item.data) : ids[j]);
+    }
+
+    mostrarModal(
+      'Se eliminarán <strong>' + ids.length + '</strong> registros de <strong>' + estado.colActual + '</strong>.',
+      nombres,
+      function() { eliminarIds(ids); }
+    );
+  };
+
+  function eliminarIds(ids) {
+    cerrarModal();
+    log('inf', 'Eliminando ' + ids.length + ' registros de ' + estado.colActual + '…');
+
+    var promesas = [];
+    for (var i = 0; i < ids.length; i++) {
+      promesas.push(db.collection(estado.colActual).doc(ids[i]).delete());
+    }
+
+    Promise.all(promesas)
+      .then(function() {
+        log('ok', 'Eliminados ' + ids.length + ' registros correctamente.');
+        // Quitar de la lista local
+        var nuevos = [];
+        for (var k = 0; k < estado.resultados.length; k++) {
+          if (ids.indexOf(estado.resultados[k].id) < 0) {
+            nuevos.push(estado.resultados[k]);
+          }
+        }
+        estado.resultados = nuevos;
+        for (var m = 0; m < ids.length; m++) {
+          delete estado.seleccionados[ids[m]];
+        }
+        renderResultados();
+      })
+      .catch(function(err) {
+        log('err', 'Error al eliminar: ' + err.message);
+        alert('Error al eliminar: ' + err.message);
+      });
+  }
+
+  // ─── MODAL ────────────────────────────────────────────────────────────────
+
+  function mostrarModal(texto, items, onOk) {
+    document.getElementById('modalTexto').innerHTML = texto;
+    var listaEl = document.getElementById('modalLista');
+    var listaHtml = '';
+    for (var i = 0; i < items.length; i++) {
+      listaHtml += '• ' + escHtml(items[i]) + '\n';
+    }
+    listaEl.textContent = listaHtml;
+
+    var btnOk = document.getElementById('btnModalOk');
+    btnOk.onclick = onOk;
+
+    document.getElementById('overlayConfirm').classList.add('visible');
+  }
+
+  window.cerrarModal = function() {
+    document.getElementById('overlayConfirm').classList.remove('visible');
+  };
+
+  // Cerrar tocando fuera
+  document.getElementById('overlayConfirm').addEventListener('click', function(ev) {
+    if (ev.target === this) window.cerrarModal();
+  });
+
+  // ─── LOG ─────────────────────────────────────────────────────────────────
+
+  function log(tipo, msg) {
+    var panel = document.getElementById('logPanel');
+    panel.classList.add('visible');
+    var ts = new Date().toLocaleTimeString('es-AR');
+    var icono = tipo === 'err' ? '✗' : (tipo === 'ok' ? '✓' : 'ℹ');
+    var linea = document.createElement('div');
+    linea.className = 'log-linea ' + tipo;
+    linea.textContent = '[' + ts + '] ' + icono + ' ' + msg;
+    panel.appendChild(linea);
+    panel.scrollTop = panel.scrollHeight;
+    // Máx 50 líneas
+    while (panel.children.length > 50) {
+      panel.removeChild(panel.firstChild);
+    }
+  }
+
+  // ─── HELPERS ──────────────────────────────────────────────────────────────
+
+  function getColeccion(id) {
+    for (var i = 0; i < COLECCIONES.length; i++) {
+      if (COLECCIONES[i].id === id) return COLECCIONES[i];
+    }
+    return null;
+  }
+
+  function getResultado(id) {
+    for (var i = 0; i < estado.resultados.length; i++) {
+      if (estado.resultados[i].id === id) return estado.resultados[i];
+    }
+    return null;
+  }
+
+  function textoDocumento(d) {
+    var partes = [];
+    var campos = ['nombre','titulo','texto','concepto','descripcion','clienteNombre',
+                  'estado','origen','tipo','refLabel','ultimoMensaje'];
+    for (var i = 0; i < campos.length; i++) {
+      if (d[campos[i]]) partes.push(String(d[campos[i]]));
+    }
+    return partes.join(' ');
+  }
+
+  function extraerFechaStr(val) {
+    if (!val) return null;
+    if (typeof val === 'string') return val.substring(0, 10);
+    if (val && val.toDate) {
+      return val.toDate().toISOString().substring(0, 10);
+    }
+    if (val instanceof Date) {
+      return val.toISOString().substring(0, 10);
+    }
+    return null;
+  }
+
+  function formatValor(v) {
+    if (v === null || v === undefined) return '—';
+    if (typeof v === 'boolean')  return v ? 'Sí' : 'No';
+    if (typeof v === 'object' && v.toDate) {
+      return v.toDate().toLocaleString('es-AR');
+    }
+    if (Array.isArray(v)) return '[' + v.length + ' items]';
+    if (typeof v === 'object')   return JSON.stringify(v).substring(0, 120);
+    return String(v);
+  }
+
+  function escHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function mostrarError(msg) {
+    document.getElementById('listaResultados').innerHTML =
+      '<div class="estado-msg"><div class="icon">❌</div><p>' + escHtml(msg) + '</p></div>';
+  }
+
+})();
+</script>
+</body>
+</html>
