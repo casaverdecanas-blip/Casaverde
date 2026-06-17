@@ -601,14 +601,24 @@
 
             <!-- MODO RAPIDO -->
             <div id="seccionRapida">
-                <div class="form-group" style="margin-bottom:var(--space-3);">
-                    <label class="form-label">Monto (R$) *</label>
-                    <input type="number" id="ngMonto" class="form-control" step="0.01" min="0" placeholder="0,00"
-                        style="font-size:var(--text-xl);font-weight:700;text-align:right;">
+                <div class="form-row" style="margin-bottom:var(--space-3);">
+                    <div class="form-group" style="flex:2;">
+                        <label class="form-label">Monto *</label>
+                        <input type="number" id="ngMonto" class="form-control" step="0.01" min="0" placeholder="0,00"
+                            style="font-size:var(--text-xl);font-weight:700;text-align:right;">
+                    </div>
+                    <div class="form-group" style="flex:1;">
+                        <label class="form-label">Moneda</label>
+                        <select id="ngMoneda" class="form-control" style="font-weight:700;">
+                            <option value="BRL">BRL R$</option>
+                            <option value="UYU">UYU $U</option>
+                            <option value="USD">USD US$</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="form-group" style="margin-bottom:var(--space-3);">
                     <label class="form-label">De donde salio *</label>
-                    <select id="ngCuenta" class="form-control">
+                    <select id="ngCuenta" class="form-control" onchange="ngActualizarMonedaPorCuenta('ngCuenta','ngMoneda')">
                         <option value="">-- Pendiente de asignar --</option>
                     </select>
                 </div>
@@ -690,14 +700,24 @@
                         <span class="material-icons" style="font-size:15px;">auto_fix_high</span>
                         Datos extraidos por IA -- revisa y completa lo que falta
                     </div>
-                    <div class="form-group" style="margin-bottom:var(--space-3);">
-                        <label class="form-label">Monto (R$) *</label>
-                        <input type="number" id="ngFMonto" class="form-control" step="0.01" min="0"
-                            style="font-size:var(--text-xl);font-weight:700;text-align:right;">
+                    <div class="form-row" style="margin-bottom:var(--space-3);">
+                        <div class="form-group" style="flex:2;">
+                            <label class="form-label">Monto *</label>
+                            <input type="number" id="ngFMonto" class="form-control" step="0.01" min="0"
+                                style="font-size:var(--text-xl);font-weight:700;text-align:right;">
+                        </div>
+                        <div class="form-group" style="flex:1;">
+                            <label class="form-label">Moneda</label>
+                            <select id="ngFMoneda" class="form-control" style="font-weight:700;">
+                                <option value="BRL">BRL R$</option>
+                                <option value="UYU">UYU $U</option>
+                                <option value="USD">USD US$</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="form-group" style="margin-bottom:var(--space-3);">
                         <label class="form-label">De donde salio *</label>
-                        <select id="ngFCuenta" class="form-control">
+                        <select id="ngFCuenta" class="form-control" onchange="ngActualizarMonedaPorCuenta('ngFCuenta','ngFMoneda')">
                             <option value="">-- Pendiente de asignar --</option>
                         </select>
                     </div>
@@ -1551,6 +1571,8 @@
         document.getElementById('ngMonto').value    = '';
         document.getElementById('ngConcepto').value = '';
         document.getElementById('ngProveedor') && (document.getElementById('ngProveedor').value = '');
+        document.getElementById('ngMoneda') && (document.getElementById('ngMoneda').value = 'BRL');
+        document.getElementById('ngFMoneda') && (document.getElementById('ngFMoneda').value = 'BRL');
         document.getElementById('ngOpcionales').style.display = 'none';
         document.getElementById('ngToggleBtn').textContent = '+ Mas detalles (opcional)';
         document.getElementById('seccionRapida').style.display = 'block';
@@ -1598,6 +1620,23 @@
     window.cerrarNuevoGasto = function(e) {
         if (e && e.target !== document.getElementById('modalNuevoGasto')) return;
         document.getElementById('modalNuevoGasto').style.display = 'none';
+    };
+
+    // Cuando se elige cuenta, sugerir la moneda de esa cuenta
+    window.ngActualizarMonedaPorCuenta = function(cuentaSelectId, monedaSelectId) {
+        var selCuenta = document.getElementById(cuentaSelectId);
+        var selMoneda = document.getElementById(monedaSelectId);
+        if (!selCuenta || !selMoneda) return;
+        var cuentaId = selCuenta.value;
+        if (!cuentaId || cuentaId === '__propios__') return;
+        var cuenta = _ngCuentasCache.find(function(c) { return c.id === cuentaId; });
+        if (!cuenta || !cuenta.moneda) return;
+        var moneda = cuenta.moneda.toUpperCase();
+        // Solo actualiza si la moneda existe en el select
+        var opciones = ['BRL','UYU','USD'];
+        if (opciones.indexOf(moneda) >= 0) {
+            selMoneda.value = moneda;
+        }
     };
 
     window.setModoGasto = function(modo) {
@@ -1679,12 +1718,13 @@
 
             flog('Enviando a Gemini IA...', '#fbbf24');
 
-            var PROMPT = 'Sos un extractor de datos de facturas y recibos de compra en Brasil.' +
+            var PROMPT = 'Sos un extractor de datos de facturas y recibos de compra.' +
                 ' Extrae solo los datos de CABECERA del comprobante y responde UNICAMENTE con JSON valido, sin texto adicional:' +
-                ' {"proveedor":"","fecha":"YYYY-MM-DD","monto_total":0,"moneda":"BRL","concepto":"",' +
+                ' {"proveedor":"","fecha":"YYYY-MM-DD","monto_total":0,"moneda":"","concepto":"",' +
                 '"numero_factura":"","categoria_sugerida":"","metodo_pago_sugerido":""}.' +
                 ' monto_total = el TOTAL a pagar de la factura (con descuentos). Es el dato mas importante: leelo con cuidado.' +
-                ' Numeros BRL: eliminar R$, puntos de miles, cambiar coma por punto. R$1.234,56 -> 1234.56.' +
+                ' moneda = la moneda del comprobante: BRL para reales brasileros, UYU para pesos uruguayos, USD para dolares. Detectala por el simbolo (R$=BRL, $U=UYU, US$=USD). Si no se puede determinar usar BRL.' +
+                ' Numeros BRL/UYU: eliminar simbolo, puntos de miles, cambiar coma por punto. R$1.234,56 -> 1234.56.' +
                 ' concepto: descripcion corta de la compra (ej: "Compra en supermercado", "Materiales de ferreteria").' +
                 ' metodo_pago_sugerido: pix, efectivo, debito, credito o transferencia.' +
                 ' categoria_sugerida: Materiales, Limpieza, Mantenimiento, Servicios, Alimentos, Transporte u Otro.' +
@@ -1721,6 +1761,13 @@
 
             // Poblar campos
             if (ext.monto_total)  document.getElementById('ngFMonto').value    = ext.monto_total;
+            if (ext.moneda) {
+                var monedaIA = (ext.moneda || '').toUpperCase();
+                var selMon = document.getElementById('ngFMoneda');
+                if (selMon && ['BRL','UYU','USD'].indexOf(monedaIA) >= 0) {
+                    selMon.value = monedaIA;
+                }
+            }
             if (ext.concepto)     document.getElementById('ngFConcepto').value  = ext.concepto;
             if (ext.proveedor)    document.getElementById('ngFProveedor').value = ext.proveedor;
             if (ext.fecha)        document.getElementById('ngFFecha').value     = ext.fecha;
@@ -1795,7 +1842,7 @@
             var docData = {
                 concepto: concepto,
                 monto:    monto,
-                moneda:   'BRL',
+                moneda:   (esFoto ? (document.getElementById('ngFMoneda') ? document.getElementById('ngFMoneda').value : 'BRL') : (document.getElementById('ngMoneda') ? document.getElementById('ngMoneda').value : 'BRL')),
                 fecha:    fecha,
                 metodo:   metodo,
                 circuito: circuito || null,
@@ -1829,7 +1876,7 @@
                     tipo: 'reembolso',
                     concepto: 'Reembolso: ' + concepto,
                     monto: monto,
-                    moneda: 'BRL',
+                    moneda: docData.moneda,
                     horas: 0,
                     estado: 'pendiente',
                     gastoId: docRef.id,
