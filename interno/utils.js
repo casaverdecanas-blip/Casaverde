@@ -592,6 +592,36 @@ function crearTareaLimpieza(reservaId, reservaData) {
     });
 }
 
+// Al anular/eliminar una reserva: borra sus tareas y recalcula la ventana del huésped siguiente.
+function alAnularReserva(reservaId) {
+    var tareas = db.collection('tareas');
+    return tareas.doc('limp-' + reservaId).delete().catch(function() {})
+    .then(function() { return tareas.doc('ctrl-' + reservaId).delete().catch(function() {}); })
+    .then(function() { return db.collection('reservas').doc(reservaId).get(); })
+    .then(function(snap) {
+        if (!snap.exists) return;
+        var rd = snap.data();
+        var caba = rd.caba;
+        if (caba === undefined || caba === null) return;
+        var co = (rd.checkOut && rd.checkOut.toDate) ? rd.checkOut.toDate() : (rd.checkOut ? new Date(rd.checkOut) : null);
+        if (!co || isNaN(co.getTime())) return;
+        return db.collection('reservas').where('caba', '==', caba).get().then(function(rs) {
+            var follower = null;
+            rs.forEach(function(d) {
+                if (d.id === reservaId) return;
+                var r = d.data();
+                if (r.estado === 'anulada') return;
+                var ci = (r.checkIn && r.checkIn.toDate) ? r.checkIn.toDate() : (r.checkIn ? new Date(r.checkIn) : null);
+                if (!ci || isNaN(ci.getTime())) return;
+                if (ci.getTime() >= co.getTime()) {
+                    if (!follower || ci.getTime() < follower.ci.getTime()) follower = { id: d.id, data: r, ci: ci };
+                }
+            });
+            if (follower) crearTareaLimpieza(follower.id, follower.data);
+        });
+    }).catch(function(err) { console.warn('alAnularReserva:', err.message); });
+}
+
 
 // ── SINCRONIZADOR DE CANALES ─────────────────────────────────────────────────
 function sincronizarDisponibilidad() {
@@ -1798,6 +1828,7 @@ window.CVC = {
     verificarDisponibilidadCabana,
     mensajeConflicto,
     crearTareaLimpieza,
+    alAnularReserva,
     sincronizarDisponibilidad,
     sincronizarDesdeGCal,
     iniciarTarea, pausarTarea, finalizarTarea, verificarTarea, urgenciaTarea,

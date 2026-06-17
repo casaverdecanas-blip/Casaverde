@@ -1009,55 +1009,18 @@
                 actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
             });
             await sincronizarDisponibilidad(id, { estado: 'anulada' });
+            if (CVC.alAnularReserva) { try { await CVC.alAnularReserva(id); } catch(e) {} }
             showToast('Reserva anulada.', 'warning');
             await recargarReservas();
         } catch(e) { showToast('Error: ' + e.message, 'error'); }
     };
 
-    // ── Actualizar tarea de limpieza al editar reserva ────────
+    // ── Actualizar tareas (ingreso/control) al editar reserva ────────
     async function actualizarTareaLimpieza(reservaId, reservaData) {
         try {
-            const tareasSnap = await db.collection('tareas')
-                .where('reservaId', '==', reservaId).get();
-            if (tareasSnap.empty) return;
-
-            const checkOut = reservaData.checkOut?.toDate
-                ? reservaData.checkOut.toDate()
-                : new Date(reservaData.checkOut);
-
-            let nombreCab = 'Cabana ' + reservaData.caba;
-            try {
-                const cs = await db.collection('cabanas').doc(String(reservaData.caba)).get();
-                if (cs.exists) nombreCab = cs.data().nombre?.es || nombreCab;
-            } catch(e) {}
-
-            const alertas = [];
-            if (reservaData.mascotas === 'si')       alertas.push('🐾 MASCOTAS');
-            if (reservaData.niniosPequenos === 'si') alertas.push('👶 NIÑOS PEQUEÑOS');
-
-            const updates = {
-                nombre:      'Limpiar ' + nombreCab + ' — ' + reservaData.nombre,
-                fechaInicio: checkOut.toISOString().split('T')[0],
-                cabana:      reservaData.caba,
-                monto:       reservaData.costoLimpiezaBRL || 0,
-                descripcion: [
-                    '🔑 SALIDA — ' + nombreCab,
-                    '   Huésped: ' + reservaData.nombre,
-                    '   Personas: ' + (reservaData.huespedes || ((reservaData.adultos||0)+(reservaData.ninos||0)))
-                        + ' (' + (reservaData.adultos||0) + ' adultos, ' + (reservaData.ninos||0) + ' niños)',
-                    '   Sale: ' + checkOut.toLocaleDateString('es-AR')
-                        + (reservaData.horaSalida ? ' a las ' + reservaData.horaSalida + 'hs' : ''),
-                    reservaData.notas ? '   Notas: ' + reservaData.notas : '',
-                    alertas.length ? '\n⚠️ ATENCIÓN: ' + alertas.join(' · ') : '',
-                    '',
-                    '💰 Monto limpieza: R$ ' + (reservaData.costoLimpiezaBRL || 0)
-                ].filter(s => s !== null && s !== undefined).join('\n'),
-                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
-            };
-
-            const batch = db.batch();
-            tareasSnap.docs.forEach(doc => batch.update(doc.ref, updates));
-            await batch.commit();
+            // crearTareaLimpieza usa set+merge sobre limp-<id> y ctrl-<id>,
+            // así que regenera/actualiza ambas con los datos nuevos.
+            crearTareaLimpieza(reservaId, reservaData);
         } catch(e) {
             console.warn('actualizarTareaLimpieza:', e.message);
         }

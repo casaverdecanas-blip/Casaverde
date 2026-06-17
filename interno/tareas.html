@@ -551,6 +551,46 @@
     </div>
 </div>
 
+<!-- MODAL: Control de salida (verificación de inventario) -->
+<div class="modal-overlay" id="modalControl" style="display:none;" onclick="cerrarControlSalida(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <div class="modal__title"><span class="material-icons">fact_check</span> Control de salida</div>
+            <button class="modal__close" onclick="cerrarControlSalida()"><span class="material-icons">close</span></button>
+        </div>
+        <div class="modal__body">
+            <p style="font-size:13px;color:var(--color-text-primary);margin-bottom:4px;"><b id="ctrlInfo">—</b></p>
+            <p style="font-size:12px;color:var(--color-text-muted);margin-bottom:8px;">Contá lo que queda en la cabaña. Si falta o algo está dañado, escribilo en la nota: se registra en la reserva y genera un pendiente de mantenimiento en rojo para la próxima limpieza.</p>
+            <div id="ctrlRows"></div>
+            <label class="form-label" style="margin-top:12px;">Observaciones generales (opcional)</label>
+            <textarea id="ctrlObs" class="form-control" rows="2" placeholder="Estado general de la cabaña, electrodomésticos, luces, etc."></textarea>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarControlSalida()">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarControlSalida(this)"><span class="material-icons">save</span> Guardar control</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Control de inventario (ingreso) -->
+<div class="modal-overlay" id="modalInventario" style="display:none;" onclick="cerrarInventario(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <div class="modal__title"><span class="material-icons">inventory_2</span> Control de inventario (ingreso)</div>
+            <button class="modal__close" onclick="cerrarInventario()"><span class="material-icons">close</span></button>
+        </div>
+        <div class="modal__body">
+            <p style="font-size:13px;color:var(--color-text-primary);margin-bottom:4px;"><b id="invInfo">—</b></p>
+            <p style="font-size:12px;color:var(--color-text-muted);margin-bottom:8px;">Ajustá las cantidades que quedan en la cabaña (ej: más platos si entran más huéspedes). Se guardan como inventario de entrada de esta reserva y se verifican en la salida.</p>
+            <div id="invRows"></div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarInventario()">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarInventarioEntrada(this)"><span class="material-icons">save</span> Guardar inventario</button>
+        </div>
+    </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -848,7 +888,13 @@
                 }
             }
             accionesHtml +=
-                '<button class="btn-accion" onclick="abrirReporte(\'' + t.id + '\')" title="Reportar al admin">'
+                (t.tipo === 'limpieza' && t.reservaId
+                    ? '<button class="btn-accion" onclick="abrirInventario(\'' + t.id + '\')" title="Controlar inventario"><span class="material-icons">inventory_2</span></button>'
+                    : '')
+                + (t.tipo === 'control' && t.reservaId
+                    ? '<button class="btn-accion" onclick="abrirControlSalida(\'' + t.id + '\')" title="Control de salida"><span class="material-icons">fact_check</span></button>'
+                    : '')
+                + '<button class="btn-accion" onclick="abrirReporte(\'' + t.id + '\')" title="Reportar al admin">'
                 + '<span class="material-icons">campaign</span>'
                 + '</button>'
                 + '<button class="btn-accion detalle" onclick="abrirModal(\'' + t.id + '\')" title="Ver detalle">'
@@ -1056,7 +1102,13 @@
         }
 
         botonesHtml +=
-            '<button class="btn-accion" onclick="abrirReporte(\'' + t.id + '\')" title="Reportar al admin">'
+            (t.tipo === 'limpieza' && t.reservaId
+                ? '<button class="btn-accion" onclick="abrirInventario(\'' + t.id + '\')" title="Controlar inventario"><span class="material-icons">inventory_2</span></button>'
+                : '')
+            + (t.tipo === 'control' && t.reservaId
+                ? '<button class="btn-accion" onclick="abrirControlSalida(\'' + t.id + '\')" title="Control de salida"><span class="material-icons">fact_check</span></button>'
+                : '')
+            + '<button class="btn-accion" onclick="abrirReporte(\'' + t.id + '\')" title="Reportar al admin">'
             + '<span class="material-icons">campaign</span>'
             + '</button>'
             + '<button class="btn-accion detalle" onclick="abrirModal(\'' + t.id + '\')" title="Ver detalle completo">'
@@ -1457,6 +1509,224 @@
         else if (_timer) { clearInterval(_timer); _timer = null; }
     });
     iniciarRefresh();
+
+    // ===== Control de salida (check-out): verificar inventario =====
+    var _ctrlReservaId = null, _ctrlCabana = null, _ctrlNombreCab = '', _ctrlGuest = '', _ctrlDef = [];
+    window.abrirControlSalida = async function (taskId) {
+        var t = null;
+        for (var i = 0; i < tareasCache.length; i++) { if (tareasCache[i].id === taskId) { t = tareasCache[i]; break; } }
+        if (!t || !t.reservaId) { showToast('Esta tarea no tiene reserva asociada.', 'info'); return; }
+        _ctrlReservaId = t.reservaId; _ctrlCabana = t.cabana; _ctrlDef = [];
+        document.getElementById('ctrlInfo').textContent = t.nombre || 'Control de salida';
+        document.getElementById('ctrlObs').value = '';
+        document.getElementById('ctrlRows').innerHTML = '<div class="state-loading"><div class="spinner"></div><span>Cargando inventario…</span></div>';
+        document.getElementById('modalControl').style.display = 'flex';
+        try {
+            var resSnap = await db.collection('reservas').doc(t.reservaId).get();
+            var rdata = resSnap.exists ? resSnap.data() : {};
+            _ctrlGuest = rdata.nombre || '';
+            var entrada = (rdata.inventarioEntrada && rdata.inventarioEntrada.items) ? rdata.inventarioEntrada.items : null;
+            var salida  = (rdata.inventarioSalida && rdata.inventarioSalida.items) ? rdata.inventarioSalida.items : null;
+
+            var fuente = entrada;
+            if (!fuente) {
+                // Sin inventario de entrada: caer a la lista base de la cabaña.
+                var cabSnap = await db.collection('cabanas').doc(String(t.cabana)).get();
+                var base = (cabSnap.exists && cabSnap.data().checklistInventario) ? cabSnap.data().checklistInventario : [];
+                fuente = base.map(function (b) { return { nombre: b.nombre, categoria: b.categoria || 'General', cantidad: b.cantidadBase }; });
+            }
+            var prevSalida = {};
+            if (salida) salida.forEach(function (s) { prevSalida[s.nombre] = s; });
+
+            _ctrlNombreCab = (t.nombre || '').replace('Control de salida — ', '');
+            _ctrlDef = fuente.map(function (it) {
+                var ps = prevSalida[it.nombre];
+                return {
+                    nombre: it.nombre,
+                    categoria: it.categoria || 'General',
+                    entrada: (it.cantidad != null ? it.cantidad : 0),
+                    salida: (ps && ps.cantidadSalida != null) ? ps.cantidadSalida : (it.cantidad != null ? it.cantidad : 0),
+                    nota: (ps && ps.nota) ? ps.nota : ''
+                };
+            });
+            document.getElementById('ctrlInfo').textContent = (t.nombre || 'Control de salida') + (_ctrlGuest ? ' · sale ' + _ctrlGuest : '') + (entrada ? '' : ' · (sin inventario de entrada — usando lista base)');
+            renderCtrlRows();
+        } catch (e) {
+            document.getElementById('ctrlRows').innerHTML = '<p style="color:var(--color-danger);font-size:13px;">Error al cargar: ' + e.message + '</p>';
+        }
+    };
+    function renderCtrlRows() {
+        if (!_ctrlDef.length) {
+            document.getElementById('ctrlRows').innerHTML = '<p style="color:var(--color-text-muted);font-size:13px;">No hay inventario de entrada ni lista base para esta cabaña.</p>';
+            return;
+        }
+        var cats = {};
+        for (var i = 0; i < _ctrlDef.length; i++) { var c = _ctrlDef[i].categoria; (cats[c] = cats[c] || []).push(i); }
+        var html = '';
+        Object.keys(cats).forEach(function (cat) {
+            html += '<div style="font-weight:600;font-size:11px;color:var(--color-text-muted);margin:10px 0 2px;text-transform:uppercase;letter-spacing:.4px;">' + escapeHtml(cat) + '</div>';
+            cats[cat].forEach(function (i) {
+                var it = _ctrlDef[i];
+                html += '<div style="padding:7px 0;border-bottom:1px solid var(--color-border);">'
+                    + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">'
+                    + '<span style="flex:1;">' + escapeHtml(it.nombre) + ' <span style="color:var(--color-text-muted);font-size:12px;">(entró ' + it.entrada + ')</span></span>'
+                    + '<input type="number" min="0" id="ctrl-c-' + i + '" value="' + it.salida + '" oninput="ctrlChequear(' + i + ')" style="width:78px;padding:6px;border:1px solid var(--color-border);border-radius:8px;text-align:center;">'
+                    + '</div>'
+                    + '<input type="text" id="ctrl-n-' + i + '" value="' + escapeHtml(it.nota) + '" placeholder="Nota / daño (opcional)" style="width:100%;margin-top:5px;padding:6px;border:1px solid var(--color-border);border-radius:8px;font-size:12px;">'
+                    + '<div id="ctrl-f-' + i + '" style="font-size:11px;color:var(--color-danger);margin-top:2px;"></div>'
+                    + '</div>';
+            });
+        });
+        document.getElementById('ctrlRows').innerHTML = html;
+        for (var k = 0; k < _ctrlDef.length; k++) ctrlChequear(k);
+    }
+    window.ctrlChequear = function (i) {
+        var el = document.getElementById('ctrl-c-' + i);
+        var fdiv = document.getElementById('ctrl-f-' + i);
+        if (!el || !fdiv) return;
+        var sal = parseInt(el.value, 10);
+        if (isNaN(sal)) sal = 0;
+        var falta = _ctrlDef[i].entrada - sal;
+        fdiv.textContent = falta > 0 ? ('⚠ Faltan ' + falta) : '';
+    };
+    window.cerrarControlSalida = function () { document.getElementById('modalControl').style.display = 'none'; };
+    window.guardarControlSalida = async function (btn) {
+        if (!_ctrlReservaId || !_ctrlDef.length) { showToast('No hay inventario para controlar.', 'info'); return; }
+        var items = [], faltantes = [], pendientesTexto = [];
+        for (var i = 0; i < _ctrlDef.length; i++) {
+            var sal = parseInt(document.getElementById('ctrl-c-' + i).value, 10);
+            if (isNaN(sal) || sal < 0) sal = 0;
+            var nota = (document.getElementById('ctrl-n-' + i).value || '').trim();
+            var falta = _ctrlDef[i].entrada - sal;
+            items.push({ nombre: _ctrlDef[i].nombre, categoria: _ctrlDef[i].categoria, cantidadEntrada: _ctrlDef[i].entrada, cantidadSalida: sal, falta: falta > 0 ? falta : 0, nota: nota });
+            if (falta > 0 || nota) {
+                var detalle = _ctrlDef[i].nombre + (falta > 0 ? ': faltan ' + falta + ' (entró ' + _ctrlDef[i].entrada + ', quedó ' + sal + ')' : '') + (nota ? ' — ' + nota : '');
+                faltantes.push({ nombre: _ctrlDef[i].nombre, falta: falta > 0 ? falta : 0, nota: nota });
+                pendientesTexto.push(detalle);
+            }
+        }
+        var obs = (document.getElementById('ctrlObs').value || '').trim();
+        btn.disabled = true; btn.textContent = 'Guardando…';
+        try {
+            await db.collection('reservas').doc(_ctrlReservaId).update({
+                inventarioSalida: {
+                    items: items,
+                    faltantes: faltantes,
+                    observaciones: obs,
+                    fecha: firebase.firestore.FieldValue.serverTimestamp(),
+                    porUid: user.uid,
+                    porNombre: currentUser.nombre
+                }
+            });
+            // Un pendiente en rojo por cada faltante/daño observado.
+            var cabLabel = _ctrlNombreCab || ('Cabaña ' + _ctrlCabana);
+            for (var j = 0; j < pendientesTexto.length; j++) {
+                await db.collection('pendientes').add({
+                    texto: '[' + cabLabel + (_ctrlGuest ? ' · salida ' + _ctrlGuest : '') + '] ' + pendientesTexto[j],
+                    visibilidad: 'todos',
+                    semaforo: 'rojo',
+                    realizado: false,
+                    autorId: user.uid,
+                    autorNombre: currentUser.nombre,
+                    asignadoA: null,
+                    asignadoNom: null,
+                    origen: 'control-salida',
+                    reservaId: _ctrlReservaId,
+                    creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                    realizadoPor: null,
+                    realizadoEn: null,
+                    realizadoUid: null
+                });
+            }
+            var msg = pendientesTexto.length
+                ? ('Control guardado. ' + pendientesTexto.length + ' pendiente(s) de mantenimiento generado(s).')
+                : 'Control guardado. Sin faltantes ni daños.';
+            showToast(msg, 'success');
+            cerrarControlSalida();
+        } catch (e) { showToast('No se pudo guardar: ' + e.message, 'error'); }
+        btn.disabled = false; btn.innerHTML = '<span class="material-icons">save</span> Guardar control';
+    };
+
+    // ===== Control de inventario de ingreso (check-in) =====
+    var _invReservaId = null, _invDef = [];
+    window.abrirInventario = async function (taskId) {
+        var t = null;
+        for (var i = 0; i < tareasCache.length; i++) { if (tareasCache[i].id === taskId) { t = tareasCache[i]; break; } }
+        if (!t || !t.reservaId) { showToast('Esta tarea no tiene reserva asociada.', 'info'); return; }
+        _invReservaId = t.reservaId; _invDef = [];
+        document.getElementById('invInfo').textContent = t.nombre || 'Inventario';
+        document.getElementById('invRows').innerHTML = '<div class="state-loading"><div class="spinner"></div><span>Cargando lista…</span></div>';
+        document.getElementById('modalInventario').style.display = 'flex';
+        try {
+            var cabSnap = await db.collection('cabanas').doc(String(t.cabana)).get();
+            var base = (cabSnap.exists && cabSnap.data().checklistInventario) ? cabSnap.data().checklistInventario : [];
+            var resSnap = await db.collection('reservas').doc(t.reservaId).get();
+            var rdata = resSnap.exists ? resSnap.data() : {};
+            var entrada = (rdata.inventarioEntrada && rdata.inventarioEntrada.items) ? rdata.inventarioEntrada.items : null;
+            var personas = rdata.huespedes || ((rdata.adultos || 0) + (rdata.ninos || 0)) || '';
+            document.getElementById('invInfo').textContent = (t.nombre || 'Inventario') + (personas ? ' · ' + personas + ' personas' : '');
+
+            var prev = {};
+            if (entrada) entrada.forEach(function (e) { prev[e.nombre] = e.cantidad; });
+            if (base.length) {
+                base.forEach(function (it) {
+                    var sug = prev.hasOwnProperty(it.nombre) ? prev[it.nombre] : it.cantidadBase;
+                    _invDef.push({ nombre: it.nombre, categoria: it.categoria || 'General', cantidad: sug });
+                });
+            } else if (entrada) {
+                entrada.forEach(function (e) { _invDef.push({ nombre: e.nombre, categoria: e.categoria || 'General', cantidad: e.cantidad }); });
+            }
+            renderInvRows();
+        } catch (e) {
+            document.getElementById('invRows').innerHTML = '<p style="color:var(--color-danger);font-size:13px;">Error al cargar: ' + e.message + '</p>';
+        }
+    };
+    function renderInvRows() {
+        if (!_invDef.length) {
+            document.getElementById('invRows').innerHTML = '<p style="color:var(--color-text-muted);font-size:13px;">Esta cabaña no tiene lista base de inventario. Cargala en Cabañas → editar cabaña → Lista base de inventario.</p>';
+            return;
+        }
+        var cats = {};
+        for (var i = 0; i < _invDef.length; i++) { var c = _invDef[i].categoria; (cats[c] = cats[c] || []).push(i); }
+        var html = '';
+        Object.keys(cats).forEach(function (cat) {
+            html += '<div style="font-weight:600;font-size:11px;color:var(--color-text-muted);margin:10px 0 2px;text-transform:uppercase;letter-spacing:.4px;">' + escapeHtml(cat) + '</div>';
+            cats[cat].forEach(function (i) {
+                var it = _invDef[i];
+                html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--color-border);">'
+                    + '<span style="flex:1;">' + escapeHtml(it.nombre) + '</span>'
+                    + '<input type="number" min="0" id="inv-' + i + '" value="' + (it.cantidad != null ? it.cantidad : '') + '" style="width:84px;padding:6px;border:1px solid var(--color-border);border-radius:8px;text-align:center;">'
+                    + '</div>';
+            });
+        });
+        document.getElementById('invRows').innerHTML = html;
+    }
+    window.cerrarInventario = function () { document.getElementById('modalInventario').style.display = 'none'; };
+    window.guardarInventarioEntrada = async function (btn) {
+        if (!_invReservaId) return;
+        if (!_invDef.length) { showToast('No hay lista base que guardar.', 'info'); return; }
+        var items = [];
+        for (var i = 0; i < _invDef.length; i++) {
+            var el = document.getElementById('inv-' + i);
+            var cant = el ? parseInt(el.value, 10) : NaN;
+            if (isNaN(cant) || cant < 0) cant = 0;
+            items.push({ nombre: _invDef[i].nombre, categoria: _invDef[i].categoria, cantidad: cant });
+        }
+        btn.disabled = true; btn.textContent = 'Guardando…';
+        try {
+            await db.collection('reservas').doc(_invReservaId).update({
+                inventarioEntrada: {
+                    items: items,
+                    fecha: firebase.firestore.FieldValue.serverTimestamp(),
+                    porUid: user.uid,
+                    porNombre: currentUser.nombre
+                }
+            });
+            showToast('Inventario de entrada guardado.', 'success');
+            cerrarInventario();
+        } catch (e) { showToast('No se pudo guardar: ' + e.message, 'error'); }
+        btn.disabled = false; btn.innerHTML = '<span class="material-icons">save</span> Guardar inventario';
+    };
 
     // ===== Reportar tarea al administrador (mensaje en Comunicación) =====
     var _repTareaId = null, _repFoto = null;
