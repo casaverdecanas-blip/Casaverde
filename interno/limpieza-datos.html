@@ -564,36 +564,18 @@
   // ─── INIT ────────────────────────────────────────────────────────────────
 
   document.addEventListener('DOMContentLoaded', function() {
-    esperarAuth();
+    CVC.verificarAuth(['admin'])
+      .then(function(res) {
+        db = CVC.db;
+        CVC.renderNav('limpieza-datos.html', res.userData.rol);
+        montarTabs();
+        montarFiltros('reservas');
+        log('inf', 'Panel listo. Usuario: ' + (res.userData.nombre || res.user.email));
+      })
+      .catch(function(err) {
+        mostrarError('Error de autenticación: ' + err.message);
+      });
   });
-
-  function esperarAuth() {
-    var intentos = 0;
-    var iv = setInterval(function() {
-      intentos++;
-      if (window.CVC && window.CVC.db) {
-        clearInterval(iv);
-        db = window.CVC.db;
-        initPagina();
-      } else if (intentos > 40) {
-        clearInterval(iv);
-        mostrarError('No se pudo conectar con Firebase. Recargá la página.');
-      }
-    }, 150);
-  }
-
-  function initPagina() {
-    // Verificar rol admin
-    var user = window.CVC.currentUser;
-    if (!user || user.rol !== 'admin') {
-      document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#e53935;font-size:18px">⛔ Acceso solo para administradores</div>';
-      return;
-    }
-
-    montarTabs();
-    montarFiltros('reservas');
-    log('inf', 'Panel listo. Usuario: ' + user.email);
-  }
 
   // ─── TABS ────────────────────────────────────────────────────────────────
 
