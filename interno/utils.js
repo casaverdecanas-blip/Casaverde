@@ -1,6 +1,13 @@
 // ============================================================
-//  utils.js — Casa Verde Canas  v4.11 (puente de compatibilidad)
+//  utils.js — Casa Verde Canas  v4.12
 //  Funciones compartidas · /interno/
+//
+//  CAMBIOS v4.12:
+//  - API key de Firebase movida a Firestore (config/integraciones.firebaseApiKey)
+//    para evitar exposición en el repositorio público de GitHub.
+//    Flujo: se lee apiKey de Firestore usando projectId+authDomain hardcodeados
+//    (no son secretos), luego se reinicializa Firebase con la key real.
+//  - Menú admin: agregado "Limpieza de datos" (limpieza-datos.html) en Config.
 //
 //  CAMBIOS v4.11:
 //  - Nuevo "Análisis de gastos" (analisis-gastos.html) en la capa Reportar
@@ -85,15 +92,39 @@
 
 
 // ── FIREBASE ──────────────────────────────────────────────────────────────────
-const FIREBASE_CONFIG = {
-    apiKey:     'AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4',
-    authDomain: 'casaverdecanas-199.firebaseapp.com',
-    projectId:  'casaverdecanas-199'
-};
-if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+// La apiKey se carga desde Firestore (config/integraciones) para no exponerla
+// en el repositorio público. projectId y authDomain no son secretos.
+var _FIREBASE_PROJECT  = 'casaverdecanas-199';
+var _FIREBASE_DOMAIN   = 'casaverdecanas-199.firebaseapp.com';
+
+// Inicialización temporal sin apiKey para poder leer config/integraciones
+if (!firebase.apps.length) {
+    firebase.initializeApp({
+        apiKey:     'PENDIENTE',
+        authDomain: _FIREBASE_DOMAIN,
+        projectId:  _FIREBASE_PROJECT
+    });
+}
 const db   = firebase.firestore();
 db.settings({ experimentalForceLongPolling: true, merge: true });
 const auth = firebase.auth();
+
+// Carga la apiKey real desde Firestore y reinicializa si es necesario
+(function() {
+    var _apiKeyOk = false;
+    db.collection('config').doc('integraciones').get()
+        .then(function(snap) {
+            if (!snap.exists) { console.warn('config/integraciones no encontrado'); return; }
+            var key = snap.data() && snap.data().firebaseApiKey;
+            if (!key) { console.warn('firebaseApiKey no definido en config/integraciones'); return; }
+            // Actualizar la app existente con la key real
+            firebase.app().options.apiKey = key;
+            _apiKeyOk = true;
+        })
+        .catch(function(e) {
+            console.warn('No se pudo cargar firebaseApiKey:', e.message);
+        });
+})();
 
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
@@ -201,7 +232,9 @@ const NAV_ADMIN_ITEMS = [
             { href: 'usuarios.html',       icon: 'manage_accounts', label: 'Usuarios' },
             { href: 'notificaciones.html', icon: 'notifications',   label: 'Notificaciones' },
             { sep: true },
-            { href: 'manual-sistema.html', icon: 'menu_book',       label: 'Manual'   }
+            { href: 'manual-sistema.html', icon: 'menu_book',       label: 'Manual'   },
+            { sep: true },
+            { href: 'limpieza-datos.html', icon: 'cleaning_services', label: 'Limpieza de datos' }
         ]
     }
 ];
