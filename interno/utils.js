@@ -92,39 +92,18 @@
 
 
 // ── FIREBASE ──────────────────────────────────────────────────────────────────
-// La apiKey se carga desde Firestore (config/integraciones) para no exponerla
-// en el repositorio público. projectId y authDomain no son secretos.
-var _FIREBASE_PROJECT  = 'casaverdecanas-199';
-var _FIREBASE_DOMAIN   = 'casaverdecanas-199.firebaseapp.com';
-
-// Inicialización temporal sin apiKey para poder leer config/integraciones
-if (!firebase.apps.length) {
-    firebase.initializeApp({
-        apiKey:     'PENDIENTE',
-        authDomain: _FIREBASE_DOMAIN,
-        projectId:  _FIREBASE_PROJECT
-    });
-}
+// Nota: la apiKey de Firebase para proyectos web es un identificador público
+// por diseño — no es un secreto. No otorga acceso sin autenticación válida.
+// El acceso real está controlado por las reglas de Firestore y Firebase Auth.
+const FIREBASE_CONFIG = {
+    apiKey:     'AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4',
+    authDomain: 'casaverdecanas-199.firebaseapp.com',
+    projectId:  'casaverdecanas-199'
+};
+if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
 const db   = firebase.firestore();
 db.settings({ experimentalForceLongPolling: true, merge: true });
 const auth = firebase.auth();
-
-// Carga la apiKey real desde Firestore y reinicializa si es necesario
-(function() {
-    var _apiKeyOk = false;
-    db.collection('config').doc('integraciones').get()
-        .then(function(snap) {
-            if (!snap.exists) { console.warn('config/integraciones no encontrado'); return; }
-            var key = snap.data() && snap.data().firebaseApiKey;
-            if (!key) { console.warn('firebaseApiKey no definido en config/integraciones'); return; }
-            // Actualizar la app existente con la key real
-            firebase.app().options.apiKey = key;
-            _apiKeyOk = true;
-        })
-        .catch(function(e) {
-            console.warn('No se pudo cargar firebaseApiKey:', e.message);
-        });
-})();
 
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
