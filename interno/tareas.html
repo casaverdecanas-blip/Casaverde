@@ -396,8 +396,9 @@
     </div>
 
     <!-- Nueva tarea -->
-    <div style="margin-bottom:var(--space-4);">
+    <div style="margin-bottom:var(--space-4); display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap;">
         <button class="btn btn-primary btn-sm" onclick="abrirNuevaTarea()"><span class="material-icons">add_task</span> Nueva tarea</button>
+        <span id="badgeTemporada"></span>
     </div>
 
     <!-- Tabs -->
@@ -603,6 +604,7 @@
     if (typeof CVC.initAyuda === 'function') CVC.initAyuda('tareas.html');
 
     var db = CVC.db;
+    await CVC.cargarTemporada();
     var {
         escapeHtml, formatFecha, formatHoras,
         urgenciaTarea, showEmpty, showError, showToast,
@@ -613,6 +615,19 @@
     var currentUser = { uid: user.uid, nombre: userData.nombre || user.email };
 
     if (esAdmin) document.getElementById('adminLinkBar').style.display = 'block';
+
+    // Badge de temporada actual (afecta la frecuencia de las tareas recurrentes)
+    (function() {
+        var temp = CVC.temporadaActual();
+        var col = temp === 'alta' ? 'var(--color-danger)' : (temp === 'baja' ? '#1a7f37' : 'var(--color-warning,#d9822b)');
+        var label = temp === 'alta' ? 'Temporada alta' : (temp === 'baja' ? 'Temporada baja' : 'Fuera de temporada');
+        var factor = CVC.factorTemporada ? CVC.factorTemporada(temp) : 1;
+        var nota = factor !== 1 ? ' · frecuencia ×' + factor : '';
+        var html = '<span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--text-sm);font-weight:600;color:' + col + ';border:1.5px solid ' + col + ';border-radius:99px;padding:4px 12px;">' +
+            '<span class="material-icons" style="font-size:16px;">wb_sunny</span>' + label + nota + '</span>';
+        if (esAdmin) html += ' <a href="temporada.html" style="font-size:var(--text-xs);color:var(--color-text-muted);">cambiar</a>';
+        document.getElementById('badgeTemporada').innerHTML = html;
+    })();
 
     var tareasCache    = [];
     var filtroActual   = 'pendiente';
@@ -638,8 +653,9 @@
         var diasAtraso = Math.floor((hoy - inicio) / 86400000);
         if (diasAtraso < 0)  return 'gris';
         if (diasAtraso === 0) return 'verde';
-        var ciclo = t.recurrencia > 0 ? t.recurrencia : 3;
-        if (diasAtraso > ciclo || diasAtraso > 10) return 'rojo';
+        var ciclo = (CVC.cicloEfectivoTarea ? CVC.cicloEfectivoTarea(t) : 0);
+        if (ciclo <= 0) ciclo = t.recurrencia > 0 ? t.recurrencia : 3;
+        if (diasAtraso > ciclo) return 'rojo';
         return 'amarillo';
     }
 
@@ -921,7 +937,7 @@
             + '</div>'
             + '<div class="task-card__meta">'
             + (t.fechaInicio ? '<span><span class="material-icons">calendar_today</span>' + t.fechaInicio + '</span>' : '')
-            + (t.recurrencia > 0 ? '<span><span class="material-icons">repeat</span>Cada ' + t.recurrencia + 'd</span>' : '')
+            + (t.recurrencia > 0 ? '<span><span class="material-icons">repeat</span>Cada ' + (CVC.cicloEfectivoTarea ? CVC.cicloEfectivoTarea(t) : t.recurrencia) + 'd</span>' : '')
             + '</div>'
             + cronHtml
             + workingChips

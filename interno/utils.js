@@ -177,6 +177,7 @@ const NAV_ADMIN_ITEMS = [
             { sep: true },
             { href: 'panel-financiero.html', icon: 'monitoring',      label: 'Panel financiero'   },
             { href: 'analisis-gastos.html',  icon: 'insights',        label: 'Análisis de gastos' },
+            { href: 'clasificacion-masiva.html', icon: 'auto_fix_high', label: 'Clasificación masiva' },
             { href: 'proyeccion-anual.html', icon: 'query_stats',     label: 'Proyección anual'   },
             { href: 'informes-airbnb.html',  icon: 'summarize',       label: 'Informes Airbnb'    }
         ]
@@ -189,6 +190,7 @@ const NAV_ADMIN_ITEMS = [
         items: [
             { href: 'tareas.html',         icon: 'checklist',            label: 'Tareas'             },
             { href: 'tareas-admin.html',   icon: 'admin_panel_settings', label: 'Gestión tareas'     },
+            { href: 'temporada.html',      icon: 'wb_sunny',             label: 'Temporada'          },
             { href: 'pendientes.html',     icon: 'playlist_add_check',   label: 'Pendientes'         },
             { sep: true },
             { href: 'limpieza-stats.html', icon: 'cleaning_services',    label: 'Análisis limpiezas' }
@@ -246,7 +248,7 @@ var SECCIONES_SOLO_ADMIN = [
     'panel-financiero', 'fiscal', 'cuentas', 'movimientos',
     'herramientas-btg', 'categorias', 'pagos', 'informes-airbnb',
     'acceso-contador', 'cabanas-admin', 'usuarios', 'tareas-admin', 'gastos',
-    'analisis-gastos', 'proyeccion-anual', 'cotizaciones', 'transferencias'
+    'analisis-gastos', 'proyeccion-anual', 'cotizaciones', 'transferencias', 'clasificacion-masiva', 'temporada'
 ];
 function puede(seccion, rol) {
     rol = rol || 'admin';
@@ -763,7 +765,8 @@ async function pausarTarea(tareaId, user) {
 // Cierra el ciclo de la tarea: si es recurrente la reprograma,
 // si no, la marca finalizada. Limpia sesiones y sesionesActivas.
 async function _cerrarCicloTarea(ref, t, sesDocs) {
-    const recurrencia = parseInt(t.recurrencia, 10) || 0;
+    await cargarTemporada();
+    const ciclo = cicloEfectivoTarea(t);
 
     // Limpiar la subcolección de sesiones para que el próximo ciclo
     // arranque en cero (el historial ya quedó en historial_tareas)
@@ -773,10 +776,10 @@ async function _cerrarCicloTarea(ref, t, sesDocs) {
         await batch.commit();
     }
 
-    if (recurrencia > 0) {
+    if (ciclo > 0) {
         await ref.update({
             estado: 'pendiente',
-            fechaInicio: _sumarDiasISO(recurrencia),
+            fechaInicio: _sumarDiasISO(ciclo),
             sesionesActivas: []
         });
     } else {
@@ -956,6 +959,77 @@ async function verificarTarea(tareaId, b, nota) {
 //   urgenciaTarea(tareaObjeto)        ← moderno: retorna { color, label }
 //                                       color: 'rojo' | 'amarillo' | 'verde' | 'gris'
 //   urgenciaTarea(id, esUrgente)      ← legacy v4.2: actualiza prioridad en DB
+// ── TEMPORADAS (v4.25) ────────────────────────────────────────────────────────
+//  Control central de temporada (alta/media/baja). Afecta la FRECUENCIA con que las
+//  tareas recurrentes se resaltan/recuerdan, sin borrarlas: en temporada baja el ciclo
+//  se estira (factor mayor) y la tarea satura menos. config/temporada:
+//    { modo:'auto'|'manual', actual, rangos:[{desde'MM-DD',hasta'MM-DD',temporada}], factores:{alta,media,baja} }
+var _temporadaCfg = null;
+var _temporadaActual = null;
+
+function _mmdd(d) {
+    var m = String(d.getMonth() + 1); if (m.length < 2) m = '0' + m;
+    var dd = String(d.getDate()); if (dd.length < 2) dd = '0' + dd;
+    return m + '-' + dd;
+}
+function _enRangoMMDD(mmdd, desde, hasta) {
+    if (!desde || !hasta) return false;
+    if (desde <= hasta) return mmdd >= desde && mmdd <= hasta;
+    return mmdd >= desde || mmdd <= hasta; // cruza el fin de año
+}
+function calcularTemporada(cfg, fecha) {
+    fecha = fecha || new Date();
+    if (!cfg) return 'media';
+    if (cfg.modo === 'manual') return cfg.actual || 'media';
+    var mmdd = _mmdd(fecha);
+    var rangos = cfg.rangos || [];
+    for (var i = 0; i < rangos.length; i++) {
+        if (_enRangoMMDD(mmdd, rangos[i].desde, rangos[i].hasta)) return rangos[i].temporada || 'media';
+    }
+    return 'media';
+}
+function _temporadaDefault() { return { modo: 'manual', actual: 'media', rangos: [], factores: { alta: 1, media: 1, baja: 1 } }; }
+function cargarTemporada(forzar) {
+    if (_temporadaCfg && !forzar) return Promise.resolve({ cfg: _temporadaCfg, actual: _temporadaActual });
+    return db.collection('config').doc('temporada').get().then(function(doc) {
+        _temporadaCfg = doc.exists ? doc.data() : _temporadaDefault();
+        if (!_temporadaCfg.factores) _temporadaCfg.factores = { alta: 1, media: 1, baja: 1 };
+        _temporadaActual = calcularTemporada(_temporadaCfg);
+        return { cfg: _temporadaCfg, actual: _temporadaActual };
+    }).catch(function() {
+        _temporadaCfg = _temporadaDefault(); _temporadaActual = 'media';
+        return { cfg: _temporadaCfg, actual: _temporadaActual };
+    });
+}
+function temporadaActual() { return _temporadaActual || 'media'; }
+function guardarTemporada(cfg) {
+    return db.collection('config').doc('temporada').set({
+        modo: cfg.modo || 'manual',
+        actual: cfg.actual || 'media',
+        rangos: cfg.rangos || [],
+        factores: cfg.factores || { alta: 1, media: 1, baja: 1 },
+        actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true }).then(function() { return cargarTemporada(true); });
+}
+function factorTemporada(temporada) {
+    var f = (_temporadaCfg && _temporadaCfg.factores) ? _temporadaCfg.factores[temporada] : 1;
+    f = parseFloat(f);
+    return (!isNaN(f) && f > 0) ? f : 1;
+}
+// Ciclo efectivo (en días) de una tarea para la temporada dada. Prioriza override por
+// tarea (recurrenciaTemporada), si no aplica el factor global sobre la recurrencia base.
+function cicloEfectivoTarea(t, temporada) {
+    temporada = temporada || temporadaActual();
+    var rt = t.recurrenciaTemporada;
+    if (rt && typeof rt === 'object') {
+        var v = parseInt(rt[temporada], 10);
+        if (!isNaN(v)) return v;
+    }
+    var base = parseInt(t.recurrencia, 10) || 0;
+    if (base <= 0) return 0;
+    return Math.max(1, Math.round(base * factorTemporada(temporada)));
+}
+
 function urgenciaTarea(t, esUrgente) {
     // Modo legacy: primer argumento es un id (string)
     if (typeof t === 'string') {
@@ -983,7 +1057,7 @@ function urgenciaTarea(t, esUrgente) {
     }
 
     const dias  = Math.round((hoy - f) / 86400000);
-    const ciclo = parseInt(t.recurrenciaDias || t.recurrencia || 0, 10) || 0;
+    const ciclo = cicloEfectivoTarea(t);
 
     if (dias < 0)  return { color: 'verde',    label: 'En ' + Math.abs(dias) + 'd' };
     if (dias === 0) return { color: 'amarillo', label: 'Hoy' };
@@ -1973,6 +2047,26 @@ function validarCambioTransferencia(t, ratesFecha) {
 //  Colección 'transferencias' (fuente de verdad). NO escribe en 'movimientos'
 //  (esos son el espejo del banco con saldoPost encadenado). Ajusta cuentas.saldoActual
 //  de forma atómica con increment. La conciliación (v4.20) cruza las patas con el banco.
+// ── CLASIFICACIÓN MASIVA (v4.24) ──────────────────────────────────────────────
+//  Aplica en lote actualizaciones de clasificación a gastos y movimientos.
+//  cambios = [{ col:'gastos'|'movimientos', id, data:{...campos...} }]
+//  Divide en tandas de 400 (límite de batch 500) y las confirma en orden.
+function aplicarClasificacionMasiva(cambios) {
+    var tandas = [];
+    for (var i = 0; i < cambios.length; i += 400) tandas.push(cambios.slice(i, i + 400));
+    var idx = 0;
+    function siguiente() {
+        if (idx >= tandas.length) return Promise.resolve(cambios.length);
+        var batch = db.batch();
+        tandas[idx].forEach(function(c) {
+            batch.update(db.collection(c.col).doc(c.id), c.data);
+        });
+        idx++;
+        return batch.commit().then(siguiente);
+    }
+    return siguiente();
+}
+
 function crearTransferencia(t) {
     var batch = db.batch();
     var ref = db.collection('transferencias').doc();
@@ -2054,6 +2148,8 @@ window.CVC = {
     cargarCotizaciones, convertir, monedaDe, diasDesdeCotizacion,
     guardarCotizaciones, actualizarCotizacionesOnline, cotizacionEnFecha,
     crearTransferencia, eliminarTransferencia,
+    aplicarClasificacionMasiva,
+    cargarTemporada, temporadaActual, guardarTemporada, calcularTemporada, cicloEfectivoTarea, factorTemporada,
     cargarHistorialCotizaciones, cotizacionEnFechaLocal, validarCambioTransferencia,
     escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
     subirComprobante, abrirComprobante, elegirFuenteFoto,

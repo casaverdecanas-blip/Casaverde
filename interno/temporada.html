@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporada · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .tp-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4) var(--space-5); margin-bottom: var(--space-4); }
+        .tp-card__title { font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: var(--space-3); }
+        .tp-hint { font-size: var(--text-sm); color: var(--color-text-muted); margin-bottom: var(--space-3); }
+        .tp-actual { display: inline-flex; align-items: center; gap: 8px; font-size: var(--text-base); font-weight: 700; border-radius: 99px; padding: 6px 16px; }
+        .tp-actual.alta { color: var(--color-danger); border: 2px solid var(--color-danger); }
+        .tp-actual.media { color: var(--color-warning, #b86e00); border: 2px solid var(--color-warning, #d9822b); }
+        .tp-actual.baja { color: var(--color-success, #1a7f37); border: 2px solid var(--color-success, #1a7f37); }
+        .form-label { display: block; font-size: var(--text-sm); font-weight: 600; margin-bottom: 5px; }
+        .form-control { font-family: inherit; font-size: var(--text-base); padding: 9px 12px; border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-2); }
+        .tp-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+        .tp-range { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px; border: 1px solid var(--color-border); border-radius: var(--radius-md); margin-bottom: 8px; }
+        .tp-range input { width: 92px; text-align: center; }
+        .tp-range select { width: 150px; }
+        .tp-del { border: none; background: transparent; cursor: pointer; color: var(--color-text-muted); }
+        .tp-fac { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+        .tp-fac label { min-width: 150px; font-size: var(--text-sm); }
+        .tp-fac input { width: 90px; text-align: center; }
+        .tp-ej { font-size: var(--text-xs); color: var(--color-text-muted); }
+    </style>
+</head>
+<body>
+<header class="admin-header">
+    <div class="admin-header__brand"><span class="material-icons">cottage</span> Casa Verde Canas</div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span> <span id="userName">—</span></div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()"><span class="material-icons">logout</span> Salir</button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+    <div class="db-section-head" style="margin-bottom:var(--space-3);">
+        <div class="db-section-title">
+            <span class="material-icons" style="color:var(--color-primary);">wb_sunny</span>
+            Temporada
+        </div>
+    </div>
+    <p class="tp-hint">
+        La temporada ajusta <b>cuán seguido se resaltan y recuerdan las tareas recurrentes</b>, sin
+        borrarlas. En temporada baja, el ciclo de cada tarea se estira con un factor, para no saturar a
+        los colaboradores con tareas que esa época no hacen falta tan seguido. La higiene y la seguridad
+        siguen, solo cambia la frecuencia con que se insiste.
+    </p>
+
+    <div class="tp-card">
+        <div class="tp-card__title"><span class="material-icons" style="color:var(--color-primary);">event</span> Temporada actual</div>
+        <div id="tpActual"></div>
+        <div class="tp-ej" id="tpActualNota" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="tp-card">
+        <div class="tp-card__title"><span class="material-icons">tune</span> Cómo se determina</div>
+        <div class="tp-row">
+            <label><input type="radio" name="modo" value="auto" onchange="setModo('auto')"> Automática por fechas</label>
+            <label><input type="radio" name="modo" value="manual" onchange="setModo('manual')"> Manual (la fijo yo)</label>
+        </div>
+
+        <div id="bloqueManual" style="display:none;">
+            <label class="form-label">Temporada actual (manual)</label>
+            <select id="manualActual" class="form-control" onchange="previsualizar()">
+                <option value="alta">Temporada alta</option>
+                <option value="media">Fuera de temporada</option>
+                <option value="baja">Temporada baja</option>
+            </select>
+        </div>
+
+        <div id="bloqueAuto" style="display:none;">
+            <p class="tp-hint">Definí los rangos de fecha (formato <b>MM-DD</b>). Lo que no entre en ningún rango queda como "fuera de temporada".</p>
+            <div id="rangos"></div>
+            <button class="btn btn-secondary btn-sm" onclick="agregarRango()"><span class="material-icons">add</span> Agregar rango</button>
+        </div>
+    </div>
+
+    <div class="tp-card">
+        <div class="tp-card__title"><span class="material-icons">speed</span> Factores de frecuencia</div>
+        <p class="tp-hint">Multiplican el ciclo de las tareas recurrentes. <b>1 = igual</b>; más alto = menos seguido. Ej: con factor 3 en baja, una tarea "cada 2 días" pasa a "cada 6 días".</p>
+        <div class="tp-fac"><label>Temporada alta</label><input type="number" id="facAlta" class="form-control" step="0.5" min="0.1" oninput="previsualizar()"></div>
+        <div class="tp-fac"><label>Fuera de temporada</label><input type="number" id="facMedia" class="form-control" step="0.5" min="0.1" oninput="previsualizar()"></div>
+        <div class="tp-fac"><label>Temporada baja</label><input type="number" id="facBaja" class="form-control" step="0.5" min="0.1" oninput="previsualizar()"></div>
+        <div class="tp-ej" id="ejemplo"></div>
+    </div>
+
+    <button class="btn btn-primary" id="btnGuardar" onclick="guardar()"><span class="material-icons">save</span> Guardar</button>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async function() {
+    var sesion = await CVC.verificarAuth(['admin']);
+    document.getElementById('userName').textContent = sesion.userData.nombre || sesion.user.email;
+    CVC.renderNav('temporada.html', sesion.userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('temporada.html');
+
+    var showToast = CVC.showToast;
+    var LBL = { alta: 'Temporada alta', media: 'Fuera de temporada', baja: 'Temporada baja' };
+
+    var data = await CVC.cargarTemporada(true);
+    var cfg = data.cfg || {};
+    var _modo = cfg.modo || 'manual';
+    var _rangos = (cfg.rangos && cfg.rangos.length) ? cfg.rangos.slice() : [
+        { desde: '12-15', hasta: '03-15', temporada: 'alta' },
+        { desde: '05-01', hasta: '08-31', temporada: 'baja' }
+    ];
+    var fac = cfg.factores || { alta: 1, media: 1, baja: 3 };
+
+    document.querySelector('input[name="modo"][value="' + _modo + '"]').checked = true;
+    document.getElementById('manualActual').value = cfg.actual || 'media';
+    document.getElementById('facAlta').value = fac.alta != null ? fac.alta : 1;
+    document.getElementById('facMedia').value = fac.media != null ? fac.media : 1;
+    document.getElementById('facBaja').value = fac.baja != null ? fac.baja : 3;
+
+    window.setModo = function(m) {
+        _modo = m;
+        document.getElementById('bloqueManual').style.display = m === 'manual' ? 'block' : 'none';
+        document.getElementById('bloqueAuto').style.display = m === 'auto' ? 'block' : 'none';
+        previsualizar();
+    };
+
+    function renderRangos() {
+        var cont = document.getElementById('rangos');
+        cont.innerHTML = _rangos.map(function(r, i) {
+            return '<div class="tp-range">' +
+                '<span style="font-size:var(--text-sm);">Del</span>' +
+                '<input class="form-control" value="' + (r.desde || '') + '" placeholder="MM-DD" onchange="editRango(' + i + ',\'desde\',this.value)">' +
+                '<span style="font-size:var(--text-sm);">al</span>' +
+                '<input class="form-control" value="' + (r.hasta || '') + '" placeholder="MM-DD" onchange="editRango(' + i + ',\'hasta\',this.value)">' +
+                '<select class="form-control" onchange="editRango(' + i + ',\'temporada\',this.value)">' +
+                    '<option value="alta"' + (r.temporada === 'alta' ? ' selected' : '') + '>Alta</option>' +
+                    '<option value="baja"' + (r.temporada === 'baja' ? ' selected' : '') + '>Baja</option>' +
+                    '<option value="media"' + (r.temporada === 'media' ? ' selected' : '') + '>Fuera</option>' +
+                '</select>' +
+                '<button class="tp-del" onclick="borrarRango(' + i + ')"><span class="material-icons">delete</span></button>' +
+            '</div>';
+        }).join('');
+    }
+    window.editRango = function(i, campo, val) { _rangos[i][campo] = val.trim(); previsualizar(); };
+    window.borrarRango = function(i) { _rangos.splice(i, 1); renderRangos(); previsualizar(); };
+    window.agregarRango = function() { _rangos.push({ desde: '', hasta: '', temporada: 'alta' }); renderRangos(); };
+
+    function cfgActual() {
+        return {
+            modo: _modo,
+            actual: document.getElementById('manualActual').value,
+            rangos: _rangos,
+            factores: {
+                alta: parseFloat(document.getElementById('facAlta').value) || 1,
+                media: parseFloat(document.getElementById('facMedia').value) || 1,
+                baja: parseFloat(document.getElementById('facBaja').value) || 1
+            }
+        };
+    }
+
+    window.previsualizar = function() {
+        var c = cfgActual();
+        var temp = CVC.calcularTemporada(c);
+        var box = document.getElementById('tpActual');
+        box.className = '';
+        box.innerHTML = '<span class="tp-actual ' + temp + '"><span class="material-icons">wb_sunny</span>' + LBL[temp] + '</span>';
+        document.getElementById('tpActualNota').textContent = _modo === 'auto'
+            ? 'Calculada automáticamente según la fecha de hoy y los rangos.'
+            : 'Fijada manualmente.';
+        var f = c.factores[temp] || 1;
+        document.getElementById('ejemplo').innerHTML =
+            'Con la temporada actual (' + LBL[temp] + ', factor ×' + f + '): una tarea «cada 2 días» se recuerda cada <b>' + Math.max(1, Math.round(2 * f)) + ' días</b>; una «cada 7 días», cada <b>' + Math.max(1, Math.round(7 * f)) + ' días</b>.';
+    };
+
+    window.guardar = async function() {
+        var c = cfgActual();
+        if (c.modo === 'auto') {
+            for (var i = 0; i < c.rangos.length; i++) {
+                var r = c.rangos[i];
+                if (!/^\d{2}-\d{2}$/.test(r.desde || '') || !/^\d{2}-\d{2}$/.test(r.hasta || '')) {
+                    showToast('Revisá los rangos: el formato debe ser MM-DD (ej: 12-15).', 'error'); return;
+                }
+            }
+        }
+        var btn = document.getElementById('btnGuardar');
+        btn.disabled = true;
+        try {
+            await CVC.guardarTemporada(c);
+            showToast('Temporada guardada. Las tareas ya usan la nueva frecuencia.', 'success');
+            previsualizar();
+        } catch (e) { showToast('Error al guardar: ' + e.message, 'error'); }
+        btn.disabled = false;
+    };
+
+    setModo(_modo);
+    renderRangos();
+    previsualizar();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clasificación masiva · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .cm-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4) var(--space-5); margin-bottom: var(--space-4); }
+        .cm-card__title { font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: var(--space-3); }
+        .cm-hint { font-size: var(--text-sm); color: var(--color-text-muted); margin-bottom: var(--space-3); }
+        .cm-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: var(--space-3); }
+        .cm-row label { font-size: var(--text-sm); display: flex; align-items: center; gap: 6px; }
+        .cm-row select { font-family: inherit; font-size: var(--text-sm); padding: 7px 10px; border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-2); }
+        textarea.cm-ta { width: 100%; min-height: 180px; font-family: var(--font-mono); font-size: 12px; padding: 12px; border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-2); white-space: pre; overflow-wrap: normal; overflow-x: auto; }
+        .cm-step { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--color-primary); color: #fff; font-size: 12px; font-weight: 700; margin-right: 6px; }
+        .cm-prev-row { display: flex; gap: 10px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--color-border-light); font-size: var(--text-sm); }
+        .cm-prev-row:last-child { border-bottom: none; }
+        .cm-tag { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 99px; background: var(--color-surface-2); border: 1px solid var(--color-border); }
+        .cm-tag.g { color: var(--color-danger); } .cm-tag.m { color: var(--color-primary); }
+        .cm-err { color: var(--color-danger); }
+        .cm-ok { color: var(--color-success, #1a7f37); }
+        .cm-stat { display: flex; gap: 16px; flex-wrap: wrap; font-size: var(--text-sm); margin-bottom: var(--space-3); }
+        .cm-stat b { font-family: var(--font-mono); }
+    </style>
+</head>
+<body>
+<header class="admin-header">
+    <div class="admin-header__brand"><span class="material-icons">cottage</span> Casa Verde Canas</div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span> <span id="userName">—</span></div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()"><span class="material-icons">logout</span> Salir</button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+    <div class="db-section-head" style="margin-bottom:var(--space-3);">
+        <div class="db-section-title">
+            <span class="material-icons" style="color:var(--color-primary);">auto_fix_high</span>
+            Clasificación masiva
+        </div>
+    </div>
+    <p class="cm-hint">
+        Flujo en 3 pasos: <b>1)</b> exportá los datos y copialos · <b>2)</b> pegalos en un chat con Claude
+        usando la <b>Guía de clasificación masiva</b> y copiá lo que te devuelve · <b>3)</b> pegá esa
+        respuesta acá, previsualizá y aplicá. <b>Nada se aplica hasta que toques «Aplicar».</b>
+    </p>
+
+    <!-- PASO 1: EXPORTAR -->
+    <div class="cm-card">
+        <div class="cm-card__title"><span class="cm-step">1</span> Exportar para analizar</div>
+        <div class="cm-row">
+            <select id="exAnio"></select>
+            <label><input type="checkbox" id="exGastos" checked> Gastos</label>
+            <label><input type="checkbox" id="exMov" checked> Movimientos</label>
+            <label><input type="checkbox" id="exSoloPend" checked> Solo sin clasificar</label>
+            <button class="btn btn-primary" onclick="exportar()"><span class="material-icons">file_download</span> Generar</button>
+            <button class="btn btn-secondary" onclick="copiar('exOut')"><span class="material-icons">content_copy</span> Copiar</button>
+        </div>
+        <textarea class="cm-ta" id="exOut" readonly placeholder="Acá aparece el bloque para pegar en el chat…"></textarea>
+        <div class="cm-hint" id="exResumen"></div>
+    </div>
+
+    <!-- PASO 2: IMPORTAR -->
+    <div class="cm-card">
+        <div class="cm-card__title"><span class="cm-step">2</span> Pegar la respuesta del chat</div>
+        <p class="cm-hint">Pegá acá el bloque que te devolvió Claude (líneas que empiezan con G o M) y previsualizá.</p>
+        <textarea class="cm-ta" id="impIn" placeholder="G&#9;idGasto&#9;categoria&#9;destino&#9;circuito&#10;M&#9;idMovimiento&#9;categoria&#9;etiqueta"></textarea>
+        <div class="cm-row" style="margin-top:var(--space-3);">
+            <button class="btn btn-primary" onclick="previsualizar()"><span class="material-icons">visibility</span> Previsualizar</button>
+            <button class="btn btn-success" id="btnAplicar" onclick="aplicar()" style="display:none;"><span class="material-icons">save</span> Aplicar cambios</button>
+        </div>
+    </div>
+
+    <!-- PASO 3: PREVIEW -->
+    <div class="cm-card" id="prevCard" style="display:none;">
+        <div class="cm-card__title"><span class="cm-step">3</span> Previsualización</div>
+        <div class="cm-stat" id="prevStat"></div>
+        <div id="prevLista"></div>
+    </div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async function() {
+    var sesion = await CVC.verificarAuth(['admin']);
+    document.getElementById('userName').textContent = sesion.userData.nombre || sesion.user.email;
+    CVC.renderNav('clasificacion-masiva.html', sesion.userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('clasificacion-masiva.html');
+
+    var db = CVC.db;
+    var escapeHtml = CVC.escapeHtml;
+    var showToast = CVC.showToast;
+    var TAB = String.fromCharCode(9);
+
+    // Catálogos
+    var CAT_GASTO = ['materiales', 'limpieza', 'mantenimiento', 'servicios', 'administrativo', 'alimentos', 'transporte', 'otro'];
+    var CIRCUITOS = ['fiscal', 'personal', 'mixto'];
+
+    var _gastos = [], _movs = [], _cuentas = {}, _categorias = [], _destinos = [];
+    var _catPorNombre = {};   // nombre lower -> {id, nombre} (categorias de movimientos)
+    var _destPorNombre = {};  // nombre lower -> {id, nombre}
+    var _cambios = [];
+
+    function limpia(s) { return String(s == null ? '' : s).replace(/[\t\r\n]+/g, ' ').trim(); }
+
+    // ── Cargar datos ──
+    try {
+        var sg = await db.collection('gastos').get();
+        _gastos = sg.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+    } catch (e) { _gastos = []; }
+    try {
+        var sm = await db.collection('movimientos').get();
+        _movs = sm.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+    } catch (e) { _movs = []; }
+    try {
+        var scu = await db.collection('cuentas').get();
+        scu.docs.forEach(function(d) { _cuentas[d.id] = d.data().nombre || d.id; });
+    } catch (e) {}
+    try {
+        var sc = await db.collection('categorias').get();
+        _categorias = sc.docs.map(function(d) { return { id: d.id, nombre: d.data().nombre || d.id }; });
+        _categorias.forEach(function(c) { _catPorNombre[c.nombre.toLowerCase()] = c; });
+    } catch (e) {}
+    try {
+        var sd = await db.collection('destinos').get();
+        _destinos = sd.docs.map(function(d) { return { id: d.id, nombre: d.data().nombre || d.id, tipo: d.data().tipo, activo: d.data().activo }; })
+            .filter(function(d) { return d.activo !== false; });
+        _destinos.forEach(function(d) { _destPorNombre[d.nombre.toLowerCase()] = d; });
+    } catch (e) {}
+
+    // Años
+    var anios = {};
+    _gastos.forEach(function(g) { if (g.fecha) anios[String(g.fecha).slice(0, 4)] = true; });
+    _movs.forEach(function(m) { if (m.fecha) anios[String(m.fecha).slice(0, 4)] = true; });
+    var lista = Object.keys(anios).sort().reverse();
+    document.getElementById('exAnio').innerHTML = '<option value="">Todos los años</option>' +
+        lista.map(function(a) { return '<option value="' + a + '">' + a + '</option>'; }).join('');
+
+    function gastoPendiente(g) { return !g.categoria || !g.destino || !g.circuito; }
+    function movPendiente(m) { return !m.categoriaId; }
+
+    // ── PASO 1: exportar ──
+    window.exportar = function() {
+        var anio = document.getElementById('exAnio').value;
+        var incG = document.getElementById('exGastos').checked;
+        var incM = document.getElementById('exMov').checked;
+        var soloPend = document.getElementById('exSoloPend').checked;
+
+        var out = [];
+        out.push('### CATALOGOS VALIDOS (usar EXACTAMENTE estos valores)');
+        out.push('CATEGORIAS_GASTO: ' + CAT_GASTO.join(', '));
+        out.push('CIRCUITOS: ' + CIRCUITOS.join(', ') + ' (vacio = sin clasificar)');
+        out.push('DESTINOS (finalidad de gasto): ' + (_destinos.length ? _destinos.map(function(d) { return d.nombre; }).join(', ') : '(no hay)'));
+        out.push('CATEGORIAS_MOVIMIENTO: ' + (_categorias.length ? _categorias.map(function(c) { return c.nombre; }).join(', ') : '(no hay)'));
+        out.push('');
+        out.push('### FORMATO A DEVOLVER');
+        out.push('Gastos:      G' + TAB + 'id' + TAB + 'categoria' + TAB + 'destino' + TAB + 'circuito');
+        out.push('Movimientos: M' + TAB + 'id' + TAB + 'categoria' + TAB + 'etiqueta(opcional)');
+        out.push('');
+
+        var nG = 0, nM = 0;
+        if (incG) {
+            out.push('### GASTOS  (G' + TAB + 'id' + TAB + 'fecha' + TAB + 'concepto' + TAB + 'proveedor' + TAB + 'monto' + TAB + 'moneda' + TAB + 'pais' + TAB + 'cat_actual' + TAB + 'destino_actual' + TAB + 'circuito_actual)');
+            _gastos.forEach(function(g) {
+                if (anio && String(g.fecha || '').slice(0, 4) !== anio) return;
+                if (soloPend && !gastoPendiente(g)) return;
+                nG++;
+                out.push(['G', g.id, limpia(g.fecha), limpia(g.concepto), limpia(g.proveedor), (g.monto || 0), limpia(g.moneda || CVC.monedaDe(g)), limpia(g.pais || 'BR'), limpia(g.categoria), limpia(g.destinoNom), limpia(g.circuito)].join(TAB));
+            });
+        }
+        if (incM) {
+            out.push('');
+            out.push('### MOVIMIENTOS  (M' + TAB + 'id' + TAB + 'cuenta' + TAB + 'fecha' + TAB + 'descripcion' + TAB + 'monto' + TAB + 'tipo' + TAB + 'cat_actual)');
+            _movs.forEach(function(m) {
+                if (anio && String(m.fecha || '').slice(0, 4) !== anio) return;
+                if (soloPend && !movPendiente(m)) return;
+                nM++;
+                var catNom = '';
+                if (m.categoriaId) { var cc = _categorias.find(function(c) { return c.id === m.categoriaId; }); catNom = cc ? cc.nombre : ''; }
+                out.push(['M', m.id, limpia(_cuentas[m.cuentaId] || m.cuentaId), limpia(m.fecha), limpia(m.descripcion), (m.monto || 0), limpia(m.tipo), limpia(catNom)].join(TAB));
+            });
+        }
+        document.getElementById('exOut').value = out.join('\n');
+        document.getElementById('exResumen').textContent = 'Exportados: ' + nG + ' gastos y ' + nM + ' movimientos.' +
+            (soloPend ? ' (solo los que faltan clasificar)' : '');
+    };
+
+    window.copiar = function(id) {
+        var ta = document.getElementById(id);
+        if (!ta.value) { showToast('Primero generá el bloque.', 'error'); return; }
+        ta.select();
+        try { document.execCommand('copy'); showToast('Copiado.', 'success'); }
+        catch (e) { showToast('No se pudo copiar; seleccioná y copiá a mano.', 'error'); }
+    };
+
+    // ── PASO 2: previsualizar ──
+    window.previsualizar = function() {
+        var txt = document.getElementById('impIn').value;
+        _cambios = [];
+        var errores = [];
+        var lineas = txt.split('\n');
+        lineas.forEach(function(linea, i) {
+            var l = linea.replace(/\r$/, '');
+            if (!l.trim() || l.indexOf('#') === 0 || l.indexOf('###') === 0) return;
+            var p = l.split(TAB);
+            if (p[0] !== 'G' && p[0] !== 'M') return; // ignora líneas que no son datos
+            var tipo = p[0];
+            var id = (p[1] || '').trim();
+            if (!id) { errores.push('Línea ' + (i + 1) + ': sin id.'); return; }
+
+            if (tipo === 'G') {
+                var g = _gastos.find(function(x) { return x.id === id; });
+                if (!g) { errores.push('Gasto ' + id + ' no existe.'); return; }
+                var cat = (p[2] || '').trim().toLowerCase();
+                var destNom = (p[3] || '').trim();
+                var circ = (p[4] || '').trim().toLowerCase();
+                var data = {}, detalle = [];
+                if (cat) {
+                    if (CAT_GASTO.indexOf(cat) === -1) { errores.push('Gasto ' + id + ': categoría inválida "' + cat + '".'); return; }
+                    if (cat !== (g.categoria || '')) { data.categoria = cat; detalle.push('cat→' + cat); }
+                }
+                if (destNom) {
+                    var d = _destPorNombre[destNom.toLowerCase()];
+                    if (!d) { errores.push('Gasto ' + id + ': destino "' + destNom + '" no existe.'); return; }
+                    if (d.id !== (g.destino || '')) { data.destino = d.id; data.destinoNom = d.nombre; detalle.push('dest→' + d.nombre); }
+                }
+                if (circ) {
+                    if (CIRCUITOS.indexOf(circ) === -1) { errores.push('Gasto ' + id + ': circuito inválido "' + circ + '".'); return; }
+                    if (circ !== (g.circuito || '')) { data.circuito = circ; data.deducible = (circ === 'fiscal' || circ === 'mixto'); detalle.push('circ→' + circ); }
+                }
+                if (Object.keys(data).length) _cambios.push({ col: 'gastos', id: id, data: data, detalle: detalle.join('  '), ref: limpia(g.concepto) });
+            } else {
+                var m = _movs.find(function(x) { return x.id === id; });
+                if (!m) { errores.push('Movimiento ' + id + ' no existe.'); return; }
+                var catNom = (p[2] || '').trim();
+                var etiqueta = (p[3] || '').trim();
+                var data2 = {}, detalle2 = [];
+                if (catNom) {
+                    var c = _catPorNombre[catNom.toLowerCase()];
+                    if (!c) { errores.push('Movimiento ' + id + ': categoría "' + catNom + '" no existe.'); return; }
+                    if (c.id !== (m.categoriaId || '')) { data2.categoriaId = c.id; detalle2.push('cat→' + c.nombre); }
+                }
+                if (etiqueta && etiqueta !== (m.etiqueta || '')) { data2.etiqueta = etiqueta; detalle2.push('etq→' + etiqueta); }
+                if (Object.keys(data2).length) _cambios.push({ col: 'movimientos', id: id, data: data2, detalle: detalle2.join('  '), ref: limpia(m.descripcion) });
+            }
+        });
+
+        var card = document.getElementById('prevCard');
+        var stat = document.getElementById('prevStat');
+        var cont = document.getElementById('prevLista');
+        card.style.display = 'block';
+        stat.innerHTML = '<span class="cm-ok">Cambios válidos: <b>' + _cambios.length + '</b></span>' +
+            (errores.length ? '<span class="cm-err">Problemas: <b>' + errores.length + '</b></span>' : '');
+        var htmlErr = errores.length ? '<div class="cm-err" style="margin-bottom:var(--space-3);">' + errores.map(escapeHtml).join('<br>') + '</div>' : '';
+        var htmlCambios = _cambios.length
+            ? _cambios.map(function(c) {
+                return '<div class="cm-prev-row">' +
+                    '<span class="cm-tag ' + (c.col === 'gastos' ? 'g' : 'm') + '">' + (c.col === 'gastos' ? 'G' : 'M') + '</span>' +
+                    '<span style="flex:1;min-width:0;">' + escapeHtml(c.ref || c.id) + '</span>' +
+                    '<span style="font-family:var(--font-mono);font-size:12px;">' + escapeHtml(c.detalle) + '</span>' +
+                '</div>';
+            }).join('')
+            : '<div class="cm-hint">No hay cambios para aplicar (puede que ya estén clasificados o que el formato no coincida).</div>';
+        cont.innerHTML = htmlErr + htmlCambios;
+        document.getElementById('btnAplicar').style.display = _cambios.length ? 'inline-flex' : 'none';
+    };
+
+    // ── PASO 3: aplicar ──
+    window.aplicar = async function() {
+        if (!_cambios.length) return;
+        if (!confirm('Aplicar ' + _cambios.length + ' cambios a la base de datos?')) return;
+        var btn = document.getElementById('btnAplicar');
+        btn.disabled = true; btn.innerHTML = '<span class="material-icons">hourglass_empty</span> Aplicando…';
+        try {
+            var aplicar = _cambios.map(function(c) { return { col: c.col, id: c.id, data: c.data }; });
+            var n = await CVC.aplicarClasificacionMasiva(aplicar);
+            showToast(n + ' cambios aplicados.', 'success');
+            // refrescar caches locales para reflejar lo aplicado
+            _cambios.forEach(function(c) {
+                var arr = c.col === 'gastos' ? _gastos : _movs;
+                var obj = arr.find(function(x) { return x.id === c.id; });
+                if (obj) Object.assign(obj, c.data);
+            });
+            _cambios = [];
+            document.getElementById('prevCard').style.display = 'none';
+            document.getElementById('impIn').value = '';
+        } catch (e) {
+            showToast('Error al aplicar: ' + e.message, 'error');
+        }
+        btn.disabled = false; btn.innerHTML = '<span class="material-icons">save</span> Aplicar cambios';
+    };
+})();
+</script>
+</body>
+</html>
