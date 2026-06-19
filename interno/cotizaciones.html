@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cotizaciones · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .cz-estado { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); margin-bottom: var(--space-4); }
+        .cz-estado.viejo { border-color: var(--color-warning, #d9822b); background: var(--color-warning-xlight, #fdf3e7); }
+        .cz-estado__txt { font-size: var(--text-sm); }
+        .cz-estado__sub { font-size: var(--text-xs); color: var(--color-text-muted); }
+
+        .cz-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
+        .cz-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); }
+        .cz-card .par { font-size: var(--text-xs); color: var(--color-text-muted); font-weight: 700; }
+        .cz-card .val { font-family: var(--font-mono); font-size: 22px; font-weight: 700; }
+        .cz-card .cross { font-size: var(--text-xs); color: var(--color-text-muted); font-family: var(--font-mono); margin-top: 4px; }
+
+        .cz-edit { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+        .cz-edit label { font-size: var(--text-sm); min-width: 130px; }
+        .cz-edit input { width: 130px; font-family: var(--font-mono); font-size: var(--text-base); padding: 8px 10px; border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-2); text-align: right; }
+
+        .cz-hist { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+        .cz-hist th, .cz-hist td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--color-border-light); }
+        .cz-hist th { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-muted); }
+        .cz-hist td.mono { font-family: var(--font-mono); }
+        .cz-fuente { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; color: #fff; }
+        .cz-fuente.online { background: var(--color-primary); }
+        .cz-fuente.manual { background: #6366f1; }
+
+        .pa-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4) var(--space-5); margin-bottom: var(--space-4); }
+        .pa-card__title { font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: var(--space-3); }
+        .cz-hint { font-size: var(--text-sm); color: var(--color-text-muted); margin-bottom: var(--space-3); }
+        .cz-attr { font-size: 10px; color: var(--color-text-muted); text-align: right; margin-top: var(--space-4); }
+        .cz-attr a { color: var(--color-text-muted); }
+    </style>
+</head>
+<body>
+<header class="admin-header">
+    <div class="admin-header__brand"><span class="material-icons">cottage</span> Casa Verde Canas</div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span> <span id="userName">—</span></div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()"><span class="material-icons">logout</span> Salir</button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+    <div class="db-section-head" style="margin-bottom:var(--space-3);">
+        <div class="db-section-title">
+            <span class="material-icons" style="color:var(--color-primary);">currency_exchange</span>
+            Cotizaciones de mercado
+        </div>
+    </div>
+    <p class="cz-hint">
+        Fuente única de tipos de cambio para todo el sistema (Proyección, Análisis de gastos, Panel financiero).
+        Podés traerlas de internet o editarlas a mano. Cada cambio queda registrado con fecha, origen y autor.
+        <b>No es la cotización fiscal</b> (esa la fija la contadora en el módulo Fiscal y no se toca acá).
+    </p>
+
+    <!-- Estado -->
+    <div class="cz-estado" id="czEstado">
+        <span class="material-icons" style="font-size:20px;color:var(--color-text-muted);">schedule</span>
+        <div style="flex:1;min-width:0;">
+            <div class="cz-estado__txt" id="czTxt">Cargando…</div>
+            <div class="cz-estado__sub" id="czSub"></div>
+        </div>
+        <button class="btn btn-primary" id="btnOnline" onclick="traerOnline()"><span class="material-icons">cloud_download</span> Actualizar online</button>
+    </div>
+
+    <!-- Valores actuales -->
+    <div class="cz-grid" id="czGrid"></div>
+
+    <!-- Edición manual -->
+    <div class="pa-card">
+        <div class="pa-card__title"><span class="material-icons" style="color:#6366f1;">edit</span> Editar manualmente</div>
+        <p class="cz-hint">Cuánto vale <b>1 dólar (US$)</b> en cada moneda. Si la API falla o querés fijar un valor propio, editá acá y guardá.</p>
+        <div class="cz-edit"><label>1 US$ en Reales (BRL)</label><input type="number" id="mBRL" step="0.0001" placeholder="0.0000"></div>
+        <div class="cz-edit"><label>1 US$ en Pesos UY (UYU)</label><input type="number" id="mUYU" step="0.0001" placeholder="0.0000"></div>
+        <div class="cz-edit"><label>1 US$ en Euros (EUR)</label><input type="number" id="mEUR" step="0.0001" placeholder="0.0000"></div>
+        <div class="cz-edit"><label>1 US$ en Pesos AR (ARS)</label><input type="number" id="mARS" step="0.0001" placeholder="0.0000"></div>
+        <button class="btn btn-primary" onclick="guardarManual()"><span class="material-icons">save</span> Guardar manual</button>
+    </div>
+
+    <!-- Historial -->
+    <div class="pa-card">
+        <div class="pa-card__title"><span class="material-icons" style="color:var(--color-text-muted);">history</span> Historial de cotizaciones</div>
+        <div id="czHist"><div class="cz-hint">Cargando historial…</div></div>
+    </div>
+
+    <div class="cz-attr">Cotizaciones online: <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">ExchangeRate-API</a> · informativas</div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async function() {
+    var sesion = await CVC.verificarAuth(['admin']);
+    document.getElementById('userName').textContent = sesion.userData.nombre || sesion.user.email;
+    CVC.renderNav('cotizaciones.html', sesion.userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('cotizaciones.html');
+
+    var db = CVC.db;
+    var escapeHtml = CVC.escapeHtml;
+    var showToast = CVC.showToast;
+    var autor = sesion.userData.nombre || sesion.user.email;
+
+    var SIMB = { BRL: 'R$', UYU: '$U', USD: 'US$', EUR: '€', ARS: 'AR$' };
+    var _cot = null;
+
+    function fmtNum(n, dec) { return (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: dec || 2, maximumFractionDigits: dec || 2 }); }
+
+    async function cargar() {
+        _cot = await CVC.cargarCotizaciones(true);
+        renderEstado();
+        renderGrid();
+        poblarManual();
+    }
+
+    function renderEstado() {
+        var box = document.getElementById('czEstado');
+        var txt = document.getElementById('czTxt');
+        var sub = document.getElementById('czSub');
+        var dias = CVC.diasDesdeCotizacion();
+        var hayDatos = _cot && _cot.actualizadoEn;
+        var viejo = dias > 7;
+        box.classList.toggle('viejo', viejo || !hayDatos);
+        if (!hayDatos) {
+            txt.innerHTML = '<b>No hay cotizaciones cargadas todavía.</b> Tocá «Actualizar online» o cargá los valores a mano.';
+            sub.textContent = '';
+            return;
+        }
+        txt.innerHTML = 'Última actualización: <b>' + _cot.actualizadoEn.toLocaleString('es-UY') + '</b>' +
+            (viejo ? ' <span style="color:var(--color-warning,#d9822b);font-weight:700;">— conviene actualizar</span>' : '');
+        sub.textContent = 'Origen: ' + (_cot.fuente || '—') + (_cot.actualizadoPor ? ' · por ' + _cot.actualizadoPor : '') + ' · hace ' + dias + ' día' + (dias === 1 ? '' : 's');
+    }
+
+    function renderGrid() {
+        var grid = document.getElementById('czGrid');
+        var r = (_cot && _cot.rates) || {};
+        var monedas = ['BRL', 'UYU', 'EUR', 'ARS'];
+        grid.innerHTML = monedas.map(function(m) {
+            if (!r[m]) return '';
+            // cruce útil: cuánto vale 1 unidad de esta moneda en las otras dos relevantes
+            var cruces = [];
+            ['BRL', 'UYU', 'USD'].forEach(function(otro) {
+                if (otro === m) return;
+                var v = CVC.convertir(1, m, otro, r);
+                cruces.push('1 ' + m + ' = ' + (SIMB[otro] || otro) + ' ' + fmtNum(v, otro === 'USD' ? 4 : 2));
+            });
+            return '<div class="cz-card">' +
+                '<div class="par">1 US$ en ' + m + '</div>' +
+                '<div class="val">' + (SIMB[m] || m) + ' ' + fmtNum(r[m], 4) + '</div>' +
+                '<div class="cross">' + cruces.join('<br>') + '</div>' +
+            '</div>';
+        }).join('') || '<div class="cz-hint">Sin valores. Cargá cotizaciones online o manuales.</div>';
+    }
+
+    function poblarManual() {
+        var r = (_cot && _cot.rates) || {};
+        document.getElementById('mBRL').value = r.BRL || '';
+        document.getElementById('mUYU').value = r.UYU || '';
+        document.getElementById('mEUR').value = r.EUR || '';
+        document.getElementById('mARS').value = r.ARS || '';
+    }
+
+    window.traerOnline = async function() {
+        var btn = document.getElementById('btnOnline');
+        btn.disabled = true; btn.innerHTML = '<span class="material-icons">hourglass_empty</span> Consultando…';
+        try {
+            await CVC.actualizarCotizacionesOnline(autor);
+            await cargar();
+            await cargarHistorial();
+            showToast('Cotizaciones actualizadas online.', 'success');
+        } catch (e) {
+            showToast('No se pudo traer online: ' + e.message + '. Podés cargar a mano.', 'error');
+        }
+        btn.disabled = false; btn.innerHTML = '<span class="material-icons">cloud_download</span> Actualizar online';
+    };
+
+    window.guardarManual = async function() {
+        var rates = {
+            BRL: parseFloat(document.getElementById('mBRL').value),
+            UYU: parseFloat(document.getElementById('mUYU').value),
+            EUR: parseFloat(document.getElementById('mEUR').value),
+            ARS: parseFloat(document.getElementById('mARS').value)
+        };
+        var algo = ['BRL', 'UYU', 'EUR', 'ARS'].some(function(c) { return rates[c] && rates[c] > 0; });
+        if (!algo) { showToast('Cargá al menos un valor válido.', 'error'); return; }
+        try {
+            await CVC.guardarCotizaciones(rates, 'manual', autor);
+            await cargar();
+            await cargarHistorial();
+            showToast('Cotizaciones guardadas manualmente.', 'success');
+        } catch (e) {
+            showToast('Error al guardar: ' + e.message, 'error');
+        }
+    };
+
+    async function cargarHistorial() {
+        var cont = document.getElementById('czHist');
+        try {
+            var snap = await db.collection('cotizaciones_historial').orderBy('fecha', 'desc').limit(60).get();
+            if (snap.empty) { cont.innerHTML = '<div class="cz-hint">Todavía no hay historial. Se va llenando cada vez que actualizás (online o manual).</div>'; return; }
+            var rows = snap.docs.map(function(d) {
+                var x = d.data();
+                var r = x.rates || {};
+                var vals = ['BRL', 'UYU', 'EUR', 'ARS'].map(function(c) {
+                    return r[c] ? (SIMB[c] || c) + ' ' + fmtNum(r[c], 4) : '—';
+                }).join('  ·  ');
+                var fcls = x.fuente === 'online' ? 'online' : 'manual';
+                return '<tr>' +
+                    '<td class="mono">' + escapeHtml(x.fecha || '') + '</td>' +
+                    '<td><span class="cz-fuente ' + fcls + '">' + escapeHtml(x.fuente || 'manual') + '</span></td>' +
+                    '<td>' + escapeHtml(x.autor || '—') + '</td>' +
+                    '<td class="mono">' + vals + '</td>' +
+                '</tr>';
+            }).join('');
+            cont.innerHTML = '<div style="overflow-x:auto;"><table class="cz-hist">' +
+                '<thead><tr><th>Fecha</th><th>Origen</th><th>Autor</th><th>1 US$ en…</th></tr></thead>' +
+                '<tbody>' + rows + '</tbody></table></div>';
+        } catch (e) {
+            cont.innerHTML = '<div class="cz-hint">No se pudo cargar el historial: ' + escapeHtml(e.message) + '</div>';
+        }
+    }
+
+    await cargar();
+    await cargarHistorial();
+})();
+</script>
+</body>
+</html>

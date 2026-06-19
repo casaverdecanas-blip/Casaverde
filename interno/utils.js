@@ -172,9 +172,11 @@ const NAV_ADMIN_ITEMS = [
             { href: 'herramientas-btg.html', icon: 'compare_arrows',  label: 'BTG / Conciliación' },
             { href: 'categorias.html',       icon: 'label',           label: 'Categorías'         },
             { href: 'destinos.html',         icon: 'flag',            label: 'Destinos'           },
+            { href: 'cotizaciones.html',     icon: 'currency_exchange', label: 'Cotizaciones'     },
             { sep: true },
             { href: 'panel-financiero.html', icon: 'monitoring',      label: 'Panel financiero'   },
             { href: 'analisis-gastos.html',  icon: 'insights',        label: 'Análisis de gastos' },
+            { href: 'proyeccion-anual.html', icon: 'query_stats',     label: 'Proyección anual'   },
             { href: 'informes-airbnb.html',  icon: 'summarize',       label: 'Informes Airbnb'    }
         ]
     },
@@ -243,7 +245,7 @@ var SECCIONES_SOLO_ADMIN = [
     'panel-financiero', 'fiscal', 'cuentas', 'movimientos',
     'herramientas-btg', 'categorias', 'pagos', 'informes-airbnb',
     'acceso-contador', 'cabanas-admin', 'usuarios', 'tareas-admin', 'gastos',
-    'analisis-gastos'
+    'analisis-gastos', 'proyeccion-anual', 'cotizaciones'
 ];
 function puede(seccion, rol) {
     rol = rol || 'admin';
@@ -1828,7 +1830,117 @@ function cerrarCelula() {
 }
 
 
-// ── EXPORTAR ──────────────────────────────────────────────────────────────────
+// ── COTIZACIONES UNIFICADAS (v4.18) ───────────────────────────────────────────
+//  Fuente única de tipos de cambio de MERCADO para todo el sistema.
+//  - config/cotizaciones : snapshot actual { base:'USD', rates:{USD,BRL,UYU,EUR,ARS}, fuente, actualizadoEn, actualizadoPor }
+//  - cotizaciones_historial/{YYYY-MM-DD} : serie por fecha (para validar operaciones viejas)
+//  NO confundir con config/tipos_cambio (FISCAL, lo fija la contadora, no se toca aquí).
+var _cotizCache = null;
+
+function cargarCotizaciones(forzar) {
+    if (_cotizCache && !forzar) return Promise.resolve(_cotizCache);
+    return db.collection('config').doc('cotizaciones').get().then(function(doc) {
+        if (doc.exists) {
+            var d = doc.data();
+            _cotizCache = {
+                base: d.base || 'USD',
+                rates: d.rates || { USD: 1 },
+                fuente: d.fuente || '',
+                actualizadoEn: (d.actualizadoEn && d.actualizadoEn.toDate) ? d.actualizadoEn.toDate() : null,
+                actualizadoPor: d.actualizadoPor || ''
+            };
+        } else {
+            _cotizCache = { base: 'USD', rates: { USD: 1 }, fuente: '', actualizadoEn: null, actualizadoPor: '' };
+        }
+        return _cotizCache;
+    }).catch(function() {
+        _cotizCache = { base: 'USD', rates: { USD: 1 }, fuente: '', actualizadoEn: null, actualizadoPor: '' };
+        return _cotizCache;
+    });
+}
+
+// Convierte un monto entre monedas. rates = { CCY: unidades por 1 base(USD) }.
+// Si no se pasan rates usa la cache; si no hay tabla, devuelve el monto crudo (no rompe).
+function convertir(monto, desde, hacia, rates) {
+    if (!monto) return 0;
+    desde = String(desde || 'BRL').toUpperCase();
+    hacia = String(hacia || 'BRL').toUpperCase();
+    if (desde === hacia) return monto;
+    rates = rates || (_cotizCache && _cotizCache.rates);
+    if (!rates || !rates[desde] || !rates[hacia]) return monto;
+    return (monto / rates[desde]) * rates[hacia];
+}
+
+// Moneda efectiva de un registro (gasto/movimiento): usa .moneda; si no, mapea por país.
+function monedaDe(reg) {
+    var m = String((reg && reg.moneda) || '').toUpperCase();
+    if (m === 'BRL' || m === 'UYU' || m === 'USD' || m === 'EUR' || m === 'ARS') return m;
+    if (m === 'R$') return 'BRL';
+    var p = String((reg && reg.pais) || 'BR').toUpperCase();
+    if (p === 'UY') return 'UYU';
+    if (p === 'FR') return 'EUR';
+    if (p === 'AR') return 'ARS';
+    if (p === 'US') return 'USD';
+    return 'BRL';
+}
+
+function diasDesdeCotizacion() {
+    if (!_cotizCache || !_cotizCache.actualizadoEn) return 9999;
+    return Math.floor((Date.now() - _cotizCache.actualizadoEn.getTime()) / 86400000);
+}
+
+// Guarda un snapshot (manual u online) + un doc de historial del día. Actualiza la cache.
+function guardarCotizaciones(rates, fuente, autor) {
+    var hoy = new Date();
+    var mm = String(hoy.getMonth() + 1);
+    if (mm.length < 2) mm = '0' + mm;
+    var dd = String(hoy.getDate());
+    if (dd.length < 2) dd = '0' + dd;
+    var fechaId = hoy.getFullYear() + '-' + mm + '-' + dd;
+    var ratesLimpio = { USD: 1 };
+    ['BRL', 'UYU', 'EUR', 'ARS'].forEach(function(c) {
+        var v = parseFloat(rates[c]);
+        if (v && v > 0) ratesLimpio[c] = v;
+    });
+    var batch = db.batch();
+    batch.set(db.collection('config').doc('cotizaciones'), {
+        base: 'USD', rates: ratesLimpio, fuente: fuente || 'manual', actualizadoPor: autor || '',
+        actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    batch.set(db.collection('cotizaciones_historial').doc(fechaId), {
+        fecha: fechaId, base: 'USD', rates: ratesLimpio, fuente: fuente || 'manual', autor: autor || '',
+        creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    return batch.commit().then(function() {
+        _cotizCache = { base: 'USD', rates: ratesLimpio, fuente: fuente || 'manual', actualizadoEn: new Date(), actualizadoPor: autor || '' };
+        return _cotizCache;
+    });
+}
+
+// Trae cotizaciones de mercado online (open.er-api.com, sin API key) y las guarda.
+function actualizarCotizacionesOnline(autor) {
+    return fetch('https://open.er-api.com/v6/latest/USD').then(function(r) {
+        return r.json();
+    }).then(function(j) {
+        if (!j || j.result !== 'success' || !j.rates) throw new Error('respuesta inválida del servicio');
+        var rates = {};
+        ['BRL', 'UYU', 'EUR', 'ARS'].forEach(function(c) { if (j.rates[c]) rates[c] = j.rates[c]; });
+        return guardarCotizaciones(rates, 'online', autor);
+    });
+}
+
+// (v4.20) Devuelve las rates que regían en una fecha (último historial <= fecha). Promesa.
+function cotizacionEnFecha(fecha) {
+    return db.collection('cotizaciones_historial')
+        .where('fecha', '<=', fecha).orderBy('fecha', 'desc').limit(1).get()
+        .then(function(snap) {
+            if (snap.empty) return null;
+            var d = snap.docs[0].data();
+            return { fecha: d.fecha, rates: d.rates || null, fuente: d.fuente || '' };
+        }).catch(function() { return null; });
+}
+
+
 window.CVC = {
     db, auth,
     ESTADOS_RESERVA, ESTADOS_TAREA, PRIORIDADES, CALENDAR_IDS, ESTADOS_BLOQUEANTES,
@@ -1849,6 +1961,8 @@ window.CVC = {
     conciliarMovimientos, importarMovimientosConfirmados,
     matchMovimientoBancario, conciliarContraRegistros,
     guardarConciliacion, cargarConfigConciliacion,
+    cargarCotizaciones, convertir, monedaDe, diasDesdeCotizacion,
+    guardarCotizaciones, actualizarCotizacionesOnline, cotizacionEnFecha,
     escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
     subirComprobante, abrirComprobante, elegirFuenteFoto,
     enviarWhatsApp, enviarMail, notificar, avisar,

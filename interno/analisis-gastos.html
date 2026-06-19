@@ -72,6 +72,13 @@
         <button class="ag-chip active" id="cpTodos" onclick="setPais('', this)">Todos</button>
         <button class="ag-chip" id="cpBR" onclick="setPais('BR', this)">🇧🇷 Brasil</button>
         <button class="ag-chip" id="cpUY" onclick="setPais('UY', this)">🇺🇾 Uruguay</button>
+        <span style="width:10px;"></span>
+        <select id="selMoneda" onchange="setMoneda(this.value)" title="Moneda en que se muestran los totales">
+            <option value="BRL">Ver en R$</option>
+            <option value="UYU">Ver en $U</option>
+            <option value="USD">Ver en US$</option>
+            <option value="EUR">Ver en €</option>
+        </select>
     </div>
 
     <div id="contenido">
@@ -95,9 +102,15 @@
     var _gastos = [];
     var _pais = '';
     var _vista = 'categoria';
+    var _disp = 'BRL';
 
-    function fmt(n) { return 'R$ ' + (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+    var SIMB = { BRL: 'R$', UYU: '$U', USD: 'US$', EUR: '€', ARS: 'AR$' };
+    function fmt(n) { return (SIMB[_disp] || _disp) + ' ' + (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
     function capit(s) { s = s || ''; return s.charAt(0).toUpperCase() + s.slice(1); }
+    function conv(g) { return CVC.convertir(g.monto || 0, CVC.monedaDe(g), _disp); }
+    function convItem(g, precio) { return CVC.convertir(precio || 0, CVC.monedaDe(g), _disp); }
+
+    await CVC.cargarCotizaciones();
 
     try {
         var snap = await db.collection('gastos').get();
@@ -121,6 +134,11 @@
         _pais = p;
         ['cpTodos', 'cpBR', 'cpUY'].forEach(function(id) { document.getElementById(id).classList.remove('active'); });
         if (btn) btn.classList.add('active');
+        aplicar();
+    };
+
+    window.setMoneda = function(m) {
+        _disp = m || 'BRL';
         aplicar();
     };
 
@@ -160,7 +178,7 @@
         var grupos = {};
         var total = 0;
         lista.forEach(function(g) {
-            var monto = g.monto || 0;
+            var monto = conv(g);
             total += monto;
             var key = String(g.categoria || 'sin categoría').trim().toLowerCase();
             if (!grupos[key]) grupos[key] = { nombre: key, total: 0, items: [] };
@@ -178,14 +196,14 @@
             var key = c.nombre.replace(/[^a-z0-9]/g, '_');
             var pct = total ? (c.total / total * 100) : 0;
             var barW = (c.total / maxCat * 100);
-            var detalle = c.items.sort(function(a, b) { return (b.monto || 0) - (a.monto || 0); }).map(function(g) {
+            var detalle = c.items.sort(function(a, b) { return conv(b) - conv(a); }).map(function(g) {
                 var chip = '<span class="ag-chippais">' + (g.pais || 'BR') + '</span>';
                 return '<div class="ag-det">' +
                     '<div style="flex:1;min-width:0;">' + escapeHtml(g.concepto || '--') +
                         (g.proveedor ? ' <span style="color:var(--color-text-muted);">· ' + escapeHtml(g.proveedor) + '</span>' : '') +
                         ' <span style="color:var(--color-text-muted);font-size:11px;">' + escapeHtml(g.fecha || '') + '</span> ' + chip +
                     '</div>' +
-                    '<div class="ag-det__mono">' + fmt(g.monto) + '</div>' +
+                    '<div class="ag-det__mono">' + fmt(conv(g)) + '</div>' +
                 '</div>';
             }).join('');
 
@@ -211,12 +229,12 @@
             var det = Array.isArray(g.itemsDetalle) ? g.itemsDetalle : [];
             if (det.length) conDetalle++;
             det.forEach(function(it) {
-                var precio = it.precio || 0;
+                var precio = convItem(g, it.precio || 0);
                 total += precio;
                 var key = (String(it.categoria || '').trim().toLowerCase()) || 'sin categoría';
                 if (!grupos[key]) grupos[key] = { nombre: key, total: 0, items: [] };
                 grupos[key].total += precio;
-                grupos[key].items.push({ it: it, gasto: g });
+                grupos[key].items.push({ it: it, gasto: g, conv: precio });
             });
         });
         var arr = Object.keys(grupos).map(function(k) { return grupos[k]; })
@@ -232,13 +250,13 @@
             var key = 'i_' + c.nombre.replace(/[^a-z0-9]/g, '_');
             var pct = total ? (c.total / total * 100) : 0;
             var w = (c.total / maxC * 100);
-            var detalle = c.items.sort(function(a, b) { return (b.it.precio || 0) - (a.it.precio || 0); }).map(function(r) {
+            var detalle = c.items.sort(function(a, b) { return (b.conv || 0) - (a.conv || 0); }).map(function(r) {
                 return '<div class="ag-det">' +
                     '<div style="flex:1;min-width:0;">' + escapeHtml(r.it.descripcion || '--') +
                         (r.it.cantidad && r.it.cantidad !== 1 ? ' <span style="color:var(--color-text-muted);">x' + r.it.cantidad + '</span>' : '') +
                         ' <span style="color:var(--color-text-muted);font-size:11px;">· ' + escapeHtml(r.gasto.proveedor || r.gasto.concepto || '') + ' · ' + escapeHtml(r.gasto.fecha || '') + '</span>' +
                     '</div>' +
-                    '<div class="ag-det__mono">' + fmt(r.it.precio) + '</div>' +
+                    '<div class="ag-det__mono">' + fmt(r.conv) + '</div>' +
                 '</div>';
             }).join('');
             return '<div class="ag-cat">' +

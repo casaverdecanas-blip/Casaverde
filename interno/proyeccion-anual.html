@@ -190,64 +190,29 @@
         return s + ' ' + (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     }
 
-    // Moneda de un gasto: usa g.moneda, si no mapea por país.
-    function monedaGasto(g) {
-        var m = String(g.moneda || '').toUpperCase();
-        if (m === 'BRL' || m === 'UYU' || m === 'USD' || m === 'EUR') return m;
-        if (m === 'R$') return 'BRL';
-        var p = String(g.pais || 'BR').toUpperCase();
-        if (p === 'UY') return 'UYU';
-        if (p === 'FR') return 'EUR';
-        if (p === 'US') return 'USD';
-        return 'BRL';
-    }
-
-    // Convierte un monto entre monedas usando _fx (base USD).
-    function convertir(monto, desde, hacia) {
-        if (!monto) return 0;
-        if (desde === hacia) return monto;
-        if (!_fx || !_fx[desde] || !_fx[hacia]) return monto; // sin tabla: deja crudo
-        var enUSD = monto / _fx[desde];
-        return enUSD * _fx[hacia];
-    }
-
-    // ── Cotizaciones ──────────────────────────────────────────
+    // ── Cotizaciones (unificadas vía CVC, v4.18) ──────────────
     async function cargarFx() {
-        try {
-            var doc = await db.collection('config').doc('cotizaciones').get();
-            if (doc.exists) {
-                var d = doc.data();
-                _fx = d.rates || null;
-                var ts = d.actualizadoEn && d.actualizadoEn.toDate ? d.actualizadoEn.toDate() : null;
-                _fxMeta = { actualizadoEn: ts, fuente: d.fuente || '' };
-            }
-        } catch (e) { _fx = null; }
+        var c = await CVC.cargarCotizaciones(true);
+        _fx = c.rates || null;
+        _fxMeta = { actualizadoEn: c.actualizadoEn, fuente: c.fuente };
         renderFx();
-    }
-
-    function diasDesde(fecha) {
-        if (!fecha) return 9999;
-        return Math.floor((Date.now() - fecha.getTime()) / 86400000);
     }
 
     function renderFx() {
         var box = document.getElementById('fxBox');
         var est = document.getElementById('fxEstado');
         var rates = document.getElementById('fxRates');
-        if (!_fx) {
-            est.innerHTML = '<span class="pa-warn">Sin cotizaciones guardadas. Tocá «Actualizar» para traerlas.</span>';
+        if (!_fx || !_fxMeta || !_fxMeta.actualizadoEn) {
+            est.innerHTML = '<span class="pa-warn">Sin cotizaciones. Tocá «Actualizar» o cargalas en Cotizaciones.</span>';
             rates.textContent = '';
             box.classList.add('viejo');
             return;
         }
-        var dias = _fxMeta && _fxMeta.actualizadoEn ? diasDesde(_fxMeta.actualizadoEn) : 9999;
+        var dias = CVC.diasDesdeCotizacion();
         var viejo = dias > 7;
         box.classList.toggle('viejo', viejo);
-        var cuando = _fxMeta && _fxMeta.actualizadoEn
-            ? _fxMeta.actualizadoEn.toLocaleDateString('es-UY') + ' (hace ' + dias + ' día' + (dias === 1 ? '' : 's') + ')'
-            : 'fecha desconocida';
-        est.innerHTML = 'Cotizaciones actualizadas: ' + cuando + (viejo ? ' <span class="pa-warn">— conviene actualizar</span>' : '');
-        // mostrar 1 USD en cada moneda
+        var cuando = _fxMeta.actualizadoEn.toLocaleDateString('es-UY') + ' (hace ' + dias + ' día' + (dias === 1 ? '' : 's') + ')';
+        est.innerHTML = 'Cotizaciones: ' + cuando + (viejo ? ' <span class="pa-warn">— conviene actualizar</span>' : '');
         var partes = [];
         ['BRL','UYU','EUR'].forEach(function(c) { if (_fx[c]) partes.push('1 US$ = ' + _fx[c].toFixed(2) + ' ' + c); });
         rates.textContent = partes.join('  ·  ');
@@ -257,18 +222,8 @@
         var btn = document.getElementById('btnFx');
         btn.disabled = true; btn.textContent = 'Consultando…';
         try {
-            var r = await fetch('https://open.er-api.com/v6/latest/USD');
-            var j = await r.json();
-            if (!j || j.result !== 'success' || !j.rates) throw new Error('respuesta inválida');
-            var rates = { USD: 1 };
-            ['BRL','UYU','EUR'].forEach(function(c) { if (j.rates[c]) rates[c] = j.rates[c]; });
-            _fx = rates;
-            _fxMeta = { actualizadoEn: new Date(), fuente: 'open.er-api.com' };
-            await db.collection('config').doc('cotizaciones').set({
-                base: 'USD', rates: rates, fuente: 'open.er-api.com',
-                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
-            renderFx();
+            await CVC.actualizarCotizacionesOnline(sesion.userData.nombre || sesion.user.email);
+            await cargarFx();
             recalcBase();
             showToast('Cotizaciones actualizadas.', 'success');
         } catch (e) {
@@ -328,7 +283,7 @@
             var f = String(g.fecha || '');
             if (f.slice(0, 4) !== anio) return;
             var cat = String(g.categoria || 'sin categoría').trim().toLowerCase();
-            var val = convertir(g.monto || 0, monedaGasto(g), disp);
+            var val = CVC.convertir(g.monto || 0, CVC.monedaDe(g), disp);
             if (!acum[cat]) acum[cat] = { total: 0, meses: {} };
             acum[cat].total += val;
             acum[cat].meses[f.slice(5, 7)] = true;
