@@ -166,6 +166,7 @@ const NAV_ADMIN_ITEMS = [
             { href: 'pagos.html',            icon: 'trending_up',     label: 'Ingresos reservas'  },
             { href: 'gastos.html',           icon: 'trending_down',   label: 'Gastos y retiros'   },
             { href: 'honorarios.html',       icon: 'engineering',     label: 'Honorarios'         },
+            { href: 'transferencias.html',   icon: 'swap_horiz',      label: 'Transferencias'     },
             { sep: true },
             { href: 'cuentas.html',          icon: 'account_balance', label: 'Cuentas'            },
             { href: 'movimientos.html',      icon: 'receipt_long',    label: 'Movimientos'        },
@@ -245,7 +246,7 @@ var SECCIONES_SOLO_ADMIN = [
     'panel-financiero', 'fiscal', 'cuentas', 'movimientos',
     'herramientas-btg', 'categorias', 'pagos', 'informes-airbnb',
     'acceso-contador', 'cabanas-admin', 'usuarios', 'tareas-admin', 'gastos',
-    'analisis-gastos', 'proyeccion-anual', 'cotizaciones'
+    'analisis-gastos', 'proyeccion-anual', 'cotizaciones', 'transferencias'
 ];
 function puede(seccion, rol) {
     rol = rol || 'admin';
@@ -1940,6 +1941,69 @@ function cotizacionEnFecha(fecha) {
         }).catch(function() { return null; });
 }
 
+// ── TRANSFERENCIAS ENTRE CUENTAS (v4.19) ──────────────────────────────────────
+//  Operación de dos patas: salida de una cuenta + entrada en otra, vinculadas.
+//  Unifica: transferencia, retiro, honorario propio y reintegro de gasto.
+//  Colección 'transferencias' (fuente de verdad). NO escribe en 'movimientos'
+//  (esos son el espejo del banco con saldoPost encadenado). Ajusta cuentas.saldoActual
+//  de forma atómica con increment. La conciliación (v4.20) cruza las patas con el banco.
+function crearTransferencia(t) {
+    var batch = db.batch();
+    var ref = db.collection('transferencias').doc();
+    var doc = {
+        fecha: t.fecha || new Date().toISOString().split('T')[0],
+        naturaleza: t.naturaleza || 'transferencia',
+        origenCuentaId: t.origenCuentaId || '',
+        origenCuentaNom: t.origenCuentaNom || '',
+        origenMoneda: t.origenMoneda || 'BRL',
+        montoOrigen: t.montoOrigen || 0,
+        destinoCuentaId: t.destinoCuentaId || '',
+        destinoCuentaNom: t.destinoCuentaNom || '',
+        destinoMoneda: t.destinoMoneda || 'BRL',
+        montoDestino: t.montoDestino || 0,
+        tipoCambioEfectivo: t.tipoCambioEfectivo || 1,
+        tipoCambioMercado: (t.tipoCambioMercado != null ? t.tipoCambioMercado : null),
+        concepto: t.concepto || '',
+        receptorUid: t.receptorUid || '',
+        receptorNombre: t.receptorNombre || '',
+        finalidadId: t.finalidadId || '',
+        finalidadNom: t.finalidadNom || '',
+        comprobanteUrl: t.comprobanteUrl || null,
+        conciliadoOrigen: false,
+        conciliadoDestino: false,
+        creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+        creadoPor: t.creadoPor || ''
+    };
+    batch.set(ref, doc);
+    if (t.origenCuentaId) {
+        batch.update(db.collection('cuentas').doc(t.origenCuentaId), {
+            saldoActual: firebase.firestore.FieldValue.increment(-(t.montoOrigen || 0))
+        });
+    }
+    if (t.destinoCuentaId) {
+        batch.update(db.collection('cuentas').doc(t.destinoCuentaId), {
+            saldoActual: firebase.firestore.FieldValue.increment(t.montoDestino || 0)
+        });
+    }
+    return batch.commit().then(function() { return ref.id; });
+}
+
+// Revierte los saldos y elimina la transferencia (recibe el doc completo con id).
+function eliminarTransferencia(t) {
+    var batch = db.batch();
+    if (t.origenCuentaId) {
+        batch.update(db.collection('cuentas').doc(t.origenCuentaId), {
+            saldoActual: firebase.firestore.FieldValue.increment(t.montoOrigen || 0)
+        });
+    }
+    if (t.destinoCuentaId) {
+        batch.update(db.collection('cuentas').doc(t.destinoCuentaId), {
+            saldoActual: firebase.firestore.FieldValue.increment(-(t.montoDestino || 0))
+        });
+    }
+    batch.delete(db.collection('transferencias').doc(t.id));
+    return batch.commit();
+}
 
 window.CVC = {
     db, auth,
@@ -1963,6 +2027,7 @@ window.CVC = {
     guardarConciliacion, cargarConfigConciliacion,
     cargarCotizaciones, convertir, monedaDe, diasDesdeCotizacion,
     guardarCotizaciones, actualizarCotizacionesOnline, cotizacionEnFecha,
+    crearTransferencia, eliminarTransferencia,
     escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
     subirComprobante, abrirComprobante, elegirFuenteFoto,
     enviarWhatsApp, enviarMail, notificar, avisar,

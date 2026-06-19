@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transferencias · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .tf-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4) var(--space-5); margin-bottom: var(--space-4); }
+        .tf-card__title { font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: var(--space-3); }
+        .form-group { margin-bottom: var(--space-3); }
+        .form-label { display: block; font-size: var(--text-sm); font-weight: 600; margin-bottom: 5px; }
+        .form-control { width: 100%; font-family: inherit; font-size: var(--text-base); padding: 9px 12px; border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-2); }
+        .tf-row { display: flex; gap: 10px; }
+        .tf-row > * { flex: 1; }
+        .tf-mon { display: flex; gap: 8px; }
+        .tf-mon input { flex: 1; }
+        .tf-mon select { width: 90px; }
+        .tf-leg { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); margin-bottom: var(--space-3); }
+        .tf-leg.origen { border-left: 4px solid var(--color-danger); }
+        .tf-leg.destino { border-left: 4px solid var(--color-success, #1a7f37); }
+        .tf-leg__h { font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-muted); margin-bottom: 8px; }
+        .tf-fx { font-size: var(--text-sm); padding: 9px 12px; border-radius: var(--radius-md); background: var(--color-surface-2); border: 1px solid var(--color-border); margin-bottom: var(--space-3); }
+        .tf-fx.alerta { border-color: var(--color-warning, #d9822b); background: var(--color-warning-xlight, #fdf3e7); }
+        .tf-fx b { font-family: var(--font-mono); }
+
+        .tf-item { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); margin-bottom: 8px; }
+        .tf-item__main { flex: 1; min-width: 0; }
+        .tf-item__flujo { font-weight: 600; }
+        .tf-item__sub { font-size: var(--text-xs); color: var(--color-text-muted); }
+        .tf-item__mono { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; text-align: right; }
+        .tf-nat { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; color: #fff; background: #6366f1; }
+        .tf-nat.transferencia { background: var(--color-primary); }
+        .tf-nat.retiro { background: #c62828; }
+        .tf-nat.honorario { background: #6a1b9a; }
+        .tf-nat.reintegro { background: #2e7d32; }
+        .tf-btn-del { border: none; background: transparent; cursor: pointer; color: var(--color-text-muted); padding: 4px; }
+        .tf-clip { border: none; background: transparent; cursor: pointer; color: var(--color-primary); padding: 4px; }
+        .tf-hint { font-size: var(--text-sm); color: var(--color-text-muted); margin-bottom: var(--space-3); }
+    </style>
+</head>
+<body>
+<header class="admin-header">
+    <div class="admin-header__brand"><span class="material-icons">cottage</span> Casa Verde Canas</div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span> <span id="userName">—</span></div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()"><span class="material-icons">logout</span> Salir</button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+    <div class="db-section-head" style="margin-bottom:var(--space-3);">
+        <div class="db-section-title">
+            <span class="material-icons" style="color:var(--color-primary);">swap_horiz</span>
+            Transferencias entre cuentas
+        </div>
+    </div>
+    <p class="tf-hint">
+        Movimiento de fondos con dos patas: <b>sale</b> de una cuenta y <b>entra</b> en otra. Sirve para
+        transferencias, retiros, honorarios a uno mismo y reintegros. La cuenta destino puede ser una
+        <b>cuenta personal</b> (las creás en Cuentas con tipo "Personal/Mixta", aunque no sea un banco).
+        Los saldos se ajustan automáticamente.
+    </p>
+
+    <!-- Formulario -->
+    <div class="tf-card">
+        <div class="tf-card__title"><span class="material-icons" style="color:var(--color-primary);">add</span> Nueva operación</div>
+
+        <div class="tf-row">
+            <div class="form-group">
+                <label class="form-label">Tipo de operación</label>
+                <select id="tNaturaleza" class="form-control">
+                    <option value="transferencia">Transferencia entre cuentas</option>
+                    <option value="retiro">Retiro</option>
+                    <option value="honorario">Honorario a mí mismo</option>
+                    <option value="reintegro">Reintegro de gasto</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Fecha</label>
+                <input type="date" id="tFecha" class="form-control">
+            </div>
+        </div>
+
+        <div class="tf-leg origen">
+            <div class="tf-leg__h">Sale de (origen)</div>
+            <div class="form-group">
+                <select id="tOrigen" class="form-control" onchange="onCuenta('origen')"></select>
+            </div>
+            <div class="tf-mon">
+                <input type="number" id="tMontoOrigen" class="form-control" step="0.01" min="0" placeholder="Monto que sale" oninput="recalcFx()">
+                <select id="tMonedaOrigen" class="form-control" onchange="recalcFx()">
+                    <option value="BRL">BRL</option><option value="UYU">UYU</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="ARS">ARS</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="tf-leg destino">
+            <div class="tf-leg__h">Entra en (destino)</div>
+            <div class="form-group">
+                <select id="tDestino" class="form-control" onchange="onCuenta('destino')"></select>
+            </div>
+            <div class="tf-mon">
+                <input type="number" id="tMontoDestino" class="form-control" step="0.01" min="0" placeholder="Monto que entra" oninput="recalcFx(true)">
+                <select id="tMonedaDestino" class="form-control" onchange="recalcFx()">
+                    <option value="BRL">BRL</option><option value="UYU">UYU</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="ARS">ARS</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="tf-fx" id="tFx" style="display:none;"></div>
+
+        <div class="form-group">
+            <label class="form-label">Concepto</label>
+            <input type="text" id="tConcepto" class="form-control" placeholder="Ej: Retiro de utilidad, pago honorarios marzo…">
+        </div>
+
+        <div class="tf-row">
+            <div class="form-group">
+                <label class="form-label">¿Quién recibe? (opcional)</label>
+                <select id="tReceptor" class="form-control"></select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Finalidad / economía (opcional)</label>
+                <select id="tFinalidad" class="form-control"></select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Comprobante (opcional)</label>
+            <input type="file" id="tFotoInput" accept="image/*" style="display:none;" onchange="previewFoto(this)">
+            <button type="button" class="btn btn-secondary" onclick="CVC.elegirFuenteFoto(function(f){ previewFoto({ files: [f] }); })"><span class="material-icons">photo_camera</span> Agregar foto</button>
+            <img id="tFotoPreview" src="" style="display:none; max-height:120px; margin-top:8px; border-radius:8px;">
+        </div>
+
+        <div class="alert alert-error" id="tError" style="display:none;"><span class="material-icons">error</span> <span id="tErrorText"></span></div>
+
+        <button class="btn btn-primary" id="tBtnGuardar" onclick="guardar()"><span class="material-icons">save</span> <span id="tBtnTxt">Registrar operación</span></button>
+    </div>
+
+    <!-- Lista -->
+    <div class="tf-card">
+        <div class="tf-card__title"><span class="material-icons" style="color:var(--color-text-muted);">history</span> Operaciones recientes</div>
+        <div id="tLista"><div class="state-loading"><div class="spinner"></div><span>Cargando…</span></div></div>
+    </div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async function() {
+    var sesion = await CVC.verificarAuth(['admin']);
+    document.getElementById('userName').textContent = sesion.userData.nombre || sesion.user.email;
+    CVC.renderNav('transferencias.html', sesion.userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('transferencias.html');
+
+    var db = CVC.db;
+    var escapeHtml = CVC.escapeHtml;
+    var showToast = CVC.showToast;
+    var user = sesion.user;
+    var userData = sesion.userData;
+
+    var SIMB = { BRL: 'R$', UYU: '$U', USD: 'US$', EUR: '€', ARS: 'AR$' };
+    var NAT_LABEL = { transferencia: 'Transferencia', retiro: 'Retiro', honorario: 'Honorario', reintegro: 'Reintegro' };
+    var _cuentas = [];
+    var _usuarios = [];
+    var _destinos = [];
+    var _fotoFile = null;
+
+    function fmt(n, ccy) { return (SIMB[ccy] || ccy) + ' ' + (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+    document.getElementById('tFecha').value = new Date().toISOString().split('T')[0];
+
+    // ── Cargar datos ──────────────────────────────────────────
+    await CVC.cargarCotizaciones();
+
+    try {
+        var sc = await db.collection('cuentas').get();
+        _cuentas = sc.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
+            .filter(function(c) { return c.activa !== false; });
+    } catch (e) { _cuentas = []; }
+
+    try {
+        var su = await db.collection('usuarios').get();
+        _usuarios = su.docs.map(function(d) { var x = d.data(); return { uid: d.id, nombre: x.nombre || x.email || d.id }; });
+    } catch (e) { _usuarios = []; }
+
+    try {
+        var sde = await db.collection('destinos').get();
+        _destinos = sde.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
+            .filter(function(d) { return d.activo !== false; });
+    } catch (e) { _destinos = []; }
+
+    function tipoLabel(c) {
+        var t = c.tipo || 'operativa';
+        if (t === 'personal') return ' · personal';
+        return '';
+    }
+
+    function poblarCuentas() {
+        var opts = '<option value="">— elegir cuenta —</option>' + _cuentas.map(function(c) {
+            return '<option value="' + c.id + '">' + escapeHtml(c.nombre) + ' (' + (c.moneda || 'BRL') + tipoLabel(c) + ')</option>';
+        }).join('');
+        document.getElementById('tOrigen').innerHTML = opts;
+        document.getElementById('tDestino').innerHTML = opts;
+    }
+
+    function poblarUsuarios() {
+        document.getElementById('tReceptor').innerHTML = '<option value="">— nadie en particular —</option>' +
+            _usuarios.map(function(u) { return '<option value="' + u.uid + '">' + escapeHtml(u.nombre) + '</option>'; }).join('');
+    }
+
+    function poblarDestinos() {
+        document.getElementById('tFinalidad').innerHTML = '<option value="">— sin finalidad —</option>' +
+            _destinos.map(function(d) { return '<option value="' + d.id + '">' + escapeHtml(d.nombre) + '</option>'; }).join('');
+    }
+
+    poblarCuentas();
+    poblarUsuarios();
+    poblarDestinos();
+
+    window.onCuenta = function(lado) {
+        var sel = document.getElementById(lado === 'origen' ? 'tOrigen' : 'tDestino');
+        var c = _cuentas.find(function(x) { return x.id === sel.value; });
+        if (c && c.moneda) {
+            document.getElementById(lado === 'origen' ? 'tMonedaOrigen' : 'tMonedaDestino').value = (c.moneda || 'BRL').toUpperCase();
+        }
+        recalcFx();
+    };
+
+    // ── Tipo de cambio efectivo vs mercado ────────────────────
+    window.recalcFx = function(editandoDestino) {
+        var mo = document.getElementById('tMonedaOrigen').value;
+        var md = document.getElementById('tMonedaDestino').value;
+        var montoO = parseFloat(document.getElementById('tMontoOrigen').value) || 0;
+        var box = document.getElementById('tFx');
+
+        if (mo === md) {
+            // misma moneda: el destino sigue al origen
+            document.getElementById('tMontoDestino').value = montoO ? montoO : '';
+            box.style.display = 'none';
+            return;
+        }
+
+        var montoD = parseFloat(document.getElementById('tMontoDestino').value) || 0;
+        // Si no se está editando el destino y hay mercado, sugerir el monto destino
+        if (!editandoDestino && montoO && (!montoD)) {
+            var sugerido = CVC.convertir(montoO, mo, md);
+            if (sugerido) { document.getElementById('tMontoDestino').value = sugerido.toFixed(2); montoD = sugerido; }
+        }
+
+        box.style.display = 'block';
+        if (!montoO || !montoD) { box.classList.remove('alerta'); box.innerHTML = 'Cargá ambos montos para ver el tipo de cambio.'; return; }
+
+        var efectivo = montoD / montoO;                 // unidades destino por 1 origen
+        var mercado = CVC.convertir(1, mo, md);          // mismo, según cotización guardada
+        var html = 'Cambio efectivo de la operación: <b>1 ' + mo + ' = ' + efectivo.toFixed(4) + ' ' + md + '</b>';
+        if (mercado) {
+            var difPct = (efectivo - mercado) / mercado * 100;
+            html += '<br>Cambio de mercado guardado: <b>1 ' + mo + ' = ' + mercado.toFixed(4) + ' ' + md + '</b>' +
+                ' · diferencia <b>' + (difPct >= 0 ? '+' : '') + difPct.toFixed(1) + '%</b>';
+            box.classList.toggle('alerta', Math.abs(difPct) > 3);
+            if (Math.abs(difPct) > 3) html += '<br><span style="color:var(--color-warning,#d9822b);font-weight:600;">La diferencia con el mercado es alta — revisá los montos.</span>';
+        } else {
+            html += '<br><span style="color:var(--color-text-muted);">Sin cotización de mercado para comparar (cargala en Cotizaciones).</span>';
+        }
+        box.innerHTML = html;
+    };
+
+    window.previewFoto = function(input) {
+        var file = input.files[0];
+        if (!file) return;
+        _fotoFile = file;
+        var img = document.getElementById('tFotoPreview');
+        img.src = URL.createObjectURL(file);
+        img.style.display = 'block';
+    };
+
+    function err(msg) {
+        document.getElementById('tErrorText').textContent = msg;
+        document.getElementById('tError').style.display = 'flex';
+    }
+
+    window.guardar = async function() {
+        document.getElementById('tError').style.display = 'none';
+        var origenSel = document.getElementById('tOrigen');
+        var destinoSel = document.getElementById('tDestino');
+        var origenId = origenSel.value;
+        var destinoId = destinoSel.value;
+        var montoO = parseFloat(document.getElementById('tMontoOrigen').value) || 0;
+        var montoD = parseFloat(document.getElementById('tMontoDestino').value) || 0;
+        var mo = document.getElementById('tMonedaOrigen').value;
+        var md = document.getElementById('tMonedaDestino').value;
+
+        if (!origenId) { err('Elegí la cuenta de origen.'); return; }
+        if (!destinoId) { err('Elegí la cuenta de destino.'); return; }
+        if (origenId === destinoId) { err('Origen y destino no pueden ser la misma cuenta.'); return; }
+        if (!montoO || montoO <= 0) { err('Ingresá el monto que sale.'); return; }
+        if (!montoD || montoD <= 0) { err('Ingresá el monto que entra.'); return; }
+
+        var cO = _cuentas.find(function(c) { return c.id === origenId; });
+        var cD = _cuentas.find(function(c) { return c.id === destinoId; });
+        var recSel = document.getElementById('tReceptor');
+        var finSel = document.getElementById('tFinalidad');
+
+        var datos = {
+            fecha: document.getElementById('tFecha').value || new Date().toISOString().split('T')[0],
+            naturaleza: document.getElementById('tNaturaleza').value,
+            origenCuentaId: origenId, origenCuentaNom: cO ? cO.nombre : '', origenMoneda: mo, montoOrigen: montoO,
+            destinoCuentaId: destinoId, destinoCuentaNom: cD ? cD.nombre : '', destinoMoneda: md, montoDestino: montoD,
+            tipoCambioEfectivo: montoO ? (montoD / montoO) : 1,
+            tipoCambioMercado: (mo !== md) ? CVC.convertir(1, mo, md) : 1,
+            concepto: document.getElementById('tConcepto').value.trim(),
+            receptorUid: recSel.value || '',
+            receptorNombre: recSel.value ? recSel.options[recSel.selectedIndex].textContent : '',
+            finalidadId: finSel.value || '',
+            finalidadNom: finSel.value ? finSel.options[finSel.selectedIndex].textContent : '',
+            creadoPor: user.uid
+        };
+
+        var btn = document.getElementById('tBtnGuardar');
+        var txt = document.getElementById('tBtnTxt');
+        btn.disabled = true; txt.textContent = 'Guardando…';
+        try {
+            var id = await CVC.crearTransferencia(datos);
+            if (_fotoFile) {
+                txt.textContent = 'Subiendo foto…';
+                try {
+                    var url = await CVC.subirComprobante(_fotoFile, 'transferencias', id);
+                    await db.collection('transferencias').doc(id).update({ comprobanteUrl: url });
+                } catch (se) { console.warn('Foto:', se.message); }
+            }
+            showToast('Operación registrada. Saldos actualizados.', 'success');
+            limpiar();
+            await cargarLista();
+        } catch (e) {
+            err('Error al guardar: ' + e.message);
+        } finally {
+            btn.disabled = false; txt.textContent = 'Registrar operación';
+        }
+    };
+
+    function limpiar() {
+        document.getElementById('tMontoOrigen').value = '';
+        document.getElementById('tMontoDestino').value = '';
+        document.getElementById('tConcepto').value = '';
+        document.getElementById('tFotoPreview').style.display = 'none';
+        document.getElementById('tFx').style.display = 'none';
+        _fotoFile = null;
+    }
+
+    // ── Lista ─────────────────────────────────────────────────
+    async function cargarLista() {
+        var cont = document.getElementById('tLista');
+        try {
+            var snap = await db.collection('transferencias').orderBy('fecha', 'desc').limit(100).get();
+            if (snap.empty) { cont.innerHTML = '<div class="tf-hint">Todavía no hay operaciones.</div>'; return; }
+            var arr = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+            cont.innerHTML = arr.map(function(t) {
+                var nat = t.naturaleza || 'transferencia';
+                var flujo = escapeHtml(t.origenCuentaNom || '—') + ' → ' + escapeHtml(t.destinoCuentaNom || '—');
+                var montos = fmt(t.montoOrigen, t.origenMoneda);
+                if (t.origenMoneda !== t.destinoMoneda) montos += ' → ' + fmt(t.montoDestino, t.destinoMoneda);
+                var clip = t.comprobanteUrl
+                    ? '<button class="tf-clip" onclick="CVC.abrirComprobante(\'' + t.comprobanteUrl + '\')" title="Ver comprobante"><span class="material-icons">attach_file</span></button>'
+                    : '';
+                var extra = [];
+                if (t.concepto) extra.push(escapeHtml(t.concepto));
+                if (t.receptorNombre) extra.push('recibe: ' + escapeHtml(t.receptorNombre));
+                if (t.finalidadNom) extra.push(escapeHtml(t.finalidadNom));
+                return '<div class="tf-item">' +
+                    '<div class="tf-item__main">' +
+                        '<div class="tf-item__flujo"><span class="tf-nat ' + nat + '">' + (NAT_LABEL[nat] || nat) + '</span> ' + flujo + '</div>' +
+                        '<div class="tf-item__sub">' + escapeHtml(t.fecha || '') + (extra.length ? ' · ' + extra.join(' · ') : '') + '</div>' +
+                    '</div>' +
+                    '<div class="tf-item__mono">' + montos + '</div>' +
+                    clip +
+                    '<button class="tf-btn-del" onclick="borrar(\'' + t.id + '\')" title="Eliminar"><span class="material-icons">delete</span></button>' +
+                '</div>';
+            }).join('');
+        } catch (e) {
+            cont.innerHTML = '<div class="tf-hint">No se pudo cargar: ' + escapeHtml(e.message) + '</div>';
+        }
+    }
+
+    window.borrar = async function(id) {
+        if (!confirm('¿Eliminar esta operación? Se revierten los saldos de ambas cuentas.')) return;
+        try {
+            var doc = await db.collection('transferencias').doc(id).get();
+            if (!doc.exists) return;
+            await CVC.eliminarTransferencia(Object.assign({ id: id }, doc.data()));
+            showToast('Operación eliminada y saldos revertidos.', 'success');
+            await cargarLista();
+        } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    await cargarLista();
+})();
+</script>
+</body>
+</html>
