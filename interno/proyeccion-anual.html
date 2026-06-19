@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proyección anual · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .pa-bar-tools { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; margin-bottom: var(--space-3); }
+        .pa-bar-tools select { font-family: inherit; font-size: var(--text-sm); padding: 7px var(--space-3); border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+        .pa-chip { border: 1.5px solid var(--color-border); background: var(--color-surface); color: var(--color-text-secondary); border-radius: 99px; padding: 5px 14px; font-size: var(--text-xs); font-weight: 700; cursor: pointer; font-family: inherit; }
+        .pa-chip.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+
+        .pa-fx { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); margin-bottom: var(--space-3); font-size: var(--text-sm); }
+        .pa-fx.viejo { border-color: var(--color-warning, #d9822b); background: var(--color-warning-xlight, #fdf3e7); }
+        .pa-fx__rates { color: var(--color-text-muted); font-family: var(--font-mono); font-size: var(--text-xs); }
+
+        .pa-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4) var(--space-5); margin-bottom: var(--space-4); }
+        .pa-card__head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+        .pa-card__title { font-weight: 700; display: flex; align-items: center; gap: 8px; }
+
+        .pa-res-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
+        .pa-res { background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); }
+        .pa-res .lbl { font-size: var(--text-xs); color: var(--color-text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+        .pa-res .n { font-family: var(--font-mono); font-size: 22px; font-weight: 700; color: var(--color-text-primary); }
+        .pa-res.compartido { background: var(--color-primary-xlight); border-color: var(--color-primary-light); }
+        .pa-res.compartido .n { color: var(--color-primary-dark); }
+        .pa-res.balance-pos .n { color: var(--color-success, #1a7f37); }
+        .pa-res.balance-neg .n { color: var(--color-danger); }
+
+        .pa-eco { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); padding: 10px 0; border-bottom: 1px solid var(--color-border-light); }
+        .pa-eco:last-child { border-bottom: none; }
+        .pa-eco__bar { height: 7px; background: var(--color-surface-2); border-radius: 99px; overflow: hidden; margin-top: 5px; }
+        .pa-eco__fill { height: 100%; border-radius: 99px; }
+
+        .pa-linea { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2); background: var(--color-surface); }
+        .pa-linea__top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .pa-linea input.txt { flex: 1; min-width: 140px; font-family: inherit; font-size: var(--text-sm); padding: 7px 10px; border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-2); }
+        .pa-linea input.num { width: 110px; font-family: var(--font-mono); font-size: var(--text-sm); padding: 7px 10px; border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-2); text-align: right; }
+        .pa-linea select { font-family: inherit; font-size: var(--text-sm); padding: 7px 10px; border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-2); }
+        .pa-linea__del { border: none; background: transparent; cursor: pointer; color: var(--color-text-muted); padding: 4px; }
+        .pa-linea__del .material-icons { font-size: 19px; }
+        .pa-linea__anual { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 6px; }
+        .pa-linea__anual b { color: var(--color-text-primary); font-family: var(--font-mono); }
+
+        .pa-meses { display: none; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+        .pa-meses.open { display: flex; }
+        .pa-mes { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+        .pa-mes label { font-size: 9px; color: var(--color-text-muted); font-weight: 700; }
+        .pa-mes input { width: 46px; text-align: center; font-family: var(--font-mono); font-size: 11px; padding: 4px 2px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface-2); }
+
+        .pa-base-row { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding: 9px var(--space-3); border-bottom: 1px solid var(--color-border-light); font-size: var(--text-sm); }
+        .pa-base-row:last-child { border-bottom: none; }
+        .pa-base-row .m { font-family: var(--font-mono); white-space: nowrap; }
+        .pa-base-add { border: 1.5px solid var(--color-primary); background: var(--color-surface); color: var(--color-primary); border-radius: 99px; padding: 3px 12px; font-size: var(--text-xs); font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
+
+        .pa-hint { font-size: var(--text-sm); color: var(--color-text-muted); margin-bottom: var(--space-3); }
+        .pa-warn { font-size: var(--text-xs); color: var(--color-warning, #d9822b); font-weight: 600; }
+        .pa-attr { font-size: 10px; color: var(--color-text-muted); text-align: right; margin-top: var(--space-4); }
+        .pa-attr a { color: var(--color-text-muted); }
+    </style>
+</head>
+<body>
+<header class="admin-header">
+    <div class="admin-header__brand"><span class="material-icons">cottage</span> Casa Verde Canas</div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span> <span id="userName">—</span></div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()"><span class="material-icons">logout</span> Salir</button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+    <div class="db-section-head" style="margin-bottom:var(--space-3);">
+        <div class="db-section-title">
+            <span class="material-icons" style="color:var(--color-primary);">query_stats</span>
+            Proyección anual de presupuesto
+        </div>
+    </div>
+    <p class="pa-hint">
+        Herramienta de simulación. <b>No modifica ningún gasto real:</b> toma la base histórica como punto de
+        partida y te deja jugar con los números para estimar el año, separar economías (Compartido, Niños,
+        Florencia, Mauro) y ver el mínimo a compartir y de dónde salen los recursos. Podés guardar escenarios.
+    </p>
+
+    <!-- Estado de cotizaciones -->
+    <div class="pa-fx" id="fxBox">
+        <span class="material-icons" style="font-size:18px;color:var(--color-text-muted);">currency_exchange</span>
+        <span id="fxEstado">Cargando cotizaciones…</span>
+        <span class="pa-fx__rates" id="fxRates"></span>
+        <button class="pa-chip" id="btnFx" onclick="actualizarFx()" style="margin-left:auto;">Actualizar cotizaciones</button>
+    </div>
+
+    <!-- Controles -->
+    <div class="pa-bar-tools">
+        <label style="font-size:var(--text-sm);color:var(--color-text-muted);">Año base</label>
+        <select id="selAnio" onchange="recalcBase()"></select>
+        <label style="font-size:var(--text-sm);color:var(--color-text-muted);">Mostrar en</label>
+        <select id="selMoneda" onchange="recalcBase()">
+            <option value="BRL">🇧🇷 Reales (R$)</option>
+            <option value="UYU">🇺🇾 Pesos UY ($U)</option>
+            <option value="USD">US$ Dólares</option>
+            <option value="EUR">🇪🇺 Euros (€)</option>
+        </select>
+        <span style="width:8px;"></span>
+        <select id="selEscenario" onchange="cargarEscenario()" style="min-width:160px;">
+            <option value="">— escenario nuevo —</option>
+        </select>
+        <button class="pa-chip" onclick="guardarEscenario()">Guardar</button>
+        <button class="pa-chip" onclick="borrarEscenario()">Borrar</button>
+    </div>
+
+    <!-- Resultados -->
+    <div class="pa-card">
+        <div class="pa-card__head"><div class="pa-card__title"><span class="material-icons" style="color:var(--color-primary);">savings</span> Resultado de la simulación</div></div>
+        <div class="pa-res-grid" id="resGrid"></div>
+        <div id="resEconomias"></div>
+    </div>
+
+    <!-- Gastos proyectados -->
+    <div class="pa-card">
+        <div class="pa-card__head">
+            <div class="pa-card__title"><span class="material-icons" style="color:var(--color-danger);">trending_down</span> Gastos proyectados</div>
+            <button class="btn btn-primary" onclick="agregarLinea()"><span class="material-icons">add</span> Línea</button>
+        </div>
+        <div id="lineas"></div>
+    </div>
+
+    <!-- Recursos -->
+    <div class="pa-card">
+        <div class="pa-card__head">
+            <div class="pa-card__title"><span class="material-icons" style="color:var(--color-success,#1a7f37);">trending_up</span> Recursos / ingresos estimados</div>
+            <button class="btn btn-primary" onclick="agregarRecurso()"><span class="material-icons">add</span> Recurso</button>
+        </div>
+        <div id="recursos"></div>
+    </div>
+
+    <!-- Base histórica -->
+    <div class="pa-card">
+        <div class="pa-card__head">
+            <div class="pa-card__title"><span class="material-icons" style="color:var(--color-text-muted);">history</span> Base histórica (solo lectura)</div>
+            <button class="pa-chip" id="btnBase" onclick="toggleBase()">Mostrar</button>
+        </div>
+        <div id="baseInfo" style="display:none;">
+            <p class="pa-hint" id="baseResumen"></p>
+            <div id="baseLista"></div>
+        </div>
+    </div>
+
+    <div class="pa-attr">Cotizaciones: <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">ExchangeRate-API</a> · informativas</div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async function() {
+    var sesion = await CVC.verificarAuth(['admin']);
+    document.getElementById('userName').textContent = sesion.userData.nombre || sesion.user.email;
+    CVC.renderNav('proyeccion-anual.html', sesion.userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('proyeccion-anual.html');
+
+    var db = CVC.db;
+    var escapeHtml = CVC.escapeHtml;
+    var showToast = CVC.showToast;
+
+    var MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    var SIMB = { BRL: 'R$', UYU: '$U', USD: 'US$', EUR: '€' };
+
+    // ── Estado ────────────────────────────────────────────────
+    var _gastos = [];
+    var _categorias = [];
+    var _destinos = [];
+    var _economias = ['Compartido', 'Niños', 'Florencia', 'Mauro'];
+    var _fx = null;            // { USD:1, BRL:.., UYU:.., EUR:.. }  (unidades de moneda por 1 USD)
+    var _fxMeta = null;        // { actualizadoEn (Date), fuente }
+    var _baseMedia = {};       // categoria -> media mensual en moneda display
+    var _seq = 1;
+    var _esc = { nombre: '', lineas: [], recursos: [] };
+    var _escenarios = [];
+
+    function moneda() { return document.getElementById('selMoneda').value || 'BRL'; }
+    function anioBase() { return document.getElementById('selAnio').value || String(new Date().getFullYear()); }
+
+    function fmt(n, ccy) {
+        ccy = ccy || moneda();
+        var s = SIMB[ccy] || ccy;
+        return s + ' ' + (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    }
+
+    // Moneda de un gasto: usa g.moneda, si no mapea por país.
+    function monedaGasto(g) {
+        var m = String(g.moneda || '').toUpperCase();
+        if (m === 'BRL' || m === 'UYU' || m === 'USD' || m === 'EUR') return m;
+        if (m === 'R$') return 'BRL';
+        var p = String(g.pais || 'BR').toUpperCase();
+        if (p === 'UY') return 'UYU';
+        if (p === 'FR') return 'EUR';
+        if (p === 'US') return 'USD';
+        return 'BRL';
+    }
+
+    // Convierte un monto entre monedas usando _fx (base USD).
+    function convertir(monto, desde, hacia) {
+        if (!monto) return 0;
+        if (desde === hacia) return monto;
+        if (!_fx || !_fx[desde] || !_fx[hacia]) return monto; // sin tabla: deja crudo
+        var enUSD = monto / _fx[desde];
+        return enUSD * _fx[hacia];
+    }
+
+    // ── Cotizaciones ──────────────────────────────────────────
+    async function cargarFx() {
+        try {
+            var doc = await db.collection('config').doc('tipos_cambio').get();
+            if (doc.exists) {
+                var d = doc.data();
+                _fx = d.rates || null;
+                var ts = d.actualizadoEn && d.actualizadoEn.toDate ? d.actualizadoEn.toDate() : null;
+                _fxMeta = { actualizadoEn: ts, fuente: d.fuente || '' };
+            }
+        } catch (e) { _fx = null; }
+        renderFx();
+    }
+
+    function diasDesde(fecha) {
+        if (!fecha) return 9999;
+        return Math.floor((Date.now() - fecha.getTime()) / 86400000);
+    }
+
+    function renderFx() {
+        var box = document.getElementById('fxBox');
+        var est = document.getElementById('fxEstado');
+        var rates = document.getElementById('fxRates');
+        if (!_fx) {
+            est.innerHTML = '<span class="pa-warn">Sin cotizaciones guardadas. Tocá «Actualizar» para traerlas.</span>';
+            rates.textContent = '';
+            box.classList.add('viejo');
+            return;
+        }
+        var dias = _fxMeta && _fxMeta.actualizadoEn ? diasDesde(_fxMeta.actualizadoEn) : 9999;
+        var viejo = dias > 7;
+        box.classList.toggle('viejo', viejo);
+        var cuando = _fxMeta && _fxMeta.actualizadoEn
+            ? _fxMeta.actualizadoEn.toLocaleDateString('es-UY') + ' (hace ' + dias + ' día' + (dias === 1 ? '' : 's') + ')'
+            : 'fecha desconocida';
+        est.innerHTML = 'Cotizaciones actualizadas: ' + cuando + (viejo ? ' <span class="pa-warn">— conviene actualizar</span>' : '');
+        // mostrar 1 USD en cada moneda
+        var partes = [];
+        ['BRL','UYU','EUR'].forEach(function(c) { if (_fx[c]) partes.push('1 US$ = ' + _fx[c].toFixed(2) + ' ' + c); });
+        rates.textContent = partes.join('  ·  ');
+    }
+
+    window.actualizarFx = async function() {
+        var btn = document.getElementById('btnFx');
+        btn.disabled = true; btn.textContent = 'Consultando…';
+        try {
+            var r = await fetch('https://open.er-api.com/v6/latest/USD');
+            var j = await r.json();
+            if (!j || j.result !== 'success' || !j.rates) throw new Error('respuesta inválida');
+            var rates = { USD: 1 };
+            ['BRL','UYU','EUR'].forEach(function(c) { if (j.rates[c]) rates[c] = j.rates[c]; });
+            _fx = rates;
+            _fxMeta = { actualizadoEn: new Date(), fuente: 'open.er-api.com' };
+            await db.collection('config').doc('tipos_cambio').set({
+                base: 'USD', rates: rates, fuente: 'open.er-api.com',
+                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+            renderFx();
+            recalcBase();
+            showToast('Cotizaciones actualizadas.', 'success');
+        } catch (e) {
+            showToast('No se pudieron traer las cotizaciones: ' + e.message, 'error');
+        }
+        btn.disabled = false; btn.textContent = 'Actualizar cotizaciones';
+    };
+
+    // ── Carga inicial de datos ────────────────────────────────
+    try {
+        var sg = await db.collection('gastos').get();
+        _gastos = sg.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+    } catch (e) { _gastos = []; }
+
+    try {
+        var sc = await db.collection('categorias').get();
+        _categorias = sc.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+    } catch (e) { _categorias = []; }
+
+    try {
+        var sd = await db.collection('destinos').get();
+        _destinos = sd.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+        // Economías a partir de destinos: negocio->Compartido, ninos->Niños, personal->usuarioNombre
+        var set = {};
+        _destinos.forEach(function(d) {
+            if (d.activo === false) return;
+            if (d.tipo === 'ninos') set['Niños'] = true;
+            else if (d.tipo === 'personal' && d.usuarioNombre) set[d.usuarioNombre] = true;
+        });
+        var eco = ['Compartido'];
+        if (set['Niños']) eco.push('Niños'); else eco.push('Niños');
+        Object.keys(set).forEach(function(k) { if (k !== 'Niños' && eco.indexOf(k) === -1) eco.push(k); });
+        if (eco.indexOf('Florencia') === -1) eco.push('Florencia');
+        if (eco.indexOf('Mauro') === -1) eco.push('Mauro');
+        _economias = eco;
+    } catch (e) { /* defaults */ }
+
+    // Años disponibles
+    var anios = {};
+    _gastos.forEach(function(g) { if (g.fecha) anios[String(g.fecha).slice(0, 4)] = true; });
+    var listaAnios = Object.keys(anios).sort().reverse();
+    var hoyAnio = String(new Date().getFullYear());
+    if (listaAnios.indexOf(hoyAnio) === -1) listaAnios.unshift(hoyAnio);
+    document.getElementById('selAnio').innerHTML = listaAnios.map(function(a) {
+        return '<option value="' + a + '"' + (a === hoyAnio ? ' selected' : '') + '>' + a + '</option>';
+    }).join('');
+
+    await cargarFx();
+    await cargarListaEscenarios();
+
+    // ── Base histórica → media mensual por categoría ──────────
+    function recalcBase() {
+        var anio = anioBase();
+        var disp = moneda();
+        var acum = {};   // cat -> { total, meses:{} }
+        _gastos.forEach(function(g) {
+            var f = String(g.fecha || '');
+            if (f.slice(0, 4) !== anio) return;
+            var cat = String(g.categoria || 'sin categoría').trim().toLowerCase();
+            var val = convertir(g.monto || 0, monedaGasto(g), disp);
+            if (!acum[cat]) acum[cat] = { total: 0, meses: {} };
+            acum[cat].total += val;
+            acum[cat].meses[f.slice(5, 7)] = true;
+        });
+        _baseMedia = {};
+        Object.keys(acum).forEach(function(cat) {
+            var nMeses = Object.keys(acum[cat].meses).length || 1;
+            _baseMedia[cat] = acum[cat].total / nMeses; // media por mes con datos
+        });
+        renderBase();
+        render();      // re-renderiza líneas (los montos editados se conservan) y resultados
+    }
+
+    function renderBase() {
+        var cats = Object.keys(_baseMedia).sort(function(a, b) { return _baseMedia[b] - _baseMedia[a]; });
+        var resumen = document.getElementById('baseResumen');
+        var lista = document.getElementById('baseLista');
+        if (!cats.length) {
+            resumen.textContent = 'No hay gastos registrados en ' + anioBase() + ' para usar como base.';
+            lista.innerHTML = '';
+            return;
+        }
+        var totalMes = 0;
+        cats.forEach(function(c) { totalMes += _baseMedia[c]; });
+        resumen.innerHTML = 'Media mensual del año ' + anioBase() + ' (convertida a ' + (SIMB[moneda()] || moneda()) +
+            '): <b>' + fmt(totalMes) + '/mes</b>. Tocá «Llevar» para arrancar una línea de proyección con ese valor.';
+        lista.innerHTML = cats.map(function(c) {
+            return '<div class="pa-base-row">' +
+                '<span style="flex:1;text-transform:capitalize;">' + escapeHtml(c) + '</span>' +
+                '<span class="m">' + fmt(_baseMedia[c]) + '/mes</span>' +
+                '<button class="pa-base-add" onclick="agregarLinea(\'' + encodeURIComponent(c) + '\')">Llevar →</button>' +
+            '</div>';
+        }).join('');
+    }
+
+    window.toggleBase = function() {
+        var d = document.getElementById('baseInfo');
+        var b = document.getElementById('btnBase');
+        var open = d.style.display === 'none';
+        d.style.display = open ? 'block' : 'none';
+        b.textContent = open ? 'Ocultar' : 'Mostrar';
+    };
+
+    // ── Líneas de gasto ───────────────────────────────────────
+    function nuevoPerfil() { return [1,1,1,1,1,1,1,1,1,1,1,1]; }
+
+    function presetFactores(perfil) {
+        if (perfil === 'verano') return [1.4,1.4,1.2,0.9,0.8,0.7,0.7,0.8,0.9,1.0,1.1,1.4];
+        if (perfil === 'invierno') return [0.7,0.7,0.8,1.0,1.2,1.4,1.4,1.3,1.1,0.9,0.8,0.7];
+        return nuevoPerfil();
+    }
+
+    window.agregarLinea = function(catEnc) {
+        var cat = catEnc ? decodeURIComponent(catEnc) : '';
+        var base = cat && _baseMedia[cat] ? Math.round(_baseMedia[cat]) : 0;
+        _esc.lineas.push({
+            id: 'L' + (_seq++), concepto: cat ? (cat.charAt(0).toUpperCase() + cat.slice(1)) : '',
+            economia: 'Compartido', base: base, perfil: 'plano', factores: nuevoPerfil()
+        });
+        render();
+    };
+
+    window.agregarRecurso = function() {
+        _esc.recursos.push({ id: 'R' + (_seq++), concepto: '', base: 0, perfil: 'plano', factores: nuevoPerfil() });
+        render();
+    };
+
+    window.borrarLinea = function(id, tipo) {
+        var arr = tipo === 'rec' ? _esc.recursos : _esc.lineas;
+        for (var i = 0; i < arr.length; i++) { if (arr[i].id === id) { arr.splice(i, 1); break; } }
+        render();
+    };
+
+    function getLinea(id) {
+        var arr = _esc.lineas.concat(_esc.recursos);
+        for (var i = 0; i < arr.length; i++) { if (arr[i].id === id) return arr[i]; }
+        return null;
+    }
+
+    window.setCampo = function(id, campo, val) {
+        var l = getLinea(id);
+        if (!l) return;
+        if (campo === 'base') l.base = parseFloat(val) || 0;
+        else l[campo] = val;
+        if (campo === 'perfil') { l.factores = presetFactores(val); render(); return; }
+        if (campo === 'base') { renderResultados(); actualizarAnualLinea(id); return; }
+        renderResultados();
+    };
+
+    window.setFactor = function(id, mes, val) {
+        var l = getLinea(id);
+        if (!l) return;
+        l.factores[mes] = (parseFloat(val) || 0) / 100;
+        l.perfil = 'personalizado';
+        renderResultados();
+        actualizarAnualLinea(id);
+    };
+
+    window.toggleMeses = function(id) {
+        var el = document.getElementById('meses-' + id);
+        if (el) el.classList.toggle('open');
+    };
+
+    function anualLinea(l) {
+        var t = 0;
+        for (var m = 0; m < 12; m++) t += (l.base || 0) * (l.factores[m] != null ? l.factores[m] : 1);
+        return t;
+    }
+
+    function actualizarAnualLinea(id) {
+        var el = document.getElementById('anual-' + id);
+        var l = getLinea(id);
+        if (el && l) el.innerHTML = 'Anual: <b>' + fmt(anualLinea(l)) + '</b> · mensual prom. <b>' + fmt(anualLinea(l) / 12) + '</b>';
+    }
+
+    function lineaHTML(l, tipo) {
+        var ecoSel = '';
+        if (tipo !== 'rec') {
+            ecoSel = '<select onchange="setCampo(\'' + l.id + '\',\'economia\',this.value)">' +
+                _economias.map(function(e) { return '<option value="' + escapeHtml(e) + '"' + (e === l.economia ? ' selected' : '') + '>' + escapeHtml(e) + '</option>'; }).join('') +
+                '</select>';
+        }
+        var perfilSel = '<select onchange="setCampo(\'' + l.id + '\',\'perfil\',this.value)">' +
+            '<option value="plano"' + (l.perfil === 'plano' ? ' selected' : '') + '>Plano</option>' +
+            '<option value="verano"' + (l.perfil === 'verano' ? ' selected' : '') + '>Temp. alta verano</option>' +
+            '<option value="invierno"' + (l.perfil === 'invierno' ? ' selected' : '') + '>Temp. alta invierno</option>' +
+            '<option value="personalizado"' + (l.perfil === 'personalizado' ? ' selected' : '') + '>Personalizado</option>' +
+            '</select>';
+        var meses = '<div class="pa-meses" id="meses-' + l.id + '">' +
+            MESES.map(function(nm, i) {
+                var pct = Math.round((l.factores[i] != null ? l.factores[i] : 1) * 100);
+                return '<div class="pa-mes"><label>' + nm + '</label>' +
+                    '<input type="number" value="' + pct + '" oninput="setFactor(\'' + l.id + '\',' + i + ',this.value)"></div>';
+            }).join('') + '</div>';
+        return '<div class="pa-linea">' +
+            '<div class="pa-linea__top">' +
+                '<input class="txt" type="text" value="' + escapeHtml(l.concepto || '') + '" placeholder="' + (tipo === 'rec' ? 'Ej: Airbnb, reservas directas, aporte…' : 'Concepto (ej: Luz, Materiales, Comida…)') + '" oninput="setCampo(\'' + l.id + '\',\'concepto\',this.value)">' +
+                ecoSel +
+                '<input class="num" type="number" value="' + (l.base || 0) + '" oninput="setCampo(\'' + l.id + '\',\'base\',this.value)" title="Monto base mensual">' +
+                perfilSel +
+                '<button class="pa-chip" onclick="toggleMeses(\'' + l.id + '\')" title="Ajustar por mes">Meses</button>' +
+                '<button class="pa-linea__del" onclick="borrarLinea(\'' + l.id + '\',\'' + (tipo || 'gasto') + '\')"><span class="material-icons">delete</span></button>' +
+            '</div>' +
+            meses +
+            '<div class="pa-linea__anual" id="anual-' + l.id + '">Anual: <b>' + fmt(anualLinea(l)) + '</b> · mensual prom. <b>' + fmt(anualLinea(l) / 12) + '</b></div>' +
+        '</div>';
+    }
+
+    function renderLineas() {
+        var c = document.getElementById('lineas');
+        if (!_esc.lineas.length) { c.innerHTML = '<div class="pa-hint">Sin líneas. Agregá una manual o traé categorías desde la base histórica.</div>'; return; }
+        c.innerHTML = _esc.lineas.map(function(l) { return lineaHTML(l, 'gasto'); }).join('');
+    }
+
+    function renderRecursos() {
+        var c = document.getElementById('recursos');
+        if (!_esc.recursos.length) { c.innerHTML = '<div class="pa-hint">Sin recursos cargados. Agregá de dónde saldría el dinero (Airbnb, reservas, aportes…).</div>'; return; }
+        c.innerHTML = _esc.recursos.map(function(l) { return lineaHTML(l, 'rec'); }).join('');
+    }
+
+    // ── Resultados ────────────────────────────────────────────
+    function renderResultados() {
+        var disp = moneda();
+        var totalGastos = 0, totalRecursos = 0;
+        var porEco = {};
+        _economias.forEach(function(e) { porEco[e] = 0; });
+
+        _esc.lineas.forEach(function(l) {
+            var a = anualLinea(l);
+            totalGastos += a;
+            if (porEco[l.economia] == null) porEco[l.economia] = 0;
+            porEco[l.economia] += a;
+        });
+        _esc.recursos.forEach(function(l) { totalRecursos += anualLinea(l); });
+
+        var compartido = porEco['Compartido'] || 0;
+        var balanceComp = totalRecursos - compartido;
+
+        var grid = document.getElementById('resGrid');
+        grid.innerHTML =
+            cardRes('Gastos totales / año', fmt(totalGastos), '') +
+            cardRes('Mínimo a compartir', fmt(compartido), 'compartido') +
+            cardRes('Recursos / año', fmt(totalRecursos), '') +
+            cardRes('Balance compartido', fmt(balanceComp), balanceComp >= 0 ? 'balance-pos' : 'balance-neg');
+
+        // Desglose por economía
+        var ecos = Object.keys(porEco).filter(function(e) { return porEco[e] > 0; })
+            .sort(function(a, b) { return porEco[b] - porEco[a]; });
+        var maxE = ecos.length ? porEco[ecos[0]] : 1;
+        var colores = { 'Compartido': 'var(--color-primary)', 'Niños': '#ea9b3e' };
+        var paleta = ['#6366f1', '#0d7377', '#c62828', '#558b2f', '#ad1457'];
+        var pi = 0;
+        var html = '<div style="font-size:var(--text-xs);font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text-muted);margin-bottom:8px;">Por economía (anual)</div>';
+        if (!ecos.length) {
+            html += '<div class="pa-hint">Cargá líneas de gasto para ver el reparto.</div>';
+        } else {
+            html += ecos.map(function(e) {
+                var col = colores[e] || paleta[(pi++) % paleta.length];
+                var w = porEco[e] / maxE * 100;
+                var pct = totalGastos ? (porEco[e] / totalGastos * 100) : 0;
+                return '<div class="pa-eco"><div style="flex:1;min-width:0;">' +
+                    '<div style="font-weight:600;">' + escapeHtml(e) + ' <span style="color:var(--color-text-muted);font-weight:400;font-size:var(--text-xs);">' + pct.toFixed(0) + '%</span></div>' +
+                    '<div class="pa-eco__bar"><div class="pa-eco__fill" style="width:' + w + '%;background:' + col + ';"></div></div>' +
+                    '</div>' +
+                    '<div style="font-family:var(--font-mono);font-weight:700;white-space:nowrap;">' + fmt(porEco[e]) + '</div>' +
+                '</div>';
+            }).join('');
+        }
+        document.getElementById('resEconomias').innerHTML = html;
+    }
+
+    function cardRes(lbl, n, cls) {
+        return '<div class="pa-res ' + cls + '"><div class="lbl">' + lbl + '</div><div class="n">' + n + '</div></div>';
+    }
+
+    function render() {
+        renderLineas();
+        renderRecursos();
+        renderResultados();
+    }
+
+    // ── Escenarios (Firestore: proyecciones) ──────────────────
+    async function cargarListaEscenarios() {
+        try {
+            var snap = await db.collection('proyecciones').orderBy('nombre').get();
+            _escenarios = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+        } catch (e) {
+            // sin orderBy si no hay índice / colección vacía
+            try {
+                var s2 = await db.collection('proyecciones').get();
+                _escenarios = s2.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+            } catch (e2) { _escenarios = []; }
+        }
+        var sel = document.getElementById('selEscenario');
+        sel.innerHTML = '<option value="">— escenario nuevo —</option>' +
+            _escenarios.map(function(e) { return '<option value="' + e.id + '">' + escapeHtml(e.nombre || '(sin nombre)') + '</option>'; }).join('');
+    }
+
+    window.cargarEscenario = function() {
+        var id = document.getElementById('selEscenario').value;
+        if (!id) { _esc = { nombre: '', lineas: [], recursos: [] }; render(); return; }
+        var e = null;
+        for (var i = 0; i < _escenarios.length; i++) { if (_escenarios[i].id === id) { e = _escenarios[i]; break; } }
+        if (!e) return;
+        _esc = {
+            id: e.id, nombre: e.nombre || '',
+            lineas: (e.lineas || []).map(function(l) { return clonarLinea(l); }),
+            recursos: (e.recursos || []).map(function(l) { return clonarLinea(l); })
+        };
+        if (e.anioBase) document.getElementById('selAnio').value = e.anioBase;
+        if (e.moneda) document.getElementById('selMoneda').value = e.moneda;
+        render();
+        showToast('Escenario cargado: ' + (e.nombre || ''), 'success');
+    };
+
+    function clonarLinea(l) {
+        return {
+            id: l.id || ('L' + (_seq++)), concepto: l.concepto || '', economia: l.economia || 'Compartido',
+            base: l.base || 0, perfil: l.perfil || 'plano',
+            factores: Array.isArray(l.factores) && l.factores.length === 12 ? l.factores.slice() : nuevoPerfil()
+        };
+    }
+
+    window.guardarEscenario = async function() {
+        var nombre = prompt('Nombre del escenario:', _esc.nombre || ('Proyección ' + anioBase()));
+        if (nombre === null) return;
+        nombre = (nombre || '').trim();
+        if (!nombre) { showToast('Poné un nombre.', 'error'); return; }
+        var datos = {
+            nombre: nombre, anioBase: anioBase(), moneda: moneda(),
+            lineas: _esc.lineas.map(function(l) { return { id: l.id, concepto: l.concepto, economia: l.economia, base: l.base, perfil: l.perfil, factores: l.factores }; }),
+            recursos: _esc.recursos.map(function(l) { return { id: l.id, concepto: l.concepto, base: l.base, perfil: l.perfil, factores: l.factores }; }),
+            actualizadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+            autor: sesion.userData.nombre || sesion.user.email
+        };
+        try {
+            if (_esc.id) {
+                await db.collection('proyecciones').doc(_esc.id).set(datos, { merge: true });
+            } else {
+                datos.creadoEn = firebase.firestore.FieldValue.serverTimestamp();
+                var ref = await db.collection('proyecciones').add(datos);
+                _esc.id = ref.id;
+            }
+            _esc.nombre = nombre;
+            await cargarListaEscenarios();
+            document.getElementById('selEscenario').value = _esc.id;
+            showToast('Escenario guardado.', 'success');
+        } catch (e) { showToast('Error al guardar: ' + e.message, 'error'); }
+    };
+
+    window.borrarEscenario = async function() {
+        var id = document.getElementById('selEscenario').value;
+        if (!id) { showToast('Elegí un escenario guardado para borrar.', 'error'); return; }
+        if (!confirm('¿Borrar este escenario guardado? La simulación en pantalla no se borra.')) return;
+        try {
+            await db.collection('proyecciones').doc(id).delete();
+            if (_esc.id === id) _esc.id = null;
+            await cargarListaEscenarios();
+            showToast('Escenario borrado.', 'success');
+        } catch (e) { showToast('Error al borrar: ' + e.message, 'error'); }
+    };
+
+    // ── Arranque ──────────────────────────────────────────────
+    recalcBase();
+    render();
+})();
+</script>
+</body>
+</html>
