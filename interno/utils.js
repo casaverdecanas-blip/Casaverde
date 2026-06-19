@@ -1941,7 +1941,33 @@ function cotizacionEnFecha(fecha) {
         }).catch(function() { return null; });
 }
 
-// ── TRANSFERENCIAS ENTRE CUENTAS (v4.19) ──────────────────────────────────────
+// Carga el historial de cotizaciones (ordenado por fecha desc) para validaciones en lote.
+function cargarHistorialCotizaciones(limite) {
+    return db.collection('cotizaciones_historial').orderBy('fecha', 'desc').limit(limite || 365).get()
+        .then(function(snap) { return snap.docs.map(function(d) { return d.data(); }); })
+        .catch(function() { return []; });
+}
+
+// Dado un historial ya cargado (desc), devuelve el snapshot que regía en 'fecha' (último <= fecha).
+function cotizacionEnFechaLocal(historial, fecha) {
+    if (!historial || !historial.length) return null;
+    for (var i = 0; i < historial.length; i++) {
+        if ((historial[i].fecha || '') <= fecha) return historial[i];
+    }
+    return historial[historial.length - 1];
+}
+
+// Valida el cambio de una transferencia contra la cotización de mercado de su fecha.
+// ratesFecha = rates del snapshot histórico (de cotizacionEnFecha/Local). Devuelve dif %.
+function validarCambioTransferencia(t, ratesFecha) {
+    if (!t || t.origenMoneda === t.destinoMoneda) return { aplica: false };
+    var rateEfectivo = (t.montoOrigen ? (t.montoDestino / t.montoOrigen) : 0);
+    var rateMercado = ratesFecha ? convertir(1, t.origenMoneda, t.destinoMoneda, ratesFecha) : null;
+    var difPct = (rateMercado ? ((rateEfectivo - rateMercado) / rateMercado * 100) : null);
+    return { aplica: true, rateEfectivo: rateEfectivo, rateMercado: rateMercado, difPct: difPct };
+}
+
+
 //  Operación de dos patas: salida de una cuenta + entrada en otra, vinculadas.
 //  Unifica: transferencia, retiro, honorario propio y reintegro de gasto.
 //  Colección 'transferencias' (fuente de verdad). NO escribe en 'movimientos'
@@ -2028,6 +2054,7 @@ window.CVC = {
     cargarCotizaciones, convertir, monedaDe, diasDesdeCotizacion,
     guardarCotizaciones, actualizarCotizacionesOnline, cotizacionEnFecha,
     crearTransferencia, eliminarTransferencia,
+    cargarHistorialCotizaciones, cotizacionEnFechaLocal, validarCambioTransferencia,
     escapeHtml, formatFecha, formatFechaHora, formatHoras, colorCabana,
     subirComprobante, abrirComprobante, elegirFuenteFoto,
     enviarWhatsApp, enviarMail, notificar, avisar,
