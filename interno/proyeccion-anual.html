@@ -177,6 +177,9 @@
     var _fx = null;            // { USD:1, BRL:.., UYU:.., EUR:.. }  (unidades de moneda por 1 USD)
     var _fxMeta = null;        // { actualizadoEn (Date), fuente }
     var _baseMedia = {};       // categoria -> media mensual en moneda display
+    var _baseDom = {};         // categoria -> economia dominante (de datos reales)
+    var _baseEco = {};         // economia -> media mensual total (incl 'Sin asignar')
+    var _destinoEco = {};      // destino.id -> economia
     var _seq = 1;
     var _esc = { nombre: '', lineas: [], recursos: [] };
     var _escenarios = [];
@@ -259,6 +262,14 @@
         if (eco.indexOf('Florencia') === -1) eco.push('Florencia');
         if (eco.indexOf('Mauro') === -1) eco.push('Mauro');
         _economias = eco;
+        // Mapa destino.id -> economía (para desglosar la base histórica con datos reales)
+        _destinos.forEach(function(d) {
+            var e;
+            if (d.tipo === 'ninos') e = 'Niños';
+            else if (d.tipo === 'personal') e = d.usuarioNombre || d.nombre || 'Personal';
+            else e = 'Compartido';
+            _destinoEco[d.id] = e;
+        });
     } catch (e) { /* defaults */ }
 
     // Años disponibles
@@ -274,27 +285,52 @@
     await cargarFx();
     await cargarListaEscenarios();
 
-    // ── Base histórica → media mensual por categoría ──────────
+    // ── Base histórica → media mensual por categoría y por economía ──
+    function economiaDeGasto(g) {
+        if (g.destino && _destinoEco[g.destino]) return _destinoEco[g.destino];
+        return 'Sin asignar';
+    }
+
     function recalcBase() {
         var anio = anioBase();
         var disp = moneda();
-        var acum = {};   // cat -> { total, meses:{} }
+        var acum = {};      // cat -> { total, meses:{}, eco:{ economia -> total } }
+        var ecoTot = {};    // economia -> total
+        var ecoMeses = {};  // economia -> meses con datos
         _gastos.forEach(function(g) {
             var f = String(g.fecha || '');
             if (f.slice(0, 4) !== anio) return;
             var cat = String(g.categoria || 'sin categoría').trim().toLowerCase();
             var val = CVC.convertir(g.monto || 0, CVC.monedaDe(g), disp);
-            if (!acum[cat]) acum[cat] = { total: 0, meses: {} };
+            var eco = economiaDeGasto(g);
+            var mes = f.slice(5, 7);
+            if (!acum[cat]) acum[cat] = { total: 0, meses: {}, eco: {} };
             acum[cat].total += val;
-            acum[cat].meses[f.slice(5, 7)] = true;
+            acum[cat].meses[mes] = true;
+            acum[cat].eco[eco] = (acum[cat].eco[eco] || 0) + val;
+            ecoTot[eco] = (ecoTot[eco] || 0) + val;
+            if (!ecoMeses[eco]) ecoMeses[eco] = {};
+            ecoMeses[eco][mes] = true;
         });
         _baseMedia = {};
+        _baseDom = {};
         Object.keys(acum).forEach(function(cat) {
             var nMeses = Object.keys(acum[cat].meses).length || 1;
-            _baseMedia[cat] = acum[cat].total / nMeses; // media por mes con datos
+            _baseMedia[cat] = acum[cat].total / nMeses;
+            // economía dominante de esa categoría según datos reales
+            var dom = '', max = -1;
+            Object.keys(acum[cat].eco).forEach(function(e) {
+                if (acum[cat].eco[e] > max) { max = acum[cat].eco[e]; dom = e; }
+            });
+            _baseDom[cat] = dom;
+        });
+        _baseEco = {};
+        Object.keys(ecoTot).forEach(function(e) {
+            var nMeses = Object.keys(ecoMeses[e]).length || 1;
+            _baseEco[e] = ecoTot[e] / nMeses;
         });
         renderBase();
-        render();      // re-renderiza líneas (los montos editados se conservan) y resultados
+        render();
     }
 
     function renderBase() {
@@ -309,14 +345,41 @@
         var totalMes = 0;
         cats.forEach(function(c) { totalMes += _baseMedia[c]; });
         resumen.innerHTML = 'Media mensual del año ' + anioBase() + ' (convertida a ' + (SIMB[moneda()] || moneda()) +
-            '): <b>' + fmt(totalMes) + '/mes</b>. Tocá «Llevar» para arrancar una línea de proyección con ese valor.';
-        lista.innerHTML = cats.map(function(c) {
+            '): <b>' + fmt(totalMes) + '/mes</b>.';
+
+        // Bloque: desglose por economía (datos reales del destino imputado)
+        var ecosOrden = _economias.slice();
+        if (_baseEco['Sin asignar']) ecosOrden.push('Sin asignar');
+        var ecoRows = ecosOrden.filter(function(e) { return _baseEco[e]; }).map(function(e) {
+            var pct = totalMes ? (_baseEco[e] / totalMes * 100) : 0;
+            var col = e === 'Sin asignar' ? 'var(--color-text-muted)' : (e === 'Compartido' ? 'var(--color-primary)' : '#6366f1');
             return '<div class="pa-base-row">' +
-                '<span style="flex:1;text-transform:capitalize;">' + escapeHtml(c) + '</span>' +
+                '<span style="flex:1;">' + escapeHtml(e) + (e === 'Sin asignar' ? ' <span style="color:var(--color-warning,#d9822b);font-size:11px;">(gastos sin finalidad — conviene clasificar)</span>' : '') + '</span>' +
+                '<span class="m" style="color:' + col + ';">' + fmt(_baseEco[e]) + '/mes · ' + pct.toFixed(0) + '%</span>' +
+            '</div>';
+        }).join('');
+        var bloqueEco = '<div style="margin:8px 0 14px;">' +
+            '<div style="font-size:var(--text-xs);font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text-muted);margin-bottom:6px;">Base real por economía</div>' +
+            (ecoRows || '<div class="pa-hint">Los gastos todavía no tienen finalidad imputada.</div>') +
+            '<button class="pa-base-add" style="margin-top:8px;" onclick="traerPorEconomia()">Traer todo por economía →</button>' +
+            '</div>';
+
+        // Lista por categoría (con economía dominante real y "Llevar" que la pre-asigna)
+        var catRows = cats.map(function(c) {
+            var dom = _baseDom[c] || '';
+            var badge = dom && dom !== 'Sin asignar'
+                ? ' <span style="font-size:10px;color:var(--color-text-muted);">→ ' + escapeHtml(dom) + '</span>'
+                : (dom === 'Sin asignar' ? ' <span style="font-size:10px;color:var(--color-warning,#d9822b);">→ sin asignar</span>' : '');
+            return '<div class="pa-base-row">' +
+                '<span style="flex:1;text-transform:capitalize;">' + escapeHtml(c) + badge + '</span>' +
                 '<span class="m">' + fmt(_baseMedia[c]) + '/mes</span>' +
                 '<button class="pa-base-add" onclick="agregarLinea(\'' + encodeURIComponent(c) + '\')">Llevar →</button>' +
             '</div>';
         }).join('');
+
+        lista.innerHTML = bloqueEco +
+            '<div style="font-size:var(--text-xs);font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text-muted);margin-bottom:6px;">Por categoría</div>' +
+            catRows;
     }
 
     window.toggleBase = function() {
@@ -336,14 +399,34 @@
         return nuevoPerfil();
     }
 
-    window.agregarLinea = function(catEnc) {
+    window.agregarLinea = function(catEnc, economiaForzada) {
         var cat = catEnc ? decodeURIComponent(catEnc) : '';
         var base = cat && _baseMedia[cat] ? Math.round(_baseMedia[cat]) : 0;
+        // economía: la forzada, o la dominante real de la categoría, o Compartido
+        var eco = economiaForzada || (cat && _baseDom[cat] && _baseDom[cat] !== 'Sin asignar' ? _baseDom[cat] : 'Compartido');
+        if (_economias.indexOf(eco) === -1) eco = 'Compartido';
         _esc.lineas.push({
             id: 'L' + (_seq++), concepto: cat ? (cat.charAt(0).toUpperCase() + cat.slice(1)) : '',
-            economia: 'Compartido', base: base, perfil: 'plano', factores: nuevoPerfil()
+            economia: eco, base: base, perfil: 'plano', factores: nuevoPerfil()
         });
         render();
+    };
+
+    // Crea una línea por cada economía a partir de la base real imputada (un clic).
+    window.traerPorEconomia = function() {
+        var ecosOrden = _economias.slice();
+        ecosOrden.push('Sin asignar');
+        ecosOrden.forEach(function(e) {
+            if (!_baseEco[e]) return;
+            var ecoLinea = (e === 'Sin asignar') ? 'Compartido' : e;
+            _esc.lineas.push({
+                id: 'L' + (_seq++),
+                concepto: (e === 'Sin asignar') ? 'Sin asignar (revisar)' : e,
+                economia: ecoLinea, base: Math.round(_baseEco[e]), perfil: 'plano', factores: nuevoPerfil()
+            });
+        });
+        render();
+        showToast('Líneas creadas desde la base real por economía.', 'success');
     };
 
     window.agregarRecurso = function() {

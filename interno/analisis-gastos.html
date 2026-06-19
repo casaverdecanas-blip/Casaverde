@@ -58,6 +58,7 @@
     <div class="ag-filtros">
         <button class="ag-chip active" id="vCat" onclick="setVista('categoria', this)">Por categoría</button>
         <button class="ag-chip" id="vItem" onclick="setVista('item', this)">Por ítem</button>
+        <button class="ag-chip" id="vFin" onclick="setVista('finalidad', this)">Por finalidad</button>
         <span style="width:10px;"></span>
         <select id="selAnio" onchange="aplicar()"></select>
         <select id="selMes" onchange="aplicar()">
@@ -120,6 +121,25 @@
         return;
     }
 
+    // Destinos -> economía (para la vista "por finalidad")
+    var _destinoEco = {};
+    try {
+        var snapD = await db.collection('destinos').get();
+        snapD.docs.forEach(function(d) {
+            var x = d.data();
+            var e;
+            if (x.tipo === 'ninos') e = 'Niños';
+            else if (x.tipo === 'personal') e = x.usuarioNombre || x.nombre || 'Personal';
+            else e = 'Compartido';
+            _destinoEco[d.id] = e;
+        });
+    } catch (e) { _destinoEco = {}; }
+
+    function economiaDeGasto(g) {
+        if (g.destino && _destinoEco[g.destino]) return _destinoEco[g.destino];
+        return 'Sin asignar';
+    }
+
     // Poblar años presentes
     var anios = {};
     _gastos.forEach(function(g) { if (g.fecha) anios[String(g.fecha).slice(0, 4)] = true; });
@@ -146,6 +166,7 @@
         _vista = v;
         document.getElementById('vCat').classList.toggle('active', v === 'categoria');
         document.getElementById('vItem').classList.toggle('active', v === 'item');
+        document.getElementById('vFin').classList.toggle('active', v === 'finalidad');
         aplicar();
     };
 
@@ -174,13 +195,15 @@
 
         if (_vista === 'item') { renderPorItem(lista, cont); return; }
 
-        // Agrupar por categoría (normalizada)
+        var porFin = _vista === 'finalidad';
+
+        // Agrupar por categoría o por finalidad (economía)
         var grupos = {};
         var total = 0;
         lista.forEach(function(g) {
             var monto = conv(g);
             total += monto;
-            var key = String(g.categoria || 'sin categoría').trim().toLowerCase();
+            var key = porFin ? economiaDeGasto(g) : String(g.categoria || 'sin categoría').trim().toLowerCase();
             if (!grupos[key]) grupos[key] = { nombre: key, total: 0, items: [] };
             grupos[key].total += monto;
             grupos[key].items.push(g);
@@ -190,27 +213,34 @@
         var maxCat = arr[0].total || 1;
 
         var html = '<div class="ag-total"><div class="n">' + fmt(total) + '</div>' +
-            '<div class="s">' + lista.length + ' gastos · ' + arr.length + ' categorías</div></div>';
+            '<div class="s">' + lista.length + ' gastos · ' + arr.length + (porFin ? ' finalidades' : ' categorías') + '</div></div>';
 
         html += arr.map(function(c) {
-            var key = c.nombre.replace(/[^a-z0-9]/g, '_');
+            var key = c.nombre.toLowerCase().replace(/[^a-z0-9]/g, '_');
             var pct = total ? (c.total / total * 100) : 0;
             var barW = (c.total / maxCat * 100);
             var detalle = c.items.sort(function(a, b) { return conv(b) - conv(a); }).map(function(g) {
                 var chip = '<span class="ag-chippais">' + (g.pais || 'BR') + '</span>';
+                var fin = porFin && g.proveedor ? '' : (porFin && g.categoria ? ' <span style="color:var(--color-text-muted);font-size:11px;">(' + escapeHtml(g.categoria) + ')</span>' : '');
                 return '<div class="ag-det">' +
                     '<div style="flex:1;min-width:0;">' + escapeHtml(g.concepto || '--') +
-                        (g.proveedor ? ' <span style="color:var(--color-text-muted);">· ' + escapeHtml(g.proveedor) + '</span>' : '') +
+                        (g.proveedor ? ' <span style="color:var(--color-text-muted);">· ' + escapeHtml(g.proveedor) + '</span>' : '') + fin +
                         ' <span style="color:var(--color-text-muted);font-size:11px;">' + escapeHtml(g.fecha || '') + '</span> ' + chip +
                     '</div>' +
                     '<div class="ag-det__mono">' + fmt(conv(g)) + '</div>' +
                 '</div>';
             }).join('');
 
+            var nombreMostrar = porFin
+                ? (c.nombre === 'Sin asignar'
+                    ? '<span style="color:var(--color-warning,#d9822b);">Sin asignar</span>'
+                    : escapeHtml(c.nombre))
+                : escapeHtml(capit(c.nombre));
+
             return '<div class="ag-cat">' +
                 '<div class="ag-cat__head" onclick="toggleCat(\'' + key + '\')">' +
                     '<div class="ag-cat__top">' +
-                        '<span class="ag-cat__nom">' + escapeHtml(capit(c.nombre)) + '</span>' +
+                        '<span class="ag-cat__nom">' + nombreMostrar + '</span>' +
                         '<span class="ag-cat__val">' + fmt(c.total) + '</span>' +
                     '</div>' +
                     '<div class="ag-bar"><div class="ag-bar__fill" style="width:' + barW + '%;"></div></div>' +
