@@ -58,6 +58,7 @@
             <label><input type="checkbox" id="exSoloPend" checked> Solo sin clasificar</label>
             <button class="btn btn-primary" onclick="exportar()"><span class="material-icons">file_download</span> Generar</button>
             <button class="btn btn-secondary" onclick="copiar('exOut')"><span class="material-icons">content_copy</span> Copiar</button>
+            <button class="btn btn-secondary" onclick="descargarExport()"><span class="material-icons">download</span> Descargar .txt</button>
         </div>
         <textarea class="cm-ta" id="exOut" readonly placeholder="Acá aparece el bloque para pegar en el chat…"></textarea>
         <div class="cm-hint" id="exResumen"></div>
@@ -70,6 +71,8 @@
         <textarea class="cm-ta" id="impIn" placeholder="G&#9;idGasto&#9;categoria&#9;destino&#9;circuito&#10;M&#9;idMovimiento&#9;categoria&#9;etiqueta"></textarea>
         <div class="cm-row" style="margin-top:var(--space-3);">
             <button class="btn btn-primary" onclick="previsualizar()"><span class="material-icons">visibility</span> Previsualizar</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('impFile').click()"><span class="material-icons">upload_file</span> Cargar archivo .txt</button>
+            <input type="file" id="impFile" accept=".txt,text/plain" style="display:none;" onchange="cargarArchivo(event)">
             <button class="btn btn-success" id="btnAplicar" onclick="aplicar()" style="display:none;"><span class="material-icons">save</span> Aplicar cambios</button>
         </div>
     </div>
@@ -197,6 +200,39 @@
         ta.select();
         try { document.execCommand('copy'); showToast('Copiado.', 'success'); }
         catch (e) { showToast('No se pudo copiar; seleccioná y copiá a mano.', 'error'); }
+    };
+
+    window.descargarExport = function() {
+        var txt = document.getElementById('exOut').value;
+        if (!txt) { showToast('Primero generá el bloque.', 'error'); return; }
+        try {
+            var blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            var hoy = new Date().toISOString().split('T')[0];
+            a.href = url;
+            a.download = 'export-cvc-' + hoy + '.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+            showToast('Archivo descargado.', 'success');
+        } catch (e) {
+            showToast('No se pudo descargar: ' + e.message, 'error');
+        }
+    };
+
+    window.cargarArchivo = function(ev) {
+        var file = ev.target.files && ev.target.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function() {
+            document.getElementById('impIn').value = String(reader.result || '');
+            showToast('Archivo cargado. Tocá Previsualizar.', 'success');
+        };
+        reader.onerror = function() { showToast('No se pudo leer el archivo.', 'error'); };
+        reader.readAsText(file);
+        ev.target.value = '';
     };
 
     // ── PASO 2: previsualizar ──
