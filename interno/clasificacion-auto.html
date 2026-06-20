@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clasificación automática · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .cm-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4) var(--space-5); margin-bottom: var(--space-4); }
+        .cm-card__title { font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: var(--space-3); }
+        .cm-hint { font-size: var(--text-sm); color: var(--color-text-muted); margin-bottom: var(--space-3); }
+        .cm-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: var(--space-3); }
+        .cm-step { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--color-primary); color: #fff; font-size: 12px; font-weight: 700; margin-right: 6px; }
+        .cm-prev-row { display: flex; gap: 10px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--color-border-light); font-size: var(--text-sm); }
+        .cm-prev-row:last-child { border-bottom: none; }
+        .cm-tag { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 99px; background: var(--color-surface-2); border: 1px solid var(--color-border); }
+        .cm-tag.g { color: var(--color-danger); } .cm-tag.m { color: var(--color-primary); }
+        .cm-err { color: var(--color-danger); }
+        .cm-ok { color: var(--color-success, #1a7f37); }
+        .cm-stat { display: flex; gap: 16px; flex-wrap: wrap; font-size: var(--text-sm); margin-bottom: var(--space-3); }
+        .cm-stat b { font-family: var(--font-mono); }
+        .ca-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--color-border); background: var(--color-surface-2); margin: 0 6px 6px 0; }
+        .ca-chip.new { border-color: var(--color-success, #1a7f37); color: var(--color-success, #1a7f37); }
+        .ca-note { font-size: var(--text-sm); background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 10px 12px; margin-bottom: var(--space-3); }
+        .ca-rev { font-size: var(--text-sm); padding: 5px 0; border-bottom: 1px dashed var(--color-border-light); display: flex; gap: 10px; }
+        .ca-rev:last-child { border-bottom: none; }
+    </style>
+</head>
+<body>
+<header class="admin-header">
+    <div class="admin-header__brand"><span class="material-icons">cottage</span> Casa Verde Canas</div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span> <span id="userName">—</span></div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()"><span class="material-icons">logout</span> Salir</button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+    <div class="db-section-head" style="margin-bottom:var(--space-3);">
+        <div class="db-section-title">
+            <span class="material-icons" style="color:var(--color-primary);">bolt</span>
+            Clasificación automática
+        </div>
+    </div>
+    <p class="cm-hint">
+        Esta herramienta hace dos cosas: <b>1)</b> crea las categorías y destinos que faltan, y
+        <b>2)</b> clasifica gastos y movimientos aplicando reglas por comercio, leyendo los registros
+        directo de la base (los id salen siempre correctos). <b>Nada se escribe hasta que tocás «Aplicar».</b>
+    </p>
+
+    <div class="ca-note">
+        <b>Vehículos:</b> la herramienta detecta gastos de vehículo y los manda al destino genérico
+        <b>«Vehículo»</b>; después separás a mano cuál es (Hilux / Fiat / Triciclo). El combustible
+        pagado con tarjeta aparece en <i>movimientos</i> y solo lleva categoría («Combustible / Transporte»),
+        no destino por vehículo.
+    </div>
+
+    <!-- PASO 1: PREPARAR CATÁLOGOS -->
+    <div class="cm-card">
+        <div class="cm-card__title"><span class="cm-step">1</span> Preparar categorías y destinos</div>
+        <p class="cm-hint">Se crean solo los que falten (si ya existen, no se duplican).</p>
+        <div id="planCatalogos"></div>
+        <div class="cm-row" style="margin-top:var(--space-2);">
+            <button class="btn btn-primary" id="btnCrear" onclick="crearFaltantes()">
+                <span class="material-icons">playlist_add</span> Crear faltantes
+            </button>
+        </div>
+        <div class="cm-hint" id="crearResultado"></div>
+    </div>
+
+    <!-- PASO 2: PREVISUALIZAR -->
+    <div class="cm-card">
+        <div class="cm-card__title"><span class="cm-step">2</span> Generar clasificación y previsualizar</div>
+        <p class="cm-hint">Aplica las reglas a todo lo que esté sin clasificar y te muestra exactamente qué cambiaría.</p>
+        <div class="cm-row">
+            <button class="btn btn-primary" onclick="previsualizar()">
+                <span class="material-icons">visibility</span> Previsualizar
+            </button>
+            <button class="btn btn-success" id="btnAplicar" onclick="aplicar()" style="display:none;">
+                <span class="material-icons">save</span> Aplicar cambios
+            </button>
+        </div>
+    </div>
+
+    <!-- PASO 3: PREVIEW -->
+    <div class="cm-card" id="prevCard" style="display:none;">
+        <div class="cm-card__title"><span class="cm-step">3</span> Previsualización</div>
+        <div class="cm-stat" id="prevStat"></div>
+        <div id="prevLista"></div>
+        <div id="prevRevisar"></div>
+    </div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async function() {
+    var sesion = await CVC.verificarAuth(['admin']);
+    document.getElementById('userName').textContent = sesion.userData.nombre || sesion.user.email;
+    CVC.renderNav('clasificacion-auto.html', sesion.userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('clasificacion-auto.html');
+
+    var db = CVC.db;
+    var escapeHtml = CVC.escapeHtml;
+    var showToast = CVC.showToast;
+
+    var CAT_GASTO = ['materiales', 'limpieza', 'mantenimiento', 'servicios', 'administrativo', 'alimentos', 'transporte', 'otro'];
+    var CIRCUITOS = ['fiscal', 'personal', 'mixto'];
+
+    // Categorías de movimiento a asegurar (solo se crean las que falten)
+    var CATS_NUEVAS = [
+        { nombre: 'Rendimiento',             grupo: 'Ingresos',  color: '#1a7f37', icono: 'savings',            deducible: false, orden: 70 },
+        { nombre: 'Alimentos / Supermercado', grupo: 'Operación', color: '#2e7d32', icono: 'shopping_cart',      deducible: false, orden: 71 },
+        { nombre: 'Combustible / Transporte', grupo: 'Operación', color: '#ef6c00', icono: 'local_gas_station',  deducible: false, orden: 72 },
+        { nombre: 'Salud / Farmacia',         grupo: 'Personal',  color: '#c2185b', icono: 'local_pharmacy',     deducible: false, orden: 73 },
+        { nombre: 'Comidas fuera',            grupo: 'Personal',  color: '#d84315', icono: 'restaurant',         deducible: false, orden: 74 },
+        { nombre: 'Personal / Varios',        grupo: 'Personal',  color: '#6a1b9a', icono: 'shopping_bag',       deducible: false, orden: 75 }
+    ];
+
+    // Destinos a asegurar (vehículos como gasto operativo del negocio)
+    var DESTS_NUEVOS = [
+        { nombre: 'Vehículo – Hilux',    tipo: 'negocio' },
+        { nombre: 'Vehículo – Fiat',     tipo: 'negocio' },
+        { nombre: 'Vehículo – Triciclo', tipo: 'negocio' }
+    ];
+
+    var _gastos = [], _movs = [], _categorias = [], _destinos = [];
+    var _catPorNombre = {};
+    var _destPorNombre = {};
+    var _cambios = [];
+    var _revisar = [];
+
+    function limpia(s) { return String(s == null ? '' : s).replace(/[\t\r\n]+/g, ' ').trim(); }
+
+    function normalizar(s) {
+        var t = String(s == null ? '' : s).toLowerCase();
+        try { t = t.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) {}
+        return t;
+    }
+
+    function tieneAlguno(txt, lista) {
+        for (var i = 0; i < lista.length; i++) {
+            if (txt.indexOf(lista[i]) !== -1) return true;
+        }
+        return false;
+    }
+
+    // ── Cargar datos ──
+    async function cargarTodo() {
+        try {
+            var sg = await db.collection('gastos').get();
+            _gastos = sg.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+        } catch (e) { _gastos = []; }
+        try {
+            var sm = await db.collection('movimientos').get();
+            _movs = sm.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+        } catch (e) { _movs = []; }
+        await recargarCatalogos();
+    }
+
+    async function recargarCatalogos() {
+        _categorias = []; _destinos = []; _catPorNombre = {}; _destPorNombre = {};
+        try {
+            var sc = await db.collection('categorias').get();
+            _categorias = sc.docs.map(function(d) { return { id: d.id, nombre: d.data().nombre || d.id }; });
+            _categorias.forEach(function(c) { _catPorNombre[c.nombre.toLowerCase()] = c; });
+        } catch (e) {}
+        try {
+            var sd = await db.collection('destinos').get();
+            _destinos = sd.docs.map(function(d) {
+                return { id: d.id, nombre: d.data().nombre || d.id, activo: d.data().activo, activa: d.data().activa };
+            }).filter(function(d) { return d.activo !== false && d.activa !== false; });
+            _destinos.forEach(function(d) { _destPorNombre[d.nombre.toLowerCase()] = d; });
+        } catch (e) {}
+    }
+
+    await cargarTodo();
+    pintarPlan();
+
+    function existeCat(nombre) { return !!_catPorNombre[nombre.toLowerCase()]; }
+    function existeDest(nombre) { return !!_destPorNombre[nombre.toLowerCase()]; }
+
+    function pintarPlan() {
+        var html = '<div style="margin-bottom:var(--space-2);"><b>Categorías de movimiento</b></div><div>';
+        CATS_NUEVAS.forEach(function(c) {
+            var hay = existeCat(c.nombre);
+            html += '<span class="ca-chip ' + (hay ? '' : 'new') + '">' +
+                '<span class="material-icons" style="font-size:14px;">' + (hay ? 'check' : 'add') + '</span>' +
+                escapeHtml(c.nombre) + (hay ? ' (existe)' : ' (crear)') + '</span>';
+        });
+        html += '</div><div style="margin:var(--space-3) 0 var(--space-2);"><b>Destinos de vehículo</b></div><div>';
+        DESTS_NUEVOS.forEach(function(d) {
+            var hay = existeDest(d.nombre);
+            html += '<span class="ca-chip ' + (hay ? '' : 'new') + '">' +
+                '<span class="material-icons" style="font-size:14px;">' + (hay ? 'check' : 'add') + '</span>' +
+                escapeHtml(d.nombre) + (hay ? ' (existe)' : ' (crear)') + '</span>';
+        });
+        html += '</div>';
+        document.getElementById('planCatalogos').innerHTML = html;
+    }
+
+    // ── PASO 1: crear faltantes ──
+    window.crearFaltantes = async function() {
+        var btn = document.getElementById('btnCrear');
+        btn.disabled = true;
+        var creadas = 0, creados = 0;
+        try {
+            var batch = db.batch();
+            CATS_NUEVAS.forEach(function(c) {
+                if (existeCat(c.nombre)) return;
+                var ref = db.collection('categorias').doc();
+                batch.set(ref, {
+                    nombre: c.nombre, grupo: c.grupo, color: c.color, icono: c.icono,
+                    deducible: c.deducible, orden: c.orden, activa: true,
+                    creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                creadas++;
+            });
+            DESTS_NUEVOS.forEach(function(d) {
+                if (existeDest(d.nombre)) return;
+                var ref = db.collection('destinos').doc();
+                batch.set(ref, {
+                    nombre: d.nombre, tipo: d.tipo, activo: true, activa: true,
+                    creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                creados++;
+            });
+            if (creadas + creados > 0) await batch.commit();
+            await recargarCatalogos();
+            pintarPlan();
+            var msg = (creadas + creados === 0)
+                ? 'Ya existían todas. No se creó nada.'
+                : ('Creadas ' + creadas + ' categorías y ' + creados + ' destinos. Ya podés previsualizar.');
+            document.getElementById('crearResultado').textContent = msg;
+            showToast('Catálogos al día.', 'success');
+        } catch (e) {
+            document.getElementById('crearResultado').textContent = 'Error: ' + e.message;
+            showToast('Error al crear: ' + e.message, 'error');
+        }
+        btn.disabled = false;
+    };
+
+    // ── Reglas ──
+    function clasificarMov(m) {
+        var d = normalizar(m.descripcion);
+        var monto = Number(m.monto) || 0;
+        var cred = m.tipo === 'credito';
+
+        if (d.indexOf('saldo diario') !== -1) {
+            if (Math.abs(monto) < 50) return { cat: 'Rendimiento', etq: 'Interés' };
+            return null; // grandes → revisión manual
+        }
+        if (tieneAlguno(d, ['mauro gastaldello', 'de tezanos pinto', 'florencia de tezanos'])) return { cat: 'Entre cuentas propias', etq: '' };
+        if (tieneAlguno(d, ['pix marketplace', 'marketplace', 'mercado pago', 'merpago', 'mercadoli', 'amazon', 'hotmart', 'decathlon', 'ri happy', 'milium', 'kora', 'vuoncard', 'm4 produtos', 'shpp brasil', 'biomaster', 'ubu editora', 'revistaria', 'magus', 'princesa', 'espaco corpo', 'frigelar'])) return { cat: 'Personal / Varios', etq: '' };
+        if (d.indexOf('celesc') !== -1) return { cat: 'Luz (Celesc)', etq: '' };
+        if (tieneAlguno(d, ['casan', 'catarinense de aguas'])) return { cat: 'Agua (Casan)', etq: '' };
+        if (tieneAlguno(d, ['leo gas', 'gas agua'])) return { cat: 'Gas', etq: '' };
+        if (tieneAlguno(d, ['telefonica', 'vivo', 'claro'])) return { cat: 'Internet', etq: '' };
+        if (d.indexOf('municipio de florianopolis') !== -1) return { cat: 'IPTU', etq: '' };
+        if (d.indexOf('mederos zapata') !== -1) return { cat: 'Contador', etq: '' };
+        if (tieneAlguno(d, ['materiais de construcao', 'amc', 'construrar', 'constrular', 'franzoni', 'lenz comercio', 'casas da agua', 'construmais', 'madeireira', 'phix', 'alemao materiais'])) return { cat: 'Materiales', etq: '' };
+        if (tieneAlguno(d, ['posto', 'rede de postos', 'sim - rede', 'auto posto', 'agricopel', 'combustiveis', 'maranata', 'mdestri', 'uber', 'telepeaje', 'ancap', 'esso'])) return { cat: 'Combustible / Transporte', etq: '' };
+        if (tieneAlguno(d, ['farmacia', 'farmaouro', 'drogaria'])) return { cat: 'Salud / Farmacia', etq: '' };
+        if (tieneAlguno(d, ['gelateria', 'gelato', 'sorvete', 'acai', 'lanches', 'choperia', 'petiscaria', 'grill', 'pizzaria', 'pizza', 'restaurante', 'burguer', 'churras', 'monte civetta', 'tiziano'])) return { cat: 'Comidas fuera', etq: '' };
+        if (tieneAlguno(d, ['mercado dos amigos', 'supermerc', 'sdb comercio', 'mundialmix', 'prado supermercado', 'bistek', 'direto do campo', 'emporio', 'verdureira', 'super rio', 'serra & mar', 'serra e mar', 'desterro comercial', 'atacadista'])) return { cat: 'Alimentos / Supermercado', etq: '' };
+        if (cred && tieneAlguno(d, ['pix recebido', 'recebido', 'transferencia recebida', 'banco inter', 'astro', 'devolucao de pix'])) return { cat: 'Transferencia recibida', etq: '' };
+        return null;
+    }
+
+    function clasificarGasto(g) {
+        var t = normalizar((g.proveedor || '') + ' ' + (g.concepto || ''));
+        if (tieneAlguno(t, ['materiais de construcao', 'amc ', 'construrar', 'constrular', 'franzoni', 'lenz', 'casas da agua', 'construmais', 'madeireira', 'phix', 'alemao materiais', 'chaveiro'])) return { destino: 'Casa Verde – Mantenimiento', circuito: 'fiscal' };
+        if (tieneAlguno(t, ['posto', 'rede de postos', 'sim - rede', 'auto posto', 'agricopel', 'combustivel', 'diesel', 'sucive', 'patente', 'telepeaje', 'maranata', 'mdestri', 'ancap', 'esso'])) return { destino: 'Vehículo', circuito: '' };
+        if (tieneAlguno(t, ['gelateria', 'gelato', 'sorvete', 'acai', 'lanches', 'choperia', 'grill', 'pizza', 'restaurante', 'burguer', 'tiziano', 'monte civetta', 'canas lanches', 'heli tur', 'magias da ilha'])) return { destino: 'Niños – Actividades', circuito: 'personal' };
+        return null;
+    }
+
+    // ── PASO 2: previsualizar ──
+    window.previsualizar = function() {
+        _cambios = [];
+        _revisar = [];
+        var errores = [];
+        var faltaCatalogo = false;
+        var sinClasMov = 0, sinClasGasto = 0;
+
+        _gastos.forEach(function(g) {
+            if (g.destino && g.circuito) return; // ya clasificado
+            var r = clasificarGasto(g);
+            if (!r) { if (!g.destino || !g.circuito) sinClasGasto++; return; }
+            var data = {}, detalle = [];
+            if (r.destino) {
+                var d = _destPorNombre[r.destino.toLowerCase()];
+                if (!d) { faltaCatalogo = true; return; }
+                if (d.id !== (g.destino || '')) { data.destino = d.id; data.destinoNom = d.nombre; detalle.push('dest→' + d.nombre); }
+            }
+            if (r.circuito) {
+                if (r.circuito !== (g.circuito || '')) {
+                    data.circuito = r.circuito;
+                    data.deducible = (r.circuito === 'fiscal' || r.circuito === 'mixto');
+                    detalle.push('circ→' + r.circuito);
+                }
+            }
+            if (Object.keys(data).length) _cambios.push({ col: 'gastos', id: g.id, data: data, detalle: detalle.join('  '), ref: limpia(g.concepto || g.proveedor) });
+        });
+
+        _movs.forEach(function(m) {
+            if (m.categoriaId) return; // ya clasificado
+            var d = normalizar(m.descripcion);
+            var monto = Number(m.monto) || 0;
+            // Saldo Diário grande → a revisión, no se toca
+            if (d.indexOf('saldo diario') !== -1 && Math.abs(monto) >= 50) {
+                _revisar.push({ tipo: 'Saldo Diário grande', fecha: limpia(m.fecha), monto: monto, ref: limpia(m.descripcion) });
+                return;
+            }
+            var r = clasificarMov(m);
+            if (!r) { sinClasMov++; return; }
+            var c = _catPorNombre[r.cat.toLowerCase()];
+            if (!c) { faltaCatalogo = true; return; }
+            var data = {}, detalle = [];
+            if (c.id !== (m.categoriaId || '')) { data.categoriaId = c.id; detalle.push('cat→' + c.nombre); }
+            if (r.etq && r.etq !== (m.etiqueta || '')) { data.etiqueta = r.etq; detalle.push('etq→' + r.etq); }
+            if (Object.keys(data).length) _cambios.push({ col: 'movimientos', id: m.id, data: data, detalle: detalle.join('  '), ref: limpia(m.descripcion) });
+        });
+
+        if (faltaCatalogo) errores.push('Faltan categorías o destinos. Corré primero el paso 1 («Crear faltantes»).');
+
+        var card = document.getElementById('prevCard');
+        var stat = document.getElementById('prevStat');
+        var cont = document.getElementById('prevLista');
+        var rev = document.getElementById('prevRevisar');
+        card.style.display = 'block';
+
+        stat.innerHTML = '<span class="cm-ok">Cambios a aplicar: <b>' + _cambios.length + '</b></span>' +
+            '<span>Sin regla (quedan sin clasificar): <b>' + (sinClasGasto + sinClasMov) + '</b></span>' +
+            (_revisar.length ? '<span class="cm-err">Para revisar a mano: <b>' + _revisar.length + '</b></span>' : '') +
+            (errores.length ? '<span class="cm-err">Problemas: <b>' + errores.length + '</b></span>' : '');
+
+        var htmlErr = errores.length ? '<div class="cm-err" style="margin-bottom:var(--space-3);">' + errores.map(escapeHtml).join('<br>') + '</div>' : '';
+        var htmlCambios = _cambios.length
+            ? _cambios.map(function(c) {
+                return '<div class="cm-prev-row">' +
+                    '<span class="cm-tag ' + (c.col === 'gastos' ? 'g' : 'm') + '">' + (c.col === 'gastos' ? 'G' : 'M') + '</span>' +
+                    '<span style="flex:1;min-width:0;">' + escapeHtml(c.ref || c.id) + '</span>' +
+                    '<span style="font-family:var(--font-mono);font-size:12px;">' + escapeHtml(c.detalle) + '</span>' +
+                '</div>';
+            }).join('')
+            : '<div class="cm-hint">No hay cambios para aplicar (puede que ya estén clasificados, o que el paso 1 falte).</div>';
+        cont.innerHTML = htmlErr + htmlCambios;
+
+        if (_revisar.length) {
+            var htmlRev = '<div style="margin-top:var(--space-4);"><b>Para revisar a mano</b> ' +
+                '<span class="cm-hint">(no se tocan; revisalos en la app)</span></div>';
+            _revisar.forEach(function(x) {
+                htmlRev += '<div class="ca-rev">' +
+                    '<span style="color:var(--color-text-muted);white-space:nowrap;">' + escapeHtml(x.fecha) + '</span>' +
+                    '<span style="flex:1;min-width:0;">' + escapeHtml(x.ref) + '</span>' +
+                    '<span style="font-family:var(--font-mono);">' + (x.monto).toFixed(2) + '</span>' +
+                '</div>';
+            });
+            rev.innerHTML = htmlRev;
+        } else {
+            rev.innerHTML = '';
+        }
+
+        document.getElementById('btnAplicar').style.display = (_cambios.length && !errores.length) ? 'inline-flex' : 'none';
+    };
+
+    // ── PASO 3: aplicar ──
+    window.aplicar = async function() {
+        if (!_cambios.length) return;
+        if (!confirm('Aplicar ' + _cambios.length + ' cambios a la base de datos?')) return;
+        var btn = document.getElementById('btnAplicar');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-icons">hourglass_empty</span> Aplicando…';
+        try {
+            var lote = _cambios.map(function(c) { return { col: c.col, id: c.id, data: c.data }; });
+            var n = await CVC.aplicarClasificacionMasiva(lote);
+            showToast(n + ' cambios aplicados.', 'success');
+            _cambios.forEach(function(c) {
+                var arr = c.col === 'gastos' ? _gastos : _movs;
+                var obj = arr.find(function(x) { return x.id === c.id; });
+                if (obj) Object.assign(obj, c.data);
+            });
+            _cambios = [];
+            document.getElementById('prevCard').style.display = 'none';
+        } catch (e) {
+            showToast('Error al aplicar: ' + e.message, 'error');
+        }
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-icons">save</span> Aplicar cambios';
+    };
+})();
+</script>
+</body>
+</html>
