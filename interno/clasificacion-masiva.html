@@ -68,7 +68,7 @@
     <div class="cm-card">
         <div class="cm-card__title"><span class="cm-step">2</span> Pegar la respuesta del chat</div>
         <p class="cm-hint">Pegá acá el bloque que te devolvió Claude (líneas que empiezan con G o M) y previsualizá.</p>
-        <textarea class="cm-ta" id="impIn" placeholder="G&#9;idGasto&#9;categoria&#9;destino&#9;circuito&#10;M&#9;idMovimiento&#9;categoria&#9;etiqueta"></textarea>
+        <textarea class="cm-ta" id="impIn" placeholder="G&#9;idGasto&#9;categoria&#9;destino&#9;circuito&#10;M&#9;idMovimiento&#9;categoria&#9;etiqueta&#10;F&#9;gastos&#9;idGasto&#9;fecha&#9;2026-06-05"></textarea>
         <div class="cm-row" style="margin-top:var(--space-3);">
             <button class="btn btn-primary" onclick="previsualizar()"><span class="material-icons">visibility</span> Previsualizar</button>
             <button class="btn btn-secondary" onclick="document.getElementById('impFile').click()"><span class="material-icons">upload_file</span> Cargar archivo .txt</button>
@@ -165,6 +165,9 @@
         out.push('### FORMATO A DEVOLVER');
         out.push('Gastos:      G' + TAB + 'id' + TAB + 'categoria' + TAB + 'destino' + TAB + 'circuito');
         out.push('Movimientos: M' + TAB + 'id' + TAB + 'categoria' + TAB + 'etiqueta(opcional)');
+        out.push('Cualquier campo: F' + TAB + 'coleccion(gastos|movimientos)' + TAB + 'id' + TAB + 'campo' + TAB + 'valor');
+        out.push('  campos gasto: fecha monto concepto proveedor moneda pais categoria destino circuito');
+        out.push('  campos movimiento: fecha monto descripcion tipo cuenta categoria etiqueta');
         out.push('');
 
         var nG = 0, nM = 0;
@@ -213,6 +216,9 @@
         out.push('### FORMATO A DEVOLVER');
         out.push('Gastos:      G' + TAB + 'id' + TAB + 'categoria' + TAB + 'destino' + TAB + 'circuito');
         out.push('Movimientos: M' + TAB + 'id' + TAB + 'categoria' + TAB + 'etiqueta(opcional)');
+        out.push('Cualquier campo: F' + TAB + 'coleccion(gastos|movimientos)' + TAB + 'id' + TAB + 'campo' + TAB + 'valor');
+        out.push('  campos gasto: fecha monto concepto proveedor moneda pais categoria destino circuito');
+        out.push('  campos movimiento: fecha monto descripcion tipo cuenta categoria etiqueta');
         out.push('');
         var nG = 0, nM = 0;
         out.push('### GASTOS  (G' + TAB + 'id' + TAB + 'fecha' + TAB + 'concepto' + TAB + 'proveedor' + TAB + 'monto' + TAB + 'moneda' + TAB + 'pais' + TAB + 'cat_actual' + TAB + 'destino_actual' + TAB + 'circuito_actual)');
@@ -269,10 +275,10 @@
             var l = linea.replace(/\r$/, '');
             if (!l.trim() || l.indexOf('#') === 0 || l.indexOf('###') === 0) return;
             var p = l.split(TAB);
-            if (p[0] !== 'G' && p[0] !== 'M') return; // ignora líneas que no son datos
+            if (p[0] !== 'G' && p[0] !== 'M' && p[0] !== 'F') return; // ignora líneas que no son datos
             var tipo = p[0];
             var id = (p[1] || '').trim();
-            if (!id) { errores.push('Línea ' + (i + 1) + ': sin id.'); return; }
+            if (tipo !== 'F' && !id) { errores.push('Línea ' + (i + 1) + ': sin id.'); return; }
 
             if (tipo === 'G') {
                 var g = _gastos.find(function(x) { return x.id === id; });
@@ -283,19 +289,19 @@
                 var data = {}, detalle = [];
                 if (cat) {
                     if (CAT_GASTO.indexOf(cat) === -1) { errores.push('Gasto ' + id + ': categoría inválida "' + cat + '".'); return; }
-                    if (cat !== (g.categoria || '')) { data.categoria = cat; detalle.push('cat→' + cat); }
+                    if (cat !== (g.categoria || '')) { data.categoria = cat; detalle.push('cat: ' + (g.categoria || '∅') + '→' + cat); }
                 }
                 if (destNom) {
                     var d = _destPorNombre[destNom.toLowerCase()];
                     if (!d) { errores.push('Gasto ' + id + ': destino "' + destNom + '" no existe.'); return; }
-                    if (d.id !== (g.destino || '')) { data.destino = d.id; data.destinoNom = d.nombre; detalle.push('dest→' + d.nombre); }
+                    if (d.id !== (g.destino || '')) { data.destino = d.id; data.destinoNom = d.nombre; detalle.push('dest: ' + (g.destinoNom || '∅') + '→' + d.nombre); }
                 }
                 if (circ) {
                     if (CIRCUITOS.indexOf(circ) === -1) { errores.push('Gasto ' + id + ': circuito inválido "' + circ + '".'); return; }
-                    if (circ !== (g.circuito || '')) { data.circuito = circ; data.deducible = (circ === 'fiscal' || circ === 'mixto'); detalle.push('circ→' + circ); }
+                    if (circ !== (g.circuito || '')) { data.circuito = circ; data.deducible = (circ === 'fiscal' || circ === 'mixto'); detalle.push('circ: ' + (g.circuito || '∅') + '→' + circ); }
                 }
                 if (Object.keys(data).length) _cambios.push({ col: 'gastos', id: id, data: data, detalle: detalle.join('  '), ref: limpia(g.concepto) });
-            } else {
+            } else if (tipo === 'M') {
                 var m = _movs.find(function(x) { return x.id === id; });
                 if (!m) { errores.push('Movimiento ' + id + ' no existe.'); return; }
                 var catNom = (p[2] || '').trim();
@@ -304,10 +310,72 @@
                 if (catNom) {
                     var c = _catPorNombre[catNom.toLowerCase()];
                     if (!c) { errores.push('Movimiento ' + id + ': categoría "' + catNom + '" no existe.'); return; }
-                    if (c.id !== (m.categoriaId || '')) { data2.categoriaId = c.id; detalle2.push('cat→' + c.nombre); }
+                    if (c.id !== (m.categoriaId || '')) { var cAnt = ''; if (m.categoriaId) { var cAo = _categorias.find(function(x){ return x.id === m.categoriaId; }); cAnt = cAo ? cAo.nombre : ''; } data2.categoriaId = c.id; detalle2.push('cat: ' + (cAnt || '∅') + '→' + c.nombre); }
                 }
-                if (etiqueta && etiqueta !== (m.etiqueta || '')) { data2.etiqueta = etiqueta; detalle2.push('etq→' + etiqueta); }
+                if (etiqueta && etiqueta !== (m.etiqueta || '')) { data2.etiqueta = etiqueta; detalle2.push('etq: ' + (m.etiqueta || '∅') + '→' + etiqueta); }
                 if (Object.keys(data2).length) _cambios.push({ col: 'movimientos', id: id, data: data2, detalle: detalle2.join('  '), ref: limpia(m.descripcion) });
+            } else if (tipo === 'F') {
+                // F  coleccion  id  campo  valor  — editar CUALQUIER campo
+                var colRaw = (p[1] || '').trim().toLowerCase();
+                var idF    = (p[2] || '').trim();
+                var campo  = (p[3] || '').trim().toLowerCase();
+                var valor  = (p[4] || '').trim();
+                var col = (colRaw === 'g' || colRaw === 'gasto' || colRaw === 'gastos') ? 'gastos'
+                        : (colRaw === 'm' || colRaw === 'movimiento' || colRaw === 'movimientos') ? 'movimientos' : '';
+                if (!col) { errores.push('Línea ' + (i + 1) + ': colección inválida "' + colRaw + '" (usá gastos o movimientos).'); return; }
+                if (!idF) { errores.push('Línea ' + (i + 1) + ': falta el id.'); return; }
+                if (!campo) { errores.push('Línea ' + (i + 1) + ': falta el nombre del campo.'); return; }
+                if (valor === '') { errores.push('Línea ' + (i + 1) + ': falta el valor (no se permite vacío, para evitar borrados accidentales).'); return; }
+                var arrF = (col === 'gastos') ? _gastos : _movs;
+                var rec = arrF.find(function(x) { return x.id === idF; });
+                if (!rec) { errores.push((col === 'gastos' ? 'Gasto ' : 'Movimiento ') + idF + ' no existe.'); return; }
+                var dataF = {}, antesVal = '', nuevoVal = '';
+                if (campo === 'fecha') {
+                    if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) { errores.push(idF + ': fecha inválida "' + valor + '" (formato AAAA-MM-DD).'); return; }
+                    antesVal = rec.fecha || ''; nuevoVal = valor; dataF.fecha = valor;
+                } else if (campo === 'monto') {
+                    var num = parseFloat(valor.replace(',', '.'));
+                    if (!isFinite(num)) { errores.push(idF + ': monto inválido "' + valor + '".'); return; }
+                    antesVal = String(rec.monto != null ? rec.monto : ''); nuevoVal = String(num); dataF.monto = num;
+                } else if (campo === 'circuito' && col === 'gastos') {
+                    var cir = valor.toLowerCase();
+                    if (CIRCUITOS.indexOf(cir) === -1) { errores.push(idF + ': circuito inválido "' + valor + '".'); return; }
+                    antesVal = rec.circuito || ''; nuevoVal = cir; dataF.circuito = cir; dataF.deducible = (cir === 'fiscal' || cir === 'mixto');
+                } else if (campo === 'categoria' && col === 'gastos') {
+                    var cg = valor.toLowerCase();
+                    if (CAT_GASTO.indexOf(cg) === -1) { errores.push(idF + ': categoría de gasto inválida "' + valor + '".'); return; }
+                    antesVal = rec.categoria || ''; nuevoVal = cg; dataF.categoria = cg;
+                } else if (campo === 'destino' && col === 'gastos') {
+                    var dd = _destPorNombre[valor.toLowerCase()];
+                    if (!dd) { errores.push(idF + ': destino "' + valor + '" no existe.'); return; }
+                    antesVal = rec.destinoNom || rec.destino || ''; nuevoVal = dd.nombre; dataF.destino = dd.id; dataF.destinoNom = dd.nombre;
+                } else if (campo === 'categoria' && col === 'movimientos') {
+                    var cm = _catPorNombre[valor.toLowerCase()];
+                    if (!cm) { errores.push(idF + ': categoría de movimiento "' + valor + '" no existe.'); return; }
+                    var catAct = '';
+                    if (rec.categoriaId) { var ccx = _categorias.find(function(c) { return c.id === rec.categoriaId; }); catAct = ccx ? ccx.nombre : ''; }
+                    antesVal = catAct; nuevoVal = cm.nombre; dataF.categoriaId = cm.id;
+                } else if (campo === 'cuenta' && col === 'movimientos') {
+                    var cuId = '';
+                    for (var kk in _cuentas) { if (_cuentas[kk] && String(_cuentas[kk]).toLowerCase() === valor.toLowerCase()) { cuId = kk; break; } }
+                    if (!cuId) { errores.push(idF + ': cuenta "' + valor + '" no existe.'); return; }
+                    antesVal = _cuentas[rec.cuentaId] || rec.cuentaId || ''; nuevoVal = _cuentas[cuId]; dataF.cuentaId = cuId;
+                } else if (campo === 'tipo' && col === 'movimientos') {
+                    var tp = valor.toLowerCase();
+                    if (tp !== 'debito' && tp !== 'credito') { errores.push(idF + ': tipo inválido "' + valor + '" (debito|credito).'); return; }
+                    antesVal = rec.tipo || ''; nuevoVal = tp; dataF.tipo = tp;
+                } else if ((campo === 'concepto' || campo === 'proveedor') && col === 'gastos') {
+                    antesVal = rec[campo] || ''; nuevoVal = valor; dataF[campo] = valor;
+                } else if ((campo === 'descripcion' || campo === 'etiqueta') && col === 'movimientos') {
+                    antesVal = rec[campo] || ''; nuevoVal = valor; dataF[campo] = valor;
+                } else if (campo === 'moneda' || campo === 'pais') {
+                    antesVal = rec[campo] || ''; nuevoVal = valor; dataF[campo] = valor;
+                } else {
+                    errores.push(idF + ': campo "' + campo + '" no editable para ' + col + '.'); return;
+                }
+                if (String(antesVal) === String(nuevoVal)) return;
+                var refF = (col === 'gastos') ? (rec.concepto || '') : (rec.descripcion || '');
+                _cambios.push({ col: col, id: idF, data: dataF, detalle: campo + ': "' + antesVal + '" → "' + nuevoVal + '"', ref: limpia(refF) });
             }
         });
 
