@@ -391,20 +391,22 @@ function verificarAuth(rolesPermitidos) {
                         return;
                     }
 
-                    // Campo correcto: "rol" (NO "role")
-                    if (roles.indexOf(userData.rol) === -1) {
-                        // Sin permiso de ROL para esta página → a su inicio seguro
-                        window.location.href = (userData.rol === 'admin') ? 'dashboard.html' : 'dashboard.html';
-                        return;
-                    }
-
-                    // Permisos granulares: un colaborador solo entra a lo habilitado
+                    // ── Control de acceso ──
+                    // El admin entra a TODO. Un colaborador entra si:
+                    //   - es una página del mínimo permitido (ALWAYS_ALLOWED), o
+                    //   - el admin le dio el permiso granular de esta página, o
+                    //   - la página permite explícitamente su rol (verificarAuth([...,'user'])).
+                    // El permiso granular manda por encima del rol fijo de la página,
+                    // así una página marcada solo-admin se abre si el admin la habilitó.
                     if (userData.rol !== 'admin') {
                         var _pag = (window.location.pathname.split('/').pop() || '').replace('.html', '');
-                        if (_pag && _pag !== 'index' && ALWAYS_ALLOWED.indexOf(_pag) === -1) {
-                            var _ps = userData.permisos || [];
-                            if (_ps.indexOf(_pag) === -1) { window.location.href = 'dashboard.html'; return; }
-                        }
+                        var _ps = userData.permisos || [];
+                        var _permitido =
+                            (!_pag || _pag === 'index') ||
+                            (ALWAYS_ALLOWED.indexOf(_pag) !== -1) ||
+                            (_ps.indexOf(_pag) !== -1) ||
+                            (roles.indexOf(userData.rol) !== -1);
+                        if (!_permitido) { window.location.href = 'dashboard.html'; return; }
                     }
 
                     resolve({ user: user, userData: userData });
