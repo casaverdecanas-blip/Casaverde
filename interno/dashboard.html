@@ -291,6 +291,7 @@
         <div class="db-section-title" style="margin-bottom:var(--space-2);">
             <span class="material-icons" style="color:var(--color-danger);">warning_amber</span>
             Requieren atención
+            <button onclick="ayudaNovedades()" title="¿Cómo funciona?" style="margin-left:8px;width:22px;height:22px;border-radius:50%;border:none;background:var(--color-primary,#2d5a27);color:#fff;font-weight:700;cursor:pointer;font-size:13px;line-height:1;flex-shrink:0;">?</button>
         </div>
         <div id="alertasList"></div>
     </div>
@@ -427,6 +428,25 @@
 
 </main>
 
+<div id="modalNovedades" style="position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:16px;z-index:999;" onclick="if(event.target===this)cerrarNovedades()">
+  <div style="background:#fff;border-radius:14px;padding:18px;max-width:480px;width:100%;max-height:85vh;overflow:auto;">
+    <h3 style="margin:0 0 10px;">Cómo funcionan las alertas y novedades</h3>
+    <div style="font-size:14px;line-height:1.55;color:#333;">
+      <p style="margin:0 0 8px;">Esta sección reúne lo que <strong>requiere tu atención</strong> en un solo lugar:</p>
+      <ul style="margin:0 0 8px;padding-left:18px;">
+        <li>Tareas o limpiezas con atraso crítico, y reservas sin tarea de limpieza próxima.</li>
+        <li>Honorarios pendientes hace más de 14 días.</li>
+        <li>Movimientos del banco sin categorizar.</li>
+        <li><strong>Tu agenda personal:</strong> recordatorios y tareas para hoy o vencidos.</li>
+      </ul>
+      <p style="margin:0 0 8px;">Cada fila es un <strong>acceso directo</strong>: tocala y vas a la página correspondiente (la agenda, tareas, pagos, etc.).</p>
+      <p style="margin:0 0 8px;">Además, al entrar al sistema tus recordatorios de hoy o vencidos se registran en <strong>Notificaciones</strong>, así te enterás aunque no abras la agenda. Si tenés el aviso por WhatsApp/email activado, también te llega por ahí.</p>
+      <p style="margin:0;color:#888;font-size:13px;">Nota: el aviso aparece al abrir la app y por Notificaciones. No es una alarma con la app cerrada.</p>
+    </div>
+    <div style="text-align:right;margin-top:14px;"><button class="btn btn-primary" onclick="cerrarNovedades()">Entendido</button></div>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -450,6 +470,9 @@
     var showEmpty     = CVC.showEmpty;
     var showError     = CVC.showError;
     var showToast     = CVC.showToast;
+
+    window.ayudaNovedades = function() { document.getElementById('modalNovedades').style.display = 'flex'; };
+    window.cerrarNovedades = function() { document.getElementById('modalNovedades').style.display = 'none'; };
 
     var hoy = new Date(); hoy.setHours(0,0,0,0);
 
@@ -923,6 +946,35 @@
                     href:'herramientas-btg.html' });
             }
         } catch(e) {}
+
+        // ── Novedades de TU agenda personal (recordatorios hoy / vencidos) ──
+        try {
+            var hIso = new Date().toISOString().slice(0, 10);
+            var agSnap = await db.collection('agenda_items').where('uid', '==', user.uid).get();
+            var agHoy = 0, agVenc = 0, aNotificar = [];
+            agSnap.forEach(function(d) {
+                var x = d.data(); x.id = d.id;
+                if (x.hecho) return;
+                if (x.fecha === hIso) agHoy++;
+                else if (x.fecha && x.fecha < hIso) agVenc++;
+                if (!x.notificado && x.fecha && x.fecha <= hIso) aNotificar.push(x);
+            });
+            if (agHoy || agVenc) {
+                var partesAg = [];
+                if (agHoy) partesAg.push(agHoy + ' para hoy');
+                if (agVenc) partesAg.push(agVenc + ' vencido' + (agVenc > 1 ? 's' : ''));
+                alertas.push({ nivel: agVenc ? 'atencion' : 'info', icon: 'event_note',
+                    title: 'Agenda: ' + partesAg.join(' y '),
+                    desc: 'Recordatorios y tareas personales pendientes',
+                    href: 'agenda.html' });
+            }
+            // Surfacing en Notificaciones: registrar una vez los vencidos/de hoy
+            aNotificar.forEach(function(it) {
+                var cuando = (it.fecha === hIso) ? 'hoy' : ('vencido (' + it.fecha + ')');
+                if (CVC.registrarEvento) CVC.registrarEvento('recordatorio', 'Recordatorio ' + cuando + ': ' + (it.titulo || ''), [user.uid]);
+                db.collection('agenda_items').doc(it.id).update({ notificado: true }).catch(function() {});
+            });
+        } catch (e) { /* agenda no disponible: no bloquea el dashboard */ }
 
         if (!alertas.length) return;
         document.getElementById('alertasList').innerHTML = alertas.map(function(a) {

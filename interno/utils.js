@@ -144,6 +144,7 @@ const NAV_ADMIN_ITEMS = [
 
     // Items directos
     { href: 'dashboard.html',  icon: 'dashboard',      label: 'Dashboard'  },
+    { href: 'agenda.html',     icon: 'event_note',     label: 'Mi agenda'  },
     { href: 'calendario.html', icon: 'calendar_month', label: 'Calendario' },
     { href: 'comunicacion.html', icon: 'forum',        label: 'Comunicación' },
 
@@ -250,7 +251,7 @@ const NAV_USER_ITEMS = [
 //  usados por puede() y renderNav().
 // ============================================================
 var _userDataActual = null;
-var ALWAYS_ALLOWED = ['dashboard', 'notificaciones', 'manual-sistema'];
+var ALWAYS_ALLOWED = ['dashboard', 'agenda', 'notificaciones', 'manual-sistema'];
 var CATALOGO_PERMISOS = [
     { grupo: 'Operación', icon: 'checklist', items: [
         { href: 'tareas.html',         icon: 'checklist',            label: 'Tareas' },
@@ -296,7 +297,7 @@ var CATALOGO_PERMISOS = [
 ];
 
 function construirNavColaborador() {
-    var nav = [{ href: 'dashboard.html', icon: 'dashboard', label: 'Inicio' }];
+    var nav = [{ href: 'dashboard.html', icon: 'dashboard', label: 'Inicio' }, { href: 'agenda.html', icon: 'event_note', label: 'Mi agenda' }];
     CATALOGO_PERMISOS.forEach(function(g) {
         var its = g.items.filter(function(x) { return puede(x.href); });
         if (its.length) nav.push({ group: g.grupo, icon: g.icon, items: its });

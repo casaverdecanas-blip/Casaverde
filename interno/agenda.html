@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi agenda · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .ag-wrap { max-width: 920px; margin: 0 auto; padding: 16px; }
+        .ag-banner { background: var(--color-warning-light, #fef3c7); color: var(--color-warning, #92400e); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; font-weight: 600; }
+        .ag-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+        .ag-mes { font-weight: 700; font-size: 17px; min-width: 160px; text-align: center; }
+        .ag-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .ag-dow { text-align: center; font-size: 11px; color: var(--color-text-muted, #888); font-weight: 700; padding: 4px 0; }
+        .ag-cell { min-height: 56px; border: 1px solid var(--color-border, #e5e7eb); border-radius: 8px; padding: 4px; cursor: pointer; background: #fff; position: relative; }
+        .ag-cell.vacio { background: transparent; border: none; cursor: default; }
+        .ag-cell.hoy { border-color: var(--color-primary, #2d5a27); border-width: 2px; }
+        .ag-cell.sel { background: var(--color-primary-light, #e8f3e6); }
+        .ag-num { font-size: 12px; font-weight: 700; color: var(--color-text-primary, #222); }
+        .ag-dots { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 3px; }
+        .ag-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-primary, #2d5a27); }
+        .ag-dot.venc { background: #dc2626; }
+        .ag-badge { position: absolute; top: 3px; right: 4px; font-size: 10px; font-weight: 700; color: var(--color-text-muted, #888); }
+        .ag-panel { margin-top: 16px; }
+        .ag-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border: 1px solid var(--color-border, #e5e7eb); border-radius: 10px; margin-bottom: 8px; background: #fff; }
+        .ag-item.done { opacity: .55; }
+        .ag-item .t { font-weight: 600; }
+        .ag-item .t.done { text-decoration: line-through; }
+        .ag-item .sub { font-size: 12px; color: var(--color-text-muted, #888); margin-top: 2px; }
+        .ag-pcolor { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: middle; }
+        .ag-acts { margin-left: auto; display: flex; gap: 4px; }
+        .ag-acts button { background: none; border: none; cursor: pointer; color: var(--color-text-muted, #888); padding: 2px; }
+        .ag-proy { border: 1px solid var(--color-border, #e5e7eb); border-radius: 10px; padding: 10px; margin-bottom: 8px; cursor: pointer; }
+        .ag-proy.activo { border-color: var(--color-primary, #2d5a27); background: var(--color-primary-light, #e8f3e6); }
+        .ag-prog { height: 6px; border-radius: 3px; background: #eee; margin-top: 6px; overflow: hidden; }
+        .ag-prog > i { display: block; height: 100%; background: var(--color-primary, #2d5a27); }
+        .ag-tag-asig { display: inline-block; font-size: 10px; font-weight: 700; background: var(--color-info-light, #dbeafe); color: var(--color-info, #1d4ed8); border-radius: 6px; padding: 1px 6px; margin-left: 6px; }
+        .ag-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+        .ag-tabs button { flex: 1; padding: 8px; border: 1px solid var(--color-border, #e5e7eb); background: #fff; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        .ag-tabs button.on { background: var(--color-primary, #2d5a27); color: #fff; border-color: var(--color-primary, #2d5a27); }
+        .modal-cv { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+        .modal-cv.show { display: flex; }
+        .modal-cv .box { background: #fff; border-radius: 14px; padding: 18px; width: 100%; max-width: 460px; max-height: 90vh; overflow: auto; }
+        .modal-cv h3 { margin: 0 0 12px; }
+        .modal-cv .form-row2 { display: flex; gap: 8px; }
+        .modal-cv .form-row2 > div { flex: 1; }
+        .modal-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+    </style>
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">cottage</span>
+        Casa Verde Canas
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip">
+            <span class="material-icons">person</span>
+            <span id="userName">—</span>
+        </div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons">logout</span>
+            Salir
+        </button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<div class="ag-wrap">
+    <h1 style="margin:0 0 12px;font-size:22px;">Mi agenda</h1>
+
+    <div class="ag-tabs">
+        <button id="tabCal" class="on" onclick="setVista('cal')">Calendario</button>
+        <button id="tabProy" onclick="setVista('proy')">Proyectos</button>
+    </div>
+
+    <div id="bannerAlertas"></div>
+
+    <!-- VISTA CALENDARIO -->
+    <div id="vistaCal">
+        <div class="ag-toolbar">
+            <button class="btn btn-secondary" onclick="cambiarMes(-1)"><span class="material-icons">chevron_left</span></button>
+            <span class="ag-mes" id="lblMes">—</span>
+            <button class="btn btn-secondary" onclick="cambiarMes(1)"><span class="material-icons">chevron_right</span></button>
+            <button class="btn btn-secondary" onclick="irHoy()">Hoy</button>
+            <button class="btn btn-primary" style="margin-left:auto;" onclick="abrirItem(null)"><span class="material-icons">add</span> Nuevo</button>
+            <button class="btn btn-secondary" id="btnAsignar" style="display:none;" onclick="abrirAsignar()"><span class="material-icons">person_add</span> Asignar</button>
+        </div>
+
+        <div class="ag-grid" id="dows"></div>
+        <div class="ag-grid" id="cal" style="margin-top:4px;"></div>
+
+        <div class="ag-panel" id="panelDia"></div>
+    </div>
+
+    <!-- VISTA PROYECTOS -->
+    <div id="vistaProy" style="display:none;">
+        <button class="btn btn-primary" onclick="abrirProyecto(null)"><span class="material-icons">add</span> Nuevo proyecto</button>
+        <div id="listaProyectos" style="margin-top:12px;"></div>
+        <div id="itemsProyecto" style="margin-top:12px;"></div>
+    </div>
+</div>
+
+<!-- MODAL ITEM -->
+<div class="modal-cv" id="modalItem">
+    <div class="box">
+        <h3 id="modalItemTitulo">Nuevo</h3>
+        <input type="hidden" id="itId">
+        <div class="form-group">
+            <label class="form-label">Título</label>
+            <input type="text" id="itTitulo" class="form-control" placeholder="Ej: Llamar al plomero">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Detalle (opcional)</label>
+            <textarea id="itDetalle" class="form-control" rows="2"></textarea>
+        </div>
+        <div class="form-row2">
+            <div class="form-group">
+                <label class="form-label">Fecha</label>
+                <input type="date" id="itFecha" class="form-control">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Hora (opcional)</label>
+                <input type="time" id="itHora" class="form-control">
+            </div>
+        </div>
+        <div class="form-row2">
+            <div class="form-group">
+                <label class="form-label">Tipo</label>
+                <select id="itTipo" class="form-control">
+                    <option value="recordatorio">Recordatorio</option>
+                    <option value="tarea">Tarea</option>
+                    <option value="actividad">Actividad</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Proyecto</label>
+                <select id="itProyecto" class="form-control"><option value="">— sin proyecto —</option></select>
+            </div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;">
+            <input type="checkbox" id="itHecho"> Marcar como hecho
+        </label>
+        <div class="modal-foot">
+            <button class="btn btn-secondary" onclick="cerrarModal('modalItem')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarItem()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL PROYECTO -->
+<div class="modal-cv" id="modalProyecto">
+    <div class="box">
+        <h3 id="modalProyTitulo">Nuevo proyecto</h3>
+        <input type="hidden" id="pjId">
+        <div class="form-group">
+            <label class="form-label">Nombre</label>
+            <input type="text" id="pjNombre" class="form-control" placeholder="Ej: Reforma cabaña 3">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Descripción (opcional)</label>
+            <textarea id="pjDesc" class="form-control" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Color</label>
+            <input type="color" id="pjColor" class="form-control" value="#2d5a27" style="height:42px;">
+        </div>
+        <div class="modal-foot">
+            <button class="btn btn-secondary" onclick="cerrarModal('modalProyecto')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarProyecto()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL ASIGNAR (admin) -->
+<div class="modal-cv" id="modalAsignar">
+    <div class="box">
+        <h3>Asignar recordatorio a un usuario</h3>
+        <div class="form-group">
+            <label class="form-label">Usuario</label>
+            <select id="asUsuario" class="form-control"></select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Título</label>
+            <input type="text" id="asTitulo" class="form-control">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Detalle (opcional)</label>
+            <textarea id="asDetalle" class="form-control" rows="2"></textarea>
+        </div>
+        <div class="form-row2">
+            <div class="form-group">
+                <label class="form-label">Fecha</label>
+                <input type="date" id="asFecha" class="form-control">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Hora (opcional)</label>
+                <input type="time" id="asHora" class="form-control">
+            </div>
+        </div>
+        <p class="form-hint">Le aparecerá en su agenda y recibirá el aviso por la sección Notificaciones.</p>
+        <div class="modal-foot">
+            <button class="btn btn-secondary" onclick="cerrarModal('modalAsignar')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarAsignar()">Asignar</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async function () {
+    var sesion = await CVC.verificarAuth(['admin', 'user']);
+    var user = sesion.user, userData = sesion.userData;
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+    CVC.renderNav('agenda.html');
+    if (CVC.initAyuda) CVC.initAyuda('agenda.html');
+
+    var db = CVC.db;
+    var showToast = CVC.showToast;
+    var escapeHtml = CVC.escapeHtml || function (x) { return (x == null ? '' : String(x)); };
+    var uid = user.uid;
+    var esAdmin = userData.rol === 'admin';
+    var miNombre = userData.nombre || user.email;
+
+    var items = [];
+    var proyectos = [];
+    var hoy = new Date();
+    var verYear = hoy.getFullYear();
+    var verMonth = hoy.getMonth(); // 0-11
+    var selFecha = isoDe(hoy);
+    var filtroProyecto = '';
+
+    var MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    var DOWS = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa'];
+
+    function isoDe(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function isoHoy() { return isoDe(new Date()); }
+    function proyNombre(id) { var p = buscarProy(id); return p ? p.nombre : ''; }
+    function proyColor(id) { var p = buscarProy(id); return p ? (p.color || '#2d5a27') : '#2d5a27'; }
+    function buscarProy(id) { for (var i = 0; i < proyectos.length; i++) { if (proyectos[i].id === id) return proyectos[i]; } return null; }
+    function buscarItem(id) { for (var i = 0; i < items.length; i++) { if (items[i].id === id) return items[i]; } return null; }
+
+    // ── Carga ──────────────────────────────────────────────
+    async function cargar() {
+        try {
+            var sp = await db.collection('agenda_proyectos').where('uid', '==', uid).get();
+            proyectos = [];
+            sp.forEach(function (d) { var x = d.data(); x.id = d.id; proyectos.push(x); });
+            proyectos.sort(function (a, b) { return (a.nombre || '').localeCompare(b.nombre || ''); });
+
+            var si = await db.collection('agenda_items').where('uid', '==', uid).get();
+            items = [];
+            si.forEach(function (d) { var x = d.data(); x.id = d.id; items.push(x); });
+            items.sort(function (a, b) { return ((a.fecha || '') + (a.hora || '')).localeCompare((b.fecha || '') + (b.hora || '')); });
+
+            llenarSelectProyectos();
+            renderTodo();
+            chequearAlertas();
+        } catch (e) {
+            showToast('No se pudo cargar la agenda: ' + e.message, 'error');
+        }
+    }
+
+    function renderTodo() {
+        renderDows();
+        renderCalendario();
+        renderDia();
+        renderBanner();
+        renderProyectos();
+    }
+
+    // ── Banner de alertas (hoy / vencidos) ──────────────────
+    function renderBanner() {
+        var h = isoHoy();
+        var hoyN = 0, venc = 0;
+        items.forEach(function (it) {
+            if (it.hecho) return;
+            if (it.fecha === h) hoyN++;
+            else if (it.fecha && it.fecha < h) venc++;
+        });
+        var cont = document.getElementById('bannerAlertas');
+        if (!hoyN && !venc) { cont.innerHTML = ''; return; }
+        var txt = [];
+        if (hoyN) txt.push(hoyN + (hoyN === 1 ? ' para hoy' : ' para hoy'));
+        if (venc) txt.push(venc + (venc === 1 ? ' vencido' : ' vencidos'));
+        cont.innerHTML = '<div class="ag-banner"><span class="material-icons">notifications_active</span> Tenés ' + txt.join(' y ') + '.</div>';
+    }
+
+    // ── Calendario ──────────────────────────────────────────
+    function renderDows() {
+        var h = '';
+        for (var i = 0; i < 7; i++) h += '<div class="ag-dow">' + DOWS[i] + '</div>';
+        document.getElementById('dows').innerHTML = h;
+    }
+
+    function renderCalendario() {
+        document.getElementById('lblMes').textContent = MESES[verMonth] + ' ' + verYear;
+        var primero = new Date(verYear, verMonth, 1);
+        var startDow = primero.getDay();
+        var diasMes = new Date(verYear, verMonth + 1, 0).getDate();
+        var h = isoHoy();
+        var html = '';
+        var i;
+        for (i = 0; i < startDow; i++) html += '<div class="ag-cell vacio"></div>';
+        for (var dia = 1; dia <= diasMes; dia++) {
+            var iso = verYear + '-' + pad(verMonth + 1) + '-' + pad(dia);
+            var delDia = items.filter(function (it) { return it.fecha === iso && (!filtroProyecto || it.proyectoId === filtroProyecto); });
+            var cls = 'ag-cell';
+            if (iso === h) cls += ' hoy';
+            if (iso === selFecha) cls += ' sel';
+            var dots = '';
+            var n = 0;
+            delDia.forEach(function (it) {
+                if (n < 4) {
+                    var dv = (!it.hecho && it.fecha < h) ? ' venc' : '';
+                    var col = it.proyectoId ? (' style="background:' + proyColor(it.proyectoId) + ';"') : '';
+                    dots += '<span class="ag-dot' + dv + '"' + (it.proyectoId ? col : '') + '></span>';
+                }
+                n++;
+            });
+            var badge = delDia.length ? '<span class="ag-badge">' + delDia.length + '</span>' : '';
+            html += '<div class="' + cls + '" onclick="seleccionar(\'' + iso + '\')"><span class="ag-num">' + dia + '</span>' + badge + '<div class="ag-dots">' + dots + '</div></div>';
+        }
+        document.getElementById('cal').innerHTML = html;
+    }
+
+    function renderDia() {
+        var cont = document.getElementById('panelDia');
+        var delDia = items.filter(function (it) { return it.fecha === selFecha && (!filtroProyecto || it.proyectoId === filtroProyecto); });
+        delDia.sort(function (a, b) { return (a.hora || '99').localeCompare(b.hora || '99'); });
+        var titulo = '<div style="display:flex;align-items:center;gap:8px;margin:6px 0 10px;"><strong>' + selFecha + '</strong>' +
+            '<button class="btn btn-primary" style="margin-left:auto;padding:4px 10px;" onclick="abrirItem(null)"><span class="material-icons">add</span> Agregar</button></div>';
+        if (!delDia.length) { cont.innerHTML = titulo + '<p style="color:#888;">Sin actividades este día.</p>'; return; }
+        var html = titulo;
+        delDia.forEach(function (it) { html += itemHTML(it); });
+        cont.innerHTML = html;
+    }
+
+    function itemHTML(it) {
+        var pc = it.proyectoId ? ('<span class="ag-pcolor" style="background:' + proyColor(it.proyectoId) + ';"></span>' + escapeHtml(proyNombre(it.proyectoId))) : '';
+        var asig = it.asignadoPor ? ('<span class="ag-tag-asig">asignado: ' + escapeHtml(it.asignadoPorNombre || 'admin') + '</span>') : '';
+        var sub = [];
+        if (it.hora) sub.push(it.hora);
+        if (it.tipo) sub.push(it.tipo);
+        if (pc) sub.push(pc);
+        return '<div class="ag-item' + (it.hecho ? ' done' : '') + '">' +
+            '<input type="checkbox" ' + (it.hecho ? 'checked' : '') + ' onchange="toggleHecho(\'' + it.id + '\')">' +
+            '<div><div class="t' + (it.hecho ? ' done' : '') + '">' + escapeHtml(it.titulo || '') + asig + '</div>' +
+            (it.detalle ? '<div class="sub">' + escapeHtml(it.detalle) + '</div>' : '') +
+            (sub.length ? '<div class="sub">' + sub.join(' · ') + '</div>' : '') + '</div>' +
+            '<div class="ag-acts">' +
+            '<button onclick="abrirItem(\'' + it.id + '\')"><span class="material-icons">edit</span></button>' +
+            '<button onclick="borrarItem(\'' + it.id + '\')"><span class="material-icons">delete</span></button>' +
+            '</div></div>';
+    }
+
+    // ── Proyectos ───────────────────────────────────────────
+    function renderProyectos() {
+        var cont = document.getElementById('listaProyectos');
+        if (!proyectos.length) { cont.innerHTML = '<p style="color:#888;">Todavía no tenés proyectos. Creá uno para agrupar actividades.</p>'; document.getElementById('itemsProyecto').innerHTML = ''; return; }
+        var html = '';
+        proyectos.forEach(function (p) {
+            var its = items.filter(function (it) { return it.proyectoId === p.id; });
+            var tot = its.length, hechos = its.filter(function (it) { return it.hecho; }).length;
+            var pct = tot ? Math.round(hechos * 100 / tot) : 0;
+            html += '<div class="ag-proy' + (filtroProyecto === p.id ? ' activo' : '') + '" onclick="filtrarProyecto(\'' + p.id + '\')">' +
+                '<div style="display:flex;align-items:center;gap:8px;">' +
+                '<span class="ag-pcolor" style="background:' + (p.color || '#2d5a27') + ';"></span>' +
+                '<strong>' + escapeHtml(p.nombre || '') + '</strong>' +
+                '<span style="margin-left:auto;font-size:12px;color:#888;">' + hechos + '/' + tot + '</span>' +
+                '<button onclick="event.stopPropagation();abrirProyecto(\'' + p.id + '\')" style="background:none;border:none;cursor:pointer;color:#888;"><span class="material-icons">edit</span></button>' +
+                '<button onclick="event.stopPropagation();borrarProyecto(\'' + p.id + '\')" style="background:none;border:none;cursor:pointer;color:#888;"><span class="material-icons">delete</span></button>' +
+                '</div>' +
+                (p.descripcion ? '<div class="sub" style="font-size:12px;color:#888;margin-top:4px;">' + escapeHtml(p.descripcion) + '</div>' : '') +
+                '<div class="ag-prog"><i style="width:' + pct + '%;background:' + (p.color || '#2d5a27') + ';"></i></div>' +
+                '</div>';
+        });
+        cont.innerHTML = html;
+        renderItemsProyecto();
+    }
+
+    function renderItemsProyecto() {
+        var cont = document.getElementById('itemsProyecto');
+        if (!filtroProyecto) { cont.innerHTML = ''; return; }
+        var its = items.filter(function (it) { return it.proyectoId === filtroProyecto; });
+        its.sort(function (a, b) { return ((a.fecha || '') + (a.hora || '')).localeCompare((b.fecha || '') + (b.hora || '')); });
+        var p = buscarProy(filtroProyecto);
+        var html = '<h3 style="margin:6px 0;">' + escapeHtml(p ? p.nombre : '') + ' — actividades</h3>';
+        if (!its.length) html += '<p style="color:#888;">Sin actividades en este proyecto.</p>';
+        its.forEach(function (it) { html += '<div class="sub" style="font-size:12px;color:#888;margin-bottom:2px;">' + (it.fecha || '') + (it.hora ? ' ' + it.hora : '') + '</div>' + itemHTML(it); });
+        cont.innerHTML = html;
+    }
+
+    function llenarSelectProyectos() {
+        var sel = document.getElementById('itProyecto');
+        var html = '<option value="">— sin proyecto —</option>';
+        proyectos.forEach(function (p) { html += '<option value="' + p.id + '">' + escapeHtml(p.nombre || '') + '</option>'; });
+        sel.innerHTML = html;
+    }
+
+    // ── Alertas → pipeline de Notificaciones ────────────────
+    function chequearAlertas() {
+        try {
+            var h = isoHoy();
+            var pendientes = items.filter(function (it) { return !it.hecho && !it.notificado && it.fecha && it.fecha <= h; });
+            if (!pendientes.length) return;
+            pendientes.forEach(function (it) {
+                var cuando = (it.fecha === h) ? 'hoy' : ('vencido (' + it.fecha + ')');
+                if (CVC.registrarEvento) CVC.registrarEvento('recordatorio', 'Recordatorio ' + cuando + ': ' + (it.titulo || ''), [uid]);
+                db.collection('agenda_items').doc(it.id).update({ notificado: true }).catch(function () {});
+                it.notificado = true;
+            });
+        } catch (e) { /* silencioso */ }
+    }
+
+    // ── Modales / acciones (globales) ───────────────────────
+    window.setVista = function (v) {
+        document.getElementById('vistaCal').style.display = (v === 'cal') ? 'block' : 'none';
+        document.getElementById('vistaProy').style.display = (v === 'proy') ? 'block' : 'none';
+        document.getElementById('tabCal').className = (v === 'cal') ? 'on' : '';
+        document.getElementById('tabProy').className = (v === 'proy') ? 'on' : '';
+    };
+    window.cambiarMes = function (delta) {
+        verMonth += delta;
+        if (verMonth < 0) { verMonth = 11; verYear--; }
+        if (verMonth > 11) { verMonth = 0; verYear++; }
+        renderCalendario();
+    };
+    window.irHoy = function () { verYear = hoy.getFullYear(); verMonth = hoy.getMonth(); selFecha = isoHoy(); renderCalendario(); renderDia(); };
+    window.seleccionar = function (iso) { selFecha = iso; renderCalendario(); renderDia(); };
+    window.filtrarProyecto = function (id) { filtroProyecto = (filtroProyecto === id) ? '' : id; renderProyectos(); };
+
+    window.abrirItem = function (id) {
+        var it = id ? buscarItem(id) : null;
+        document.getElementById('modalItemTitulo').textContent = it ? 'Editar' : 'Nuevo';
+        document.getElementById('itId').value = it ? it.id : '';
+        document.getElementById('itTitulo').value = it ? (it.titulo || '') : '';
+        document.getElementById('itDetalle').value = it ? (it.detalle || '') : '';
+        document.getElementById('itFecha').value = it ? (it.fecha || selFecha) : selFecha;
+        document.getElementById('itHora').value = it ? (it.hora || '') : '';
+        document.getElementById('itTipo').value = it ? (it.tipo || 'recordatorio') : 'recordatorio';
+        document.getElementById('itProyecto').value = it ? (it.proyectoId || '') : (filtroProyecto || '');
+        document.getElementById('itHecho').checked = it ? !!it.hecho : false;
+        abrirModal('modalItem');
+    };
+
+    window.guardarItem = async function () {
+        var id = document.getElementById('itId').value;
+        var titulo = document.getElementById('itTitulo').value.trim();
+        var fecha = document.getElementById('itFecha').value;
+        if (!titulo) { showToast('Poné un título.', 'error'); return; }
+        if (!fecha) { showToast('Elegí una fecha.', 'error'); return; }
+        var data = {
+            uid: uid,
+            titulo: titulo,
+            detalle: document.getElementById('itDetalle').value.trim(),
+            fecha: fecha,
+            hora: document.getElementById('itHora').value || '',
+            tipo: document.getElementById('itTipo').value,
+            proyectoId: document.getElementById('itProyecto').value || '',
+            hecho: document.getElementById('itHecho').checked
+        };
+        try {
+            if (id) {
+                await db.collection('agenda_items').doc(id).update(data);
+            } else {
+                data.notificado = false;
+                data.asignadoPor = '';
+                data.creadoEn = firebase.firestore.FieldValue.serverTimestamp();
+                await db.collection('agenda_items').add(data);
+            }
+            cerrarModal('modalItem');
+            await cargar();
+            showToast('Guardado.', 'success');
+        } catch (e) { showToast('No se pudo guardar: ' + e.message, 'error'); }
+    };
+
+    window.toggleHecho = async function (id) {
+        var it = buscarItem(id); if (!it) return;
+        try { await db.collection('agenda_items').doc(id).update({ hecho: !it.hecho }); it.hecho = !it.hecho; renderTodo(); }
+        catch (e) { showToast('No se pudo actualizar: ' + e.message, 'error'); }
+    };
+
+    window.borrarItem = async function (id) {
+        if (!confirm('¿Borrar esta actividad?')) return;
+        try { await db.collection('agenda_items').doc(id).delete(); await cargar(); showToast('Borrado.', 'success'); }
+        catch (e) { showToast('No se pudo borrar: ' + e.message, 'error'); }
+    };
+
+    window.abrirProyecto = function (id) {
+        var p = id ? buscarProy(id) : null;
+        document.getElementById('modalProyTitulo').textContent = p ? 'Editar proyecto' : 'Nuevo proyecto';
+        document.getElementById('pjId').value = p ? p.id : '';
+        document.getElementById('pjNombre').value = p ? (p.nombre || '') : '';
+        document.getElementById('pjDesc').value = p ? (p.descripcion || '') : '';
+        document.getElementById('pjColor').value = p ? (p.color || '#2d5a27') : '#2d5a27';
+        abrirModal('modalProyecto');
+    };
+
+    window.guardarProyecto = async function () {
+        var id = document.getElementById('pjId').value;
+        var nombre = document.getElementById('pjNombre').value.trim();
+        if (!nombre) { showToast('Poné un nombre.', 'error'); return; }
+        var data = { uid: uid, nombre: nombre, descripcion: document.getElementById('pjDesc').value.trim(), color: document.getElementById('pjColor').value };
+        try {
+            if (id) { await db.collection('agenda_proyectos').doc(id).update(data); }
+            else { data.creadoEn = firebase.firestore.FieldValue.serverTimestamp(); await db.collection('agenda_proyectos').add(data); }
+            cerrarModal('modalProyecto');
+            await cargar();
+            showToast('Proyecto guardado.', 'success');
+        } catch (e) { showToast('No se pudo guardar: ' + e.message, 'error'); }
+    };
+
+    window.borrarProyecto = async function (id) {
+        var its = items.filter(function (it) { return it.proyectoId === id; });
+        var msg = its.length ? ('Este proyecto tiene ' + its.length + ' actividad(es). Se borrará el proyecto y esas actividades quedarán SIN proyecto. ¿Seguir?') : '¿Borrar este proyecto?';
+        if (!confirm(msg)) return;
+        try {
+            for (var i = 0; i < its.length; i++) { await db.collection('agenda_items').doc(its[i].id).update({ proyectoId: '' }); }
+            await db.collection('agenda_proyectos').doc(id).delete();
+            if (filtroProyecto === id) filtroProyecto = '';
+            await cargar();
+            showToast('Proyecto borrado.', 'success');
+        } catch (e) { showToast('No se pudo borrar: ' + e.message, 'error'); }
+    };
+
+    // ── Asignar (admin) ─────────────────────────────────────
+    window.abrirAsignar = async function () {
+        try {
+            var snap = await db.collection('usuarios').get();
+            var html = '';
+            snap.forEach(function (d) { var x = d.data(); if (x.activo === false) return; html += '<option value="' + d.id + '">' + escapeHtml((x.nombre || x.email || d.id)) + (x.rol === 'admin' ? ' (admin)' : '') + '</option>'; });
+            document.getElementById('asUsuario').innerHTML = html;
+            document.getElementById('asTitulo').value = '';
+            document.getElementById('asDetalle').value = '';
+            document.getElementById('asFecha').value = isoHoy();
+            document.getElementById('asHora').value = '';
+            abrirModal('modalAsignar');
+        } catch (e) { showToast('No se pudieron cargar los usuarios: ' + e.message, 'error'); }
+    };
+
+    window.guardarAsignar = async function () {
+        var target = document.getElementById('asUsuario').value;
+        var titulo = document.getElementById('asTitulo').value.trim();
+        var fecha = document.getElementById('asFecha').value;
+        if (!target) { showToast('Elegí un usuario.', 'error'); return; }
+        if (!titulo) { showToast('Poné un título.', 'error'); return; }
+        if (!fecha) { showToast('Elegí una fecha.', 'error'); return; }
+        var hora = document.getElementById('asHora').value || '';
+        var detalle = document.getElementById('asDetalle').value.trim();
+        var data = {
+            uid: target, titulo: titulo, detalle: detalle, fecha: fecha, hora: hora,
+            tipo: 'recordatorio', proyectoId: '', hecho: false, notificado: false,
+            asignadoPor: uid, asignadoPorNombre: miNombre,
+            creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        try {
+            await db.collection('agenda_items').add(data);
+            var txt = 'Te asignaron un recordatorio: ' + titulo + ' (para el ' + fecha + (hora ? ' ' + hora : '') + ')';
+            if (CVC.avisar) { try { await CVC.avisar('recordatorio', 'Nuevo recordatorio', txt, [target], uid); } catch (e2) { } }
+            cerrarModal('modalAsignar');
+            showToast('Recordatorio asignado y avisado.', 'success');
+            if (target === uid) await cargar();
+        } catch (e) { showToast('No se pudo asignar: ' + e.message, 'error'); }
+    };
+
+    window.abrirModal = function (id) { document.getElementById(id).classList.add('show'); };
+    window.cerrarModal = function (id) { document.getElementById(id).classList.remove('show'); };
+
+    if (esAdmin) document.getElementById('btnAsignar').style.display = 'inline-flex';
+
+    await cargar();
+})();
+</script>
+</body>
+</html>
