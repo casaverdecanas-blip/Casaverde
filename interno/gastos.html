@@ -1704,13 +1704,13 @@
                 var canvas = document.createElement('canvas');
                 var img2   = new Image();
                 img2.onload = function() {
-                    var max = 1200;
+                    var max = 2000;
                     var w = img2.width, h = img2.height;
                     if (w > max) { h = h * max / w; w = max; }
                     if (h > max) { w = w * max / h; h = max; }
                     canvas.width = w; canvas.height = h;
                     canvas.getContext('2d').drawImage(img2, 0, 0, w, h);
-                    res(canvas.toDataURL('image/jpeg', 0.75).split(',')[1]);
+                    res(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
                 };
                 img2.onerror = rej;
                 img2.src = URL.createObjectURL(file);
@@ -1720,11 +1720,13 @@
 
             var PROMPT = 'Sos un extractor de datos de facturas y recibos de compra.' +
                 ' Extrae solo los datos de CABECERA del comprobante y responde UNICAMENTE con JSON valido, sin texto adicional:' +
-                ' {"proveedor":"","fecha":"YYYY-MM-DD","monto_total":0,"moneda":"","concepto":"",' +
+                ' {"proveedor":"","fecha":"YYYY-MM-DD","fecha_texto":"","monto_total":0,"moneda":"","concepto":"",' +
                 '"numero_factura":"","categoria_sugerida":"","metodo_pago_sugerido":""}.' +
                 ' monto_total = el TOTAL a pagar de la factura (con descuentos). Es el dato mas importante: leelo con cuidado.' +
                 ' moneda = la moneda del comprobante: BRL para reales brasileros, UYU para pesos uruguayos, USD para dolares. Detectala por el simbolo (R$=BRL, $U=UYU, US$=USD). Si no se puede determinar usar BRL.' +
                 ' Numeros BRL/UYU: eliminar simbolo, puntos de miles, cambiar coma por punto. R$1.234,56 -> 1234.56.' +
+                ' fecha: el comprobante es de Brasil o Uruguay y las fechas vienen en formato dd/mm/aaaa (dia/mes/año). Convertila a YYYY-MM-DD SIN invertir dia y mes. En las NFCe brasileñas mira "Data de autorizacao" o "Data de emissao". El año casi siempre es el actual o reciente; NUNCA inventes años viejos.' +
+                ' fecha_texto: copia textual de la fecha tal como figura en el comprobante (ej "09/06/2026"), para control.' +
                 ' concepto: descripcion corta de la compra (ej: "Compra en supermercado", "Materiales de ferreteria").' +
                 ' metodo_pago_sugerido: pix, efectivo, debito, credito o transferencia.' +
                 ' categoria_sugerida: Materiales, Limpieza, Mantenimiento, Servicios, Alimentos, Transporte u Otro.' +
@@ -1734,7 +1736,7 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    model: 'gemini-2.5-flash-lite',
+                    model: 'gemini-2.5-flash',
                     max_tokens: 8000,
                     messages: [{
                         role: 'user',
@@ -1771,6 +1773,13 @@
             if (ext.concepto)     document.getElementById('ngFConcepto').value  = ext.concepto;
             if (ext.proveedor)    document.getElementById('ngFProveedor').value = ext.proveedor;
             if (ext.fecha)        document.getElementById('ngFFecha').value     = ext.fecha;
+            (function() {
+                var anioF = parseInt(String(ext.fecha || '').slice(0, 4), 10);
+                var anioHoy = new Date().getFullYear();
+                if (ext.fecha && (!anioF || anioF < anioHoy - 1 || anioF > anioHoy)) {
+                    flog('\u26a0\ufe0f Revisá la fecha leída: ' + ext.fecha + (ext.fecha_texto ? ' (en el ticket dice: ' + ext.fecha_texto + ')' : '') + '. Confirmala contra el comprobante.', '#fbbf24');
+                }
+            })();
             if (ext.numero_factura) document.getElementById('ngFReferencia').value = ext.numero_factura;
 
             // Metodo de pago

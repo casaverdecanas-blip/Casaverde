@@ -355,7 +355,7 @@
         document.getElementById('logBox').innerHTML = '';
         log('Procesando imagen…');
         try {
-            var blob = await redimensionarImagen(file, 1400, 0.82);
+            var blob = await redimensionarImagen(file, 2000, 0.85);
             _fotoFile = blob;
             var prev = document.getElementById('preview');
             prev.src = URL.createObjectURL(blob);
@@ -371,10 +371,12 @@
             log('Enviando a la IA…', 'ok');
             var PROMPT = 'Sos un extractor de datos de facturas y recibos de compra en Brasil.' +
                 ' Extrae todos los datos posibles del comprobante y responde UNICAMENTE con JSON valido, sin texto adicional ni markdown:' +
-                ' {"proveedor":"","fecha":"YYYY-MM-DD","monto_total":0,"moneda":"BRL","concepto":"",' +
+                ' {"proveedor":"","fecha":"YYYY-MM-DD","fecha_texto":"","monto_total":0,"moneda":"BRL","concepto":"",' +
                 '"numero_factura":"","categoria_sugerida":"",' +
                 '"items":[{"descripcion":"","cantidad":1,"precio":0,"categoria":""}]}.' +
                 ' Numeros BRL (monto_total y precio): eliminar R$, puntos de miles, cambiar coma por punto. R$1.234,56 -> 1234.56.' +
+                ' fecha: el comprobante es de Brasil o Uruguay y las fechas vienen dd/mm/aaaa (dia/mes/año); convertila a YYYY-MM-DD SIN invertir dia y mes. En las NFCe mira "Data de autorizacao" o "Data de emissao". El año casi siempre es el actual o reciente; NUNCA inventes años viejos.' +
+                ' fecha_texto: copia textual de la fecha tal como figura en el comprobante (ej "09/06/2026"), para control.' +
                 ' La lista tiene columnas: numero, codigo, descripcion, cantidad (Qt), unidad (Un), precio unitario (Vlr) y total del renglon (Tot); el precio figura DOS veces por linea.' +
                 ' AGRUPA los productos IGUALES (misma descripcion) en UN SOLO item, sumando cantidades y totales. NO repitas ni inventes lineas: cada producto distinto aparece una sola vez.' +
                 ' precio = suma del total (Tot) de ese producto, en reales. monto_total = Valor total de la factura (con descuentos).' +
@@ -386,7 +388,7 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    model: 'gemini-2.5-flash-lite',
+                    model: 'gemini-2.5-flash',
                     max_tokens: 8000,
                     messages: [{
                         role: 'user',
@@ -411,6 +413,13 @@
             if (ext.concepto)           document.getElementById('concepto').value   = ext.concepto;
             if (ext.monto_total)        document.getElementById('monto').value      = ext.monto_total;
             if (ext.fecha)              document.getElementById('fecha').value      = ext.fecha;
+            (function() {
+                var anioF = parseInt(String(ext.fecha || '').slice(0, 4), 10);
+                var anioHoy = new Date().getFullYear();
+                if (ext.fecha && (!anioF || anioF < anioHoy - 1 || anioF > anioHoy)) {
+                    log('\u26a0\ufe0f Revisá la fecha leída: ' + ext.fecha + (ext.fecha_texto ? ' (en el ticket dice: ' + ext.fecha_texto + ')' : '') + '. Confirmala contra el comprobante.', 'err');
+                }
+            })();
             if (ext.categoria_sugerida) document.getElementById('categoria').value  = ext.categoria_sugerida;
             if (ext.proveedor)          document.getElementById('proveedor').value  = ext.proveedor;
             if (ext.numero_factura)     document.getElementById('referencia').value = ext.numero_factura;
