@@ -178,6 +178,7 @@ const NAV_ADMIN_ITEMS = [
             { href: 'panel-financiero.html', icon: 'monitoring',      label: 'Panel financiero'   },
             { href: 'analisis-gastos.html',  icon: 'insights',        label: 'Análisis de gastos' },
             { href: 'clasificacion-masiva.html', icon: 'auto_fix_high', label: 'Clasificación masiva' },
+            { href: 'clasificacion-auto.html', icon: 'bolt', label: 'Clasificación automática' },
             { href: 'auditoria.html', icon: 'fact_check', label: 'Auditoría' },
             { href: 'proyeccion-anual.html', icon: 'query_stats',     label: 'Proyección anual'   },
             { href: 'informes-airbnb.html',  icon: 'summarize',       label: 'Informes Airbnb'    }
@@ -239,6 +240,73 @@ const NAV_USER_ITEMS = [
 ];
 
 // ============================================================
+//  PERMISOS GRANULARES POR COLABORADOR  (v4.27)
+//  CATALOGO_PERMISOS: herramientas que el admin puede habilitar
+//  por usuario (clave = nombre de pagina sin .html).
+//  ALWAYS_ALLOWED: lo minimo que cualquier usuario logueado ve,
+//  para no quedar encerrado. NO incluye 'usuarios' ni
+//  'limpieza-datos' (administracion sensible, solo admin).
+//  _userDataActual: datos del usuario de la sesion actual,
+//  usados por puede() y renderNav().
+// ============================================================
+var _userDataActual = null;
+var ALWAYS_ALLOWED = ['dashboard', 'notificaciones', 'manual-sistema'];
+var CATALOGO_PERMISOS = [
+    { grupo: 'Operación', icon: 'checklist', items: [
+        { href: 'tareas.html',         icon: 'checklist',            label: 'Tareas' },
+        { href: 'pendientes.html',     icon: 'playlist_add_check',   label: 'Pendientes' },
+        { href: 'calendario.html',     icon: 'calendar_month',       label: 'Calendario' },
+        { href: 'temporada.html',      icon: 'wb_sunny',             label: 'Temporada' },
+        { href: 'tareas-admin.html',   icon: 'admin_panel_settings', label: 'Gestión de tareas' },
+        { href: 'limpieza-stats.html', icon: 'cleaning_services',    label: 'Análisis de limpiezas' },
+        { href: 'comunicacion.html',   icon: 'forum',                label: 'Comunicación' }
+    ]},
+    { grupo: 'Reservas y clientes', icon: 'event', items: [
+        { href: 'reservas.html',     icon: 'event',         label: 'Reservas' },
+        { href: 'presupuestos.html', icon: 'request_quote', label: 'Presupuestos' },
+        { href: 'clientes.html',     icon: 'people',        label: 'Clientes' }
+    ]},
+    { grupo: 'Finanzas', icon: 'payments', items: [
+        { href: 'gastos-mantenimiento.html', icon: 'receipt_long',      label: 'Carga de gastos (colaborador)' },
+        { href: 'gastos.html',               icon: 'trending_down',     label: 'Gastos y retiros' },
+        { href: 'pagos.html',                icon: 'trending_up',       label: 'Ingresos de reservas' },
+        { href: 'honorarios.html',           icon: 'engineering',       label: 'Honorarios / cobros' },
+        { href: 'transferencias.html',       icon: 'swap_horiz',        label: 'Transferencias' },
+        { href: 'cuentas.html',              icon: 'account_balance',   label: 'Cuentas' },
+        { href: 'movimientos.html',          icon: 'receipt_long',      label: 'Movimientos' },
+        { href: 'herramientas-btg.html',     icon: 'compare_arrows',    label: 'BTG / Conciliación' },
+        { href: 'categorias.html',           icon: 'label',             label: 'Categorías' },
+        { href: 'destinos.html',             icon: 'flag',              label: 'Destinos' },
+        { href: 'cotizaciones.html',         icon: 'currency_exchange', label: 'Cotizaciones' },
+        { href: 'panel-financiero.html',     icon: 'monitoring',        label: 'Panel financiero' },
+        { href: 'analisis-gastos.html',      icon: 'insights',          label: 'Análisis de gastos' },
+        { href: 'clasificacion-masiva.html', icon: 'auto_fix_high',     label: 'Clasificación masiva' },
+        { href: 'clasificacion-auto.html',   icon: 'bolt',              label: 'Clasificación automática' },
+        { href: 'auditoria.html',            icon: 'fact_check',        label: 'Auditoría' },
+        { href: 'proyeccion-anual.html',     icon: 'query_stats',       label: 'Proyección anual' },
+        { href: 'informes-airbnb.html',      icon: 'summarize',         label: 'Informes Airbnb' }
+    ]},
+    { grupo: 'Fiscal', icon: 'receipt', items: [
+        { href: 'fiscal.html',          icon: 'receipt',        label: 'Panel fiscal' },
+        { href: 'acceso-contador.html', icon: 'person_outline', label: 'Acceso contador' }
+    ]},
+    { grupo: 'Contenido del sitio', icon: 'cottage', items: [
+        { href: 'cabanas-admin.html', icon: 'cottage', label: 'Cabañas (contenido)' }
+    ]}
+];
+
+function construirNavColaborador() {
+    var nav = [{ href: 'dashboard.html', icon: 'dashboard', label: 'Inicio' }];
+    CATALOGO_PERMISOS.forEach(function(g) {
+        var its = g.items.filter(function(x) { return puede(x.href); });
+        if (its.length) nav.push({ group: g.grupo, icon: g.icon, items: its });
+    });
+    nav.push({ href: 'notificaciones.html', icon: 'notifications', label: 'Notificaciones' });
+    nav.push({ href: 'manual-sistema.html', icon: 'menu_book', label: 'Manual' });
+    return nav;
+}
+
+// ============================================================
 //  PERMISOS POR ROL  (v4.7)
 //  Punto único de control de acceso por sección. Cada página ya
 //  valida con verificarAuth(); este mapa centraliza qué ve cada
@@ -251,11 +319,13 @@ var SECCIONES_SOLO_ADMIN = [
     'acceso-contador', 'cabanas-admin', 'usuarios', 'tareas-admin', 'gastos',
     'analisis-gastos', 'proyeccion-anual', 'cotizaciones', 'transferencias', 'clasificacion-masiva', 'temporada'
 ];
-function puede(seccion, rol) {
-    rol = rol || 'admin';
+function puede(seccion, rol, permisos) {
+    rol = rol || (_userDataActual && _userDataActual.rol) || 'admin';
     if (rol === 'admin') return true;
     var s = (seccion || '').replace('.html', '');
-    return SECCIONES_SOLO_ADMIN.indexOf(s) === -1;
+    if (ALWAYS_ALLOWED.indexOf(s) !== -1) return true;
+    var ps = permisos || (_userDataActual && _userDataActual.permisos) || [];
+    return ps.indexOf(s) !== -1;
 }
 
 
@@ -309,6 +379,7 @@ function verificarAuth(rolesPermitidos) {
                     }
 
                     const userData = userDoc.data();
+                    _userDataActual = userData;
 
                     // Solo bloquea si activo === false explícitamente
                     if (userData.activo === false) {
@@ -322,9 +393,18 @@ function verificarAuth(rolesPermitidos) {
 
                     // Campo correcto: "rol" (NO "role")
                     if (roles.indexOf(userData.rol) === -1) {
-                        // Sin permiso para esta página → redirigir a su home
-                        window.location.href = userData.rol === 'user' ? 'tareas.html' : 'dashboard.html';
+                        // Sin permiso de ROL para esta página → a su inicio seguro
+                        window.location.href = (userData.rol === 'admin') ? 'dashboard.html' : 'dashboard.html';
                         return;
+                    }
+
+                    // Permisos granulares: un colaborador solo entra a lo habilitado
+                    if (userData.rol !== 'admin') {
+                        var _pag = (window.location.pathname.split('/').pop() || '').replace('.html', '');
+                        if (_pag && _pag !== 'index' && ALWAYS_ALLOWED.indexOf(_pag) === -1) {
+                            var _ps = userData.permisos || [];
+                            if (_ps.indexOf(_pag) === -1) { window.location.href = 'dashboard.html'; return; }
+                        }
                     }
 
                     resolve({ user: user, userData: userData });
@@ -1218,7 +1298,7 @@ function renderNav(paginaActiva, rol) {
     rol = rol || 'admin';
     const el = document.getElementById('appNav') || document.querySelector('.admin-nav');
     if (!el) return;
-    const items = rol === 'admin' ? NAV_ADMIN_ITEMS : NAV_USER_ITEMS;
+    const items = rol === 'admin' ? NAV_ADMIN_ITEMS : construirNavColaborador();
 
     el.innerHTML = items.map(function(item, gi) {
         if (item.href) {
@@ -2130,7 +2210,7 @@ window.CVC = {
     db, auth,
     ESTADOS_RESERVA, ESTADOS_TAREA, PRIORIDADES, CALENDAR_IDS, ESTADOS_BLOQUEANTES,
     NAV_ADMIN_ITEMS, NAV_USER_ITEMS, renderNav,
-    SECCIONES_SOLO_ADMIN, puede,
+    SECCIONES_SOLO_ADMIN, puede, CATALOGO_PERMISOS, ALWAYS_ALLOWED,
     badgeEstado, badgePrioridad,
     verificarAuth, cerrarSesion,
     calcularPrecio,

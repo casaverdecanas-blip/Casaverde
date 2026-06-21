@@ -117,7 +117,7 @@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Rol <span class="required">*</span></label>
-                    <select id="uRol" class="form-control">
+                    <select id="uRol" class="form-control" onchange="onRolChange()">
                         <option value="user">👷 Colaborador</option>
                         <option value="admin">🔑 Administrador</option>
                     </select>
@@ -129,6 +129,12 @@
                         <option value="false">❌ Inactivo</option>
                     </select>
                 </div>
+            </div>
+
+            <div class="form-group" id="permisosGroup">
+                <label class="form-label">Herramientas habilitadas</label>
+                <p class="form-hint">El colaborador verá SOLO lo que marques (más Inicio, Notificaciones y Manual). Sin marcar nada, no ve herramientas.</p>
+                <div id="permisosLista"></div>
             </div>
 
             <div class="alert alert-error" id="errorModal" style="display:none;">
@@ -287,6 +293,30 @@
     }
 
     // ── Modal nuevo ───────────────────────────────────────────
+    function _catPerm() { return (window.CVC && CVC.CATALOGO_PERMISOS) ? CVC.CATALOGO_PERMISOS : []; }
+    window.renderPermisos = function(seleccionados) {
+        seleccionados = seleccionados || [];
+        var html = '';
+        _catPerm().forEach(function(g) {
+            html += '<div style="margin:10px 0 4px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;"><span class="material-icons" style="font-size:18px;">' + g.icon + '</span>' + g.grupo + '</div>';
+            g.items.forEach(function(it) {
+                var key = it.href.replace('.html', '');
+                var ck = seleccionados.indexOf(key) !== -1 ? ' checked' : '';
+                html += '<label style="display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:14px;cursor:pointer;"><input type="checkbox" class="perm-chk" value="' + key + '"' + ck + '> ' + it.label + '</label>';
+            });
+        });
+        document.getElementById('permisosLista').innerHTML = html;
+    };
+    window.getPermisosSeleccionados = function() {
+        var out = [], chks = document.querySelectorAll('.perm-chk');
+        for (var i = 0; i < chks.length; i++) { if (chks[i].checked) out.push(chks[i].value); }
+        return out;
+    };
+    window.onRolChange = function() {
+        var esUser = document.getElementById('uRol').value === 'user';
+        document.getElementById('permisosGroup').style.display = esUser ? 'block' : 'none';
+    };
+
     window.abrirModalNuevo = function() {
         document.getElementById('modalTitulo').innerHTML = '<span class="material-icons">person_add</span> Nuevo usuario';
         document.getElementById('usuarioUid').value    = '';
@@ -295,6 +325,8 @@
         document.getElementById('uEmail').value        = '';
         document.getElementById('uPassword').value     = '';
         document.getElementById('uRol').value          = 'user';
+        renderPermisos([]);
+        onRolChange();
         document.getElementById('uTelefono').value     = '';
         document.getElementById('uActivo').value       = 'true';
         document.getElementById('uEmail').readOnly     = false;
@@ -316,6 +348,8 @@
         document.getElementById('uNombre').value       = u.nombre || '';
         document.getElementById('uEmail').value        = u.email  || '';
         document.getElementById('uRol').value          = u.rol    || 'user';
+        renderPermisos(u.permisos || []);
+        onRolChange();
         document.getElementById('uTelefono').value     = u.telefono || '';
         document.getElementById('uActivo').value       = u.activo !== false ? 'true' : 'false';
         document.getElementById('uEmail').readOnly     = true;
@@ -342,6 +376,7 @@
         const rol       = document.getElementById('uRol').value;
         const telefono  = document.getElementById('uTelefono').value.trim();
         const activo    = document.getElementById('uActivo').value === 'true';
+        const permisos  = rol === 'user' ? getPermisosSeleccionados() : [];
 
         ocultarErrorModal();
 
@@ -377,7 +412,7 @@
 
                 // Guardar en Firestore
                 await db.collection('usuarios').doc(data.localId).set({
-                    nombre, email, rol, telefono,
+                    nombre, email, rol, telefono, permisos,
                     activo:    true,
                     creadoEn:  firebase.firestore.FieldValue.serverTimestamp(),
                     creadoPor: currentAdmin.uid
@@ -388,7 +423,7 @@
             } else {
                 // Editar — solo Firestore
                 await db.collection('usuarios').doc(uid).update({
-                    nombre, rol, telefono, activo,
+                    nombre, rol, telefono, activo, permisos,
                     actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 showToast('Usuario actualizado.', 'success');
