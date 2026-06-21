@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auditoría · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .aud-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4) var(--space-5); margin-bottom: var(--space-4); }
+        .aud-card__title { font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: var(--space-3); }
+        .aud-hint { font-size: var(--text-sm); color: var(--color-text-muted); margin-bottom: var(--space-3); }
+        .aud-stat { display: flex; gap: 16px; flex-wrap: wrap; font-size: var(--text-sm); margin-bottom: var(--space-3); }
+        .aud-stat b { font-family: var(--font-mono); }
+        .aud-grp-title { font-weight: 700; margin: var(--space-4) 0 var(--space-2); display: flex; align-items: center; gap: 8px; }
+        .aud-item { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 10px; background: var(--color-surface-2); }
+        .aud-item.ok { opacity: .55; }
+        .aud-item__q { font-size: var(--text-sm); margin-bottom: 8px; }
+        .aud-item__ref { font-weight: 600; }
+        .aud-item__id { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-muted); }
+        .aud-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+        .aud-row select, .aud-row input { font-family: inherit; font-size: var(--text-sm); padding: 7px 10px; border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+        .aud-row input.nota { flex: 1; min-width: 160px; }
+        .aud-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--color-border); white-space: nowrap; }
+        .b-dup { color: var(--color-danger); } .b-sig { color: var(--color-danger); } .b-fec { color: #b26a00; }
+        .b-trf { color: var(--color-primary); } .b-cir { color: #6a1b9a; } .b-cat { color: #0277bd; }
+        .aud-est { font-size: 11px; font-weight: 700; margin-left: 6px; }
+        .aud-est.resuelto { color: var(--color-success, #1a7f37); }
+        .aud-est.ignorado { color: var(--color-text-muted); }
+        .aud-sub { font-size: 12px; color: var(--color-text-muted); margin: 2px 0 0; }
+    </style>
+</head>
+<body>
+<header class="admin-header">
+    <div class="admin-header__brand"><span class="material-icons">cottage</span> Casa Verde Canas</div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span> <span id="userName">—</span></div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()"><span class="material-icons">logout</span> Salir</button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content" id="audMain">
+    <div class="db-section-head" style="margin-bottom:var(--space-3);">
+        <div class="db-section-title">
+            <span class="material-icons" style="color:var(--color-primary);">fact_check</span>
+            Auditoría
+        </div>
+    </div>
+    <p class="aud-hint">
+        Corré la auditoría: detecta automáticamente duplicados, signos incoherentes, fechas imposibles,
+        transferencias entre cuentas y registros sin clasificar. Cada caso dudoso se resuelve acá mismo
+        (no por chat). Para clasificar, te sugiere un valor por regla; podés pedir una sugerencia de IA
+        cuando la regla no alcanza. <b>Nada se escribe en la base sin que confirmes el cambio.</b>
+    </p>
+
+    <div class="aud-card">
+        <div class="aud-row">
+            <button class="btn btn-primary" onclick="correrAuditoria()"><span class="material-icons">play_arrow</span> Correr auditoría</button>
+            <button class="btn btn-secondary" onclick="analizarTodoIA(this)"><span class="material-icons">smart_toy</span> Analizar toda la base con IA</button>
+            <label style="font-size:var(--text-sm);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="audOcultar" onchange="rerender()"> Ocultar resueltos/ignorados</label>
+            <span class="aud-sub" id="audCorrida"></span>
+        </div>
+        <div class="aud-stat" id="audStat" style="margin-top:var(--space-3);"></div>
+    </div>
+
+    <div id="audResultados"></div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async function() {
+    var sesion = await CVC.verificarAuth(['admin', 'user']);
+    var rol = sesion.userData.rol || 'user';
+    var esAuditor = (rol === 'admin') || (sesion.userData.auditor === true);
+    document.getElementById('userName').textContent = sesion.userData.nombre || sesion.user.email;
+    if (typeof CVC.renderNav === 'function') CVC.renderNav('auditoria.html', rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('auditoria.html');
+
+    if (!esAuditor) {
+        document.getElementById('audMain').innerHTML =
+            '<div class="aud-card"><div class="aud-card__title"><span class="material-icons">lock</span> Sin acceso</div>' +
+            '<p class="aud-hint">Esta página es para administradores y colaboradores habilitados. ' +
+            'Pedile al administrador que te habilite como auditor.</p></div>';
+        return;
+    }
+
+    var db = CVC.db;
+    var showToast = CVC.showToast || function(m) { alert(m); };
+    var NETLIFY_BASE = 'https://serene-scone-76bd4e.netlify.app/.netlify/functions';
+    var HOY = new Date().toISOString().slice(0, 10);
+    var CIRCUITOS = ['fiscal', 'personal', 'mixto'];
+
+    var _gastos = [], _movs = [], _cuentas = {}, _categorias = [], _destinos = [];
+    var _catPorNombre = {};
+    var _items = [];        // items detectados en la última corrida
+    var _estados = {};      // clave -> { estado, nota } (de auditoria_revisiones)
+
+    function norm(s) { return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+    function limpia(s) { return String(s == null ? '' : s).replace(/[\t\r\n]+/g, ' ').trim(); }
+    function d2(s) { return String(s == null ? '' : s).slice(0, 10); }
+
+    // ── Cargar datos ──
+    async function cargar() {
+        try { var sg = await db.collection('gastos').get(); _gastos = sg.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); }); } catch (e) { _gastos = []; }
+        try { var sm = await db.collection('movimientos').get(); _movs = sm.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); }); } catch (e) { _movs = []; }
+        try { var scu = await db.collection('cuentas').get(); scu.docs.forEach(function(d) { _cuentas[d.id] = d.data().nombre || d.id; }); } catch (e) {}
+        try { var sc = await db.collection('categorias').get(); _categorias = sc.docs.map(function(d) { return { id: d.id, nombre: d.data().nombre || d.id }; }); _categorias.forEach(function(c) { _catPorNombre[norm(c.nombre)] = c; }); } catch (e) {}
+        try { var sd = await db.collection('destinos').get(); _destinos = sd.docs.map(function(d) { return { id: d.id, nombre: d.data().nombre || d.id, activo: d.data().activo }; }).filter(function(d) { return d.activo !== false; }); } catch (e) {}
+        try { var se = await db.collection('auditoria_revisiones').get(); se.docs.forEach(function(d) { _estados[d.id] = d.data(); }); } catch (e) {}
+    }
+
+    // ── Sugerencia por REGLA LOCAL (categoría de movimiento) ──
+    function sugerirCatMov(desc, cred) {
+        var d = norm(desc);
+        function has(arr) { for (var i = 0; i < arr.length; i++) { if (d.indexOf(arr[i]) !== -1) return true; } return false; }
+        if (d.indexOf('saldo diario') !== -1) return cred ? 'Rendimiento' : '';
+        if (d.indexOf('celesc') !== -1) return 'Luz (celesc)';
+        if (d.indexOf('ute') === 0) return 'Luz (ute)';
+        if (has(['casan'])) return 'Agua (casan)';
+        if (d.indexOf('ose') === 0) return 'Agua (ose)';
+        if (has(['leo gas', 'gas agua'])) return 'Gas';
+        if (has(['telefonica', 'vivo', 'claro', 'antel', 'ancel'])) return 'Teléfono';
+        if (d.indexOf('municipio de florianopolis') !== -1) return 'IPTU';
+        if (has(['materiais de construcao', 'amc', 'unifer', 'la chispa', 'franzoni', 'lenz'])) return 'Materiales';
+        if (has(['posto', 'rede de postos', 'agricopel', 'uber', 'sucive', 'patente', 'ancap'])) return 'Combustible / Transporte';
+        if (has(['farmacia', 'drogaria', 'farmaouro'])) return 'Salud / Farmacia';
+        if (has(['gelateria', 'sorvete', 'restaurante', 'pizza', 'don pollo', 'bizcocheria', 'bar las flores', 'lanches'])) return 'Comidas fuera';
+        if (has(['supermerc', 'mercado dos amigos', 'sdb', 'mundialmix', 'prado supermercado', 'bistek', 'ta ta', 'tata', 'disco n', 'super vagos', 'propal', 'autoservice', 'super el pue', 'atacadista'])) return 'Alimentos / Supermercado';
+        if (cred && has(['pix recebido', 'recebido', 'carga transferencia', 'carga abitab', 'prestaciones bps'])) return 'Transferencia recibida';
+        return '';
+    }
+    // ── Sugerencia de circuito de gasto, por categoría ──
+    function sugerirCircGasto(cat) {
+        cat = (cat || '').toLowerCase();
+        if (cat === 'materiales' || cat === 'servicios') return 'fiscal';
+        if (cat === 'transporte') return 'mixto';
+        if (cat === 'alimentos') return 'personal';
+        return '';
+    }
+
+    function fechaValida(s) { return /^\d{4}-\d{2}-\d{2}$/.test(s); }
+    function fechaImposible(s) { var x = d2(s); if (!fechaValida(x)) return true; return (x.slice(0, 4) < '2025') || (x > HOY); }
+    function clave(col, id, tipo) { return (col + '_' + id + '_' + tipo).replace(/[^a-zA-Z0-9_]/g, ''); }
+
+    // ── Motor de auditoría (lógica pura, reproducible) ──
+    function correr() {
+        var items = [];
+
+        // 1) Duplicados exactos en gastos
+        var vg = {};
+        _gastos.forEach(function(g) { var k = d2(g.fecha) + '|' + (g.monto || 0) + '|' + norm(g.concepto); (vg[k] = vg[k] || []).push(g); });
+        Object.keys(vg).forEach(function(k) {
+            if (vg[k].length > 1) {
+                vg[k].forEach(function(g, idx) {
+                    if (idx === 0) return; // el primero se conserva
+                    items.push({ tipo: 'dup', col: 'gastos', id: g.id, ref: limpia(g.concepto), problema: 'Posible duplicado de gasto (mismo monto, fecha y concepto). Monto ' + (g.monto || 0) + ', fecha ' + d2(g.fecha) + '. Revisar y, si corresponde, borrar en Limpieza de datos.' });
+                });
+            }
+        });
+
+        // 2) Duplicados exactos en movimientos
+        var vm = {};
+        _movs.forEach(function(m) { var k = (m.cuentaId || '') + '|' + d2(m.fecha) + '|' + (m.monto || 0) + '|' + norm(m.descripcion); (vm[k] = vm[k] || []).push(m); });
+        Object.keys(vm).forEach(function(k) {
+            if (vm[k].length > 1) {
+                vm[k].forEach(function(m, idx) {
+                    if (idx === 0) return;
+                    items.push({ tipo: 'dup', col: 'movimientos', id: m.id, ref: limpia(m.descripcion), problema: 'Posible duplicado de movimiento (misma cuenta, monto, fecha y descripción). Revisar y borrar en Limpieza de datos si corresponde.' });
+                });
+            }
+        });
+
+        // 3) Signos incoherentes
+        _movs.forEach(function(m) {
+            var mo = Number(m.monto || 0);
+            if ((m.tipo === 'debito' && mo > 0) || (m.tipo === 'credito' && mo < 0)) {
+                items.push({ tipo: 'signo', col: 'movimientos', id: m.id, ref: limpia(m.descripcion), problema: 'Signo incoherente: tipo "' + m.tipo + '" con monto ' + mo + '. Revisar.' });
+            }
+        });
+
+        // 4) Fechas imposibles
+        _gastos.forEach(function(g) { if (fechaImposible(g.fecha)) items.push({ tipo: 'fecha', col: 'gastos', id: g.id, ref: limpia(g.concepto), problema: 'Fecha sospechosa: ' + d2(g.fecha) + '. Corregila contra el comprobante.', fix: { campo: 'fecha', actual: d2(g.fecha) } }); });
+        _movs.forEach(function(m) { if (fechaImposible(m.fecha)) items.push({ tipo: 'fecha', col: 'movimientos', id: m.id, ref: limpia(m.descripcion), problema: 'Fecha sospechosa: ' + d2(m.fecha) + '.', fix: { campo: 'fecha', actual: d2(m.fecha) } }); });
+
+        // 5) Transferencias entre cuentas (informativo)
+        var deb = _movs.filter(function(m) { return Number(m.monto || 0) < 0; });
+        var cre = _movs.filter(function(m) { return Number(m.monto || 0) > 0; });
+        var usados = {};
+        deb.forEach(function(a) {
+            var da = d2(a.fecha); if (!fechaValida(da)) return;
+            for (var j = 0; j < cre.length; j++) {
+                var b = cre[j];
+                if (usados[b.id]) continue;
+                if ((a.cuentaId || '') === (b.cuentaId || '')) continue;
+                if (Math.abs(Math.abs(Number(a.monto || 0)) - Number(b.monto || 0)) > 0.01) continue;
+                var db_ = d2(b.fecha); if (!fechaValida(db_)) continue;
+                var dif = Math.abs((new Date(da) - new Date(db_)) / 86400000);
+                if (dif <= 3) {
+                    usados[b.id] = true;
+                    items.push({ tipo: 'transf', col: 'movimientos', id: a.id, ref: (_cuentas[a.cuentaId] || a.cuentaId) + ' → ' + (_cuentas[b.cuentaId] || b.cuentaId), problema: 'Posible transferencia entre cuentas propias: ' + a.monto + ' (' + da + ') ↔ +' + b.monto + ' (' + db_ + '). Si lo es, marcala "Entre cuentas propias" en ambas puntas.' });
+                    break;
+                }
+            }
+        });
+
+        // 6) Gastos sin circuito (clasificación)
+        _gastos.forEach(function(g) {
+            if (!g.circuito) {
+                items.push({ tipo: 'circuito', col: 'gastos', id: g.id, ref: limpia(g.concepto), problema: 'Gasto sin circuito (no entra al cálculo fiscal hasta definirlo). Categoría: ' + (g.categoria || '—') + '.', fix: { campo: 'circuito', sugerido: sugerirCircGasto(g.categoria) } });
+            }
+        });
+
+        // 7) Movimientos sin categoría (clasificación)
+        _movs.forEach(function(m) {
+            if (!m.categoriaId) {
+                var cred = Number(m.monto || 0) > 0;
+                items.push({ tipo: 'categoria', col: 'movimientos', id: m.id, ref: limpia(m.descripcion), problema: 'Movimiento sin categoría.', fix: { campo: 'categoria', sugerido: sugerirCatMov(m.descripcion, cred) } });
+            }
+        });
+
+        return items;
+    }
+
+    // ── Escritura segura a la base (confirmar antes→después) ──
+    async function aplicarCambio(col, id, data, antesTxt, nuevoTxt, itemClave, onOk) {
+        if (!confirm('Confirmás este cambio?\n\n' + antesTxt + '  →  ' + nuevoTxt)) return;
+        try {
+            await CVC.aplicarClasificacionMasiva([{ col: col, id: id, data: data }]);
+            // refrescar cache local
+            var arr = (col === 'gastos') ? _gastos : _movs;
+            var obj = arr.find(function(x) { return x.id === id; });
+            if (obj) Object.assign(obj, data);
+            await guardarEstado(itemClave, { estado: 'resuelto', cambio: nuevoTxt });
+            showToast('Cambio aplicado.', 'success');
+            if (onOk) onOk();
+        } catch (e) {
+            showToast('Error al aplicar: ' + e.message, 'error');
+        }
+    }
+
+    async function guardarEstado(cl, patch) {
+        _estados[cl] = Object.assign({}, _estados[cl] || {}, patch, { fecha: new Date().toISOString() });
+        try { await db.collection('auditoria_revisiones').doc(cl).set(_estados[cl], { merge: true }); } catch (e) { showToast('No se pudo guardar el estado: ' + e.message, 'error'); }
+    }
+
+    // ── Análisis GLOBAL con IA (toda la base; capa cualitativa, a validar) ──
+    window.analizarTodoIA = async function(btn) {
+        var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<span class="material-icons">hourglass_empty</span> Analizando…';
+        try {
+            // resumen compacto de toda la base
+            var lineas = [];
+            _gastos.forEach(function(g) { lineas.push('G|' + g.id + '|' + d2(g.fecha) + '|' + (g.monto || 0) + '|' + limpia(g.concepto) + '|cat=' + (g.categoria || '') + '|circ=' + (g.circuito || '')); });
+            _movs.forEach(function(m) { var cat = ''; if (m.categoriaId) { var c = _categorias.find(function(x) { return x.id === m.categoriaId; }); cat = c ? c.nombre : ''; } lineas.push('M|' + m.id + '|' + (_cuentas[m.cuentaId] || m.cuentaId) + '|' + d2(m.fecha) + '|' + (m.monto || 0) + '|' + limpia(m.descripcion) + '|cat=' + cat); });
+            var prompt = 'Sos auditor contable de Casa Verde Canas, un alquiler de cabañas en Florianópolis, Brasil. ' +
+                'El objetivo es coherencia fiscal: lo declarable en Brasil debe cerrar. ' +
+                'Te paso TODOS los registros (G=gasto con categoria y circuito fiscal/personal/mixto; M=movimiento bancario con categoria). ' +
+                'Buscá INCONSISTENCIAS que una regla simple NO detecta: un mismo proveedor con circuito mezclado (a veces fiscal, a veces personal), ' +
+                'montos recurrentes que cambian de golpe, un gasto que parece el mismo pago que un movimiento aunque la descripción difiera, ' +
+                'clasificación dudosa o que rompa la coherencia fiscal. ' +
+                'NO repitas lo que ya detecta la lógica (duplicados exactos, signos, fechas imposibles, registros sin clasificar). ' +
+                'Devolvé EXCLUSIVAMENTE un JSON válido: un array de objetos con las claves "coleccion" (gastos|movimientos), "id", "problema" (texto breve), ' +
+                '"campo" (circuito|categoria|fecha|monto, o "" si es solo observación) y "valorSugerido" ("" si no aplica). ' +
+                'Máximo 40 hallazgos, los más relevantes. Nada de texto fuera del JSON.\n\nDATOS:\n' + lineas.join('\n');
+
+            var r = await fetch(NETLIFY_BASE + '/claude-proxy', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: 'gemini-2.5-flash', max_tokens: 8000, messages: [{ role: 'user', content: prompt }] })
+            });
+            var data = await r.json();
+            if (!r.ok || (data && data.error)) { showToast('IA: ' + ((data && data.error) || ('HTTP ' + r.status)), 'error'); btn.disabled = false; btn.innerHTML = orig; return; }
+            var txt = (data && data.content && data.content[0] && data.content[0].text) ? data.content[0].text : '';
+            var BT = String.fromCharCode(96);
+            txt = txt.split(BT).join('').replace(/^\s*json/i, '').trim();
+            // recortar a los corchetes del array por si vino texto extra
+            var a = txt.indexOf('['), b = txt.lastIndexOf(']');
+            if (a !== -1 && b !== -1 && b > a) txt = txt.slice(a, b + 1);
+            var arr;
+            try { arr = JSON.parse(txt); } catch (e) { showToast('La IA devolvió algo no parseable. Probá de nuevo.', 'error'); btn.disabled = false; btn.innerHTML = orig; return; }
+            if (!Array.isArray(arr)) arr = [];
+
+            var nuevos = 0;
+            arr.forEach(function(o) {
+                if (!o || !o.id || !o.coleccion) return;
+                var col = (norm(o.coleccion).indexOf('gasto') !== -1) ? 'gastos' : 'movimientos';
+                var rec = (col === 'gastos' ? _gastos : _movs).find(function(x) { return x.id === o.id; });
+                if (!rec) return; // id inexistente → descartar, no alucinar
+                var ref = (col === 'gastos') ? limpia(rec.concepto) : limpia(rec.descripcion);
+                var dupia = _items.find(function(it) { return it.tipo === 'ia' && it.id === o.id && it.problema === ('[IA] ' + (o.problema || '')); });
+                if (dupia) return;
+                var fix = null;
+                if (o.campo && o.valorSugerido) fix = { campo: String(o.campo).toLowerCase(), sugerido: String(o.valorSugerido) };
+                _items.push({ tipo: 'ia', col: col, id: o.id, ref: ref, problema: '[IA] ' + (o.problema || '(sin detalle)'), fix: fix });
+                nuevos++;
+            });
+            if (data.warning) showToast('IA: ' + nuevos + ' sospechas (respuesta truncada, puede faltar alguna).', 'info');
+            else showToast('IA: ' + nuevos + ' sospechas agregadas a la lista.', 'success');
+            rerenderInterno();
+        } catch (e) {
+            showToast('IA no disponible ahora: ' + e.message, 'error');
+        }
+        btn.disabled = false; btn.innerHTML = orig;
+    };
+
+    // ── Render ──
+    var GRUPOS = [
+        { key: 'dup', label: 'Posibles duplicados', icon: 'content_copy', badge: 'b-dup' },
+        { key: 'signo', label: 'Signos incoherentes', icon: 'swap_vert', badge: 'b-sig' },
+        { key: 'fecha', label: 'Fechas sospechosas', icon: 'event_busy', badge: 'b-fec' },
+        { key: 'transf', label: 'Transferencias entre cuentas', icon: 'swap_horiz', badge: 'b-trf' },
+        { key: 'circuito', label: 'Gastos sin circuito', icon: 'rule', badge: 'b-cir' },
+        { key: 'categoria', label: 'Movimientos sin categoría', icon: 'sell', badge: 'b-cat' },
+        { key: 'ia', label: 'Sospechas de IA (validar)', icon: 'smart_toy', badge: 'b-cat' }
+    ];
+
+    function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+
+    function rerenderInterno() {
+        var cont = document.getElementById('audResultados');
+        cont.innerHTML = '';
+        var ocultar = document.getElementById('audOcultar').checked;
+        var grupoMeta = {};
+        GRUPOS.forEach(function(g) { grupoMeta[g.key] = g; });
+
+        GRUPOS.forEach(function(g) {
+            var delGrupo = _items.filter(function(it) { return it.tipo === g.key; });
+            if (!delGrupo.length) return;
+            var visibles = delGrupo.filter(function(it) {
+                var es = _estados[clave(it.col, it.id, it.tipo)];
+                return !(ocultar && es && (es.estado === 'resuelto' || es.estado === 'ignorado'));
+            });
+            if (!visibles.length) return;
+
+            var titulo = el('div', 'aud-grp-title');
+            titulo.appendChild(el('span', 'material-icons', g.icon));
+            titulo.appendChild(el('span', null, g.label + ' (' + visibles.length + ')'));
+            cont.appendChild(titulo);
+
+            visibles.forEach(function(it) { cont.appendChild(renderItem(it, g)); });
+        });
+
+        if (!cont.children.length) cont.appendChild(el('p', 'aud-hint', 'No hay ítems para mostrar. ¡Todo en orden o ya revisado!'));
+    }
+    window.rerender = rerenderInterno;
+
+    function construirAccion(it, cl, card, q) {
+        var col = it.col, id = it.id;
+        var campo = it.fix ? it.fix.campo : '';
+        var sugerido = it.fix ? it.fix.sugerido : '';
+        if (!campo) return null;
+        var row = el('div', 'aud-row');
+        var control, getVal, toData, antes;
+        if (campo === 'categoria' && col === 'movimientos') {
+            control = el('select'); control.appendChild(new Option('— categoría —', ''));
+            _categorias.forEach(function(c) { control.appendChild(new Option(c.nombre, c.nombre)); });
+            if (sugerido) control.value = sugerido;
+            getVal = function() { return control.value; };
+            toData = function(v) { var c = _catPorNombre[norm(v)]; return c ? { categoriaId: c.id } : null; };
+            antes = 'sin categoría';
+        } else if (campo === 'categoria' && col === 'gastos') {
+            control = el('select'); control.appendChild(new Option('— categoría —', ''));
+            ['materiales', 'limpieza', 'mantenimiento', 'servicios', 'administrativo', 'alimentos', 'transporte', 'otro'].forEach(function(c) { control.appendChild(new Option(c, c)); });
+            if (sugerido) control.value = norm(sugerido);
+            getVal = function() { return control.value; };
+            toData = function(v) { return { categoria: v }; };
+            antes = 'categoría actual';
+        } else if (campo === 'circuito') {
+            control = el('select'); control.appendChild(new Option('— circuito —', ''));
+            CIRCUITOS.forEach(function(c) { control.appendChild(new Option(c, c)); });
+            if (sugerido) control.value = sugerido;
+            getVal = function() { return control.value; };
+            toData = function(v) { return { circuito: v, deducible: (v === 'fiscal' || v === 'mixto') }; };
+            antes = 'sin circuito';
+        } else if (campo === 'fecha') {
+            control = el('input'); control.type = 'text'; control.placeholder = 'AAAA-MM-DD'; control.value = (it.fix.actual || sugerido || '');
+            getVal = function() { return control.value.trim(); };
+            toData = function(v) { return fechaValida(v) ? { fecha: v } : null; };
+            antes = (it.fix.actual || 'fecha actual');
+        } else if (campo === 'monto') {
+            control = el('input'); control.type = 'text'; control.placeholder = 'monto'; control.value = (sugerido || '');
+            getVal = function() { return control.value.trim(); };
+            toData = function(v) { var n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? { monto: n } : null; };
+            antes = 'monto actual';
+        } else { return null; }
+        var btnR = el('button', 'btn btn-success'); btnR.innerHTML = '<span class="material-icons">save</span> Resolver';
+        btnR.onclick = function() {
+            var v = getVal(); if (!v) { showToast('Completá el valor.', 'error'); return; }
+            var data = toData(v); if (!data) { showToast('Valor inválido.', 'error'); return; }
+            aplicarCambio(col, id, data, antes, String(v), cl, function() { card.classList.add('ok'); q.appendChild(el('span', 'aud-est resuelto', '· resuelto')); });
+        };
+        row.appendChild(control); row.appendChild(btnR);
+        if (sugerido) row.appendChild(el('span', 'aud-sub', 'sugerencia: ' + sugerido));
+        return row;
+    }
+
+    function renderItem(it, g) {
+        var cl = clave(it.col, it.id, it.tipo);
+        var es = _estados[cl] || {};
+        var card = el('div', 'aud-item' + ((es.estado === 'resuelto' || es.estado === 'ignorado') ? ' ok' : ''));
+
+        var q = el('div', 'aud-item__q');
+        var badge = el('span', 'aud-badge ' + g.badge, it.col === 'gastos' ? 'GASTO' : 'MOV');
+        q.appendChild(badge);
+        q.appendChild(document.createTextNode(' '));
+        q.appendChild(el('span', 'aud-item__ref', it.ref || it.id));
+        if (es.estado) { var be = el('span', 'aud-est ' + es.estado, '· ' + es.estado); q.appendChild(be); }
+        card.appendChild(q);
+        card.appendChild(el('p', 'aud-sub', it.problema));
+        card.appendChild(el('div', 'aud-item__id', it.col + '/' + it.id));
+
+        // Acción de corrección (según el campo del ítem; sirve para lógicos e IA)
+        var accion = construirAccion(it, cl, card, q);
+        if (accion) card.appendChild(accion);
+
+        // Nota + ignorar (para todos)
+        var row4 = el('div', 'aud-row');
+        var nota = el('input', 'nota'); nota.type = 'text'; nota.placeholder = 'Nota / descripción del colaborador…'; nota.value = es.nota || '';
+        var btnN = el('button', 'btn btn-secondary'); btnN.innerHTML = '<span class="material-icons">comment</span> Guardar nota';
+        btnN.onclick = function() { guardarEstado(cl, { nota: nota.value }).then(function() { showToast('Nota guardada.', 'success'); }); };
+        var btnI = el('button', 'btn btn-secondary'); btnI.innerHTML = '<span class="material-icons">visibility_off</span> Ignorar';
+        btnI.onclick = function() { guardarEstado(cl, { estado: 'ignorado', nota: nota.value }).then(function() { card.classList.add('ok'); showToast('Marcado como ignorado.', 'success'); }); };
+        row4.appendChild(nota); row4.appendChild(btnN); row4.appendChild(btnI);
+        card.appendChild(row4);
+
+        return card;
+    }
+
+    window.correrAuditoria = async function() {
+        showToast('Corriendo auditoría…', 'info');
+        try { var se = await db.collection('auditoria_revisiones').get(); _estados = {}; se.docs.forEach(function(d) { _estados[d.id] = d.data(); }); } catch (e) {}
+        _items = correr();
+        var por = {};
+        _items.forEach(function(it) { por[it.tipo] = (por[it.tipo] || 0) + 1; });
+        var crit = (por.dup || 0) + (por.signo || 0) + (por.fecha || 0);
+        var stat = document.getElementById('audStat');
+        stat.innerHTML =
+            '<span class="' + (crit ? 'cm-err' : '') + '">Coherencia (dup/signo/fecha): <b>' + crit + '</b></span>' +
+            '<span>Transferencias: <b>' + (por.transf || 0) + '</b></span>' +
+            '<span>Gastos sin circuito: <b>' + (por.circuito || 0) + '</b></span>' +
+            '<span>Movimientos sin categoría: <b>' + (por.categoria || 0) + '</b></span>';
+        document.getElementById('audCorrida').textContent = 'Última corrida: ' + new Date().toLocaleString() + ' · ' + _gastos.length + ' gastos, ' + _movs.length + ' movimientos.';
+        rerenderInterno();
+    };
+
+    await cargar();
+    showToast('Datos cargados. Tocá «Correr auditoría».', 'info');
+})();
+</script>
+</body>
+</html>

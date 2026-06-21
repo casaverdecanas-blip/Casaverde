@@ -1,14 +1,6 @@
 // ============================================================
-//  utils.js — Casa Verde Canas  v4.26
+//  utils.js — Casa Verde Canas  v4.12
 //  Funciones compartidas · /interno/
-//
-//  CAMBIOS v4.26:
-//  - Menú admin (Finanzas): agregado "Clasificación automática"
-//    (clasificacion-auto.html), debajo de "Clasificación masiva".
-//    Sección solo-admin. La página crea categorías/destinos faltantes
-//    y clasifica gastos y movimientos por reglas de comercio, leyendo
-//    los registros de Firestore (ids siempre correctos). Reutiliza
-//    CVC.aplicarClasificacionMasiva; nada se escribe hasta "Aplicar".
 //
 //  CAMBIOS v4.12:
 //  - API key de Firebase movida a Firestore (config/integraciones.firebaseApiKey)
@@ -186,7 +178,7 @@ const NAV_ADMIN_ITEMS = [
             { href: 'panel-financiero.html', icon: 'monitoring',      label: 'Panel financiero'   },
             { href: 'analisis-gastos.html',  icon: 'insights',        label: 'Análisis de gastos' },
             { href: 'clasificacion-masiva.html', icon: 'auto_fix_high', label: 'Clasificación masiva' },
-            { href: 'clasificacion-auto.html',   icon: 'bolt',          label: 'Clasificación automática' },
+            { href: 'auditoria.html', icon: 'fact_check', label: 'Auditoría' },
             { href: 'proyeccion-anual.html', icon: 'query_stats',     label: 'Proyección anual'   },
             { href: 'informes-airbnb.html',  icon: 'summarize',       label: 'Informes Airbnb'    }
         ]
@@ -257,7 +249,7 @@ var SECCIONES_SOLO_ADMIN = [
     'panel-financiero', 'fiscal', 'cuentas', 'movimientos',
     'herramientas-btg', 'categorias', 'pagos', 'informes-airbnb',
     'acceso-contador', 'cabanas-admin', 'usuarios', 'tareas-admin', 'gastos',
-    'analisis-gastos', 'proyeccion-anual', 'cotizaciones', 'transferencias', 'clasificacion-masiva', 'clasificacion-auto', 'temporada'
+    'analisis-gastos', 'proyeccion-anual', 'cotizaciones', 'transferencias', 'clasificacion-masiva', 'temporada'
 ];
 function puede(seccion, rol) {
     rol = rol || 'admin';
