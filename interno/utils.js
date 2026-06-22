@@ -251,7 +251,7 @@ const NAV_USER_ITEMS = [
 //  usados por puede() y renderNav().
 // ============================================================
 var _userDataActual = null;
-var ALWAYS_ALLOWED = ['dashboard', 'agenda', 'notificaciones', 'manual-sistema'];
+var ALWAYS_ALLOWED = ['dashboard', 'agenda', 'gastos-mantenimiento', 'notificaciones', 'manual-sistema'];
 var CATALOGO_PERMISOS = [
     { grupo: 'Operación', icon: 'checklist', items: [
         { href: 'tareas.html',         icon: 'checklist',            label: 'Tareas' },
@@ -1334,6 +1334,28 @@ function renderNav(paginaActiva, rol) {
 
     document.removeEventListener('click', _cerrarDropdowns);
     document.addEventListener('click', _cerrarDropdowns);
+
+    inyectarBotonGasto(paginaActiva);
+}
+
+// Botón flotante para registrar un gasto rápido (carga básica, igual que colaboradores).
+// Aparece en todas las páginas internas; el destino es gastos-mantenimiento.html.
+function inyectarBotonGasto(paginaActiva) {
+    try {
+        if (document.getElementById('cvcGastoFab')) return;
+        var pag = paginaActiva || (window.location.pathname.split('/').pop() || '');
+        if (String(pag).indexOf('gastos-mantenimiento') !== -1) return; // ya estás en la carga
+        var a = document.createElement('a');
+        a.id = 'cvcGastoFab';
+        a.href = 'gastos-mantenimiento.html';
+        a.title = 'Registrar un gasto';
+        a.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:996;background:#2d5a27;'
+            + 'color:#fff;border-radius:28px;padding:0 18px;height:52px;display:inline-flex;'
+            + 'align-items:center;gap:8px;box-shadow:0 4px 16px rgba(45,90,39,.35);'
+            + 'text-decoration:none;font-weight:700;font-size:15px;font-family:inherit;';
+        a.innerHTML = '<span class="material-icons">receipt_long</span>Gasto';
+        document.body.appendChild(a);
+    } catch (e) { /* no bloquea */ }
 }
 
 function toggleNavDrop(e, id) {
@@ -1944,7 +1966,7 @@ function initAyuda(paginaActual) {
             const fab = document.createElement('button');
             fab.id = 'cvcAyudaFab';
             fab.title = 'Ayuda de esta página';
-            fab.style.cssText = 'position:fixed;bottom:20px;right:20px;width:48px;height:48px;'
+            fab.style.cssText = 'position:fixed;bottom:84px;right:20px;width:48px;height:48px;'
                 + 'border-radius:50%;background:#2d5a27;color:#fff;border:none;cursor:pointer;'
                 + 'font-size:20px;font-weight:700;box-shadow:0 4px 16px rgba(45,90,39,.35);'
                 + 'z-index:997;font-family:inherit;';
