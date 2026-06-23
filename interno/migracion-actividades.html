@@ -115,26 +115,32 @@ function alcanceDePendiente(p) {
 }
 
 function mapTarea(t) {
-  return {
-    parentId: '', raizId: t.id, orden: 0,
+  // Se copian TODOS los campos originales tal cual (base) y luego se aplica
+  // el esquema nuevo encima. Esto preserva los campos que el dashboard usa
+  // para las advertencias de atraso (fechaInicio, recurrencia,
+  // recurrenciaTemporada, fechaCheckIn, rol, mismoDia, horaCheckIn…) y
+  // cualquier otro campo que setee el generador de limpieza, sin enumerarlos.
+  var base = Object.assign({}, t);
+  delete base.id;
+  return Object.assign(base, {
+    parentId: '', raizId: t.id, orden: (t.orden || 0),
     tipoRaiz: tipoRaizTarea(t), color: '',
-    titulo: t.nombre || '', detalle: t.descripcion || '',
-    creadoPor: t.creadoPor || null, creadoNombre: '',
-    creadoEn: t.creadoEn || null,
+    titulo: t.titulo || t.nombre || '',
+    detalle: t.detalle || t.descripcion || '',
+    creadoPor: t.creadoPor || null, creadoNombre: t.creadoNombre || '',
     alcance: 'equipo', competencias: [],
-    fechaInicio: t.fechaInicio || '', fechaVencimiento: '', hora: '',
+    fechaVencimiento: t.fechaVencimiento || '', hora: t.hora || '',
     hecho: t.estado === 'finalizada', hechoPor: null, hechoEn: null,
     notificado: false,
     cronometrable: true, estado: t.estado || 'pendiente',
-    prioridad: prioridadDeTarea(t.prioridad), monto: t.monto || 0,
-    recurrencia: t.recurrencia || 0, tiempoEstimado: t.tiempoEstimado || 0,
+    // prioridad unificada al semáforo (rojo/amarillo/verde/gris)
+    prioridad: prioridadDeTarea(t.prioridad),
+    // subtipo operativo (limpieza/control); lo demás queda en ''
     tipo: (t.tipo === 'limpieza' || t.tipo === 'control') ? t.tipo : '',
     cabana: (t.cabana !== undefined && t.cabana !== null) ? t.cabana : ((t.caba !== undefined && t.caba !== null) ? t.caba : null),
-    reservaId: t.reservaId || null,
-    sesionesActivas: t.sesionesActivas || [],
     esCompra: false, categoriaCompra: '',
     _origen: 'tareas', _legacyId: t.id, _legacy: t
-  };
+  });
 }
 
 function mapPendiente(p, shadow) {
