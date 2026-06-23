@@ -1344,6 +1344,7 @@ function inyectarBotonGasto(paginaActiva) {
     try {
         if (document.getElementById('cvcGastoFab')) return;
         var pag = paginaActiva || (window.location.pathname.split('/').pop() || '');
+        if (String(pag).indexOf('dashboard') === -1) return; // el botón flotante de Gasto solo aparece en el dashboard
         if (String(pag).indexOf('gastos-mantenimiento') !== -1) return; // ya estás en la carga
         var a = document.createElement('a');
         a.id = 'cvcGastoFab';
