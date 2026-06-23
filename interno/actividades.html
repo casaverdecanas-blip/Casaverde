@@ -202,6 +202,7 @@ var childrenOf = {};
 var usuarios  = [];
 var expandido = {};   // id -> false para colapsar (default: abierto)
 var tabActual = 'rutinas';
+var diagCarga = '';   // diagnóstico de permisos cuando alguna consulta del colaborador falla
 
 // ── Helpers ────────────────────────────────────────────────
 function esc(s) { return (CVC.escapeHtml ? CVC.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s)); }
@@ -232,19 +233,30 @@ async function cargar() {
     });
 
     var docs = [];
+    diagCarga = '';
     if (esAdmin) {
       var s = await db.collection('actividades').get();
       s.forEach(function (d) { docs.push(Object.assign({ id: d.id }, d.data())); });
     } else {
-      var res = await Promise.all([
-        db.collection('actividades').where('alcance', '==', 'equipo').get(),
-        db.collection('actividades').where('creadoPor', '==', uid).get(),
-        db.collection('actividades').where('competencias', 'array-contains', uid).get()
-      ]);
       var seen = {};
-      res.forEach(function (snap) {
-        snap.forEach(function (d) { if (!seen[d.id]) { seen[d.id] = 1; docs.push(Object.assign({ id: d.id }, d.data())); } });
-      });
+      var consultas = [
+        { etq: 'equipo',    q: db.collection('actividades').where('alcance', '==', 'equipo') },
+        { etq: 'propios',   q: db.collection('actividades').where('creadoPor', '==', uid) },
+        { etq: 'asignados', q: db.collection('actividades').where('competencias', 'array-contains', uid) }
+      ];
+      var oks = [], fails = [];
+      for (var c = 0; c < consultas.length; c++) {
+        try {
+          var snap = await consultas[c].q.get();
+          snap.forEach(function (d) { if (!seen[d.id]) { seen[d.id] = 1; docs.push(Object.assign({ id: d.id }, d.data())); } });
+          oks.push(consultas[c].etq);
+        } catch (eq) {
+          fails.push(consultas[c].etq + ': ' + (eq && eq.code ? eq.code : (eq && eq.message ? eq.message : 'error')));
+        }
+      }
+      if (fails.length) {
+        diagCarga = 'Diagnóstico — consultas OK: [' + (oks.join(', ') || 'ninguna') + ']  ·  FALLARON: [' + fails.join('  |  ') + ']';
+      }
     }
     items = docs;
     indexar();
@@ -308,7 +320,8 @@ function render() {
   document.getElementById('cntCalendario').textContent = items.filter(conFecha).length;
 
   var z = document.getElementById('zonaContenido');
-  if (tabActual === 'calendario') { z.innerHTML = renderCalendario(); return; }
+  var banner = diagCarga ? ('<div class="muted-note" style="border-color:#e0a3a3;color:#a33;background:#fdf3f3">' + esc(diagCarga) + '</div>') : '';
+  if (tabActual === 'calendario') { z.innerHTML = banner + renderCalendario(); return; }
 
   var tipo = tabActual === 'rutinas' ? 'rutina' : tabActual === 'proyectos' ? 'proyecto' : 'suelto';
   var raices = raicesDeTipo(tipo);
@@ -330,7 +343,7 @@ function render() {
     for (var i = 0; i < raices.length; i++) html += nodoHTML(raices[i], 0);
     html += '</div>';
   }
-  z.innerHTML = html;
+  z.innerHTML = banner + html;
 }
 
 function nodoHTML(it, nivel) {
