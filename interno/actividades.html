@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Actividades · Casa Verde Canas</title>
+<link rel="stylesheet" href="design-system.css">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<style>
+  .act-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .act-list { display: flex; flex-direction: column; border: 1px solid #e7ece4; border-radius: 12px; overflow: hidden; background: #fff; }
+  .act-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #eef2ec; min-height: 44px; }
+  .act-row:last-child { border-bottom: none; }
+  .act-caret { width: 16px; cursor: pointer; color: #7a8a76; font-size: 12px; text-align: center; user-select: none; flex: 0 0 auto; }
+  .act-chk { width: 18px; height: 18px; flex: 0 0 auto; }
+  .act-tit { flex: 1 1 auto; font-size: 14px; color: #2a3328; word-break: break-word; }
+  .act-tit.done { text-decoration: line-through; color: #9aa69a; }
+  .act-badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .act-badge { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: #eef2ee; color: #46583f; white-space: nowrap; }
+  .act-badge.rojo { background: #fde8e8; color: #c0271f; }
+  .act-badge.amarillo { background: #fdf4dd; color: #8a5d00; }
+  .act-badge.verde { background: #e6f5e6; color: #1f7a32; }
+  .act-badge.compra { background: #e9eefb; color: #33508f; }
+  .act-badge.curso { background: #e7f0fd; color: #1f5fb0; }
+  .act-acc { display: flex; gap: 2px; flex: 0 0 auto; }
+  .act-acc button { border: none; background: transparent; cursor: pointer; font-size: 16px; padding: 4px 6px; border-radius: 6px; color: #5a6a55; line-height: 1; }
+  .act-acc button:hover { background: #eef2ee; }
+  .cal-head { font-weight: 700; font-size: 13px; color: #46583f; margin: 16px 0 6px; }
+  .muted-note { font-size: 12.5px; color: #66735f; background: #f4f7f3; border: 1px dashed #cdd8c8; border-radius: 8px; padding: 8px 11px; margin-bottom: 12px; }
+  .usr-list { display: flex; flex-direction: column; gap: 6px; max-height: 190px; overflow: auto; border: 1px solid #e3e8e0; border-radius: 8px; padding: 8px; }
+  .usr-list label { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: 0 0 auto; background: #9aa69a; }
+  .dot-rojo { background: #dc2626; }
+  .dot-amarillo { background: #d97706; }
+  .dot-verde { background: #16a34a; }
+  .dot-gris { background: #9ca3af; }
+</style>
+</head>
+<body>
+
+<header class="admin-header">
+  <div class="admin-header__brand">
+    <span class="material-icons">cottage</span>
+    Casa Verde Canas
+  </div>
+  <div class="admin-header__actions">
+    <div class="user-chip">
+      <span class="material-icons">person</span>
+      <span id="userName">—</span>
+    </div>
+    <button class="btn-logout" onclick="CVC.cerrarSesion()">
+      <span class="material-icons">logout</span> Salir
+    </button>
+  </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+
+  <div class="main-tabs">
+    <button class="main-tab active" onclick="irTab('rutinas',this)">
+      <span class="material-icons" style="font-size:15px">autorenew</span>
+      Rutinas <span class="cnt" id="cntRutinas">0</span>
+    </button>
+    <button class="main-tab" onclick="irTab('proyectos',this)">
+      <span class="material-icons" style="font-size:15px">folder</span>
+      Proyectos <span class="cnt" id="cntProyectos">0</span>
+    </button>
+    <button class="main-tab" onclick="irTab('sueltos',this)">
+      <span class="material-icons" style="font-size:15px">check_box_outline_blank</span>
+      Sueltos <span class="cnt" id="cntSueltos">0</span>
+    </button>
+    <button class="main-tab" onclick="irTab('calendario',this)">
+      <span class="material-icons" style="font-size:15px">event</span>
+      Calendario <span class="cnt" id="cntCalendario">0</span>
+    </button>
+  </div>
+
+  <div id="zonaContenido">
+    <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+  </div>
+
+</main>
+
+<!-- ══ MODAL: crear / editar actividad ════════════════════════════ -->
+<div class="modal-cv" id="modalItem">
+  <div class="box">
+    <h3 id="modalItemTitulo">Nueva actividad</h3>
+    <input type="hidden" id="itId">
+    <input type="hidden" id="itParent">
+    <input type="hidden" id="itTipoRaiz">
+
+    <div class="form-group">
+      <label class="form-label">Título</label>
+      <input type="text" id="itTitulo" class="form-control" placeholder="Ej: Comprar resistencia">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Detalle (opcional)</label>
+      <textarea id="itDetalle" class="form-control" rows="2" placeholder="Notas, instrucciones…"></textarea>
+    </div>
+
+    <div class="form-row2" style="display:flex;gap:8px">
+      <div style="flex:1">
+        <label class="form-label">Inicio</label>
+        <input type="date" id="itInicio" class="form-control">
+      </div>
+      <div style="flex:1">
+        <label class="form-label">Vencimiento</label>
+        <input type="date" id="itVence" class="form-control">
+      </div>
+      <div style="flex:1">
+        <label class="form-label">Hora</label>
+        <input type="time" id="itHora" class="form-control">
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-top:10px">
+      <label class="form-label">Prioridad</label>
+      <select id="itPrioridad" class="form-control">
+        <option value="gris">⚫ Sin prioridad</option>
+        <option value="rojo">🔴 Urgente</option>
+        <option value="amarillo">🟡 Atención</option>
+        <option value="verde">🟢 Normal</option>
+      </select>
+    </div>
+
+    <div class="form-group" style="margin-top:10px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13.5px">
+        <input type="checkbox" id="itCompra" onclick="toggleCompraUI()"> Es una compra (va a la lista de compras)
+      </label>
+    </div>
+    <div class="form-group" id="bloqueCompra" style="display:none">
+      <label class="form-label">Categoría de compra</label>
+      <select id="itCategoria" class="form-control">
+        <option value="mantenimiento">🔧 Mantenimiento / construcción</option>
+        <option value="comestibles">🍽 Comestibles</option>
+        <option value="insumos">🧴 Insumos limpieza / higiene</option>
+      </select>
+    </div>
+
+    <div class="form-group" style="margin-top:10px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13.5px">
+        <input type="checkbox" id="itCronometrable"> Se puede cronometrar / generar honorario
+      </label>
+      <div style="font-size:11.5px;color:#7a8a76;margin-top:2px">El reloj y el cierre con honorario se activan en la próxima etapa.</div>
+    </div>
+
+    <!-- Bloque solo para items raíz (proyecto/suelto/rutina) -->
+    <div id="bloqueRaiz">
+      <div class="form-group" id="bloqueColor" style="margin-top:10px;display:none">
+        <label class="form-label">Color del proyecto</label>
+        <input type="color" id="itColor" class="form-control" value="#2d5a27" style="height:42px;padding:4px">
+      </div>
+
+      <div class="form-group" style="margin-top:10px">
+        <label class="form-label">Quién lo ve</label>
+        <select id="itAlcance" class="form-control" onchange="toggleAlcanceUI()">
+          <option value="personal">🔒 Solo yo</option>
+          <option value="equipo">👥 Todo el equipo</option>
+          <option value="asignados">📌 Personas elegidas</option>
+        </select>
+      </div>
+      <div class="form-group" id="bloqueCompetencias" style="display:none">
+        <label class="form-label">Marcá a quién le compete</label>
+        <div class="usr-list" id="usrList"></div>
+      </div>
+    </div>
+
+    <div id="hijoNota" class="muted-note" style="display:none;margin-top:10px">Hereda el alcance y las personas del proyecto/actividad superior.</div>
+
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="cerrarModal('modalItem')">Cancelar</button>
+      <button class="btn btn-primary" id="btnGuardarItem" onclick="guardarItem()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+
+// ── Arranque ───────────────────────────────────────────────
+var sesion   = await CVC.verificarAuth(['admin', 'user']);
+var user     = sesion.user;
+var userData = sesion.userData;
+document.getElementById('userName').textContent = userData.nombre || user.email;
+CVC.renderNav('actividades.html');
+
+var db       = CVC.db;
+var uid      = user.uid;
+var miNombre = userData.nombre || user.email;
+var esAdmin  = userData.rol === 'admin';
+
+// ── Estado ─────────────────────────────────────────────────
+var items     = [];
+var byId      = {};
+var childrenOf = {};
+var usuarios  = [];
+var expandido = {};   // id -> false para colapsar (default: abierto)
+var tabActual = 'rutinas';
+
+// ── Helpers ────────────────────────────────────────────────
+function esc(s) { return (CVC.escapeHtml ? CVC.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s)); }
+function toast(m, t) { if (CVC.showToast) { CVC.showToast(m, t || 'info'); } }
+function serverTs() { return firebase.firestore.FieldValue.serverTimestamp(); }
+function isoHoy() { var d = new Date(); var m = String(d.getMonth() + 1); var dd = String(d.getDate()); return d.getFullYear() + '-' + (m.length < 2 ? '0' + m : m) + '-' + (dd.length < 2 ? '0' + dd : dd); }
+function fmtDMY(iso) { if (!iso) return ''; var p = String(iso).slice(0, 10).split('-'); if (p.length < 3) return iso; return p[2] + '/' + p[1]; }
+function refAct(id) { return db.collection('actividades').doc(id); }
+function abrirModal(id) { document.getElementById(id).classList.add('show'); }
+window.cerrarModal = function (id) { document.getElementById(id).classList.remove('show'); };
+
+function dotClase(p) {
+  if (p === 'rojo') return 'dot-rojo';
+  if (p === 'amarillo') return 'dot-amarillo';
+  if (p === 'verde') return 'dot-verde';
+  return 'dot-gris';
+}
+
+// ── Carga (respetando reglas: admin = todo; colaborador = 3 consultas) ──
+async function cargar() {
+  try {
+    var uSnap = await db.collection('usuarios').get();
+    usuarios = [];
+    uSnap.forEach(function (d) {
+      var x = d.data() || {};
+      if (x.activo === false) return;
+      usuarios.push({ uid: d.id, nombre: x.nombre || x.email || d.id, rol: x.rol || 'user' });
+    });
+
+    var docs = [];
+    if (esAdmin) {
+      var s = await db.collection('actividades').get();
+      s.forEach(function (d) { docs.push(Object.assign({ id: d.id }, d.data())); });
+    } else {
+      var res = await Promise.all([
+        db.collection('actividades').where('alcance', '==', 'equipo').get(),
+        db.collection('actividades').where('creadoPor', '==', uid).get(),
+        db.collection('actividades').where('competencias', 'array-contains', uid).get()
+      ]);
+      var seen = {};
+      res.forEach(function (snap) {
+        snap.forEach(function (d) { if (!seen[d.id]) { seen[d.id] = 1; docs.push(Object.assign({ id: d.id }, d.data())); } });
+      });
+    }
+    items = docs;
+    indexar();
+    render();
+  } catch (e) {
+    document.getElementById('zonaContenido').innerHTML = '<div class="muted-note">No se pudieron cargar las actividades: ' + esc(e.message) + '</div>';
+  }
+}
+
+function indexar() {
+  byId = {}; childrenOf = {};
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    byId[it.id] = it;
+    var p = it.parentId || '';
+    if (!childrenOf[p]) childrenOf[p] = [];
+    childrenOf[p].push(it);
+  }
+}
+
+function hijosDe(id) {
+  var arr = (childrenOf[id] || []).slice();
+  arr.sort(function (a, b) {
+    var oa = a.orden || 0, ob = b.orden || 0;
+    if (oa !== ob) return oa - ob;
+    return String(a.titulo || '').localeCompare(String(b.titulo || ''));
+  });
+  return arr;
+}
+
+function descendientes(id) {
+  var out = [];
+  var pila = hijosDe(id).map(function (x) { return x.id; });
+  while (pila.length) {
+    var x = pila.shift();
+    out.push(x);
+    var hs = hijosDe(x);
+    for (var i = 0; i < hs.length; i++) pila.push(hs[i].id);
+  }
+  return out;
+}
+
+function progresoDe(id) {
+  var d = descendientes(id);
+  if (!d.length) return null;
+  var hechos = 0;
+  for (var i = 0; i < d.length; i++) { if (byId[d[i]] && byId[d[i]].hecho) hechos++; }
+  return { hechos: hechos, total: d.length };
+}
+
+function raicesDeTipo(tipo) {
+  return items.filter(function (it) { return (!it.parentId) && it.tipoRaiz === tipo; })
+    .sort(function (a, b) { return String(a.titulo || '').localeCompare(String(b.titulo || '')); });
+}
+
+// ── Render ─────────────────────────────────────────────────
+function render() {
+  document.getElementById('cntRutinas').textContent   = raicesDeTipo('rutina').length;
+  document.getElementById('cntProyectos').textContent = raicesDeTipo('proyecto').length;
+  document.getElementById('cntSueltos').textContent   = raicesDeTipo('suelto').length;
+  document.getElementById('cntCalendario').textContent = items.filter(conFecha).length;
+
+  var z = document.getElementById('zonaContenido');
+  if (tabActual === 'calendario') { z.innerHTML = renderCalendario(); return; }
+
+  var tipo = tabActual === 'rutinas' ? 'rutina' : tabActual === 'proyectos' ? 'proyecto' : 'suelto';
+  var raices = raicesDeTipo(tipo);
+  var html = '';
+
+  html += '<div class="act-toolbar">';
+  if (tipo === 'proyecto') html += '<button class="btn btn-primary" onclick="nuevoRoot(\'proyecto\')"><span class="material-icons">add</span> Nuevo proyecto</button>';
+  if (tipo === 'suelto')   html += '<button class="btn btn-primary" onclick="nuevoRoot(\'suelto\')"><span class="material-icons">add</span> Nuevo suelto</button>';
+  html += '</div>';
+
+  if (tipo === 'rutina') {
+    html += '<div class="muted-note">Las rutinas se generan desde el circuito de limpieza/reservas. La creación y edición de su frecuencia y honorario llega en la próxima etapa. Acá podés verlas, marcar avances y agregarles sub-tareas.</div>';
+  }
+
+  if (!raices.length) {
+    html += '<div class="muted-note">No hay ' + (tipo === 'rutina' ? 'rutinas' : tipo === 'proyecto' ? 'proyectos' : 'sueltos') + ' por ahora.</div>';
+  } else {
+    html += '<div class="act-list">';
+    for (var i = 0; i < raices.length; i++) html += nodoHTML(raices[i], 0);
+    html += '</div>';
+  }
+  z.innerHTML = html;
+}
+
+function nodoHTML(it, nivel) {
+  var hijos = hijosDe(it.id);
+  var tiene = hijos.length > 0;
+  var abierto = expandido[it.id] !== false;
+  var indent = Math.min(nivel, 4) * 18;
+
+  var h = '';
+  h += '<div class="act-row" style="padding-left:' + (indent + 10) + 'px">';
+  h += '<span class="act-caret" onclick="toggleExp(\'' + it.id + '\')">' + (tiene ? (abierto ? '\u25be' : '\u25b8') : '') + '</span>';
+  h += '<input type="checkbox" class="act-chk" ' + (it.hecho ? 'checked' : '') + ' onclick="toggleHecho(\'' + it.id + '\')">';
+  h += '<span class="dot ' + dotClase(it.prioridad) + '"></span>';
+  h += '<span class="act-tit' + (it.hecho ? ' done' : '') + '">' + esc(it.titulo) + '</span>';
+
+  h += '<span class="act-badges">';
+  // Urgencia (lógica real de CVC.urgenciaTarea: usa fechaCheckIn/recurrencia)
+  if (!it.hecho && CVC.urgenciaTarea) {
+    var u = CVC.urgenciaTarea(it);
+    if (u && u.color && u.color !== 'gris') h += '<span class="act-badge ' + u.color + '">' + esc(u.label) + '</span>';
+  }
+  // Fecha
+  var fv = it.fechaVencimiento ? fmtDMY(it.fechaVencimiento) : (it.fechaInicio ? fmtDMY(it.fechaInicio) : '');
+  if (fv) h += '<span class="act-badge">\ud83d\uddd3 ' + fv + (it.hora ? ' ' + it.hora : '') + '</span>';
+  // Progreso
+  var pr = progresoDe(it.id);
+  if (pr) h += '<span class="act-badge">\u2713 ' + pr.hechos + '/' + pr.total + '</span>';
+  // Compra
+  if (it.esCompra) h += '<span class="act-badge compra">\ud83d\uded2 ' + esc(it.categoriaCompra || 'compra') + '</span>';
+  // En curso
+  if (it.estado === 'en_curso') h += '<span class="act-badge curso">\u23f1 en curso</span>';
+  // Alcance (solo raíz)
+  if (!it.parentId) {
+    if (it.alcance === 'equipo') h += '<span class="act-badge">\ud83d\udc65</span>';
+    else if (it.alcance === 'asignados') h += '<span class="act-badge">\ud83d\udccc ' + ((it.competencias || []).length) + '</span>';
+    else h += '<span class="act-badge">\ud83d\udd12</span>';
+  }
+  h += '</span>';
+
+  h += '<span class="act-acc">';
+  h += '<button title="Agregar dentro" onclick="nuevoHijo(\'' + it.id + '\')">\uff0b</button>';
+  h += '<button title="Editar" onclick="editarItem(\'' + it.id + '\')">\u270e</button>';
+  h += '<button title="Borrar" onclick="borrarItem(\'' + it.id + '\')">\ud83d\uddd1</button>';
+  h += '</span>';
+
+  h += '</div>';
+
+  if (tiene && abierto) { for (var i = 0; i < hijos.length; i++) h += nodoHTML(hijos[i], nivel + 1); }
+  return h;
+}
+
+function conFecha(it) { return !!(it.fechaVencimiento || it.fechaInicio); }
+
+function renderCalendario() {
+  var conF = items.filter(function (it) { return conFecha(it) && !it.hecho; });
+  conF.sort(function (a, b) {
+    var fa = (a.fechaVencimiento || a.fechaInicio || '');
+    var fb = (b.fechaVencimiento || b.fechaInicio || '');
+    return fa < fb ? -1 : fa > fb ? 1 : 0;
+  });
+  if (!conF.length) return '<div class="muted-note">No hay actividades con fecha pendientes.</div>';
+
+  var html = '';
+  var ultimaFecha = '';
+  var listaAbierta = false;
+  for (var i = 0; i < conF.length; i++) {
+    var it = conF[i];
+    var f = (it.fechaVencimiento || it.fechaInicio || '');
+    if (f !== ultimaFecha) {
+      if (listaAbierta) html += '</div>';
+      html += '<div class="cal-head">\ud83d\uddd3 ' + fmtDMY(f) + (it.fechaVencimiento ? ' (vence)' : '') + '</div>';
+      html += '<div class="act-list">';
+      listaAbierta = true;
+      ultimaFecha = f;
+    }
+    html += '<div class="act-row">';
+    html += '<input type="checkbox" class="act-chk" onclick="toggleHecho(\'' + it.id + '\')">';
+    html += '<span class="dot ' + dotClase(it.prioridad) + '"></span>';
+    html += '<span class="act-tit">' + esc(it.titulo) + '</span>';
+    html += '<span class="act-badges">';
+    if (CVC.urgenciaTarea) { var u = CVC.urgenciaTarea(it); if (u && u.color && u.color !== 'gris') html += '<span class="act-badge ' + u.color + '">' + esc(u.label) + '</span>'; }
+    if (it.hora) html += '<span class="act-badge">' + esc(it.hora) + '</span>';
+    html += '<span class="act-badge">' + (it.tipoRaiz === 'rutina' ? 'Rutina' : it.tipoRaiz === 'proyecto' ? 'Proyecto' : 'Suelto') + '</span>';
+    html += '</span>';
+    html += '<span class="act-acc"><button title="Editar" onclick="editarItem(\'' + it.id + '\')">\u270e</button></span>';
+    html += '</div>';
+  }
+  if (listaAbierta) html += '</div>';
+  return html;
+}
+
+// ── Interacción ────────────────────────────────────────────
+window.irTab = function (t, btn) {
+  tabActual = t;
+  var tabs = document.querySelectorAll('.main-tab');
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+  if (btn) btn.classList.add('active');
+  render();
+};
+
+window.toggleExp = function (id) {
+  expandido[id] = (expandido[id] === false) ? true : false;
+  render();
+};
+
+window.toggleHecho = async function (id) {
+  var it = byId[id]; if (!it) return;
+  var nuevo = !it.hecho;
+  try {
+    if (nuevo) {
+      // Cascada: marcar este y todos sus descendientes
+      var ids = [id].concat(descendientes(id));
+      var batch = db.batch();
+      for (var i = 0; i < ids.length; i++) {
+        batch.update(refAct(ids[i]), { hecho: true, hechoPor: uid, hechoEn: serverTs() });
+        if (byId[ids[i]]) byId[ids[i]].hecho = true;
+      }
+      await batch.commit();
+    } else {
+      await refAct(id).update({ hecho: false, hechoPor: null, hechoEn: null });
+      it.hecho = false;
+    }
+    render();
+  } catch (e) { toast('No se pudo actualizar: ' + e.message, 'error'); }
+};
+
+// ── Alta / edición ─────────────────────────────────────────
+window.nuevoRoot = function (tipo) { prepararModal({ modo: 'crear', parentId: '', tipoRaiz: tipo }); };
+window.nuevoHijo = function (pid) { prepararModal({ modo: 'crear', parentId: pid }); };
+window.editarItem = function (id) { var it = byId[id]; if (it) prepararModal({ modo: 'editar', it: it }); };
+
+function renderUsuariosChecklist(sel) {
+  sel = sel || [];
+  var h = '';
+  for (var i = 0; i < usuarios.length; i++) {
+    var u = usuarios[i];
+    var marcado = sel.indexOf(u.uid) >= 0 ? 'checked' : '';
+    h += '<label><input type="checkbox" class="usr-chk" value="' + u.uid + '" ' + marcado + '> ' + esc(u.nombre) + (u.rol === 'admin' ? ' (admin)' : '') + '</label>';
+  }
+  document.getElementById('usrList').innerHTML = h || '<div style="font-size:12.5px;color:#7a8a76">No hay otros usuarios activos.</div>';
+}
+
+window.toggleAlcanceUI = function () {
+  var v = document.getElementById('itAlcance').value;
+  document.getElementById('bloqueCompetencias').style.display = (v === 'asignados') ? 'block' : 'none';
+};
+window.toggleCompraUI = function () {
+  document.getElementById('bloqueCompra').style.display = document.getElementById('itCompra').checked ? 'block' : 'none';
+};
+
+function prepararModal(o) {
+  var it = (o.modo === 'editar') ? o.it : null;
+  var parentId = it ? (it.parentId || '') : (o.parentId || '');
+  var esRoot = !parentId;
+  var tipoRaiz = it ? it.tipoRaiz : (esRoot ? o.tipoRaiz : (byId[parentId] ? byId[parentId].tipoRaiz : 'suelto'));
+
+  document.getElementById('itId').value = it ? it.id : '';
+  document.getElementById('itParent').value = parentId;
+  document.getElementById('itTipoRaiz').value = tipoRaiz || 'suelto';
+
+  document.getElementById('itTitulo').value = it ? (it.titulo || '') : '';
+  document.getElementById('itDetalle').value = it ? (it.detalle || '') : '';
+  document.getElementById('itInicio').value = it ? (it.fechaInicio || '') : '';
+  document.getElementById('itVence').value = it ? (it.fechaVencimiento || '') : '';
+  document.getElementById('itHora').value = it ? (it.hora || '') : '';
+  document.getElementById('itPrioridad').value = it ? (it.prioridad || 'gris') : 'gris';
+  document.getElementById('itCompra').checked = it ? !!it.esCompra : false;
+  document.getElementById('itCategoria').value = it ? (it.categoriaCompra || 'mantenimiento') : 'mantenimiento';
+  document.getElementById('itCronometrable').checked = it ? !!it.cronometrable : false;
+
+  // Bloque raíz vs hijo
+  document.getElementById('bloqueRaiz').style.display = esRoot ? 'block' : 'none';
+  document.getElementById('hijoNota').style.display = esRoot ? 'none' : 'block';
+  document.getElementById('bloqueColor').style.display = (esRoot && tipoRaiz === 'proyecto') ? 'block' : 'none';
+  document.getElementById('itColor').value = (it && it.color) ? it.color : '#2d5a27';
+  document.getElementById('itAlcance').value = it ? (it.alcance || 'personal') : 'personal';
+  renderUsuariosChecklist(it ? (it.competencias || []) : []);
+  toggleAlcanceUI();
+  toggleCompraUI();
+
+  var tipoTxt = tipoRaiz === 'rutina' ? 'rutina' : tipoRaiz === 'proyecto' ? 'proyecto' : 'actividad';
+  document.getElementById('modalItemTitulo').textContent = it ? ('Editar ' + tipoTxt) : (esRoot ? ('Nuevo ' + (tipoRaiz === 'proyecto' ? 'proyecto' : 'suelto')) : 'Nueva sub-actividad');
+
+  abrirModal('modalItem');
+}
+
+window.guardarItem = async function () {
+  var id = document.getElementById('itId').value;
+  var parentId = document.getElementById('itParent').value;
+  var esRoot = !parentId;
+  var titulo = document.getElementById('itTitulo').value.trim();
+  if (!titulo) { toast('Poné un título.', 'error'); return; }
+
+  var btn = document.getElementById('btnGuardarItem');
+  btn.disabled = true;
+
+  try {
+    var base = {
+      titulo: titulo,
+      detalle: document.getElementById('itDetalle').value.trim(),
+      fechaInicio: document.getElementById('itInicio').value || '',
+      fechaVencimiento: document.getElementById('itVence').value || '',
+      hora: document.getElementById('itHora').value || '',
+      prioridad: document.getElementById('itPrioridad').value || 'gris',
+      esCompra: document.getElementById('itCompra').checked,
+      categoriaCompra: document.getElementById('itCompra').checked ? document.getElementById('itCategoria').value : '',
+      cronometrable: document.getElementById('itCronometrable').checked,
+      actualizadoEn: serverTs()
+    };
+
+    // Alcance + competencias (raíz manda; hijo hereda del padre)
+    var alcance, competencias, color, tipoRaiz, raizId;
+    if (esRoot) {
+      alcance = document.getElementById('itAlcance').value;
+      competencias = [];
+      if (alcance === 'asignados') {
+        var chks = document.querySelectorAll('.usr-chk');
+        for (var i = 0; i < chks.length; i++) { if (chks[i].checked) competencias.push(chks[i].value); }
+      }
+      tipoRaiz = document.getElementById('itTipoRaiz').value;
+      color = (tipoRaiz === 'proyecto') ? document.getElementById('itColor').value : '';
+    } else {
+      var padre = byId[parentId] || {};
+      alcance = padre.alcance || 'personal';
+      competencias = (padre.competencias || []).slice();
+      tipoRaiz = padre.tipoRaiz || 'suelto';
+      color = '';
+      raizId = padre.raizId || parentId;
+    }
+
+    if (id) {
+      // EDITAR
+      var it = byId[id] || {};
+      var upd = Object.assign({}, base);
+      if (esRoot) {
+        upd.color = color;
+        upd.alcance = alcance;
+        upd.competencias = competencias;
+      }
+      await refAct(id).update(upd);
+
+      // Si cambió el alcance/competencias de una raíz, propagar a descendientes
+      if (esRoot && (it.alcance !== alcance || JSON.stringify(it.competencias || []) !== JSON.stringify(competencias))) {
+        var desc = descendientes(id);
+        if (desc.length) {
+          var b = db.batch();
+          for (var d = 0; d < desc.length; d++) { b.update(refAct(desc[d]), { alcance: alcance, competencias: competencias }); }
+          await b.commit();
+        }
+      }
+      toast('Guardado.', 'success');
+    } else {
+      // CREAR (id pre-generado para fijar raizId en raíces)
+      var ref = db.collection('actividades').doc();
+      var doc = Object.assign({}, base, {
+        parentId: parentId || '',
+        raizId: esRoot ? ref.id : raizId,
+        orden: 0,
+        tipoRaiz: tipoRaiz,
+        color: color,
+        creadoPor: uid,
+        creadoNombre: miNombre,
+        creadoEn: serverTs(),
+        alcance: alcance,
+        competencias: competencias,
+        hecho: false, hechoPor: null, hechoEn: null,
+        notificado: false,
+        estado: 'pendiente',
+        monto: 0, recurrencia: 0, tiempoEstimado: 0, tipo: '',
+        cabana: null, reservaId: null, sesionesActivas: []
+      });
+      await ref.set(doc);
+
+      // Aviso a las personas asignadas (si corresponde)
+      if (alcance === 'asignados' && competencias.length && CVC.avisar) {
+        var otros = competencias.filter(function (x) { return x !== uid; });
+        if (otros.length) { try { await CVC.avisar('actividad', 'Nueva actividad asignada', titulo, otros, uid); } catch (e2) { } }
+      }
+      toast('Creado.', 'success');
+    }
+
+    cerrarModal('modalItem');
+    await cargar();
+  } catch (e) {
+    toast('No se pudo guardar: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+window.borrarItem = async function (id) {
+  var it = byId[id]; if (!it) return;
+  var desc = descendientes(id);
+  var msg = desc.length
+    ? ('Esto borra "' + (it.titulo || '') + '" y sus ' + desc.length + ' sub-actividad(es). ¿Seguir?')
+    : ('¿Borrar "' + (it.titulo || '') + '"?');
+  if (!confirm(msg)) return;
+  try {
+    var ids = [id].concat(desc);
+    var b = db.batch();
+    for (var i = 0; i < ids.length; i++) b.delete(refAct(ids[i]));
+    await b.commit();
+    toast('Borrado.', 'success');
+    await cargar();
+  } catch (e) { toast('No se pudo borrar: ' + e.message, 'error'); }
+};
+
+// ── Init ───────────────────────────────────────────────────
+await cargar();
+
+</script>
+
+</body>
+</html>
