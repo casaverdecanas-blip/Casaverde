@@ -14,11 +14,11 @@
 <style>
   .act-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
   .act-list { display: flex; flex-direction: column; border: 1px solid #e7ece4; border-radius: 12px; overflow: hidden; background: #fff; }
-  .act-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #eef2ec; min-height: 44px; }
+  .act-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-bottom: 1px solid #eef2ec; min-height: 44px; }
   .act-row:last-child { border-bottom: none; }
   .act-caret { width: 16px; cursor: pointer; color: #7a8a76; font-size: 12px; text-align: center; user-select: none; flex: 0 0 auto; }
   .act-chk { width: 18px; height: 18px; flex: 0 0 auto; }
-  .act-tit { flex: 1 1 auto; font-size: 14px; color: #2a3328; word-break: break-word; }
+  .act-tit { flex: 1 1 auto; min-width: 120px; font-size: 14px; color: #2a3328; word-break: break-word; }
   .act-tit.done { text-decoration: line-through; color: #9aa69a; }
   .act-badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .act-badge { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: #eef2ee; color: #46583f; white-space: nowrap; }
@@ -154,9 +154,30 @@
 
     <div class="form-group" style="margin-top:10px">
       <label style="display:flex;align-items:center;gap:8px;font-size:13.5px">
-        <input type="checkbox" id="itCronometrable"> Se puede cronometrar / generar honorario
+        <input type="checkbox" id="itCronometrable" onclick="toggleCronoUI()"> Se puede cronometrar / generar honorario
       </label>
-      <div style="font-size:11.5px;color:#7a8a76;margin-top:2px">El reloj y el cierre con honorario se activan en la próxima etapa.</div>
+      <div style="font-size:11.5px;color:#7a8a76;margin-top:2px">Muestra ▶ para cronometrar; al finalizar reparte el honorario por tiempo trabajado.</div>
+    </div>
+
+    <div class="form-group" id="bloqueMonto" style="display:none">
+      <label class="form-label">Honorario al completarla (R$)</label>
+      <input type="number" id="itMonto" class="form-control" value="0" min="0" step="10">
+      <div style="font-size:11.5px;color:#7a8a76;margin-top:2px">Se reparte entre quienes la cronometren, según las horas de cada uno.</div>
+    </div>
+
+    <!-- Frecuencia: solo para rutinas raíz -->
+    <div id="bloqueRutina" style="display:none">
+      <div class="form-row2" style="display:flex;gap:8px;margin-top:10px">
+        <div style="flex:1">
+          <label class="form-label">Frecuencia (días)</label>
+          <input type="number" id="itRecurrencia" class="form-control" value="0" min="0">
+        </div>
+        <div style="flex:1">
+          <label class="form-label">Tiempo est. (min)</label>
+          <input type="number" id="itTiempoEst" class="form-control" value="0" min="0">
+        </div>
+      </div>
+      <div style="font-size:11.5px;color:#7a8a76;margin-top:2px">Frecuencia 0 = sin repetición. El factor de temporada se aplica solo. Al finalizar, la rutina se reprograma al próximo ciclo.</div>
     </div>
 
     <!-- Bloque solo para items raíz (proyecto/suelto/rutina) -->
@@ -336,12 +357,13 @@ function render() {
   var html = '';
 
   html += '<div class="act-toolbar">';
+  if (tipo === 'rutina')   html += '<button class="btn btn-primary" onclick="nuevoRoot(\'rutina\')"><span class="material-icons">add</span> Nueva rutina</button>';
   if (tipo === 'proyecto') html += '<button class="btn btn-primary" onclick="nuevoRoot(\'proyecto\')"><span class="material-icons">add</span> Nuevo proyecto</button>';
   if (tipo === 'suelto')   html += '<button class="btn btn-primary" onclick="nuevoRoot(\'suelto\')"><span class="material-icons">add</span> Nuevo suelto</button>';
   html += '</div>';
 
   if (tipo === 'rutina') {
-    html += '<div class="muted-note">Las rutinas se generan desde el circuito de limpieza/reservas. La creación y edición de su frecuencia y honorario llega en la próxima etapa. Acá podés verlas, marcar avances y agregarles sub-tareas.</div>';
+    html += '<div class="muted-note">Las rutinas se repiten según su frecuencia (en días) y se reprograman solas al finalizarlas. También las genera el circuito de limpieza/reservas. Tocá ▶ para cronometrar y registrar el honorario.</div>';
   }
 
   if (!raices.length) {
@@ -512,6 +534,9 @@ window.toggleAlcanceUI = function () {
 window.toggleCompraUI = function () {
   document.getElementById('bloqueCompra').style.display = document.getElementById('itCompra').checked ? 'block' : 'none';
 };
+window.toggleCronoUI = function () {
+  document.getElementById('bloqueMonto').style.display = document.getElementById('itCronometrable').checked ? 'block' : 'none';
+};
 
 function prepararModal(o) {
   var it = (o.modo === 'editar') ? o.it : null;
@@ -531,20 +556,28 @@ function prepararModal(o) {
   document.getElementById('itPrioridad').value = it ? (it.prioridad || 'gris') : 'gris';
   document.getElementById('itCompra').checked = it ? !!it.esCompra : false;
   document.getElementById('itCategoria').value = it ? (it.categoriaCompra || 'mantenimiento') : 'mantenimiento';
-  document.getElementById('itCronometrable').checked = it ? !!it.cronometrable : false;
+  var cronoDefault = (!it && esRoot && tipoRaiz === 'rutina');
+  document.getElementById('itCronometrable').checked = it ? !!it.cronometrable : cronoDefault;
+  document.getElementById('itMonto').value = it ? (it.monto || 0) : 0;
+  document.getElementById('itRecurrencia').value = it ? (it.recurrencia || 0) : 0;
+  document.getElementById('itTiempoEst').value = it ? (it.tiempoEstimado || 0) : 0;
 
   // Bloque raíz vs hijo
   document.getElementById('bloqueRaiz').style.display = esRoot ? 'block' : 'none';
   document.getElementById('hijoNota').style.display = esRoot ? 'none' : 'block';
   document.getElementById('bloqueColor').style.display = (esRoot && tipoRaiz === 'proyecto') ? 'block' : 'none';
+  document.getElementById('bloqueRutina').style.display = (esRoot && tipoRaiz === 'rutina') ? 'block' : 'none';
   document.getElementById('itColor').value = (it && it.color) ? it.color : '#2d5a27';
-  document.getElementById('itAlcance').value = it ? (it.alcance || 'personal') : 'personal';
+  var alcanceDefault = (!it && esRoot && tipoRaiz === 'rutina') ? 'equipo' : 'personal';
+  document.getElementById('itAlcance').value = it ? (it.alcance || 'personal') : alcanceDefault;
   renderUsuariosChecklist(it ? (it.competencias || []) : []);
   toggleAlcanceUI();
   toggleCompraUI();
+  toggleCronoUI();
 
   var tipoTxt = tipoRaiz === 'rutina' ? 'rutina' : tipoRaiz === 'proyecto' ? 'proyecto' : 'actividad';
-  document.getElementById('modalItemTitulo').textContent = it ? ('Editar ' + tipoTxt) : (esRoot ? ('Nuevo ' + (tipoRaiz === 'proyecto' ? 'proyecto' : 'suelto')) : 'Nueva sub-actividad');
+  var nuevoTxt = tipoRaiz === 'rutina' ? 'Nueva rutina' : tipoRaiz === 'proyecto' ? 'Nuevo proyecto' : (esRoot ? 'Nuevo suelto' : 'Nueva sub-actividad');
+  document.getElementById('modalItemTitulo').textContent = it ? ('Editar ' + tipoTxt) : nuevoTxt;
 
   abrirModal('modalItem');
 }
@@ -570,6 +603,7 @@ window.guardarItem = async function () {
       esCompra: document.getElementById('itCompra').checked,
       categoriaCompra: document.getElementById('itCompra').checked ? document.getElementById('itCategoria').value : '',
       cronometrable: document.getElementById('itCronometrable').checked,
+      monto: document.getElementById('itCronometrable').checked ? (parseFloat(document.getElementById('itMonto').value) || 0) : 0,
       actualizadoEn: serverTs()
     };
 
@@ -593,10 +627,17 @@ window.guardarItem = async function () {
       raizId = padre.raizId || parentId;
     }
 
+    // Frecuencia y tiempo estimado: solo para rutinas raíz
+    var esRutinaRaiz = esRoot && tipoRaiz === 'rutina';
+    var recurrencia = esRutinaRaiz ? (parseInt(document.getElementById('itRecurrencia').value, 10) || 0) : 0;
+    var tiempoEstimado = esRutinaRaiz ? (parseInt(document.getElementById('itTiempoEst').value, 10) || 0) : 0;
+
     if (id) {
       // EDITAR
       var it = byId[id] || {};
       var upd = Object.assign({}, base);
+      upd.recurrencia = recurrencia;
+      upd.tiempoEstimado = tiempoEstimado;
       if (esRoot) {
         upd.color = color;
         upd.alcance = alcance;
@@ -631,7 +672,7 @@ window.guardarItem = async function () {
         hecho: false, hechoPor: null, hechoEn: null,
         notificado: false,
         estado: 'pendiente',
-        monto: 0, recurrencia: 0, tiempoEstimado: 0, tipo: '',
+        recurrencia: recurrencia, tiempoEstimado: tiempoEstimado, tipo: '',
         cabana: null, reservaId: null, sesionesActivas: []
       });
       await ref.set(doc);
