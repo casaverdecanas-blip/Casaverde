@@ -10,6 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="utils.js"></script>
+<script src="actividades-core.js"></script>
 <style>
   .act-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
   .act-list { display: flex; flex-direction: column; border: 1px solid #e7ece4; border-radius: 12px; overflow: hidden; background: #fff; }
@@ -38,6 +39,13 @@
   .dot-amarillo { background: #d97706; }
   .dot-verde { background: #16a34a; }
   .dot-gris { background: #9ca3af; }
+  .modal-cv { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+  .modal-cv.show { display: flex; }
+  .modal-cv .box { background: #fff; border-radius: 14px; padding: 18px; width: 100%; max-width: 460px; max-height: 90vh; overflow: auto; }
+  .modal-cv h3 { margin: 0 0 12px; }
+  .modal-cv .form-row2 { display: flex; gap: 8px; }
+  .modal-cv .form-row2 > div { flex: 1; }
+  .modal-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
 </style>
 </head>
 <body>
@@ -374,7 +382,10 @@ function nodoHTML(it, nivel) {
   // Compra
   if (it.esCompra) h += '<span class="act-badge compra">\ud83d\uded2 ' + esc(it.categoriaCompra || 'compra') + '</span>';
   // En curso
-  if (it.estado === 'en_curso') h += '<span class="act-badge curso">\u23f1 en curso</span>';
+  if (it.estado === 'en_curso') {
+    var quienes = (it.sesionesActivas || []).map(function (s) { return s.nombre || ''; }).filter(Boolean).join(', ');
+    h += '<span class="act-badge curso">\u23f1 en curso' + (quienes ? ' (' + esc(quienes) + ')' : '') + '</span>';
+  }
   // Alcance (solo raíz)
   if (!it.parentId) {
     if (it.alcance === 'equipo') h += '<span class="act-badge">\ud83d\udc65</span>';
@@ -384,6 +395,14 @@ function nodoHTML(it, nivel) {
   h += '</span>';
 
   h += '<span class="act-acc">';
+  if (it.cronometrable && !it.hecho) {
+    if (it.estado === 'en_curso') {
+      h += '<button title="Pausar" onclick="cronoPausar(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#b8860b">pause</span></button>';
+      h += '<button title="Finalizar y registrar" onclick="cronoFinalizar(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#1f7a32">stop</span></button>';
+    } else {
+      h += '<button title="Iniciar cronómetro" onclick="cronoIniciar(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#1f5fb0">play_arrow</span></button>';
+    }
+  }
   h += '<button title="Agregar dentro" onclick="nuevoHijo(\'' + it.id + '\')">\uff0b</button>';
   h += '<button title="Editar" onclick="editarItem(\'' + it.id + '\')">\u270e</button>';
   h += '<button title="Borrar" onclick="borrarItem(\'' + it.id + '\')">\ud83d\uddd1</button>';
@@ -649,6 +668,28 @@ window.borrarItem = async function (id) {
     toast('Borrado.', 'success');
     await cargar();
   } catch (e) { toast('No se pudo borrar: ' + e.message, 'error'); }
+};
+
+// ── Cronómetro (motor en actividades-core.js) ─────────────
+window.cronoIniciar = async function (id) {
+  if (!CVC.actIniciar) { toast('Falta actividades-core.js', 'error'); return; }
+  try { await CVC.actIniciar(id, { uid: uid, nombre: miNombre }); await cargar(); }
+  catch (e) { toast('No se pudo iniciar: ' + e.message, 'error'); }
+};
+window.cronoPausar = async function (id) {
+  if (!CVC.actPausar) { toast('Falta actividades-core.js', 'error'); return; }
+  try { await CVC.actPausar(id, { uid: uid, nombre: miNombre }); await cargar(); }
+  catch (e) { toast('No se pudo pausar: ' + e.message, 'error'); }
+};
+window.cronoFinalizar = async function (id) {
+  if (!CVC.actFinalizar) { toast('Falta actividades-core.js', 'error'); return; }
+  if (!confirm('Finalizar y registrar el tiempo/honorario de esta actividad?')) return;
+  try {
+    var col = await CVC.actFinalizar(id, { uid: uid, nombre: miNombre });
+    var n = (col && col.length) ? col.length : 0;
+    toast('Finalizada' + (n ? (' \u00b7 honorario para ' + n + ' persona(s)') : ''), 'success');
+    await cargar();
+  } catch (e) { toast('No se pudo finalizar: ' + e.message, 'error'); }
 };
 
 // ── Init ───────────────────────────────────────────────────
