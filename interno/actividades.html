@@ -113,6 +113,12 @@
       <textarea id="itDetalle" class="form-control" rows="2" placeholder="Notas, instrucciones…"></textarea>
     </div>
 
+    <div class="form-group" id="bloquePadre" style="display:none">
+      <label class="form-label">Pertenece a</label>
+      <select id="itPadre" class="form-control" onchange="togglePadreUI()"></select>
+      <div style="font-size:11.5px;color:#7a8a76;margin-top:2px">Mové la actividad a otro proyecto. "Sin proyecto" la deja como tarea suelta. Sus sub-ítems se mueven con ella.</div>
+    </div>
+
     <div class="form-row2" style="display:flex;gap:8px">
       <div style="flex:1">
         <label class="form-label">Inicio</label>
@@ -679,6 +685,14 @@ window.toggleCompraUI = function () {
 window.toggleCronoUI = function () {
   document.getElementById('bloqueMonto').style.display = document.getElementById('itCronometrable').checked ? 'block' : 'none';
 };
+window.togglePadreUI = function () {
+  var bp = document.getElementById('bloquePadre');
+  if (!bp || bp.style.display === 'none') return; // selector oculto: no toca el bloque de alcance
+  var sinProy = (document.getElementById('itPadre').value === '');
+  document.getElementById('bloqueRaiz').style.display = sinProy ? 'block' : 'none';
+  document.getElementById('hijoNota').style.display = sinProy ? 'none' : 'block';
+  if (sinProy) toggleAlcanceUI();
+};
 
 function prepararModal(o) {
   var it = (o.modo === 'editar') ? o.it : null;
@@ -721,6 +735,26 @@ function prepararModal(o) {
   toggleAlcanceUI();
   toggleCompraUI();
   toggleCronoUI();
+
+  // Selector "Pertenece a…": solo al EDITAR, y solo si la pertenencia es representable
+  // (la actividad es de nivel superior, o hija directa de un proyecto de nivel superior).
+  var bp = document.getElementById('bloquePadre');
+  var origParent = it ? (it.parentId || '') : '';
+  var padreRaiz = origParent ? byId[origParent] : null;
+  var padreEsProyTop = !!(padreRaiz && padreRaiz.tipoRaiz === 'proyecto' && !padreRaiz.parentId);
+  var mostrarPadre = (o.modo === 'editar') && !esProyecto && (origParent === '' || padreEsProyTop);
+  if (mostrarPadre) {
+    var proys = items.filter(function (x) { return !x.parentId && x.tipoRaiz === 'proyecto' && x.id !== (it ? it.id : ''); }).sort(byTitulo);
+    var opts = '<option value="">\ud83d\udccb Sin proyecto (suelta)</option>';
+    for (var pi = 0; pi < proys.length; pi++) opts += '<option value="' + proys[pi].id + '">\ud83d\udcc1 ' + esc(proys[pi].titulo) + '</option>';
+    var selP = document.getElementById('itPadre');
+    selP.innerHTML = opts;
+    selP.value = padreEsProyTop ? origParent : '';
+    bp.style.display = 'block';
+  } else {
+    bp.style.display = 'none';
+  }
+  togglePadreUI();
 
   var tipoTxt = esProyecto ? 'proyecto' : (esRecurrente(it || {}) || o.recurrenteDefault ? 'tarea recurrente' : 'actividad');
   var nuevoTxt = esProyecto ? 'Nuevo proyecto' : (o.recurrenteDefault ? 'Nueva tarea recurrente' : (esRoot ? 'Nueva tarea suelta' : 'Nueva sub-actividad'));
@@ -780,28 +814,64 @@ window.guardarItem = async function () {
     var tiempoEstimado = esProyecto ? 0 : (parseInt(document.getElementById('itTiempoEst').value, 10) || 0);
 
     if (id) {
-      // EDITAR
+      // EDITAR (con posible reasignación de proyecto)
       var it = byId[id] || {};
+      var origParent = it.parentId || '';
+      var selVisible = document.getElementById('bloquePadre').style.display !== 'none';
+      var nuevoParentId = selVisible ? (document.getElementById('itPadre').value || '') : origParent;
+      var reparent = (nuevoParentId !== origParent);
+
+      // Estado resultante de jerarquía + herencia (alcance/competencias/tipoRaiz/raizId)
+      var resTipo, resRaiz, resAlc, resComp, resColor;
+      if (nuevoParentId) {
+        // queda como hijo del proyecto/actividad elegido: hereda todo del padre
+        var P = byId[nuevoParentId] || {};
+        resTipo = P.tipoRaiz || 'proyecto';
+        resRaiz = P.raizId || P.id || nuevoParentId;
+        resAlc = P.alcance || 'personal';
+        resComp = (P.competencias || []).slice();
+        resColor = '';
+      } else {
+        // queda como raíz: proyecto solo si ya era un proyecto contenedor de nivel superior
+        resTipo = esProyecto ? 'proyecto' : 'suelto';
+        resRaiz = id;
+        if (document.getElementById('bloqueRaiz').style.display !== 'none') {
+          resAlc = document.getElementById('itAlcance').value || 'personal';
+          resComp = [];
+          if (resAlc === 'asignados') { var chA = document.querySelectorAll('.usr-chk'); for (var ia = 0; ia < chA.length; ia++) { if (chA[ia].checked) resComp.push(chA[ia].value); } }
+        } else {
+          resAlc = it.alcance || 'personal';
+          resComp = (it.competencias || []).slice();
+        }
+        resColor = (resTipo === 'proyecto') ? (document.getElementById('itColor').value || '') : '';
+      }
+
       var upd = Object.assign({}, base);
       upd.recurrencia = recurrencia;
       upd.tiempoEstimado = tiempoEstimado;
-      if (esRoot) {
-        upd.color = color;
-        upd.alcance = alcance;
-        upd.competencias = competencias;
-      }
+      upd.parentId = nuevoParentId;
+      upd.raizId = resRaiz;
+      upd.tipoRaiz = resTipo;
+      upd.alcance = resAlc;
+      upd.competencias = resComp;
+      upd.color = resColor;
       await refAct(id).update(upd);
 
-      // Si cambió el alcance/competencias de una raíz, propagar a descendientes
-      if (esRoot && (it.alcance !== alcance || JSON.stringify(it.competencias || []) !== JSON.stringify(competencias))) {
+      // Cascada a descendientes si cambió jerarquía o herencia
+      var cambio = reparent
+        || (it.alcance !== resAlc)
+        || (JSON.stringify(it.competencias || []) !== JSON.stringify(resComp))
+        || ((it.tipoRaiz || '') !== resTipo)
+        || ((it.raizId || '') !== resRaiz);
+      if (cambio) {
         var desc = descendientes(id);
         if (desc.length) {
           var b = db.batch();
-          for (var d = 0; d < desc.length; d++) { b.update(refAct(desc[d]), { alcance: alcance, competencias: competencias }); }
+          for (var d = 0; d < desc.length; d++) { b.update(refAct(desc[d]), { raizId: resRaiz, tipoRaiz: resTipo, alcance: resAlc, competencias: resComp }); }
           await b.commit();
         }
       }
-      toast('Guardado.', 'success');
+      toast(reparent ? 'Movido y guardado.' : 'Guardado.', 'success');
     } else {
       // CREAR (id pre-generado para fijar raizId en raíces)
       var ref = db.collection('actividades').doc();
