@@ -71,23 +71,19 @@
 <main class="admin-content">
 
   <div class="main-tabs">
-    <button class="main-tab active" onclick="irTab('rutinas',this)">
-      <span class="material-icons" style="font-size:15px">autorenew</span>
-      Rutinas <span class="cnt" id="cntRutinas">0</span>
+    <button class="main-tab" onclick="irTab('mantenimiento',this)" data-tab="mantenimiento">
+      <span class="material-icons" style="font-size:15px">build</span>
+      Mantenimiento <span class="cnt" id="cntMant">0</span>
     </button>
-    <button class="main-tab" onclick="irTab('proyectos',this)">
+    <button class="main-tab" onclick="irTab('proyectos',this)" data-tab="proyectos">
       <span class="material-icons" style="font-size:15px">folder</span>
       Proyectos <span class="cnt" id="cntProyectos">0</span>
     </button>
-    <button class="main-tab" onclick="irTab('sueltos',this)">
-      <span class="material-icons" style="font-size:15px">check_box_outline_blank</span>
-      Sueltos <span class="cnt" id="cntSueltos">0</span>
-    </button>
-    <button class="main-tab" onclick="irTab('compras',this)">
+    <button class="main-tab" onclick="irTab('compras',this)" data-tab="compras">
       <span class="material-icons" style="font-size:15px">shopping_cart</span>
       Compras <span class="cnt" id="cntCompras">0</span>
     </button>
-    <button class="main-tab" onclick="irTab('calendario',this)">
+    <button class="main-tab" onclick="irTab('calendario',this)" data-tab="calendario">
       <span class="material-icons" style="font-size:15px">event</span>
       Calendario <span class="cnt" id="cntCalendario">0</span>
     </button>
@@ -169,11 +165,11 @@
       <div style="font-size:11.5px;color:#7a8a76;margin-top:2px">Se reparte entre quienes la cronometren, según las horas de cada uno.</div>
     </div>
 
-    <!-- Frecuencia: solo para rutinas raíz -->
+    <!-- Frecuencia: cualquier actividad (no proyectos) -->
     <div id="bloqueRutina" style="display:none">
       <div class="form-row2" style="display:flex;gap:8px;margin-top:10px">
         <div style="flex:1">
-          <label class="form-label">Frecuencia (días)</label>
+          <label class="form-label">Repetir cada (días)</label>
           <input type="number" id="itRecurrencia" class="form-control" value="0" min="0">
         </div>
         <div style="flex:1">
@@ -181,7 +177,7 @@
           <input type="number" id="itTiempoEst" class="form-control" value="0" min="0">
         </div>
       </div>
-      <div style="font-size:11.5px;color:#7a8a76;margin-top:2px">Frecuencia 0 = sin repetición. El factor de temporada se aplica solo. Al finalizar, la rutina se reprograma al próximo ciclo.</div>
+      <div style="font-size:11.5px;color:#7a8a76;margin-top:2px">0 = no se repite. Si ponés un número, la actividad es recurrente: al completarla se reprograma sola al próximo ciclo (el factor de temporada se aplica solo).</div>
     </div>
 
     <!-- Bloque solo para items raíz (proyecto/suelto/rutina) -->
@@ -265,7 +261,7 @@ var byId      = {};
 var childrenOf = {};
 var usuarios  = [];
 var expandido = {};   // id -> false para colapsar (default: abierto)
-var tabActual = 'rutinas';
+var tabActual = 'mantenimiento';
 var diagCarga = '';   // diagnóstico de permisos cuando alguna consulta del colaborador falla
 
 // ── Helpers ────────────────────────────────────────────────
@@ -373,46 +369,63 @@ function progresoDe(id) {
   return { hechos: hechos, total: d.length };
 }
 
-function raicesDeTipo(tipo) {
-  return items.filter(function (it) { return (!it.parentId) && it.tipoRaiz === tipo; })
-    .sort(function (a, b) { return String(a.titulo || '').localeCompare(String(b.titulo || '')); });
-}
+function byTitulo(a, b) { return String(a.titulo || '').localeCompare(String(b.titulo || '')); }
+function esProy(it) { return it.tipoRaiz === 'proyecto'; }
+function esRecurrente(it) { return (parseInt(it.recurrencia, 10) || 0) > 0; }
+function rankSem(it) { return (CVC.actSemaforo ? (CVC.actSemaforo(it).rank) : 5); }
 
 // ── Render ─────────────────────────────────────────────────
 function render() {
-  document.getElementById('cntRutinas').textContent   = raicesDeTipo('rutina').length;
-  document.getElementById('cntProyectos').textContent = raicesDeTipo('proyecto').length;
-  document.getElementById('cntSueltos').textContent   = raicesDeTipo('suelto').length;
-  document.getElementById('cntCompras').textContent   = items.filter(function (it) { return it.esCompra && !it.hecho && !esContenedorCompra(it); }).length;
+  document.getElementById('cntMant').textContent       = items.filter(esRecurrente).length;
+  document.getElementById('cntProyectos').textContent  = items.filter(function (it) { return !it.parentId && esProy(it); }).length;
+  document.getElementById('cntCompras').textContent    = items.filter(function (it) { return it.esCompra && !it.hecho && !esContenedorCompra(it); }).length;
   document.getElementById('cntCalendario').textContent = items.filter(conFecha).length;
 
   var z = document.getElementById('zonaContenido');
   var banner = diagCarga ? ('<div class="muted-note" style="border-color:#e0a3a3;color:#a33;background:#fdf3f3">' + esc(diagCarga) + '</div>') : '';
   if (tabActual === 'calendario') { z.innerHTML = banner + renderCalendario(); return; }
   if (tabActual === 'compras') { z.innerHTML = banner + renderCompras(); return; }
+  if (tabActual === 'mantenimiento') { z.innerHTML = banner + renderMantenimiento(); return; }
+  z.innerHTML = banner + renderProyectos();
+}
 
-  var tipo = tabActual === 'rutinas' ? 'rutina' : tabActual === 'proyectos' ? 'proyecto' : 'suelto';
-  var raices = raicesDeTipo(tipo);
-  var html = '';
-
-  html += '<div class="act-toolbar">';
-  if (tipo === 'rutina')   html += '<button class="btn btn-primary" onclick="nuevoRoot(\'rutina\')"><span class="material-icons">add</span> Nueva rutina</button>';
-  if (tipo === 'proyecto') html += '<button class="btn btn-primary" onclick="nuevoRoot(\'proyecto\')"><span class="material-icons">add</span> Nuevo proyecto</button>';
-  if (tipo === 'suelto')   html += '<button class="btn btn-primary" onclick="nuevoRoot(\'suelto\')"><span class="material-icons">add</span> Nuevo suelto</button>';
+// Mantenimiento = todas las actividades recurrentes que el usuario ve, ordenadas por urgencia
+function renderMantenimiento() {
+  var recs = items.filter(esRecurrente);
+  recs.sort(function (a, b) {
+    var ra = rankSem(a), rb = rankSem(b);
+    if (ra !== rb) return ra - rb;
+    return String(a.fechaInicio || '').localeCompare(String(b.fechaInicio || ''));
+  });
+  var html = '<div class="act-toolbar"><button class="btn btn-primary" onclick="nuevoRoot(\'recurrente\')"><span class="material-icons">add</span> Nueva tarea recurrente</button></div>';
+  html += '<div class="muted-note">Tus tareas que se repiten, ordenadas por urgencia (rojas primero). Al completarlas (con reloj o tildando) se reprograman solas al próximo ciclo.</div>';
+  if (!recs.length) return html + '<div class="muted-note">No hay actividades recurrentes por ahora.</div>';
+  html += '<div class="act-list">';
+  for (var i = 0; i < recs.length; i++) html += nodoHTML(recs[i], 0);
   html += '</div>';
+  return html;
+}
 
-  if (tipo === 'rutina') {
-    html += '<div class="muted-note">Las rutinas se repiten según su frecuencia (en días) y se reprograman solas al finalizarlas. También las genera el circuito de limpieza/reservas. Tocá ▶ para cronometrar y registrar el honorario.</div>';
-  }
-
-  if (!raices.length) {
-    html += '<div class="muted-note">No hay ' + (tipo === 'rutina' ? 'rutinas' : tipo === 'proyecto' ? 'proyectos' : 'sueltos') + ' por ahora.</div>';
-  } else {
+// Proyectos = árbol completo: cada proyecto + un grupo "Sueltos" con lo de nivel superior que no es proyecto
+function renderProyectos() {
+  var proys = items.filter(function (it) { return !it.parentId && esProy(it); }).sort(byTitulo);
+  var sueltos = items.filter(function (it) { return !it.parentId && !esProy(it); }).sort(byTitulo);
+  var html = '<div class="act-toolbar">';
+  html += '<button class="btn btn-primary" onclick="nuevoRoot(\'proyecto\')"><span class="material-icons">add</span> Nuevo proyecto</button>';
+  html += '<button class="btn btn-secondary" onclick="nuevoRoot(\'suelto\')"><span class="material-icons">add</span> Tarea suelta</button>';
+  html += '</div>';
+  if (!proys.length && !sueltos.length) return html + '<div class="muted-note">No hay proyectos ni tareas todav\u00eda.</div>';
+  if (proys.length) {
     html += '<div class="act-list">';
-    for (var i = 0; i < raices.length; i++) html += nodoHTML(raices[i], 0);
+    for (var i = 0; i < proys.length; i++) html += nodoHTML(proys[i], 0);
     html += '</div>';
   }
-  z.innerHTML = banner + html;
+  if (sueltos.length) {
+    html += '<div class="cal-head">\ud83d\udccc Sueltos</div><div class="act-list">';
+    for (var j = 0; j < sueltos.length; j++) html += nodoHTML(sueltos[j], 0);
+    html += '</div>';
+  }
+  return html;
 }
 
 function nodoHTML(it, nivel) {
@@ -610,7 +623,7 @@ window.toggleHecho = async function (id) {
       } else {
         if (!confirm('\u00bfDar la tarea por realizada SIN cron\u00f3metro? Queda registrada, pero sin contar tiempo.')) { render(); return; }
         await CVC.actTildar(id, { uid: uid, nombre: miNombre });
-        toast((it.tipoRaiz === 'rutina' && (it.recurrencia || 0) > 0) ? 'Rutina realizada (sin reloj) y reprogramada' : 'Realizada (sin reloj)', 'success');
+        toast(((parseInt(it.recurrencia, 10) || 0) > 0) ? 'Tarea recurrente realizada (sin reloj) y reprogramada' : 'Realizada (sin reloj)', 'success');
       }
       await cargar();
       return;
@@ -633,7 +646,10 @@ window.toggleHecho = async function (id) {
 };
 
 // ── Alta / edición ─────────────────────────────────────────
-window.nuevoRoot = function (tipo) { prepararModal({ modo: 'crear', parentId: '', tipoRaiz: tipo }); };
+window.nuevoRoot = function (tipo) {
+  if (tipo === 'recurrente') { prepararModal({ modo: 'crear', parentId: '', tipoRaiz: 'suelto', recurrenteDefault: true }); return; }
+  prepararModal({ modo: 'crear', parentId: '', tipoRaiz: tipo });
+};
 window.nuevoHijo = function (pid) { prepararModal({ modo: 'crear', parentId: pid }); };
 window.editarItem = function (id) { var it = byId[id]; if (it) prepararModal({ modo: 'editar', it: it }); };
 
@@ -680,27 +696,29 @@ function prepararModal(o) {
   var heredaCompra = (!it && padre && padre.esCompra);
   document.getElementById('itCompra').checked = it ? !!it.esCompra : !!heredaCompra;
   document.getElementById('itCategoria').value = it ? (it.categoriaCompra || 'mantenimiento') : (heredaCompra ? (padre.categoriaCompra || 'mantenimiento') : 'mantenimiento');
-  var cronoDefault = (!it && esRoot && tipoRaiz === 'rutina');
+  var cronoDefault = (!it && !!o.recurrenteDefault);
   document.getElementById('itCronometrable').checked = it ? !!it.cronometrable : cronoDefault;
   document.getElementById('itMonto').value = it ? (it.monto || 0) : 0;
-  document.getElementById('itRecurrencia').value = it ? (it.recurrencia || 0) : 0;
+  document.getElementById('itRecurrencia').value = it ? (it.recurrencia || 0) : (o.recurrenteDefault ? 7 : 0);
   document.getElementById('itTiempoEst').value = it ? (it.tiempoEstimado || 0) : 0;
 
+  var esProyecto = (esRoot && tipoRaiz === 'proyecto');
   // Bloque raíz vs hijo
   document.getElementById('bloqueRaiz').style.display = esRoot ? 'block' : 'none';
   document.getElementById('hijoNota').style.display = esRoot ? 'none' : 'block';
-  document.getElementById('bloqueColor').style.display = (esRoot && tipoRaiz === 'proyecto') ? 'block' : 'none';
-  document.getElementById('bloqueRutina').style.display = (esRoot && tipoRaiz === 'rutina') ? 'block' : 'none';
+  document.getElementById('bloqueColor').style.display = esProyecto ? 'block' : 'none';
+  // Frecuencia: cualquier actividad puede ser recurrente (los proyectos contenedores no)
+  document.getElementById('bloqueRutina').style.display = esProyecto ? 'none' : 'block';
   document.getElementById('itColor').value = (it && it.color) ? it.color : '#2d5a27';
-  var alcanceDefault = (!it && esRoot && tipoRaiz === 'rutina') ? 'equipo' : 'personal';
+  var alcanceDefault = (!it && !!o.recurrenteDefault) ? 'equipo' : 'personal';
   document.getElementById('itAlcance').value = it ? (it.alcance || 'personal') : alcanceDefault;
   renderUsuariosChecklist(it ? (it.competencias || []) : []);
   toggleAlcanceUI();
   toggleCompraUI();
   toggleCronoUI();
 
-  var tipoTxt = tipoRaiz === 'rutina' ? 'rutina' : tipoRaiz === 'proyecto' ? 'proyecto' : 'actividad';
-  var nuevoTxt = tipoRaiz === 'rutina' ? 'Nueva rutina' : tipoRaiz === 'proyecto' ? 'Nuevo proyecto' : (esRoot ? 'Nuevo suelto' : 'Nueva sub-actividad');
+  var tipoTxt = esProyecto ? 'proyecto' : (esRecurrente(it || {}) || o.recurrenteDefault ? 'tarea recurrente' : 'actividad');
+  var nuevoTxt = esProyecto ? 'Nuevo proyecto' : (o.recurrenteDefault ? 'Nueva tarea recurrente' : (esRoot ? 'Nueva tarea suelta' : 'Nueva sub-actividad'));
   document.getElementById('modalItemTitulo').textContent = it ? ('Editar ' + tipoTxt) : nuevoTxt;
 
   abrirModal('modalItem');
@@ -751,10 +769,10 @@ window.guardarItem = async function () {
       raizId = padre.raizId || parentId;
     }
 
-    // Frecuencia y tiempo estimado: solo para rutinas raíz
-    var esRutinaRaiz = esRoot && tipoRaiz === 'rutina';
-    var recurrencia = esRutinaRaiz ? (parseInt(document.getElementById('itRecurrencia').value, 10) || 0) : 0;
-    var tiempoEstimado = esRutinaRaiz ? (parseInt(document.getElementById('itTiempoEst').value, 10) || 0) : 0;
+    // Frecuencia y tiempo estimado: cualquier actividad puede ser recurrente (los proyectos contenedores no)
+    var esProyecto = esRoot && tipoRaiz === 'proyecto';
+    var recurrencia = esProyecto ? 0 : (parseInt(document.getElementById('itRecurrencia').value, 10) || 0);
+    var tiempoEstimado = esProyecto ? 0 : (parseInt(document.getElementById('itTiempoEst').value, 10) || 0);
 
     if (id) {
       // EDITAR
@@ -943,6 +961,11 @@ window.verHistorial = async function (id) {
 };
 
 // ── Init ───────────────────────────────────────────────────
+tabActual = esAdmin ? 'proyectos' : 'mantenimiento';
+(function () {
+  var tb = document.querySelector('.main-tab[data-tab="' + tabActual + '"]');
+  if (tb) tb.classList.add('active');
+})();
 await cargar();
 
 </script>
