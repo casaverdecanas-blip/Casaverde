@@ -83,6 +83,10 @@
       <span class="material-icons" style="font-size:15px">check_box_outline_blank</span>
       Sueltos <span class="cnt" id="cntSueltos">0</span>
     </button>
+    <button class="main-tab" onclick="irTab('compras',this)">
+      <span class="material-icons" style="font-size:15px">shopping_cart</span>
+      Compras <span class="cnt" id="cntCompras">0</span>
+    </button>
     <button class="main-tab" onclick="irTab('calendario',this)">
       <span class="material-icons" style="font-size:15px">event</span>
       Calendario <span class="cnt" id="cntCalendario">0</span>
@@ -217,6 +221,26 @@
     <div id="histBody"></div>
     <div class="modal-foot">
       <button class="btn btn-secondary" onclick="cerrarModal('modalHist')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: reportar / observación al admin (con foto) ═══════════ -->
+<div class="modal-cv" id="modalReporte">
+  <div class="box">
+    <h3><span class="material-icons" style="vertical-align:-5px;color:#b8860b">campaign</span> Reportar al administrador</h3>
+    <p class="muted-note" style="margin-bottom:8px">Actividad: <b id="repTitulo">\u2014</b></p>
+    <div class="form-group">
+      <label class="form-label">Comentario / observación</label>
+      <textarea id="repComentario" class="form-control" rows="4" placeholder="Escrib\u00ed tu comentario para el administrador\u2026" style="resize:vertical"></textarea>
+    </div>
+    <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-secondary" onclick="elegirFotoReporte()"><span class="material-icons" style="font-size:18px;vertical-align:-4px">photo_camera</span> Adjuntar foto</button>
+      <span id="repThumb" style="display:none;font-size:12px;color:#66735f"></span>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="cerrarModal('modalReporte')">Cancelar</button>
+      <button class="btn btn-primary" id="btnEnviarReporte" onclick="enviarReporte(this)"><span class="material-icons" style="font-size:18px;vertical-align:-4px">send</span> Enviar reporte</button>
     </div>
   </div>
 </div>
@@ -359,11 +383,13 @@ function render() {
   document.getElementById('cntRutinas').textContent   = raicesDeTipo('rutina').length;
   document.getElementById('cntProyectos').textContent = raicesDeTipo('proyecto').length;
   document.getElementById('cntSueltos').textContent   = raicesDeTipo('suelto').length;
+  document.getElementById('cntCompras').textContent   = items.filter(function (it) { return it.esCompra && !it.hecho && !esContenedorCompra(it); }).length;
   document.getElementById('cntCalendario').textContent = items.filter(conFecha).length;
 
   var z = document.getElementById('zonaContenido');
   var banner = diagCarga ? ('<div class="muted-note" style="border-color:#e0a3a3;color:#a33;background:#fdf3f3">' + esc(diagCarga) + '</div>') : '';
   if (tabActual === 'calendario') { z.innerHTML = banner + renderCalendario(); return; }
+  if (tabActual === 'compras') { z.innerHTML = banner + renderCompras(); return; }
 
   var tipo = tabActual === 'rutinas' ? 'rutina' : tabActual === 'proyectos' ? 'proyecto' : 'suelto';
   var raices = raicesDeTipo(tipo);
@@ -445,6 +471,7 @@ function nodoHTML(it, nivel) {
     }
   }
   h += '<button title="Agregar dentro" onclick="nuevoHijo(\'' + it.id + '\')">\uff0b</button>';
+  h += '<button title="Reportar / observación al admin" onclick="abrirReporte(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#b8860b">campaign</span></button>';
   if (esAdmin && it.cronometrable) h += '<button title="Historial de realizaciones" onclick="verHistorial(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#5a6a55">history</span></button>';
   h += '<button title="Editar" onclick="editarItem(\'' + it.id + '\')">\u270e</button>';
   h += '<button title="Borrar" onclick="borrarItem(\'' + it.id + '\')">\ud83d\uddd1</button>';
@@ -457,6 +484,65 @@ function nodoHTML(it, nivel) {
 }
 
 function conFecha(it) { return !!(it.fechaVencimiento || it.fechaInicio); }
+
+// ── Compras: lista central de cosas a conseguir ────────────
+function esContenedorCompra(it) {
+  // Una compra con sub-ítems de compra es un contenedor ("Lista materiales"): no se lista, se listan sus ítems
+  return items.some(function (x) { return x.parentId === it.id && x.esCompra; });
+}
+function contextoCompra(it) {
+  var cur = it, guard = 0;
+  while (cur && cur.parentId && byId[cur.parentId] && guard < 30) { cur = byId[cur.parentId]; guard++; }
+  if (cur && cur.id !== it.id) return cur.titulo || '';
+  return '';
+}
+function renderCompras() {
+  var cats = [
+    { key: 'mantenimiento', label: '\ud83d\udd27 Mantenimiento / construcci\u00f3n' },
+    { key: 'comestibles', label: '\ud83c\udf7d\ufe0f Comestibles' },
+    { key: 'insumos', label: '\ud83e\uddf4 Insumos / limpieza' }
+  ];
+  var compras = items.filter(function (it) { return it.esCompra && !esContenedorCompra(it); });
+  if (!compras.length) return '<div class="muted-note">Todav\u00eda no hay nada en la lista de compras. En cualquier actividad marc\u00e1 "es una compra", o agreg\u00e1 \u00edtems dentro de una lista de compras de un proyecto, y aparecen ac\u00e1 agrupados por categor\u00eda.</div>';
+  var pend = compras.filter(function (it) { return !it.hecho; });
+  var html = '<div class="muted-note">Tu lista para conseguir las cosas, en cualquier orden y comercio (dep\u00f3sito, ferreter\u00eda, s\u00faper\u2026). Tild\u00e1 lo que vas consiguiendo y sale de la lista.</div>';
+  var huboPend = false;
+  for (var c = 0; c < cats.length; c++) {
+    var enCat = pend.filter(function (it) { return (it.categoriaCompra || 'mantenimiento') === cats[c].key; });
+    if (!enCat.length) continue;
+    huboPend = true;
+    enCat.sort(function (a, b) { return String(a.titulo || '').localeCompare(String(b.titulo || '')); });
+    html += '<div class="cal-head">' + cats[c].label + ' (' + enCat.length + ')</div>';
+    html += '<div class="act-list">';
+    for (var i = 0; i < enCat.length; i++) {
+      var it = enCat[i];
+      var ctx = contextoCompra(it);
+      html += '<div class="act-row">';
+      html += '<input type="checkbox" class="act-chk" onclick="toggleHecho(\'' + it.id + '\')">';
+      html += '<span class="dot ' + dotClase(it.prioridad) + '"></span>';
+      html += '<span class="act-tit">' + esc(it.titulo) + (ctx ? ' <span style="color:#7a8a76;font-size:12px">\u00b7 ' + esc(ctx) + '</span>' : '') + '</span>';
+      html += '<span class="act-acc"><button title="Editar" onclick="editarItem(\'' + it.id + '\')">\u270e</button></span>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  if (!huboPend) html += '<div class="muted-note">\u2705 No queda nada por conseguir. \u00a1Todo tildado!</div>';
+  var hechas = compras.filter(function (it) { return it.hecho; });
+  if (hechas.length) {
+    hechas.sort(function (a, b) { return String(a.titulo || '').localeCompare(String(b.titulo || '')); });
+    html += '<div class="cal-head">Ya conseguido (' + hechas.length + ')</div>';
+    html += '<div class="act-list">';
+    for (var j = 0; j < hechas.length; j++) {
+      var h2 = hechas[j];
+      html += '<div class="act-row">';
+      html += '<input type="checkbox" class="act-chk" checked onclick="toggleHecho(\'' + h2.id + '\')">';
+      html += '<span class="act-tit done">' + esc(h2.titulo) + '</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  return html;
+}
 
 function renderCalendario() {
   var conF = items.filter(function (it) { return conFecha(it) && !it.hecho; });
@@ -589,8 +675,11 @@ function prepararModal(o) {
   document.getElementById('itVence').value = it ? (it.fechaVencimiento || '') : '';
   document.getElementById('itHora').value = it ? (it.hora || '') : '';
   document.getElementById('itPrioridad').value = it ? (it.prioridad || 'gris') : 'gris';
-  document.getElementById('itCompra').checked = it ? !!it.esCompra : false;
-  document.getElementById('itCategoria').value = it ? (it.categoriaCompra || 'mantenimiento') : 'mantenimiento';
+  // Hijo creado dentro de una lista de compras: hereda "es compra" + categoría
+  var padre = parentId ? byId[parentId] : null;
+  var heredaCompra = (!it && padre && padre.esCompra);
+  document.getElementById('itCompra').checked = it ? !!it.esCompra : !!heredaCompra;
+  document.getElementById('itCategoria').value = it ? (it.categoriaCompra || 'mantenimiento') : (heredaCompra ? (padre.categoriaCompra || 'mantenimiento') : 'mantenimiento');
   var cronoDefault = (!it && esRoot && tipoRaiz === 'rutina');
   document.getElementById('itCronometrable').checked = it ? !!it.cronometrable : cronoDefault;
   document.getElementById('itMonto').value = it ? (it.monto || 0) : 0;
@@ -767,6 +856,53 @@ window.cronoFinalizar = async function (id) {
     toast('Finalizada' + (n ? (' \u00b7 honorario para ' + n + ' persona(s)') : ''), 'success');
     await cargar();
   } catch (e) { toast('No se pudo finalizar: ' + e.message, 'error'); }
+};
+
+// ── Reportar / observación al admin (con foto, como en facturas) ──
+var _repActId = null, _repFoto = null;
+window.abrirReporte = function (id) {
+  _repActId = id; _repFoto = null;
+  var it = byId[id];
+  document.getElementById('repTitulo').textContent = (it && it.titulo) ? it.titulo : 'Actividad';
+  document.getElementById('repComentario').value = '';
+  var th = document.getElementById('repThumb'); th.style.display = 'none'; th.textContent = '';
+  abrirModal('modalReporte');
+};
+window.elegirFotoReporte = function () {
+  if (!CVC.elegirFuenteFoto) { toast('No se pudo abrir la c\u00e1mara/galer\u00eda.', 'error'); return; }
+  CVC.elegirFuenteFoto(function (f) {
+    _repFoto = f;
+    var th = document.getElementById('repThumb');
+    th.style.display = 'inline'; th.textContent = '\ud83d\udcce ' + ((f && f.name) ? f.name : 'foto adjunta');
+  });
+};
+window.enviarReporte = async function (btn) {
+  var comentario = document.getElementById('repComentario').value.trim();
+  if (!comentario && !_repFoto) { toast('Escrib\u00ed un comentario o adjunt\u00e1 una foto.', 'info'); return; }
+  btn.disabled = true; btn.textContent = 'Enviando\u2026';
+  try {
+    var it = byId[_repActId];
+    var nombreAct = (it && it.titulo) ? it.titulo : 'Actividad';
+    var ref = await db.collection('comunicaciones').add({
+      titulo: 'Reporte: ' + nombreAct,
+      audiencia: 'solo_admin', prioridad: 'amarillo',
+      refTipo: 'actividad', refLabel: nombreAct,
+      creadoPor: uid, creadoPorNombre: miNombre,
+      creadoEn: serverTs(), ultimaActividad: serverTs(),
+      ultimoMensaje: (comentario || '\ud83d\udcf7 foto').slice(0, 80)
+    });
+    var imagenUrl = null;
+    if (_repFoto && CVC.subirComprobante) imagenUrl = await CVC.subirComprobante(_repFoto, 'comunicacion', ref.id);
+    await ref.collection('mensajes').add({
+      texto: comentario, imagenUrl: imagenUrl,
+      autorUid: uid, autorNombre: miNombre,
+      creadoEn: serverTs()
+    });
+    if (CVC.avisar) CVC.avisar('comunicacion', 'Reporte de actividad', miNombre + ' report\u00f3 "' + nombreAct + '": ' + (comentario || '\ud83d\udcf7 foto').slice(0, 120), 'admins', uid);
+    toast('Reporte enviado al administrador.', 'success');
+    cerrarModal('modalReporte');
+  } catch (e) { toast('No se pudo enviar: ' + e.message, 'error'); }
+  btn.disabled = false; btn.innerHTML = '<span class="material-icons" style="font-size:18px;vertical-align:-4px">send</span> Enviar reporte';
 };
 
 // ── Historial de realizaciones (admin) ────────────────────
