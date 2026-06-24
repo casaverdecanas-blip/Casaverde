@@ -14,12 +14,17 @@
 <style>
   .act-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
   .act-list { display: flex; flex-direction: column; border: 1px solid #e7ece4; border-radius: 12px; overflow: hidden; background: #fff; }
-  .act-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-bottom: 1px solid #eef2ec; min-height: 44px; }
-  .act-row:last-child { border-bottom: none; }
-  .act-caret { width: 22px; cursor: pointer; color: #7a8a76; font-size: 13px; text-align: center; user-select: none; flex: 0 0 auto; padding: 6px 2px; }
+  .act-item { display: block; }
+  .act-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 9px 10px; border-bottom: 1px solid #eef2ec; min-height: 46px; }
+  .act-row.act-clic { cursor: pointer; }
+  .act-row.act-clic:hover { background: #f7faf6; }
+  .act-row.abierto { background: #f1f6f0; }
+  .act-caret { width: 24px; cursor: pointer; color: #5a6a55; font-size: 19px; text-align: center; user-select: none; flex: 0 0 auto; padding: 4px 0; line-height: 1; }
+  .act-caret.vacio { cursor: default; }
   .act-chk { width: 18px; height: 18px; flex: 0 0 auto; }
-  .act-tit { flex: 1 1 auto; min-width: 120px; font-size: 14px; color: #2a3328; word-break: break-word; }
+  .act-tit { flex: 1 1 auto; min-width: 110px; font-size: 14px; color: #2a3328; word-break: break-word; }
   .act-tit.done { text-decoration: line-through; color: #9aa69a; }
+  .act-more { flex: 0 0 auto; color: #b3beb0; font-size: 17px; padding: 0 4px; user-select: none; }
   .act-badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .act-badge { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: #eef2ee; color: #46583f; white-space: nowrap; }
   .act-badge.rojo { background: #fde8e8; color: #c0271f; }
@@ -27,9 +32,12 @@
   .act-badge.verde { background: #e6f5e6; color: #1f7a32; }
   .act-badge.compra { background: #e9eefb; color: #33508f; }
   .act-badge.curso { background: #e7f0fd; color: #1f5fb0; }
-  .act-acc { display: flex; gap: 2px; flex: 0 0 auto; }
-  .act-acc button { border: none; background: transparent; cursor: pointer; font-size: 16px; padding: 4px 6px; border-radius: 6px; color: #5a6a55; line-height: 1; }
+  .act-detalle { padding: 10px 12px 12px 42px; background: #fafcf9; border-bottom: 1px solid #eef2ec; }
+  .act-desc { font-size: 13px; color: #46583f; margin-bottom: 8px; white-space: pre-wrap; line-height: 1.45; }
+  .act-acc { display: flex; gap: 6px; flex-wrap: wrap; }
+  .act-acc button { border: 1px solid #dfe6dd; background: #fff; cursor: pointer; font-size: 13px; padding: 7px 11px; border-radius: 9px; color: #44513f; line-height: 1; display: inline-flex; align-items: center; gap: 5px; }
   .act-acc button:hover { background: #eef2ee; }
+  .act-children { margin-left: 15px; border-left: 2px solid #e3e9e2; }
   .cal-head { font-weight: 700; font-size: 13px; color: #46583f; margin: 16px 0 6px; }
   .muted-note { font-size: 12.5px; color: #66735f; background: #f4f7f3; border: 1px dashed #cdd8c8; border-radius: 8px; padding: 8px 11px; margin-bottom: 12px; }
   .usr-list { display: flex; flex-direction: column; gap: 6px; max-height: 190px; overflow: auto; border: 1px solid #e3e8e0; border-radius: 8px; padding: 8px; }
@@ -266,7 +274,8 @@ var items     = [];
 var byId      = {};
 var childrenOf = {};
 var usuarios  = [];
-var expandido = {};   // id -> false para colapsar (default: abierto)
+var expandido = {};   // id -> false para colapsar las ramas hijas (default: abierto)
+var detalleAbierto = {};  // id -> true: panel de detalle/acciones desplegado (default: cerrado)
 var tabActual = 'mantenimiento';
 var diagCarga = '';   // diagnóstico de permisos cuando alguna consulta del colaborador falla
 
@@ -438,22 +447,21 @@ function nodoHTML(it, nivel) {
   var hijos = hijosDe(it.id);
   var tiene = hijos.length > 0;
   var abierto = expandido[it.id] !== false;
-  var indent = Math.min(nivel, 4) * 18;
+  var det = !!detalleAbierto[it.id];
   var sem = (CVC.actSemaforo && !it.hecho) ? CVC.actSemaforo(it) : { color: 'gris', label: '' };
+  var esRec = (parseInt(it.recurrencia, 10) || 0) > 0;
 
-  var h = '';
-  h += '<div class="act-row" style="padding-left:' + (indent + 10) + 'px">';
-  h += '<span class="act-caret" onclick="toggleExp(\'' + it.id + '\')">' + (tiene ? (abierto ? '\u25be' : '\u25b8') : '') + '</span>';
-  h += '<input type="checkbox" class="act-chk" ' + (it.hecho ? 'checked' : '') + ' onclick="toggleHecho(\'' + it.id + '\')">';
+  var h = '<div class="act-item">';
+  // Fila compacta. Clic en la fila abre/cierra el detalle (el triángulo y el check no propagan).
+  h += '<div class="act-row act-clic' + (det ? ' abierto' : '') + '" onclick="toggleDetalle(\'' + it.id + '\')">';
+  if (tiene) h += '<span class="act-caret" onclick="event.stopPropagation();toggleExp(\'' + it.id + '\')">' + (abierto ? '\u25be' : '\u25b8') + '</span>';
+  else h += '<span class="act-caret vacio"></span>';
+  h += '<input type="checkbox" class="act-chk" ' + (it.hecho ? 'checked' : '') + ' onclick="event.stopPropagation();toggleHecho(\'' + it.id + '\')">';
   h += '<span class="dot ' + dotClase(sem.color) + '"></span>';
-  var titClick = tiene ? (' onclick="toggleExp(\'' + it.id + '\')" style="cursor:pointer"') : '';
-  h += '<span class="act-tit' + (it.hecho ? ' done' : '') + '"' + titClick + '>' + esc(it.titulo) + '</span>';
+  h += '<span class="act-tit' + (it.hecho ? ' done' : '') + '">' + esc(it.titulo) + '</span>';
 
   h += '<span class="act-badges">';
-  var esRec = (parseInt(it.recurrencia, 10) || 0) > 0;
-  // Semáforo: badge de color en estados activos (rojo/amarillo/verde). En gris el estado lo da la fecha.
   if (!it.hecho && sem && sem.color !== 'gris' && sem.label) h += '<span class="act-badge ' + sem.color + '">' + esc(sem.label) + '</span>';
-  // Fecha de referencia del semáforo: próx (descansando) / límite (en plazo) / venció (atrasada)
   if (!it.hecho && sem && sem.fecha) {
     var pref = (sem.fechaTipo === 'prox') ? 'pr\u00f3x ' : (sem.fechaTipo === 'vencio') ? 'venci\u00f3 ' : 'l\u00edmite ';
     h += '<span class="act-badge">\ud83d\uddd3 ' + pref + fmtDMY(sem.fecha) + (it.hora ? ' ' + it.hora : '') + '</span>';
@@ -462,48 +470,55 @@ function nodoHTML(it, nivel) {
   } else if (!esRec && it.fechaInicio && !it.ultimaRealizacion) {
     h += '<span class="act-badge">\ud83d\uddd3 ' + fmtDMY(it.fechaInicio) + (it.hora ? ' ' + it.hora : '') + '</span>';
   }
-  // Última realización (fecha + quién)
   if (it.ultimaRealizacion) {
     var quien = it.ultimaRealizacionPor ? (' \u00b7 ' + esc(it.ultimaRealizacionPor)) : '';
     h += '<span class="act-badge">\u21bb \u00falt ' + fmtDMY(it.ultimaRealizacion) + quien + '</span>';
   }
-  // Progreso
   var pr = progresoDe(it.id);
   if (pr) h += '<span class="act-badge">\u2713 ' + pr.hechos + '/' + pr.total + '</span>';
-  // Compra
   if (it.esCompra) h += '<span class="act-badge compra">\ud83d\uded2 ' + esc(it.categoriaCompra || 'compra') + '</span>';
-  // En curso
   if (it.estado === 'en_curso') {
     var quienes = (it.sesionesActivas || []).map(function (s) { return s.nombre || ''; }).filter(Boolean).join(', ');
     h += '<span class="act-badge curso">\u23f1 en curso' + (quienes ? ' (' + esc(quienes) + ')' : '') + '</span>';
   }
-  // Alcance (solo raíz)
   if (!it.parentId) {
     if (it.alcance === 'equipo') h += '<span class="act-badge">\ud83d\udc65</span>';
     else if (it.alcance === 'asignados') h += '<span class="act-badge">\ud83d\udccc ' + ((it.competencias || []).length) + '</span>';
     else h += '<span class="act-badge">\ud83d\udd12</span>';
   }
   h += '</span>';
+  h += '<span class="act-more">' + (det ? '\u25b4' : '\u22ef') + '</span>';
+  h += '</div>'; // act-row
 
-  h += '<span class="act-acc">';
-  if (it.cronometrable && !it.hecho) {
-    if (it.estado === 'en_curso') {
-      h += '<button title="Pausar" onclick="cronoPausar(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#b8860b">pause</span></button>';
-      h += '<button title="Finalizar y registrar" onclick="cronoFinalizar(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#1f7a32">stop</span></button>';
-    } else {
-      h += '<button title="Iniciar cronómetro" onclick="cronoIniciar(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#1f5fb0">play_arrow</span></button>';
+  // Panel de detalle + acciones (solo al hacer clic en el ítem)
+  if (det) {
+    h += '<div class="act-detalle">';
+    if (it.detalle) h += '<div class="act-desc">' + esc(it.detalle) + '</div>';
+    h += '<div class="act-acc">';
+    if (it.cronometrable && !it.hecho) {
+      if (it.estado === 'en_curso') {
+        h += '<button onclick="cronoPausar(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#b8860b">pause</span> Pausar</button>';
+        h += '<button onclick="cronoFinalizar(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#1f7a32">stop</span> Finalizar</button>';
+      } else {
+        h += '<button onclick="cronoIniciar(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#1f5fb0">play_arrow</span> Iniciar</button>';
+      }
     }
+    h += '<button onclick="nuevoHijo(\'' + it.id + '\')">\uff0b Sub-\u00edtem</button>';
+    h += '<button onclick="abrirReporte(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#b8860b">campaign</span> Reportar</button>';
+    if (esAdmin && it.cronometrable) h += '<button onclick="verHistorial(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#5a6a55">history</span> Historial</button>';
+    h += '<button onclick="editarItem(\'' + it.id + '\')">\u270e Editar</button>';
+    if (esAdmin) h += '<button onclick="borrarItem(\'' + it.id + '\')">\ud83d\uddd1 Borrar</button>';
+    h += '</div>';
+    h += '</div>';
   }
-  h += '<button title="Agregar dentro" onclick="nuevoHijo(\'' + it.id + '\')">\uff0b</button>';
-  h += '<button title="Reportar / observación al admin" onclick="abrirReporte(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#b8860b">campaign</span></button>';
-  if (esAdmin && it.cronometrable) h += '<button title="Historial de realizaciones" onclick="verHistorial(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#5a6a55">history</span></button>';
-  h += '<button title="Editar" onclick="editarItem(\'' + it.id + '\')">\u270e</button>';
-  h += '<button title="Borrar" onclick="borrarItem(\'' + it.id + '\')">\ud83d\uddd1</button>';
-  h += '</span>';
 
-  h += '</div>';
-
-  if (tiene && abierto) { for (var i = 0; i < hijos.length; i++) h += nodoHTML(hijos[i], nivel + 1); }
+  // Hijos anidados, con línea de árbol
+  if (tiene && abierto) {
+    h += '<div class="act-children">';
+    for (var i = 0; i < hijos.length; i++) h += nodoHTML(hijos[i], nivel + 1);
+    h += '</div>';
+  }
+  h += '</div>'; // act-item
   return h;
 }
 
@@ -617,6 +632,11 @@ window.irTab = function (t, btn) {
 
 window.toggleExp = function (id) {
   expandido[id] = (expandido[id] === false) ? true : false;
+  render();
+};
+
+window.toggleDetalle = function (id) {
+  detalleAbierto[id] = !detalleAbierto[id];
   render();
 };
 
