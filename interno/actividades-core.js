@@ -67,11 +67,13 @@
   }
 
   // ── Semáforo (regla nueva) ──────────────────────────────
-  //  fechaInicio = fecha de PRÓXIMA realización.
-  //  gris  : próxima en el futuro (recién hecha, descansando, fuera de plazo)
-  //  verde : ya en plazo, primera mitad del ciclo
-  //  amarillo : segunda mitad del ciclo
-  //  rojo  : pasó el ciclo completo (atrasada), o vencimiento/check-in encima
+  //  fechaInicio = cuándo la actividad ENTRA en plazo (deja de descansar).
+  //  El límite (cuándo se pone roja) = fechaInicio + ciclo.
+  //  gris  : todavía descansando (fechaInicio en el futuro) -> muestra "próx"
+  //  verde : ya en plazo, primera mitad del ciclo -> muestra "límite"
+  //  amarillo : segunda mitad del ciclo -> muestra "límite"
+  //  rojo  : pasó el límite (atrasada) -> muestra "venció"; o vencimiento/check-in encima
+  //  Devuelve { color, label, rank, fecha, fechaTipo } (fechaTipo: prox|limite|vencio).
   //  No recurrente: usa la prioridad elegida a mano.
   function _diasEntre(isoA, isoB) {
     var a = new Date(String(isoA).slice(0, 10) + 'T00:00:00');
@@ -79,33 +81,42 @@
     if (isNaN(a.getTime()) || isNaN(b.getTime())) return null;
     return Math.round((a - b) / 86400000);
   }
+  function _sumarISO(iso, dias) {
+    var d = new Date(String(iso).slice(0, 10) + 'T00:00:00');
+    if (isNaN(d.getTime())) return iso;
+    d.setDate(d.getDate() + (dias || 0));
+    var m = String(d.getMonth() + 1); if (m.length < 2) m = '0' + m;
+    var dd = String(d.getDate()); if (dd.length < 2) dd = '0' + dd;
+    return d.getFullYear() + '-' + m + '-' + dd;
+  }
   function _porPrioridad(p) {
-    if (p === 'rojo') return { color: 'rojo', label: '', rank: 1 };
-    if (p === 'amarillo') return { color: 'amarillo', label: '', rank: 2 };
-    if (p === 'verde') return { color: 'verde', label: '', rank: 3 };
-    return { color: 'gris', label: '', rank: 5 };
+    if (p === 'rojo') return { color: 'rojo', label: '', rank: 1, fecha: '', fechaTipo: '' };
+    if (p === 'amarillo') return { color: 'amarillo', label: '', rank: 2, fecha: '', fechaTipo: '' };
+    if (p === 'verde') return { color: 'verde', label: '', rank: 3, fecha: '', fechaTipo: '' };
+    return { color: 'gris', label: '', rank: 5, fecha: '', fechaTipo: '' };
   }
   function actSemaforo(t) {
-    if (!t) return { color: 'gris', label: '', rank: 5 };
+    if (!t) return { color: 'gris', label: '', rank: 5, fecha: '', fechaTipo: '' };
     var hoyISO = sumarDiasISO(0);
     // 1) Vencimiento duro (límite / limpieza antes de check-in): rojo al acercarse o pasar
     var venc = t.fechaCheckIn || t.fechaVencimiento;
     if (venc) {
       var d2 = _diasEntre(venc, hoyISO);
       if (d2 !== null) {
-        if (d2 <= 2) return { color: 'rojo', label: (d2 < 0 ? ('Vencido ' + Math.abs(d2) + 'd') : (d2 === 0 ? 'Vence hoy' : ('Vence en ' + d2 + 'd'))), rank: -100 + Math.min(d2, 0) };
-        return { color: 'amarillo', label: 'Vence en ' + d2 + 'd', rank: 2 };
+        if (d2 <= 2) return { color: 'rojo', label: (d2 < 0 ? ('Atrasada ' + Math.abs(d2) + 'd') : (d2 === 0 ? 'Vence hoy' : ('Vence en ' + d2 + 'd'))), rank: -100 + Math.min(d2, 0), fecha: venc, fechaTipo: (d2 < 0 ? 'vencio' : 'limite') };
+        return { color: 'amarillo', label: 'Vence en ' + d2 + 'd', rank: 2, fecha: venc, fechaTipo: 'limite' };
       }
     }
     var ciclo = actCiclo(t);
-    // 2) Recurrente
+    // 2) Recurrente: fechaInicio = cuándo entra en plazo; el límite (rojo) es fechaInicio + ciclo
     if (ciclo > 0 && t.fechaInicio) {
       var el = _diasEntre(hoyISO, t.fechaInicio);
       if (el === null) return _porPrioridad(t.prioridad);
-      if (el < 0) return { color: 'gris', label: 'Próx. ' + Math.abs(el) + 'd', rank: 5 };
-      if (el > ciclo) return { color: 'rojo', label: 'Atraso ' + (el - ciclo) + 'd', rank: -(el - ciclo) };
-      if (el >= ciclo / 2) return { color: 'amarillo', label: 'Quedan ' + Math.max(0, ciclo - el) + 'd', rank: 2 };
-      return { color: 'verde', label: 'A tiempo', rank: 3 };
+      var limite = _sumarISO(t.fechaInicio, ciclo);
+      if (el < 0) return { color: 'gris', label: '', rank: 5, fecha: t.fechaInicio, fechaTipo: 'prox' };
+      if (el > ciclo) return { color: 'rojo', label: 'Atrasada ' + (el - ciclo) + 'd', rank: -(el - ciclo), fecha: limite, fechaTipo: 'vencio' };
+      if (el >= ciclo / 2) { var falta = ciclo - el; return { color: 'amarillo', label: (falta <= 0 ? 'Vence hoy' : ('Vence en ' + falta + 'd')), rank: 2, fecha: limite, fechaTipo: 'limite' }; }
+      return { color: 'verde', label: 'A tiempo', rank: 3, fecha: limite, fechaTipo: 'limite' };
     }
     // 3) No recurrente (con o sin fecha): prioridad manual
     return _porPrioridad(t.prioridad);
