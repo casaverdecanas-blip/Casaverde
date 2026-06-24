@@ -21,10 +21,10 @@
   .act-row.abierto { background: #f1f6f0; }
   .act-caret { width: 24px; cursor: pointer; color: #5a6a55; font-size: 19px; text-align: center; user-select: none; flex: 0 0 auto; padding: 4px 0; line-height: 1; }
   .act-caret.vacio { cursor: default; }
+  .act-caret.tiene { color: #2d5a27; }
   .act-chk { width: 18px; height: 18px; flex: 0 0 auto; }
   .act-tit { flex: 1 1 auto; min-width: 110px; font-size: 14px; color: #2a3328; word-break: break-word; }
   .act-tit.done { text-decoration: line-through; color: #9aa69a; }
-  .act-more { flex: 0 0 auto; color: #b3beb0; font-size: 17px; padding: 0 4px; user-select: none; }
   .act-badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .act-badge { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: #eef2ee; color: #46583f; white-space: nowrap; }
   .act-badge.rojo { background: #fde8e8; color: #c0271f; }
@@ -37,7 +37,9 @@
   .act-acc { display: flex; gap: 6px; flex-wrap: wrap; }
   .act-acc button { border: 1px solid #dfe6dd; background: #fff; cursor: pointer; font-size: 13px; padding: 7px 11px; border-radius: 9px; color: #44513f; line-height: 1; display: inline-flex; align-items: center; gap: 5px; }
   .act-acc button:hover { background: #eef2ee; }
-  .act-children { margin-left: 15px; border-left: 2px solid #e3e9e2; }
+  .act-children { margin-left: 11px; padding-left: 16px; border-left: 2px solid #aebeaa; }
+  .act-children > .act-item { position: relative; }
+  .act-children > .act-item::before { content: ''; position: absolute; left: -16px; top: 22px; width: 14px; border-top: 2px solid #aebeaa; }
   .cal-head { font-weight: 700; font-size: 13px; color: #46583f; margin: 16px 0 6px; }
   .muted-note { font-size: 12.5px; color: #66735f; background: #f4f7f3; border: 1px dashed #cdd8c8; border-radius: 8px; padding: 8px 11px; margin-bottom: 12px; }
   .usr-list { display: flex; flex-direction: column; gap: 6px; max-height: 190px; overflow: auto; border: 1px solid #e3e8e0; border-radius: 8px; padding: 8px; }
@@ -158,12 +160,9 @@
       </label>
     </div>
     <div class="form-group" id="bloqueCompra" style="display:none">
-      <label class="form-label">Categoría de compra</label>
-      <select id="itCategoria" class="form-control">
-        <option value="mantenimiento">🔧 Mantenimiento / construcción</option>
-        <option value="comestibles">🍽 Comestibles</option>
-        <option value="insumos">🧴 Insumos limpieza / higiene</option>
-      </select>
+      <label class="form-label">Proveedor (dónde se consigue)</label>
+      <select id="itCategoria" class="form-control"></select>
+      <div style="font-size:11.5px;color:#7a8a76;margin-top:2px">La lista de compras se agrupa por proveedor. El admin edita la lista desde la pestaña Compras.</div>
     </div>
 
     <div class="form-group" style="margin-top:10px">
@@ -255,6 +254,23 @@
   </div>
 </div>
 
+<!-- ══ MODAL: proveedores de compras (admin) ═══════════════════════ -->
+<div class="modal-cv" id="modalProveedores">
+  <div class="box">
+    <h3><span class="material-icons" style="vertical-align:-5px">storefront</span> Proveedores de compras</h3>
+    <p class="muted-note" style="margin-bottom:8px">Los lugares donde conseguís cosas (Supermercado, Ferretería…). La lista de compras se agrupa por estos.</p>
+    <div id="provLista"></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <input type="text" id="provNuevo" class="form-control" placeholder="Nuevo proveedor…">
+      <button class="btn btn-secondary" onclick="agregarProveedor()">Agregar</button>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="cerrarModal('modalProveedores')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarProveedores()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 
 // ── Arranque ───────────────────────────────────────────────
@@ -274,10 +290,11 @@ var items     = [];
 var byId      = {};
 var childrenOf = {};
 var usuarios  = [];
-var expandido = {};   // id -> false para colapsar las ramas hijas (default: abierto)
-var detalleAbierto = {};  // id -> true: panel de detalle/acciones desplegado (default: cerrado)
+var abierto = {};   // id -> true: actividad desplegada (detalle + acciones + subítems). Default: contraído.
 var tabActual = 'mantenimiento';
 var diagCarga = '';   // diagnóstico de permisos cuando alguna consulta del colaborador falla
+var proveedoresDefault = ['Supermercado', 'Ferreter\u00eda', 'Farmacia', 'Vivero', 'Otros'];
+var proveedores = proveedoresDefault.slice();   // lista de proveedores de compras (editable por admin)
 
 // ── Helpers ────────────────────────────────────────────────
 function esc(s) { return (CVC.escapeHtml ? CVC.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s)); }
@@ -296,6 +313,14 @@ function dotClase(p) {
   if (p === 'amarillo') return 'dot-amarillo';
   if (p === 'verde') return 'dot-verde';
   return 'dot-gris';
+}
+
+// ── Proveedores de compras (config editable por admin) ──
+async function cargarProveedores() {
+  try {
+    var d = await db.collection('config').doc('compras_proveedores').get();
+    if (d.exists && d.data() && Array.isArray(d.data().lista) && d.data().lista.length) proveedores = d.data().lista.slice();
+  } catch (e) { /* usa los default */ }
 }
 
 // ── Carga (respetando reglas: admin = todo; colaborador = 3 consultas) ──
@@ -446,16 +471,14 @@ function renderProyectos() {
 function nodoHTML(it, nivel) {
   var hijos = hijosDe(it.id);
   var tiene = hijos.length > 0;
-  var abierto = expandido[it.id] !== false;
-  var det = !!detalleAbierto[it.id];
+  var ab = !!abierto[it.id];   // un solo estado: contraído por defecto
   var sem = (CVC.actSemaforo && !it.hecho) ? CVC.actSemaforo(it) : { color: 'gris', label: '' };
   var esRec = (parseInt(it.recurrencia, 10) || 0) > 0;
 
   var h = '<div class="act-item">';
-  // Fila compacta. Clic en la fila abre/cierra el detalle (el triángulo y el check no propagan).
-  h += '<div class="act-row act-clic' + (det ? ' abierto' : '') + '" onclick="toggleDetalle(\'' + it.id + '\')">';
-  if (tiene) h += '<span class="act-caret" onclick="event.stopPropagation();toggleExp(\'' + it.id + '\')">' + (abierto ? '\u25be' : '\u25b8') + '</span>';
-  else h += '<span class="act-caret vacio"></span>';
+  // Fila compacta. Un clic en la fila (menos el check) despliega detalle + acciones + subítems.
+  h += '<div class="act-row act-clic' + (ab ? ' abierto' : '') + '" onclick="toggleAbierto(\'' + it.id + '\')">';
+  h += '<span class="act-caret' + (tiene ? ' tiene' : '') + '">' + (ab ? '\u25be' : '\u25b8') + '</span>';
   h += '<input type="checkbox" class="act-chk" ' + (it.hecho ? 'checked' : '') + ' onclick="event.stopPropagation();toggleHecho(\'' + it.id + '\')">';
   h += '<span class="dot ' + dotClase(sem.color) + '"></span>';
   h += '<span class="act-tit' + (it.hecho ? ' done' : '') + '">' + esc(it.titulo) + '</span>';
@@ -487,11 +510,10 @@ function nodoHTML(it, nivel) {
     else h += '<span class="act-badge">\ud83d\udd12</span>';
   }
   h += '</span>';
-  h += '<span class="act-more">' + (det ? '\u25b4' : '\u22ef') + '</span>';
   h += '</div>'; // act-row
 
-  // Panel de detalle + acciones (solo al hacer clic en el ítem)
-  if (det) {
+  // Al desplegar (un solo clic): detalle + acciones + subítems
+  if (ab) {
     h += '<div class="act-detalle">';
     if (it.detalle) h += '<div class="act-desc">' + esc(it.detalle) + '</div>';
     h += '<div class="act-acc">';
@@ -510,13 +532,12 @@ function nodoHTML(it, nivel) {
     if (esAdmin) h += '<button onclick="borrarItem(\'' + it.id + '\')">\ud83d\uddd1 Borrar</button>';
     h += '</div>';
     h += '</div>';
-  }
-
-  // Hijos anidados, con línea de árbol
-  if (tiene && abierto) {
-    h += '<div class="act-children">';
-    for (var i = 0; i < hijos.length; i++) h += nodoHTML(hijos[i], nivel + 1);
-    h += '</div>';
+    // Subítems (en la misma acción)
+    if (tiene) {
+      h += '<div class="act-children">';
+      for (var i = 0; i < hijos.length; i++) h += nodoHTML(hijos[i], nivel + 1);
+      h += '</div>';
+    }
   }
   h += '</div>'; // act-item
   return h;
@@ -536,47 +557,47 @@ function contextoCompra(it) {
   return '';
 }
 function renderCompras() {
-  var cats = [
-    { key: 'mantenimiento', label: '\ud83d\udd27 Mantenimiento / construcci\u00f3n' },
-    { key: 'comestibles', label: '\ud83c\udf7d\ufe0f Comestibles' },
-    { key: 'insumos', label: '\ud83e\uddf4 Insumos / limpieza' }
-  ];
   var compras = items.filter(function (it) { return it.esCompra && !esContenedorCompra(it); });
-  if (!compras.length) return '<div class="muted-note">Todav\u00eda no hay nada en la lista de compras. En cualquier actividad marc\u00e1 "es una compra", o agreg\u00e1 \u00edtems dentro de una lista de compras de un proyecto, y aparecen ac\u00e1 agrupados por categor\u00eda.</div>';
+  var toolbar = '<div class="act-toolbar">' + (esAdmin ? '<button class="btn btn-secondary" onclick="abrirProveedores()"><span class="material-icons">storefront</span> Proveedores</button>' : '') + '</div>';
+  if (!compras.length) return toolbar + '<div class="muted-note">Todav\u00eda no hay nada en la lista de compras. En cualquier actividad marc\u00e1 "es una compra" (eleg\u00eds el proveedor), o agreg\u00e1 \u00edtems dentro de una lista de compras de un proyecto.</div>';
   var pend = compras.filter(function (it) { return !it.hecho; });
-  var html = '<div class="muted-note">Tu lista para conseguir las cosas, en cualquier orden y comercio (dep\u00f3sito, ferreter\u00eda, s\u00faper\u2026). Tild\u00e1 lo que vas consiguiendo y sale de la lista.</div>';
-  var huboPend = false;
-  for (var c = 0; c < cats.length; c++) {
-    var enCat = pend.filter(function (it) { return (it.categoriaCompra || 'mantenimiento') === cats[c].key; });
-    if (!enCat.length) continue;
-    huboPend = true;
-    enCat.sort(function (a, b) { return String(a.titulo || '').localeCompare(String(b.titulo || '')); });
-    html += '<div class="cal-head">' + cats[c].label + ' (' + enCat.length + ')</div>';
-    html += '<div class="act-list">';
-    for (var i = 0; i < enCat.length; i++) {
-      var it = enCat[i];
+  var html = toolbar + '<div class="muted-note">Tu lista para conseguir las cosas, agrupada por proveedor. Tild\u00e1 lo que vas consiguiendo (en el dep\u00f3sito, la ferreter\u00eda, el s\u00faper\u2026) y sale de la lista.</div>';
+
+  function grupo(titulo, lista) {
+    lista.sort(function (a, b) { return String(a.titulo || '').localeCompare(String(b.titulo || '')); });
+    var g = '<div class="cal-head">\ud83d\uded2 ' + esc(titulo) + ' (' + lista.length + ')</div><div class="act-list">';
+    for (var i = 0; i < lista.length; i++) {
+      var it = lista[i];
       var ctx = contextoCompra(it);
-      html += '<div class="act-row">';
-      html += '<input type="checkbox" class="act-chk" onclick="toggleHecho(\'' + it.id + '\')">';
-      html += '<span class="dot ' + dotClase(it.prioridad) + '"></span>';
-      html += '<span class="act-tit">' + esc(it.titulo) + (ctx ? ' <span style="color:#7a8a76;font-size:12px">\u00b7 ' + esc(ctx) + '</span>' : '') + '</span>';
-      html += '<span class="act-acc"><button title="Editar" onclick="editarItem(\'' + it.id + '\')">\u270e</button></span>';
-      html += '</div>';
+      g += '<div class="act-row">';
+      g += '<input type="checkbox" class="act-chk" onclick="toggleHecho(\'' + it.id + '\')">';
+      g += '<span class="dot ' + dotClase(it.prioridad) + '"></span>';
+      g += '<span class="act-tit">' + esc(it.titulo) + (ctx ? ' <span style="color:#7a8a76;font-size:12px">\u00b7 ' + esc(ctx) + '</span>' : '') + '</span>';
+      g += '<span class="act-acc"><button onclick="editarItem(\'' + it.id + '\')">\u270e Editar</button></span>';
+      g += '</div>';
     }
-    html += '</div>';
+    g += '</div>';
+    return g;
   }
+
+  var usados = {}, huboPend = false;
+  for (var c = 0; c < proveedores.length; c++) {
+    var prov = proveedores[c];
+    var enProv = pend.filter(function (it) { return (it.categoriaCompra || '') === prov; });
+    for (var k = 0; k < enProv.length; k++) usados[enProv[k].id] = true;
+    if (enProv.length) { huboPend = true; html += grupo(prov, enProv); }
+  }
+  var resto = pend.filter(function (it) { return !usados[it.id]; });
+  if (resto.length) { huboPend = true; html += grupo('Sin proveedor', resto); }
   if (!huboPend) html += '<div class="muted-note">\u2705 No queda nada por conseguir. \u00a1Todo tildado!</div>';
+
   var hechas = compras.filter(function (it) { return it.hecho; });
   if (hechas.length) {
     hechas.sort(function (a, b) { return String(a.titulo || '').localeCompare(String(b.titulo || '')); });
-    html += '<div class="cal-head">Ya conseguido (' + hechas.length + ')</div>';
-    html += '<div class="act-list">';
+    html += '<div class="cal-head">Ya conseguido (' + hechas.length + ')</div><div class="act-list">';
     for (var j = 0; j < hechas.length; j++) {
       var h2 = hechas[j];
-      html += '<div class="act-row">';
-      html += '<input type="checkbox" class="act-chk" checked onclick="toggleHecho(\'' + h2.id + '\')">';
-      html += '<span class="act-tit done">' + esc(h2.titulo) + '</span>';
-      html += '</div>';
+      html += '<div class="act-row"><input type="checkbox" class="act-chk" checked onclick="toggleHecho(\'' + h2.id + '\')"><span class="act-tit done">' + esc(h2.titulo) + '</span></div>';
     }
     html += '</div>';
   }
@@ -630,13 +651,8 @@ window.irTab = function (t, btn) {
   render();
 };
 
-window.toggleExp = function (id) {
-  expandido[id] = (expandido[id] === false) ? true : false;
-  render();
-};
-
-window.toggleDetalle = function (id) {
-  detalleAbierto[id] = !detalleAbierto[id];
+window.toggleAbierto = function (id) {
+  abierto[id] = !abierto[id];
   render();
 };
 
@@ -730,11 +746,19 @@ function prepararModal(o) {
   document.getElementById('itVence').value = it ? (it.fechaVencimiento || '') : '';
   document.getElementById('itHora').value = it ? (it.hora || '') : '';
   document.getElementById('itPrioridad').value = it ? (it.prioridad || 'gris') : 'gris';
-  // Hijo creado dentro de una lista de compras: hereda "es compra" + categoría
+  // Hijo creado dentro de una lista de compras: hereda "es compra" + proveedor
   var padre = parentId ? byId[parentId] : null;
   var heredaCompra = (!it && padre && padre.esCompra);
   document.getElementById('itCompra').checked = it ? !!it.esCompra : !!heredaCompra;
-  document.getElementById('itCategoria').value = it ? (it.categoriaCompra || 'mantenimiento') : (heredaCompra ? (padre.categoriaCompra || 'mantenimiento') : 'mantenimiento');
+  // Selector de proveedor: opciones desde la lista (+ valor antiguo del ítem si no está)
+  var catVal = it ? (it.categoriaCompra || '') : (heredaCompra ? (padre.categoriaCompra || '') : (proveedores[0] || ''));
+  var copts = '';
+  if (catVal && proveedores.indexOf(catVal) === -1) copts += '<option value="' + esc(catVal) + '">' + esc(catVal) + '</option>';
+  for (var pc = 0; pc < proveedores.length; pc++) copts += '<option value="' + esc(proveedores[pc]) + '">' + esc(proveedores[pc]) + '</option>';
+  copts += '<option value="">Sin proveedor</option>';
+  var selCat = document.getElementById('itCategoria');
+  selCat.innerHTML = copts;
+  selCat.value = catVal;
   var cronoDefault = (!it && !!o.recurrenteDefault);
   document.getElementById('itCronometrable').checked = it ? !!it.cronometrable : cronoDefault;
   document.getElementById('itMonto').value = it ? (it.monto || 0) : 0;
@@ -913,7 +937,7 @@ window.guardarItem = async function () {
         cabana: null, reservaId: null, sesionesActivas: []
       });
       await ref.set(doc);
-      if (parentId) { expandido[parentId] = true; } // dejar el padre desplegado para ver el nuevo sub-ítem
+      if (parentId) { abierto[parentId] = true; } // dejar el padre desplegado para ver el nuevo sub-ítem
 
       // Aviso a las personas asignadas (si corresponde)
       if (alcance === 'asignados' && competencias.length && CVC.avisar) {
@@ -1018,6 +1042,47 @@ window.enviarReporte = async function (btn) {
   btn.disabled = false; btn.innerHTML = '<span class="material-icons" style="font-size:18px;vertical-align:-4px">send</span> Enviar reporte';
 };
 
+// ── Proveedores de compras (editor admin) ─────────────────
+var _provEdit = [];
+window.abrirProveedores = function () {
+  _provEdit = proveedores.slice();
+  document.getElementById('provNuevo').value = '';
+  renderProvLista();
+  abrirModal('modalProveedores');
+};
+function renderProvLista() {
+  var c = document.getElementById('provLista');
+  if (!_provEdit.length) { c.innerHTML = '<div class="muted-note">Sin proveedores todav\u00eda. Agreg\u00e1 al menos uno.</div>'; return; }
+  var h = '<div class="act-list">';
+  for (var i = 0; i < _provEdit.length; i++) {
+    h += '<div class="act-row"><span class="act-tit">' + esc(_provEdit[i]) + '</span><span class="act-acc"><button onclick="quitarProveedor(' + i + ')">\u2715 Quitar</button></span></div>';
+  }
+  h += '</div>';
+  c.innerHTML = h;
+}
+window.agregarProveedor = function () {
+  var inp = document.getElementById('provNuevo');
+  var v = (inp.value || '').trim();
+  if (!v) return;
+  if (_provEdit.some(function (p) { return p.toLowerCase() === v.toLowerCase(); })) { toast('Ese proveedor ya est\u00e1 en la lista.', 'info'); return; }
+  _provEdit.push(v);
+  inp.value = '';
+  renderProvLista();
+};
+window.quitarProveedor = function (i) {
+  _provEdit.splice(i, 1);
+  renderProvLista();
+};
+window.guardarProveedores = async function () {
+  try {
+    await db.collection('config').doc('compras_proveedores').set({ lista: _provEdit, actualizadoEn: serverTs() }, { merge: true });
+    proveedores = _provEdit.slice();
+    toast('Proveedores guardados.', 'success');
+    cerrarModal('modalProveedores');
+    render();
+  } catch (e) { toast('No se pudo guardar: ' + e.message, 'error'); }
+};
+
 // ── Historial de realizaciones (admin) ────────────────────
 window.verHistorial = async function (id) {
   var it = byId[id];
@@ -1061,6 +1126,7 @@ tabActual = esAdmin ? 'proyectos' : 'mantenimiento';
   var tb = document.querySelector('.main-tab[data-tab="' + tabActual + '"]');
   if (tb) tb.classList.add('active');
 })();
+await cargarProveedores();
 await cargar();
 
 </script>
