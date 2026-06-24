@@ -65,7 +65,7 @@
   }
 
   // ── Cierre de ciclo: rutina recurrente -> reprograma; si no -> finaliza ──
-  async function cerrarCiclo(ref, t, sesDocs, user) {
+  async function cerrarCiclo(ref, t, sesDocs, user, conCrono) {
     if (CVC.cargarTemporada) { try { await CVC.cargarTemporada(); } catch (e) { } }
     var ciclo = CVC.cicloEfectivoTarea ? CVC.cicloEfectivoTarea(t) : (t.recurrencia || 0);
     if (sesDocs && sesDocs.length) {
@@ -73,12 +73,13 @@
       sesDocs.forEach(function (d) { batch.delete(d.ref); });
       await batch.commit();
     }
+    var meta = { ultimaRealizacion: sumarDiasISO(0), ultimaRealizacionPor: (user && user.nombre) ? user.nombre : '', ultimaRealizacionConCrono: !!conCrono };
     if (ciclo > 0) {
       // Rutina: reprograma al próximo ciclo y vuelve a pendiente (nuevo ciclo, sin marcar)
-      await ref.update({ estado: 'pendiente', fechaInicio: sumarDiasISO(ciclo), sesionesActivas: [], hecho: false, hechoPor: null, hechoEn: null });
+      await ref.update(Object.assign({ estado: 'pendiente', fechaInicio: sumarDiasISO(ciclo), sesionesActivas: [], hecho: false, hechoPor: null, hechoEn: null }, meta));
     } else {
       // No recurrente: finaliza y marca hecho (refleja el tilde en el árbol)
-      await ref.update({ estado: 'finalizada', sesionesActivas: [], hecho: true, hechoPor: (user && user.uid) ? user.uid : null, hechoEn: serverTs(), finalizadoEn: serverTs() });
+      await ref.update(Object.assign({ estado: 'finalizada', sesionesActivas: [], hecho: true, hechoPor: (user && user.uid) ? user.uid : null, hechoEn: serverTs(), finalizadoEn: serverTs() }, meta));
     }
   }
 
@@ -138,6 +139,7 @@
       tipo: t.tipo || 'general',
       cabana: (t.cabana !== undefined && t.cabana !== null) ? t.cabana : null,
       tipoRegistro: 'finalizada',
+      conCronometro: true,
       totalHoras: Math.round(totalHoras * 100) / 100,
       monto: Math.round(montoAsignado * 100) / 100,
       costoLimpiezaBRL: costoLimpiezaBRL,
@@ -158,13 +160,41 @@
     }
 
     // 7. Reprogramar (rutina) o finalizar
-    await cerrarCiclo(ref, t, sesSnap.docs, user);
+    await cerrarCiclo(ref, t, sesSnap.docs, user, true);
 
     return colaboradores;
+  }
+
+  // ── Tildar: dar por realizada SIN cronómetro (registro sin tiempo) ──
+  async function actTildar(actId, user) {
+    user = user || {};
+    var ref = db.collection('actividades').doc(actId);
+    var snap = await ref.get();
+    if (!snap.exists) throw new Error('La actividad no existe.');
+    var t = snap.data();
+    // Registro de realización sin tiempo (queda marcado conCronometro:false)
+    await db.collection('historial_tareas').add({
+      tareaId: actId,
+      nombre: nombreDe(t),
+      tipo: t.tipo || 'general',
+      cabana: (t.cabana !== undefined && t.cabana !== null) ? t.cabana : null,
+      tipoRegistro: 'tildada',
+      conCronometro: false,
+      totalHoras: 0,
+      monto: 0,
+      costoLimpiezaBRL: 0,
+      colaboradores: [{ uid: user.uid || null, nombre: user.nombre || '', horas: 0, montoRecibido: 0 }],
+      finalizadoEn: serverTs(),
+      finalizadoNombre: user.nombre || '',
+      finalizadoPor: user.uid || null
+    });
+    // Reprograma (rutina) o finaliza (no recurrente), registrando última realización sin reloj
+    await cerrarCiclo(ref, t, [], user, false);
   }
 
   // ── Enganche a CVC (sin redefinirlo) ────────────────────
   CVC.actIniciar = actIniciar;
   CVC.actPausar = actPausar;
   CVC.actFinalizar = actFinalizar;
+  CVC.actTildar = actTildar;
 })();

@@ -210,6 +210,17 @@
   </div>
 </div>
 
+<!-- ══ MODAL: historial de realizaciones (admin) ═══════════════════ -->
+<div class="modal-cv" id="modalHist">
+  <div class="box">
+    <h3 id="histTitulo">Historial</h3>
+    <div id="histBody"></div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="cerrarModal('modalHist')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 
 // ── Arranque ───────────────────────────────────────────────
@@ -239,6 +250,8 @@ function toast(m, t) { if (CVC.showToast) { CVC.showToast(m, t || 'info'); } }
 function serverTs() { return firebase.firestore.FieldValue.serverTimestamp(); }
 function isoHoy() { var d = new Date(); var m = String(d.getMonth() + 1); var dd = String(d.getDate()); return d.getFullYear() + '-' + (m.length < 2 ? '0' + m : m) + '-' + (dd.length < 2 ? '0' + dd : dd); }
 function fmtDMY(iso) { if (!iso) return ''; var p = String(iso).slice(0, 10).split('-'); if (p.length < 3) return iso; return p[2] + '/' + p[1]; }
+function pad2(n) { n = String(n); return n.length < 2 ? '0' + n : n; }
+function fmtTs(ts) { var d = (ts && ts.toDate) ? ts.toDate() : null; if (!d) return ''; return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear(); }
 function refAct(id) { return db.collection('actividades').doc(id); }
 function abrirModal(id) { document.getElementById(id).classList.add('show'); }
 window.cerrarModal = function (id) { document.getElementById(id).classList.remove('show'); };
@@ -396,9 +409,14 @@ function nodoHTML(it, nivel) {
     var u = CVC.urgenciaTarea(it);
     if (u && u.color && u.color !== 'gris') h += '<span class="act-badge ' + u.color + '">' + esc(u.label) + '</span>';
   }
-  // Fecha
-  var fv = it.fechaVencimiento ? fmtDMY(it.fechaVencimiento) : (it.fechaInicio ? fmtDMY(it.fechaInicio) : '');
-  if (fv) h += '<span class="act-badge">\ud83d\uddd3 ' + fv + (it.hora ? ' ' + it.hora : '') + '</span>';
+  // Vencimiento (en rutinas la próxima la da el badge de urgencia, no se repite la fecha)
+  if (it.fechaVencimiento) h += '<span class="act-badge">\ud83d\uddd3 vence ' + fmtDMY(it.fechaVencimiento) + (it.hora ? ' ' + it.hora : '') + '</span>';
+  else if (it.tipoRaiz !== 'rutina' && it.fechaInicio && !it.ultimaRealizacion) h += '<span class="act-badge">\ud83d\uddd3 ' + fmtDMY(it.fechaInicio) + (it.hora ? ' ' + it.hora : '') + '</span>';
+  // Última realización (fecha + quién)
+  if (it.ultimaRealizacion) {
+    var quien = it.ultimaRealizacionPor ? (' \u00b7 ' + esc(it.ultimaRealizacionPor)) : '';
+    h += '<span class="act-badge">\u21bb \u00faltima ' + fmtDMY(it.ultimaRealizacion) + quien + '</span>';
+  }
   // Progreso
   var pr = progresoDe(it.id);
   if (pr) h += '<span class="act-badge">\u2713 ' + pr.hechos + '/' + pr.total + '</span>';
@@ -427,6 +445,7 @@ function nodoHTML(it, nivel) {
     }
   }
   h += '<button title="Agregar dentro" onclick="nuevoHijo(\'' + it.id + '\')">\uff0b</button>';
+  if (esAdmin && it.cronometrable) h += '<button title="Historial de realizaciones" onclick="verHistorial(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#5a6a55">history</span></button>';
   h += '<button title="Editar" onclick="editarItem(\'' + it.id + '\')">\u270e</button>';
   h += '<button title="Borrar" onclick="borrarItem(\'' + it.id + '\')">\ud83d\uddd1</button>';
   h += '</span>';
@@ -495,8 +514,23 @@ window.toggleHecho = async function (id) {
   var it = byId[id]; if (!it) return;
   var nuevo = !it.hecho;
   try {
+    // Tareas de trabajo (cronometrables): cada realización queda registrada
+    if (nuevo && it.cronometrable) {
+      if (it.estado === 'en_curso') {
+        if (!confirm('Hay un cronómetro corriendo. ¿Finalizar y registrar el tiempo trabajado?')) { render(); return; }
+        var col = await CVC.actFinalizar(id, { uid: uid, nombre: miNombre });
+        var n = (col && col.length) ? col.length : 0;
+        toast('Finalizada con tiempo registrado' + (n ? (' \u00b7 ' + n + ' persona(s)') : ''), 'success');
+      } else {
+        if (!confirm('\u00bfDar la tarea por realizada SIN cron\u00f3metro? Queda registrada, pero sin contar tiempo.')) { render(); return; }
+        await CVC.actTildar(id, { uid: uid, nombre: miNombre });
+        toast((it.tipoRaiz === 'rutina' && (it.recurrencia || 0) > 0) ? 'Rutina realizada (sin reloj) y reprogramada' : 'Realizada (sin reloj)', 'success');
+      }
+      await cargar();
+      return;
+    }
+    // Items simples (no cronometrables): tilde con cascada hacia los hijos
     if (nuevo) {
-      // Cascada: marcar este y todos sus descendientes
       var ids = [id].concat(descendientes(id));
       var batch = db.batch();
       for (var i = 0; i < ids.length; i++) {
@@ -733,6 +767,43 @@ window.cronoFinalizar = async function (id) {
     toast('Finalizada' + (n ? (' \u00b7 honorario para ' + n + ' persona(s)') : ''), 'success');
     await cargar();
   } catch (e) { toast('No se pudo finalizar: ' + e.message, 'error'); }
+};
+
+// ── Historial de realizaciones (admin) ────────────────────
+window.verHistorial = async function (id) {
+  var it = byId[id];
+  document.getElementById('histTitulo').textContent = 'Historial \u00b7 ' + ((it && it.titulo) ? it.titulo : '');
+  document.getElementById('histBody').innerHTML = '<div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>';
+  abrirModal('modalHist');
+  try {
+    var snap = await db.collection('historial_tareas').where('tareaId', '==', id).get();
+    var regs = [];
+    snap.forEach(function (d) { regs.push(d.data()); });
+    regs.sort(function (a, b) {
+      var fa = (a.finalizadoEn && a.finalizadoEn.toMillis) ? a.finalizadoEn.toMillis() : 0;
+      var fb = (b.finalizadoEn && b.finalizadoEn.toMillis) ? b.finalizadoEn.toMillis() : 0;
+      return fb - fa;
+    });
+    if (!regs.length) { document.getElementById('histBody').innerHTML = '<div class="muted-note">Todav\u00eda no hay realizaciones registradas.</div>'; return; }
+    var conReloj = regs.filter(function (r) { return r.conCronometro; }).length;
+    var sinReloj = regs.length - conReloj;
+    var h = '<div class="muted-note">' + regs.length + ' realizaci\u00f3n(es) \u00b7 ' + conReloj + ' con reloj \u00b7 ' + sinReloj + ' sin reloj</div>';
+    h += '<div class="act-list">';
+    for (var i = 0; i < regs.length; i++) {
+      var r = regs[i];
+      var quienes = (r.colaboradores || []).map(function (c) { return (c.nombre || '') + (c.horas ? (' (' + c.horas + 'h)') : ''); }).filter(Boolean).join(', ');
+      if (!quienes) quienes = r.finalizadoNombre || '\u2014';
+      var crono = r.conCronometro ? '\u23f1 con reloj' : '\u270b sin reloj';
+      h += '<div class="act-row" style="flex-direction:column;align-items:flex-start;gap:2px">';
+      h += '<div style="font-weight:600;font-size:13.5px">' + esc(fmtTs(r.finalizadoEn)) + ' \u00b7 ' + crono + (r.totalHoras ? (' \u00b7 ' + r.totalHoras + 'h') : '') + '</div>';
+      h += '<div style="font-size:13px;color:#46583f">' + esc(quienes) + '</div>';
+      h += '</div>';
+    }
+    h += '</div>';
+    document.getElementById('histBody').innerHTML = h;
+  } catch (e) {
+    document.getElementById('histBody').innerHTML = '<div class="muted-note">No se pudo cargar: ' + esc(e.message) + '</div>';
+  }
 };
 
 // ── Init ───────────────────────────────────────────────────
