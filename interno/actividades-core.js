@@ -7,8 +7,10 @@
 //  (historial_tareas + honorarios) para no romper limpieza-stats ni pagos.
 //
 //  Se ENGANCHA a window.CVC (NO lo redefine). Cargar SIEMPRE después de
-//  utils.js. Reusa CVC.cicloEfectivoTarea / CVC.cargarTemporada para la
-//  recurrencia y el factor de temporada.
+//  utils.js (del que solo usa la plataforma: db, auth, toast, foto+Cloudinary,
+//  avisos). La LÓGICA de actividades es propia y autosuficiente: temporada,
+//  ciclo de recurrencia y semáforo viven acá, NO se toman de utils.js. Así
+//  esta sección no depende del sistema viejo de tareas.
 //
 //  Convivencia: utils.js sigue manejando la colección 'tareas' para el
 //  tareas.html viejo. Cuando se jubile (T6), este pasa a ser el único motor.
@@ -27,6 +29,87 @@
   function aDateSeguro(v) { if (!v) return null; var d = v.toDate ? v.toDate() : new Date(v); return isNaN(d.getTime()) ? null : d; }
   function sumarDiasISO(dias) { var f = new Date(); f.setDate(f.getDate() + dias); return f.toISOString().split('T')[0]; }
   function nombreDe(t) { return t.titulo || t.nombre || ''; }
+
+  // ── Temporada (copia autosuficiente, NO depende de utils.js) ──
+  var _tempCfg = null, _tempActual = null;
+  function _tempDefault() { return { modo: 'manual', actual: 'media', rangos: [], factores: { alta: 1, media: 1, baja: 1 } }; }
+  function _mmdd(d) { var m = String(d.getMonth() + 1); if (m.length < 2) m = '0' + m; var dd = String(d.getDate()); if (dd.length < 2) dd = '0' + dd; return m + '-' + dd; }
+  function _enRango(mmdd, desde, hasta) { if (!desde || !hasta) return false; if (desde <= hasta) return mmdd >= desde && mmdd <= hasta; return mmdd >= desde || mmdd <= hasta; }
+  function _calcTemporada(cfg, fecha) {
+    fecha = fecha || new Date();
+    if (!cfg) return 'media';
+    if (cfg.modo === 'manual') return cfg.actual || 'media';
+    var mmdd = _mmdd(fecha);
+    var rangos = cfg.rangos || [];
+    for (var i = 0; i < rangos.length; i++) { if (_enRango(mmdd, rangos[i].desde, rangos[i].hasta)) return rangos[i].temporada || 'media'; }
+    return 'media';
+  }
+  function actCargarTemporada(forzar) {
+    if (_tempCfg && !forzar) return Promise.resolve({ cfg: _tempCfg, actual: _tempActual });
+    return db.collection('config').doc('temporada').get().then(function (doc) {
+      _tempCfg = doc.exists ? doc.data() : _tempDefault();
+      if (!_tempCfg.factores) _tempCfg.factores = { alta: 1, media: 1, baja: 1 };
+      _tempActual = _calcTemporada(_tempCfg);
+      return { cfg: _tempCfg, actual: _tempActual };
+    }).catch(function () { _tempCfg = _tempDefault(); _tempActual = 'media'; return { cfg: _tempCfg, actual: _tempActual }; });
+  }
+  function _temporada() { return _tempActual || 'media'; }
+  function _factor(temp) { var f = (_tempCfg && _tempCfg.factores) ? _tempCfg.factores[temp] : 1; f = parseFloat(f); return (!isNaN(f) && f > 0) ? f : 1; }
+
+  // ── Ciclo efectivo (recurrencia + temporada), propio del core ──
+  function actCiclo(t, temp) {
+    temp = temp || _temporada();
+    var rt = t.recurrenciaTemporada;
+    if (rt && typeof rt === 'object') { var v = parseInt(rt[temp], 10); if (!isNaN(v)) return v; }
+    var base = parseInt(t.recurrencia, 10) || 0;
+    if (base <= 0) return 0;
+    return Math.max(1, Math.round(base * _factor(temp)));
+  }
+
+  // ── Semáforo (regla nueva) ──────────────────────────────
+  //  fechaInicio = fecha de PRÓXIMA realización.
+  //  gris  : próxima en el futuro (recién hecha, descansando, fuera de plazo)
+  //  verde : ya en plazo, primera mitad del ciclo
+  //  amarillo : segunda mitad del ciclo
+  //  rojo  : pasó el ciclo completo (atrasada), o vencimiento/check-in encima
+  //  No recurrente: usa la prioridad elegida a mano.
+  function _diasEntre(isoA, isoB) {
+    var a = new Date(String(isoA).slice(0, 10) + 'T00:00:00');
+    var b = new Date(String(isoB).slice(0, 10) + 'T00:00:00');
+    if (isNaN(a.getTime()) || isNaN(b.getTime())) return null;
+    return Math.round((a - b) / 86400000);
+  }
+  function _porPrioridad(p) {
+    if (p === 'rojo') return { color: 'rojo', label: '', rank: 1 };
+    if (p === 'amarillo') return { color: 'amarillo', label: '', rank: 2 };
+    if (p === 'verde') return { color: 'verde', label: '', rank: 3 };
+    return { color: 'gris', label: '', rank: 5 };
+  }
+  function actSemaforo(t) {
+    if (!t) return { color: 'gris', label: '', rank: 5 };
+    var hoyISO = sumarDiasISO(0);
+    // 1) Vencimiento duro (límite / limpieza antes de check-in): rojo al acercarse o pasar
+    var venc = t.fechaCheckIn || t.fechaVencimiento;
+    if (venc) {
+      var d2 = _diasEntre(venc, hoyISO);
+      if (d2 !== null) {
+        if (d2 <= 2) return { color: 'rojo', label: (d2 < 0 ? ('Vencido ' + Math.abs(d2) + 'd') : (d2 === 0 ? 'Vence hoy' : ('Vence en ' + d2 + 'd'))), rank: -100 + Math.min(d2, 0) };
+        return { color: 'amarillo', label: 'Vence en ' + d2 + 'd', rank: 2 };
+      }
+    }
+    var ciclo = actCiclo(t);
+    // 2) Recurrente
+    if (ciclo > 0 && t.fechaInicio) {
+      var el = _diasEntre(hoyISO, t.fechaInicio);
+      if (el === null) return _porPrioridad(t.prioridad);
+      if (el < 0) return { color: 'gris', label: 'Próx. ' + Math.abs(el) + 'd', rank: 5 };
+      if (el > ciclo) return { color: 'rojo', label: 'Atraso ' + (el - ciclo) + 'd', rank: -(el - ciclo) };
+      if (el >= ciclo / 2) return { color: 'amarillo', label: 'Quedan ' + Math.max(0, ciclo - el) + 'd', rank: 2 };
+      return { color: 'verde', label: 'A tiempo', rank: 3 };
+    }
+    // 3) No recurrente (con o sin fecha): prioridad manual
+    return _porPrioridad(t.prioridad);
+  }
 
   // ── ▶ Iniciar mi sesión de cronómetro ───────────────────
   async function actIniciar(actId, user) {
@@ -66,8 +149,8 @@
 
   // ── Cierre de ciclo: rutina recurrente -> reprograma; si no -> finaliza ──
   async function cerrarCiclo(ref, t, sesDocs, user, conCrono) {
-    if (CVC.cargarTemporada) { try { await CVC.cargarTemporada(); } catch (e) { } }
-    var ciclo = CVC.cicloEfectivoTarea ? CVC.cicloEfectivoTarea(t) : (t.recurrencia || 0);
+    try { await actCargarTemporada(); } catch (e) { }
+    var ciclo = actCiclo(t);
     if (sesDocs && sesDocs.length) {
       var batch = db.batch();
       sesDocs.forEach(function (d) { batch.delete(d.ref); });
@@ -197,4 +280,7 @@
   CVC.actPausar = actPausar;
   CVC.actFinalizar = actFinalizar;
   CVC.actTildar = actTildar;
+  CVC.actCiclo = actCiclo;
+  CVC.actSemaforo = actSemaforo;
+  CVC.actCargarTemporada = actCargarTemporada;
 })();

@@ -420,28 +420,28 @@ function nodoHTML(it, nivel) {
   var tiene = hijos.length > 0;
   var abierto = expandido[it.id] !== false;
   var indent = Math.min(nivel, 4) * 18;
+  var sem = (CVC.actSemaforo && !it.hecho) ? CVC.actSemaforo(it) : { color: 'gris', label: '' };
 
   var h = '';
   h += '<div class="act-row" style="padding-left:' + (indent + 10) + 'px">';
   h += '<span class="act-caret" onclick="toggleExp(\'' + it.id + '\')">' + (tiene ? (abierto ? '\u25be' : '\u25b8') : '') + '</span>';
   h += '<input type="checkbox" class="act-chk" ' + (it.hecho ? 'checked' : '') + ' onclick="toggleHecho(\'' + it.id + '\')">';
-  h += '<span class="dot ' + dotClase(it.prioridad) + '"></span>';
+  h += '<span class="dot ' + dotClase(sem.color) + '"></span>';
   var titClick = tiene ? (' onclick="toggleExp(\'' + it.id + '\')" style="cursor:pointer"') : '';
   h += '<span class="act-tit' + (it.hecho ? ' done' : '') + '"' + titClick + '>' + esc(it.titulo) + '</span>';
 
   h += '<span class="act-badges">';
-  // Urgencia (lógica real de CVC.urgenciaTarea: usa fechaCheckIn/recurrencia)
-  if (!it.hecho && CVC.urgenciaTarea) {
-    var u = CVC.urgenciaTarea(it);
-    if (u && u.color && u.color !== 'gris') h += '<span class="act-badge ' + u.color + '">' + esc(u.label) + '</span>';
-  }
-  // Vencimiento (en rutinas la próxima la da el badge de urgencia, no se repite la fecha)
+  var esRec = (parseInt(it.recurrencia, 10) || 0) > 0;
+  // Semáforo nuevo: muestro el badge en estados activos (rojo/amarillo/verde). El gris "descansando" lo da la fecha "próx".
+  if (!it.hecho && sem && sem.color !== 'gris' && sem.label) h += '<span class="act-badge ' + sem.color + '">' + esc(sem.label) + '</span>';
+  // Próxima realización (recurrentes) / vencimiento / fecha puntual
   if (it.fechaVencimiento) h += '<span class="act-badge">\ud83d\uddd3 vence ' + fmtDMY(it.fechaVencimiento) + (it.hora ? ' ' + it.hora : '') + '</span>';
-  else if (it.tipoRaiz !== 'rutina' && it.fechaInicio && !it.ultimaRealizacion) h += '<span class="act-badge">\ud83d\uddd3 ' + fmtDMY(it.fechaInicio) + (it.hora ? ' ' + it.hora : '') + '</span>';
+  else if (esRec && it.fechaInicio) h += '<span class="act-badge">\ud83d\uddd3 pr\u00f3x ' + fmtDMY(it.fechaInicio) + (it.hora ? ' ' + it.hora : '') + '</span>';
+  else if (it.fechaInicio && !it.ultimaRealizacion) h += '<span class="act-badge">\ud83d\uddd3 ' + fmtDMY(it.fechaInicio) + (it.hora ? ' ' + it.hora : '') + '</span>';
   // Última realización (fecha + quién)
   if (it.ultimaRealizacion) {
     var quien = it.ultimaRealizacionPor ? (' \u00b7 ' + esc(it.ultimaRealizacionPor)) : '';
-    h += '<span class="act-badge">\u21bb \u00faltima ' + fmtDMY(it.ultimaRealizacion) + quien + '</span>';
+    h += '<span class="act-badge">\u21bb \u00falt ' + fmtDMY(it.ultimaRealizacion) + quien + '</span>';
   }
   // Progreso
   var pr = progresoDe(it.id);
@@ -571,7 +571,7 @@ function renderCalendario() {
     html += '<span class="dot ' + dotClase(it.prioridad) + '"></span>';
     html += '<span class="act-tit">' + esc(it.titulo) + '</span>';
     html += '<span class="act-badges">';
-    if (CVC.urgenciaTarea) { var u = CVC.urgenciaTarea(it); if (u && u.color && u.color !== 'gris') html += '<span class="act-badge ' + u.color + '">' + esc(u.label) + '</span>'; }
+    if (CVC.actSemaforo) { var u = CVC.actSemaforo(it); if (u && u.color && u.color !== 'gris' && u.label) html += '<span class="act-badge ' + u.color + '">' + esc(u.label) + '</span>'; }
     if (it.hora) html += '<span class="act-badge">' + esc(it.hora) + '</span>';
     html += '<span class="act-badge">' + (it.tipoRaiz === 'rutina' ? 'Rutina' : it.tipoRaiz === 'proyecto' ? 'Proyecto' : 'Suelto') + '</span>';
     html += '</span>';
