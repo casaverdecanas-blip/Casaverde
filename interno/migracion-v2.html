@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Migración v2 — Todo bajo proyectos</title>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f4f7f3; color: #2b3a28; margin: 0; padding: 16px; }
+  .card { max-width: 720px; margin: 0 auto; background: #fff; border: 1px solid #d9e3d6; border-radius: 14px; padding: 18px; }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  p.sub { color: #5a6a55; font-size: 13.5px; margin: 0 0 14px; }
+  label.l { display: block; font-size: 12.5px; color: #46583f; margin: 10px 0 3px; font-weight: 600; }
+  input.t { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid #cdd8c9; border-radius: 9px; font-size: 14px; }
+  .hint { font-size: 11.5px; color: #7a8a76; margin-top: 2px; }
+  .btn { border: 0; border-radius: 10px; padding: 11px 14px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 14px; }
+  .btn-1 { background: #2f6b3a; color: #fff; }
+  .btn-2 { background: #e8efe5; color: #2f6b3a; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .box { margin-top: 14px; border: 1px solid #e1e9de; border-radius: 10px; padding: 12px; background: #fafdf9; }
+  .grp { margin: 8px 0; }
+  .grp b { color: #2f6b3a; }
+  .muted { color: #7a8a76; }
+  .li { font-size: 13px; padding: 2px 0; }
+  pre#log { white-space: pre-wrap; font-size: 12px; background: #0d1f12; color: #cfe9d4; border-radius: 10px; padding: 12px; max-height: 320px; overflow: auto; margin-top: 14px; }
+  .ok { color: #1f7a32; } .err { color: #c0271f; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Migración v2 — todo bajo proyectos</h1>
+  <p class="sub">Crea los proyectos base y archiva adentro las actividades que hoy están sueltas (sin proyecto). No borra nada y se puede correr varias veces sin duplicar.</p>
+
+  <label class="l">Nombre del proyecto de recurrentes (rutinas)</label>
+  <input class="t" id="nMant" value="Mantenimiento">
+  <div class="hint">Recibe todas las actividades que se repiten (recurrencia &gt; 0).</div>
+
+  <label class="l">Nombre del proyecto de limpiezas</label>
+  <input class="t" id="nLimp" value="Limpiezas">
+  <div class="hint">Recibe las limpiezas/controles, agrupadas por cabaña.</div>
+
+  <label class="l">Nombre del proyecto general</label>
+  <input class="t" id="nGral" value="General">
+  <div class="hint">Recibe el resto de las tareas sueltas (las de pendientes/agenda).</div>
+
+  <button class="btn btn-2" id="btnAnalizar">Analizar (preview)</button>
+  <button class="btn btn-1" id="btnMigrar" disabled>Aplicar migración</button>
+
+  <div class="box" id="preview" style="display:none"></div>
+  <pre id="log"></pre>
+</div>
+
+<script type="module">
+var db, user;
+var items = [];          // todas las actividades
+var cabNombres = {};     // caba -> nombre
+var loose = [], bLimp = [], bRec = [], bGen = [];
+
+var logEl = document.getElementById('log');
+function esc(s) { return (CVC.escapeHtml ? CVC.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s)); }
+function log(m, cls) { var t = new Date().toLocaleTimeString(); logEl.innerHTML += '<span' + (cls ? ' class="' + cls + '"' : '') + '>' + t + '  ' + esc(m) + '</span>\n'; logEl.scrollTop = logEl.scrollHeight; }
+function serverTs() { return firebase.firestore.FieldValue.serverTimestamp(); }
+function nInt(v) { return parseInt(v, 10) || 0; }
+function esLimpieza(it) { return it.tipo === 'limpieza' || it.tipo === 'control'; }
+function esTopNoProyecto(it) { return (!it.parentId) && it.tipoRaiz !== 'proyecto'; }
+function nombreCabana(caba) { return cabNombres[String(caba)] || ('Cabaña ' + caba); }
+
+function descendientesDe(id) {
+  var out = [], cola = [id];
+  while (cola.length) {
+    var pid = cola.shift();
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].parentId === pid) { out.push(items[i]); cola.push(items[i].id); }
+    }
+  }
+  return out;
+}
+
+async function cargar() {
+  log('Leyendo cabañas…');
+  try {
+    var cs = await db.collection('cabanas').get();
+    cs.forEach(function (d) {
+      var x = d.data() || {};
+      var nom = (x.nombre && x.nombre.es) ? x.nombre.es : (x.nombre || ('Cabaña ' + d.id));
+      cabNombres[String(d.id)] = nom;
+      if (x.caba !== undefined && x.caba !== null) cabNombres[String(x.caba)] = nom;
+    });
+  } catch (e) { log('No se pudieron leer cabañas (se usan nombres genéricos): ' + e.message, 'err'); }
+
+  log('Leyendo actividades…');
+  var snap = await db.collection('actividades').get();
+  items = [];
+  snap.forEach(function (d) { var x = d.data() || {}; x.id = d.id; items.push(x); });
+  log('Total de actividades: ' + items.length);
+
+  // Si ya existen los proyectos base, mostrar sus nombres actuales en los inputs.
+  var bases = [['proj-mantenimiento', 'nMant'], ['proj-limpiezas', 'nLimp'], ['proj-general', 'nGral']];
+  for (var i = 0; i < bases.length; i++) {
+    var ex = items.filter(function (it) { return it.id === bases[i][0]; })[0];
+    if (ex && ex.titulo) document.getElementById(bases[i][1]).value = ex.titulo;
+  }
+}
+
+function analizar() {
+  loose = items.filter(esTopNoProyecto);
+  bLimp = loose.filter(esLimpieza);
+  bRec = loose.filter(function (it) { return !esLimpieza(it) && nInt(it.recurrencia) > 0; });
+  bGen = loose.filter(function (it) { return !esLimpieza(it) && nInt(it.recurrencia) <= 0; });
+
+  var cabs = {};
+  bLimp.forEach(function (it) { if (it.cabana !== undefined && it.cabana !== null) cabs[String(it.cabana)] = true; });
+  var listaCabs = Object.keys(cabs);
+
+  function muestra(arr) {
+    var s = arr.slice(0, 6).map(function (it) { return '<div class="li">• ' + esc(it.titulo || it.nombre || it.id) + '</div>'; }).join('');
+    if (arr.length > 6) s += '<div class="li muted">…y ' + (arr.length - 6) + ' más</div>';
+    return s || '<div class="li muted">(ninguna)</div>';
+  }
+
+  var pv = document.getElementById('preview');
+  var h = '';
+  h += '<div class="grp"><b>' + esc(document.getElementById('nMant').value) + '</b> — recurrentes: ' + bRec.length + '</div>' + muestra(bRec);
+  h += '<div class="grp" style="margin-top:12px"><b>' + esc(document.getElementById('nLimp').value) + '</b> — limpiezas/controles: ' + bLimp.length + (listaCabs.length ? ' · cabañas: ' + listaCabs.map(function (c) { return esc(nombreCabana(c)); }).join(', ') : '') + '</div>' + muestra(bLimp);
+  h += '<div class="grp" style="margin-top:12px"><b>' + esc(document.getElementById('nGral').value) + '</b> — generales: ' + bGen.length + '</div>' + muestra(bGen);
+  h += '<div class="grp muted" style="margin-top:12px">Total a reubicar: ' + loose.length + '. Las actividades que ya están dentro de un proyecto no se tocan.</div>';
+  pv.innerHTML = h;
+  pv.style.display = 'block';
+
+  document.getElementById('btnMigrar').disabled = (loose.length === 0);
+  if (loose.length === 0) log('No hay actividades sueltas para reubicar. Todo ya cuelga de un proyecto.', 'ok');
+  else log('Análisis listo: ' + loose.length + ' actividad(es) a reubicar.', 'ok');
+}
+
+function metaBase(titulo, parentId, raizId, color, caba) {
+  var o = {
+    titulo: titulo, detalle: '', tipoRaiz: 'proyecto', color: color || '',
+    parentId: parentId, raizId: raizId, orden: 0,
+    alcance: 'equipo', competencias: [],
+    cronometrable: false, estado: 'pendiente', prioridad: 'gris',
+    monto: 0, recurrencia: 0, esCompra: false, hecho: false,
+    creadoPor: (user && user.uid) ? user.uid : null, creadoNombre: 'Migración', creadoEn: serverTs()
+  };
+  if (caba !== undefined && caba !== null) o.cabana = caba;
+  return o;
+}
+
+async function ensureDoc(id, metaSiFalta) {
+  var ref = db.collection('actividades').doc(id);
+  var snap = await ref.get();
+  if (snap.exists) return false;
+  await ref.set(metaSiFalta);
+  return true;
+}
+
+async function reubicar(item, parentId, raizId) {
+  await db.collection('actividades').doc(item.id).update({
+    parentId: parentId, raizId: raizId, tipoRaiz: 'proyecto', alcance: 'equipo', competencias: []
+  });
+  var desc = descendientesDe(item.id);
+  for (var i = 0; i < desc.length; i++) {
+    await db.collection('actividades').doc(desc[i].id).update({
+      raizId: raizId, tipoRaiz: 'proyecto', alcance: 'equipo', competencias: []
+    });
+  }
+  return 1 + desc.length;
+}
+
+async function migrar() {
+  document.getElementById('btnMigrar').disabled = true;
+  document.getElementById('btnAnalizar').disabled = true;
+  try {
+    var nMant = document.getElementById('nMant').value.trim() || 'Mantenimiento';
+    var nLimp = document.getElementById('nLimp').value.trim() || 'Limpiezas';
+    var nGral = document.getElementById('nGral').value.trim() || 'General';
+
+    // 1) Proyectos base (solo los que reciben algo)
+    if (bRec.length) { if (await ensureDoc('proj-mantenimiento', metaBase(nMant, '', 'proj-mantenimiento', '#4a7c59'))) log('Creado proyecto: ' + nMant); }
+    if (bLimp.length) { if (await ensureDoc('proj-limpiezas', metaBase(nLimp, '', 'proj-limpiezas', '#3f6f8f'))) log('Creado proyecto: ' + nLimp); }
+    if (bGen.length) { if (await ensureDoc('proj-general', metaBase(nGral, '', 'proj-general', '#8a7d5a'))) log('Creado proyecto: ' + nGral); }
+
+    // 2) Categorías por cabaña (bajo Limpiezas)
+    if (bLimp.length) {
+      var cabs = {};
+      bLimp.forEach(function (it) { if (it.cabana !== undefined && it.cabana !== null) cabs[String(it.cabana)] = it.cabana; });
+      var keys = Object.keys(cabs);
+      for (var k = 0; k < keys.length; k++) {
+        var caba = cabs[keys[k]];
+        var cid = 'limpiezas-cab-' + caba;
+        if (await ensureDoc(cid, metaBase(nombreCabana(caba), 'proj-limpiezas', 'proj-limpiezas', '', caba))) log('  · categoría cabaña: ' + nombreCabana(caba));
+      }
+    }
+
+    // 3) Reubicar cada suelta
+    var tocadas = 0;
+    for (var i = 0; i < bRec.length; i++) { tocadas += await reubicar(bRec[i], 'proj-mantenimiento', 'proj-mantenimiento'); }
+    log('Recurrentes archivadas en ' + nMant + ': ' + bRec.length, 'ok');
+
+    for (var j = 0; j < bLimp.length; j++) {
+      var it = bLimp[j];
+      var tieneCaba = (it.cabana !== undefined && it.cabana !== null);
+      var parent = tieneCaba ? ('limpiezas-cab-' + it.cabana) : 'proj-limpiezas';
+      tocadas += await reubicar(it, parent, 'proj-limpiezas');
+    }
+    log('Limpiezas/controles archivados en ' + nLimp + ': ' + bLimp.length, 'ok');
+
+    for (var g = 0; g < bGen.length; g++) { tocadas += await reubicar(bGen[g], 'proj-general', 'proj-general'); }
+    log('Generales archivadas en ' + nGral + ': ' + bGen.length, 'ok');
+
+    log('LISTO. Documentos actualizados (incluyendo subítems): ' + tocadas, 'ok');
+    log('Ya no quedan actividades sueltas. Volvé a Analizar para confirmar (debería dar 0).', 'ok');
+    document.getElementById('btnAnalizar').disabled = false;
+  } catch (e) {
+    log('ERROR: ' + e.message, 'err');
+    document.getElementById('btnAnalizar').disabled = false;
+    document.getElementById('btnMigrar').disabled = false;
+  }
+}
+
+(async function init() {
+  try {
+    var auth = await CVC.verificarAuth(['admin']);
+    user = auth.user;
+    db = CVC.db;
+    log('Autenticado. Listo para analizar.', 'ok');
+    await cargar();
+  } catch (e) {
+    log('No autorizado o error de carga: ' + (e && e.message ? e.message : e), 'err');
+  }
+})();
+
+document.getElementById('btnAnalizar').addEventListener('click', function () { try { analizar(); } catch (e) { log('Error al analizar: ' + e.message, 'err'); } });
+document.getElementById('btnMigrar').addEventListener('click', migrar);
+</script>
+</body>
+</html>
