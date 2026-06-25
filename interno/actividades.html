@@ -126,7 +126,7 @@
     <div class="form-group" id="bloquePadre" style="display:none">
       <label class="form-label">Pertenece a</label>
       <select id="itPadre" class="form-control" onchange="togglePadreUI()"></select>
-      <div style="font-size:11.5px;color:#7a8a76;margin-top:2px">Mové la actividad a otro proyecto. "Sin proyecto" la deja como tarea suelta. Sus sub-ítems se mueven con ella.</div>
+      <div style="font-size:11.5px;color:#7a8a76;margin-top:2px">El proyecto al que pertenece la actividad. Cambiarlo la mueve de proyecto; sus sub-ítems se mueven con ella.</div>
     </div>
 
     <div class="form-row2" style="display:flex;gap:8px">
@@ -446,23 +446,25 @@ function renderMantenimiento() {
   return html;
 }
 
-// Proyectos = árbol completo: cada proyecto + un grupo "Sueltos" con lo de nivel superior que no es proyecto
+// Proyectos = árbol completo. Todo cuelga de un proyecto; ya no hay "sueltos".
+// (Si por algún motivo quedara una actividad sin proyecto, se muestra aparte para reasignarla.)
 function renderProyectos() {
   var proys = items.filter(function (it) { return !it.parentId && esProy(it); }).sort(byTitulo);
-  var sueltos = items.filter(function (it) { return !it.parentId && !esProy(it); }).sort(byTitulo);
+  var huerfanas = items.filter(function (it) { return !it.parentId && !esProy(it); }).sort(byTitulo);
   var html = '<div class="act-toolbar">';
   html += '<button class="btn btn-primary" onclick="nuevoRoot(\'proyecto\')"><span class="material-icons">add</span> Nuevo proyecto</button>';
-  html += '<button class="btn btn-secondary" onclick="nuevoRoot(\'suelto\')"><span class="material-icons">add</span> Tarea suelta</button>';
   html += '</div>';
-  if (!proys.length && !sueltos.length) return html + '<div class="muted-note">No hay proyectos ni tareas todav\u00eda.</div>';
+  if (!proys.length && !huerfanas.length) return html + '<div class="muted-note">No hay proyectos todav\u00eda. Cre\u00e1 uno con \u201cNuevo proyecto\u201d; despu\u00e9s, dentro de cada proyecto, agreg\u00e1 categor\u00edas e \u00edtems con \u201c\uff0b Sub-\u00edtem\u201d.</div>';
   if (proys.length) {
     html += '<div class="act-list">';
     for (var i = 0; i < proys.length; i++) html += nodoHTML(proys[i], 0);
     html += '</div>';
   }
-  if (sueltos.length) {
-    html += '<div class="cal-head">\ud83d\udccc Sueltos</div><div class="act-list">';
-    for (var j = 0; j < sueltos.length; j++) html += nodoHTML(sueltos[j], 0);
+  if (huerfanas.length) {
+    html += '<div class="cal-head" style="color:#c0271f">\u26a0 Sin proyecto \u2014 reasignar</div>';
+    html += '<div class="muted-note">Estas actividades no est\u00e1n dentro de un proyecto. Abrilas, tocá Editar y eleg\u00ed un proyecto en \u201cPertenece a\u201d.</div>';
+    html += '<div class="act-list">';
+    for (var j = 0; j < huerfanas.length; j++) html += nodoHTML(huerfanas[j], 0);
     html += '</div>';
   }
   return html;
@@ -527,9 +529,10 @@ function nodoHTML(it, nivel) {
     }
     h += '<button onclick="nuevoHijo(\'' + it.id + '\')">\uff0b Sub-\u00edtem</button>';
     h += '<button onclick="abrirReporte(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#b8860b">campaign</span> Reportar</button>';
-    if (esAdmin && it.cronometrable) h += '<button onclick="verHistorial(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#5a6a55">history</span> Historial</button>';
-    h += '<button onclick="editarItem(\'' + it.id + '\')">\u270e Editar</button>';
-    if (esAdmin) h += '<button onclick="borrarItem(\'' + it.id + '\')">\ud83d\uddd1 Borrar</button>';
+    var puedeGestionar = (esAdmin || it.creadoPor === uid);
+    if (puedeGestionar && it.cronometrable) h += '<button onclick="verHistorial(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#5a6a55">history</span> Historial</button>';
+    if (puedeGestionar) h += '<button onclick="editarItem(\'' + it.id + '\')">\u270e Editar</button>';
+    if (puedeGestionar) h += '<button onclick="borrarItem(\'' + it.id + '\')">\ud83d\uddd1 Borrar</button>';
     h += '</div>';
     h += '</div>';
     // Subítems (en la misma acción)
@@ -694,7 +697,11 @@ window.toggleHecho = async function (id) {
 
 // ── Alta / edición ─────────────────────────────────────────
 window.nuevoRoot = function (tipo) {
-  if (tipo === 'recurrente') { prepararModal({ modo: 'crear', parentId: '', tipoRaiz: 'suelto', recurrenteDefault: true }); return; }
+  if (tipo === 'recurrente') {
+    var pm = byId['proj-mantenimiento'] ? 'proj-mantenimiento' : '';
+    prepararModal({ modo: 'crear', parentId: pm, recurrenteDefault: true });
+    return;
+  }
   prepararModal({ modo: 'crear', parentId: '', tipoRaiz: tipo });
 };
 window.nuevoHijo = function (pid) { prepararModal({ modo: 'crear', parentId: pid }); };
@@ -724,10 +731,9 @@ window.toggleCronoUI = function () {
 window.togglePadreUI = function () {
   var bp = document.getElementById('bloquePadre');
   if (!bp || bp.style.display === 'none') return; // selector oculto: no toca el bloque de alcance
-  var sinProy = (document.getElementById('itPadre').value === '');
-  document.getElementById('bloqueRaiz').style.display = sinProy ? 'block' : 'none';
-  document.getElementById('hijoNota').style.display = sinProy ? 'none' : 'block';
-  if (sinProy) toggleAlcanceUI();
+  // Toda actividad pertenece a un proyecto: el alcance se hereda (se oculta), se muestra la nota de hijo
+  document.getElementById('bloqueRaiz').style.display = 'none';
+  document.getElementById('hijoNota').style.display = 'block';
 };
 
 function prepararModal(o) {
@@ -780,28 +786,31 @@ function prepararModal(o) {
   toggleCompraUI();
   toggleCronoUI();
 
-  // Selector "Pertenece a…": solo al EDITAR, y solo si la pertenencia es representable
-  // (la actividad es de nivel superior, o hija directa de un proyecto de nivel superior).
+  // Selector "Pertenece a…": toda actividad que no sea un proyecto contenedor debe estar
+  // dentro de un proyecto. Se muestra al EDITAR (si la pertenencia es representable) y al
+  // crear una tarea recurrente. NO existe la opción "sin proyecto".
   var bp = document.getElementById('bloquePadre');
-  var origParent = it ? (it.parentId || '') : '';
-  var padreRaiz = origParent ? byId[origParent] : null;
-  var padreEsProyTop = !!(padreRaiz && padreRaiz.tipoRaiz === 'proyecto' && !padreRaiz.parentId);
-  var mostrarPadre = (o.modo === 'editar') && !esProyecto && (origParent === '' || padreEsProyTop);
+  var padreActual = parentId ? byId[parentId] : null;
+  var padreEsProyTop = !!(padreActual && padreActual.tipoRaiz === 'proyecto' && !padreActual.parentId);
+  var mostrarPadre = !esProyecto && (
+    (o.modo === 'editar' && (parentId === '' || padreEsProyTop))
+    || (!it && !!o.recurrenteDefault)
+  );
   if (mostrarPadre) {
     var proys = items.filter(function (x) { return !x.parentId && x.tipoRaiz === 'proyecto' && x.id !== (it ? it.id : ''); }).sort(byTitulo);
-    var opts = '<option value="">\ud83d\udccb Sin proyecto (suelta)</option>';
+    var opts = '';
     for (var pi = 0; pi < proys.length; pi++) opts += '<option value="' + proys[pi].id + '">\ud83d\udcc1 ' + esc(proys[pi].titulo) + '</option>';
     var selP = document.getElementById('itPadre');
     selP.innerHTML = opts;
-    selP.value = padreEsProyTop ? origParent : '';
-    bp.style.display = 'block';
+    selP.value = padreEsProyTop ? parentId : (proys[0] ? proys[0].id : '');
+    bp.style.display = proys.length ? 'block' : 'none';
   } else {
     bp.style.display = 'none';
   }
   togglePadreUI();
 
   var tipoTxt = esProyecto ? 'proyecto' : (esRecurrente(it || {}) || o.recurrenteDefault ? 'tarea recurrente' : 'actividad');
-  var nuevoTxt = esProyecto ? 'Nuevo proyecto' : (o.recurrenteDefault ? 'Nueva tarea recurrente' : (esRoot ? 'Nueva tarea suelta' : 'Nueva sub-actividad'));
+  var nuevoTxt = esProyecto ? 'Nuevo proyecto' : (o.recurrenteDefault ? 'Nueva tarea recurrente' : (esRoot ? 'Nueva actividad' : 'Nueva sub-actividad'));
   document.getElementById('modalItemTitulo').textContent = it ? ('Editar ' + tipoTxt) : nuevoTxt;
 
   abrirModal('modalItem');
@@ -809,7 +818,8 @@ function prepararModal(o) {
 
 window.guardarItem = async function () {
   var id = document.getElementById('itId').value;
-  var parentId = document.getElementById('itParent').value;
+  var selVisible0 = document.getElementById('bloquePadre').style.display !== 'none';
+  var parentId = (selVisible0 && document.getElementById('itPadre').value) ? document.getElementById('itPadre').value : document.getElementById('itParent').value;
   var esRoot = !parentId;
   var titulo = document.getElementById('itTitulo').value.trim();
   if (!titulo) { toast('Poné un título.', 'error'); return; }
@@ -854,6 +864,8 @@ window.guardarItem = async function () {
 
     // Frecuencia y tiempo estimado: cualquier actividad puede ser recurrente (los proyectos contenedores no)
     var esProyecto = esRoot && tipoRaiz === 'proyecto';
+    // Regla del modelo: toda actividad que no sea un proyecto contenedor debe pertenecer a un proyecto.
+    if (!esProyecto && !parentId) { toast('Toda actividad tiene que estar dentro de un proyecto. Eleg\u00ed uno en \u201cPertenece a\u201d.', 'error'); btn.disabled = false; return; }
     var recurrencia = esProyecto ? 0 : (parseInt(document.getElementById('itRecurrencia').value, 10) || 0);
     var tiempoEstimado = esProyecto ? 0 : (parseInt(document.getElementById('itTiempoEst').value, 10) || 0);
 

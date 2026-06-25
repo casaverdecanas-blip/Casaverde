@@ -144,7 +144,7 @@ const NAV_ADMIN_ITEMS = [
 
     // Items directos
     { href: 'dashboard.html',  icon: 'dashboard',      label: 'Dashboard'  },
-    { href: 'agenda.html',     icon: 'event_note',     label: 'Mi agenda'  },
+    { href: 'actividades.html', icon: 'account_tree',  label: 'Actividades' },
     { href: 'calendario.html', icon: 'calendar_month', label: 'Calendario' },
     { href: 'comunicacion.html', icon: 'forum',        label: 'Comunicación' },
 
@@ -191,11 +191,7 @@ const NAV_ADMIN_ITEMS = [
         group: 'Operaciones',
         icon:  'checklist',
         items: [
-            { href: 'tareas.html',         icon: 'checklist',            label: 'Tareas'             },
-            { href: 'tareas-admin.html',   icon: 'admin_panel_settings', label: 'Gestión tareas'     },
             { href: 'temporada.html',      icon: 'wb_sunny',             label: 'Temporada'          },
-            { href: 'pendientes.html',     icon: 'playlist_add_check',   label: 'Pendientes'         },
-            { sep: true },
             { href: 'limpieza-stats.html', icon: 'cleaning_services',    label: 'Análisis limpiezas' }
         ]
     },
@@ -228,8 +224,7 @@ const NAV_ADMIN_ITEMS = [
 
 const NAV_USER_ITEMS = [
     { href: 'dashboard.html',      icon: 'dashboard',          label: 'Inicio'       },
-    { href: 'tareas.html',         icon: 'checklist',          label: 'Tareas'       },
-    { href: 'pendientes.html',     icon: 'playlist_add_check', label: 'Pendientes'   },
+    { href: 'actividades.html',    icon: 'account_tree',       label: 'Actividades'  },
     { href: 'reservas.html',       icon: 'event',              label: 'Reservas'     },
     { href: 'presupuestos.html',   icon: 'request_quote',      label: 'Presupuestos' },
     { href: 'calendario.html',     icon: 'calendar_month',     label: 'Calendario'   },
@@ -251,14 +246,11 @@ const NAV_USER_ITEMS = [
 //  usados por puede() y renderNav().
 // ============================================================
 var _userDataActual = null;
-var ALWAYS_ALLOWED = ['dashboard', 'agenda', 'gastos-mantenimiento', 'notificaciones', 'manual-sistema'];
+var ALWAYS_ALLOWED = ['dashboard', 'actividades', 'gastos-mantenimiento', 'notificaciones', 'manual-sistema'];
 var CATALOGO_PERMISOS = [
     { grupo: 'Operación', icon: 'checklist', items: [
-        { href: 'tareas.html',         icon: 'checklist',            label: 'Tareas' },
-        { href: 'pendientes.html',     icon: 'playlist_add_check',   label: 'Pendientes' },
         { href: 'calendario.html',     icon: 'calendar_month',       label: 'Calendario' },
         { href: 'temporada.html',      icon: 'wb_sunny',             label: 'Temporada' },
-        { href: 'tareas-admin.html',   icon: 'admin_panel_settings', label: 'Gestión de tareas' },
         { href: 'limpieza-stats.html', icon: 'cleaning_services',    label: 'Análisis de limpiezas' },
         { href: 'comunicacion.html',   icon: 'forum',                label: 'Comunicación' }
     ]},
@@ -297,7 +289,7 @@ var CATALOGO_PERMISOS = [
 ];
 
 function construirNavColaborador() {
-    var nav = [{ href: 'dashboard.html', icon: 'dashboard', label: 'Inicio' }, { href: 'agenda.html', icon: 'event_note', label: 'Mi agenda' }];
+    var nav = [{ href: 'dashboard.html', icon: 'dashboard', label: 'Inicio' }, { href: 'actividades.html', icon: 'account_tree', label: 'Actividades' }];
     CATALOGO_PERMISOS.forEach(function(g) {
         var its = g.items.filter(function(x) { return puede(x.href); });
         if (its.length) nav.push({ group: g.grupo, icon: g.icon, items: its });
@@ -511,8 +503,9 @@ function mensajeConflicto(reserva) {
 
 
 // ── GESTIÓN AUTOMÁTICA DE LIMPIEZA ───────────────────────────────────────────
-function crearTareaLimpieza(reservaId, reservaData) {
-    // Por reserva se mantienen DOS tareas:
+function crearTareaLimpieza(reservaId, reservaData, creadorUid) {
+    // Por reserva se mantienen DOS tareas (ahora en la colección 'actividades',
+    // dentro del proyecto Limpiezas → categoría por cabaña):
     //  • limp-<id>  LIMPIEZA de ingreso → ventana [salida del anterior, check-in]; rojo desde 2 días antes.
     //  • ctrl-<id>  CONTROL de salida   → habilitado desde el check-out, con info del que sale.
     // Al guardar una reserva también se recalcula la ventana de la limpieza del SIGUIENTE huésped
@@ -528,6 +521,7 @@ function crearTareaLimpieza(reservaId, reservaData) {
 
     var caba = reservaData.caba;
     if (caba === undefined || caba === null) return;
+    var parentCat = 'limpiezas-cab-' + caba;   // categoría (por cabaña) dentro del proyecto Limpiezas
 
     Promise.all([
         db.collection('cabanas').doc(String(caba)).get(),
@@ -597,22 +591,33 @@ function crearTareaLimpieza(reservaId, reservaData) {
                     rol:              'ingreso',
                     nombre:           'Limpieza ingreso — ' + nombreCabana,
                     titulo:           'Limpieza ingreso — ' + nombreCabana,
+                    detalle:          descripcion,
                     cabana:           caba,
                     reservaId:        item.id,
                     recurrencia:      0,
                     fechaInicio:      isoDate(inicio),
                     fechaCheckIn:     isoDate(ci),
+                    hora:             horaEntra,
                     horaCheckIn:      horaEntra,
                     horaPuedeEmpezar: horaSale,
                     mismoDia:         mismoDia,
                     monto:            rd.costoLimpiezaBRL || 0,
-                    descripcion:      descripcion,
+                    cronometrable:    true,
+                    parentId:         parentCat,
+                    raizId:           'proj-limpiezas',
+                    tipoRaiz:         'proyecto',
+                    alcance:          'equipo',
+                    competencias:     [],
                     actualizadoEn:    firebase.firestore.FieldValue.serverTimestamp()
                 },
                 soloCrear: {
-                    estado:    'pendiente',
-                    prioridad: 'media',
-                    creadoEn:  firebase.firestore.FieldValue.serverTimestamp()
+                    estado:       'pendiente',
+                    prioridad:    'verde',
+                    hecho:        false,
+                    orden:        0,
+                    creadoEn:     firebase.firestore.FieldValue.serverTimestamp(),
+                    creadoPor:    creadorUid || null,
+                    creadoNombre: 'Sistema (reservas)'
                 }
             };
         };
@@ -629,64 +634,95 @@ function crearTareaLimpieza(reservaId, reservaData) {
         for (var k = 0; k < reservas.length; k++) { if (reservas[k].id === reservaId) { actual = reservas[k]; break; } }
         if (!actual) return;
 
-        var tareas = db.collection('tareas');
-        var jobs = [];
+        var col = db.collection('actividades');
 
-        // 1) Limpieza de la reserva actual.
-        var cl = camposLimpieza(actual);
-        if (cl) jobs.push(upsert(tareas.doc('limp-' + actual.id), cl.base, cl.soloCrear));
+        // Contenedores: proyecto "Limpiezas" → categoría por cabaña. Se crean si faltan.
+        var ahora = firebase.firestore.FieldValue.serverTimestamp();
+        var contenedor = function (titulo, pId, rId, color, cab) {
+            var o = {
+                titulo: titulo, nombre: titulo, detalle: '', tipoRaiz: 'proyecto', color: color || '',
+                parentId: pId, raizId: rId, orden: 0,
+                alcance: 'equipo', competencias: [],
+                cronometrable: false, estado: 'pendiente', prioridad: 'gris',
+                monto: 0, recurrencia: 0, esCompra: false, hecho: false,
+                creadoPor: creadorUid || null, creadoNombre: 'Sistema (reservas)', creadoEn: ahora
+            };
+            if (cab !== undefined && cab !== null) o.cabana = cab;
+            return o;
+        };
+        var ensureDoc = function (ref, meta) {
+            return ref.get().then(function (s) { if (!s.exists) return ref.set(meta); });
+        };
 
-        // 2) Control de salida de la reserva actual.
-        if (actual.co) {
-            var rd        = actual.data;
-            var personasC = rd.huespedes || ((rd.adultos || 0) + (rd.ninos || 0)) || '—';
-            var descCtrl  = [
-                '🔑 CONTROL DE SALIDA — ' + nombreCabana,
-                '   Sale: ' + (rd.nombre || 'huésped') + ' · ' + personasC + ' personas',
-                '   Check-out: ' + ddmm(actual.co) + (rd.horaSalida ? ' a las ' + rd.horaSalida + 'hs' : ''),
-                rd.notas ? '   Notas: ' + rd.notas : '',
-                '',
-                'Controlar inventario y estado: utensilios de cocina, toallas, sábanas; electrodomésticos (ventiladores, licuadora…); luces, espejos, inodoro.',
-                'Registrar faltantes/daños en la reserva y lanzar pendientes de mantenimiento para la próxima limpieza.'
-            ].filter(function(s) { return s !== null && s !== undefined && s !== ''; }).join('\n');
-            jobs.push(upsert(tareas.doc('ctrl-' + actual.id), {
-                tipo:          'control',
-                rol:           'salida',
-                nombre:        'Control de salida — ' + nombreCabana,
-                titulo:        'Control de salida — ' + nombreCabana,
-                cabana:        caba,
-                reservaId:     actual.id,
-                recurrencia:   0,
-                fechaInicio:   isoDate(actual.co),
-                fechaCheckOut: isoDate(actual.co),
-                descripcion:   descCtrl,
-                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
-            }, { estado: 'pendiente', prioridad: 'media', creadoEn: firebase.firestore.FieldValue.serverTimestamp() }));
-        }
+        return ensureDoc(col.doc('proj-limpiezas'), contenedor('Limpiezas', '', 'proj-limpiezas', '#3f6f8f'))
+        .then(function () { return ensureDoc(col.doc(parentCat), contenedor(nombreCabana, 'proj-limpiezas', 'proj-limpiezas', '', caba)); })
+        .then(function () {
+            var jobs = [];
 
-        // 3) Recalcular la ventana de la limpieza del SIGUIENTE huésped (solo si ya tiene su tarea).
-        if (actual.co) {
-            var follower = null;
-            for (var j = 0; j < reservas.length; j++) {
-                var x = reservas[j];
-                if (x.id === actual.id || !x.ci) continue;
-                if (x.ci.getTime() >= actual.co.getTime()) {
-                    if (!follower || x.ci.getTime() < follower.ci.getTime()) follower = x;
+            // 1) Limpieza de la reserva actual.
+            var cl = camposLimpieza(actual);
+            if (cl) jobs.push(upsert(col.doc('limp-' + actual.id), cl.base, cl.soloCrear));
+
+            // 2) Control de salida de la reserva actual.
+            if (actual.co) {
+                var rd        = actual.data;
+                var personasC = rd.huespedes || ((rd.adultos || 0) + (rd.ninos || 0)) || '—';
+                var descCtrl  = [
+                    '🔑 CONTROL DE SALIDA — ' + nombreCabana,
+                    '   Sale: ' + (rd.nombre || 'huésped') + ' · ' + personasC + ' personas',
+                    '   Check-out: ' + ddmm(actual.co) + (rd.horaSalida ? ' a las ' + rd.horaSalida + 'hs' : ''),
+                    rd.notas ? '   Notas: ' + rd.notas : '',
+                    '',
+                    'Controlar inventario y estado: utensilios de cocina, toallas, sábanas; electrodomésticos (ventiladores, licuadora…); luces, espejos, inodoro.',
+                    'Registrar faltantes/daños en la reserva y lanzar pendientes de mantenimiento para la próxima limpieza.'
+                ].filter(function(s) { return s !== null && s !== undefined && s !== ''; }).join('\n');
+                jobs.push(upsert(col.doc('ctrl-' + actual.id), {
+                    tipo:          'control',
+                    rol:           'salida',
+                    nombre:        'Control de salida — ' + nombreCabana,
+                    titulo:        'Control de salida — ' + nombreCabana,
+                    detalle:       descCtrl,
+                    cabana:        caba,
+                    reservaId:     actual.id,
+                    recurrencia:   0,
+                    fechaInicio:   isoDate(actual.co),
+                    fechaVencimiento: isoDate(actual.co),
+                    fechaCheckOut: isoDate(actual.co),
+                    monto:         0,
+                    cronometrable: true,
+                    parentId:      parentCat,
+                    raizId:        'proj-limpiezas',
+                    tipoRaiz:      'proyecto',
+                    alcance:       'equipo',
+                    competencias:  [],
+                    actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+                }, { estado: 'pendiente', prioridad: 'verde', hecho: false, orden: 1, creadoEn: firebase.firestore.FieldValue.serverTimestamp(), creadoPor: creadorUid || null, creadoNombre: 'Sistema (reservas)' }));
+            }
+
+            // 3) Recalcular la ventana de la limpieza del SIGUIENTE huésped (solo si ya tiene su tarea).
+            if (actual.co) {
+                var follower = null;
+                for (var j = 0; j < reservas.length; j++) {
+                    var x = reservas[j];
+                    if (x.id === actual.id || !x.ci) continue;
+                    if (x.ci.getTime() >= actual.co.getTime()) {
+                        if (!follower || x.ci.getTime() < follower.ci.getTime()) follower = x;
+                    }
+                }
+                if (follower) {
+                    var clf = camposLimpieza(follower);
+                    if (clf) {
+                        var refF = col.doc('limp-' + follower.id);
+                        jobs.push(refF.get().then(function(snap) {
+                            if (snap.exists) return refF.update(clf.base);
+                        }));
+                    }
                 }
             }
-            if (follower) {
-                var clf = camposLimpieza(follower);
-                if (clf) {
-                    var refF = tareas.doc('limp-' + follower.id);
-                    jobs.push(refF.get().then(function(snap) {
-                        if (snap.exists) return refF.update(clf.base);
-                    }));
-                }
-            }
-        }
 
-        return Promise.all(jobs).then(function() {
-            console.log('Tareas de ingreso/control sincronizadas para la reserva', reservaId);
+            return Promise.all(jobs).then(function() {
+                console.log('Limpiezas/controles sincronizados en actividades para la reserva', reservaId);
+            });
         });
     }).catch(function(err) {
         console.error('Error al sincronizar tareas de reserva:', err);
@@ -695,9 +731,9 @@ function crearTareaLimpieza(reservaId, reservaData) {
 
 // Al anular/eliminar una reserva: borra sus tareas y recalcula la ventana del huésped siguiente.
 function alAnularReserva(reservaId) {
-    var tareas = db.collection('tareas');
-    return tareas.doc('limp-' + reservaId).delete().catch(function() {})
-    .then(function() { return tareas.doc('ctrl-' + reservaId).delete().catch(function() {}); })
+    var col = db.collection('actividades');
+    return col.doc('limp-' + reservaId).delete().catch(function() {})
+    .then(function() { return col.doc('ctrl-' + reservaId).delete().catch(function() {}); })
     .then(function() { return db.collection('reservas').doc(reservaId).get(); })
     .then(function(snap) {
         if (!snap.exists) return;
