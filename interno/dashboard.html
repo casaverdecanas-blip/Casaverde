@@ -328,7 +328,7 @@
                 <span class="material-icons">playlist_add_check</span>
                 Pendientes
             </div>
-            <a href="pendientes.html" class="action-link">
+            <a href="actividades.html" class="action-link">
                 Ver todos <span class="material-icons" style="font-size:14px;">arrow_forward</span>
             </a>
         </div>
@@ -342,11 +342,11 @@
         <div class="db-section-head">
             <div class="db-section-title">
                 <span class="material-icons" style="color:var(--color-danger);">priority_high</span>
-                Tareas urgentes
+                Actividades urgentes
             </div>
-            <a href="tareas.html" class="btn btn-secondary btn-sm">
-                <span class="material-icons">checklist</span>
-                Ver todas las tareas
+            <a href="actividades.html" class="btn btn-secondary btn-sm">
+                <span class="material-icons">account_tree</span>
+                Ver actividades
             </a>
         </div>
         <div id="tareasUrgentesContainer">
@@ -442,6 +442,7 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="utils.js"></script>
+<script src="actividades-core.js"></script>
 <script>
 (async function() {
     // CORREGIDO: usar await con desestructuración
@@ -457,7 +458,7 @@
     var formatFecha   = CVC.formatFecha;
     var badgeEstado   = CVC.badgeEstado;
     var badgePrioridad = CVC.badgePrioridad;
-    var urgenciaTarea = CVC.urgenciaTarea;
+    var urgenciaTarea = CVC.actSemaforo || CVC.urgenciaTarea;
     var showEmpty     = CVC.showEmpty;
     var showError     = CVC.showError;
     var showToast     = CVC.showToast;
@@ -495,11 +496,11 @@
             ]
         },
         {
-            label: 'Operaciones', icon: 'checklist', page: 'tareas.html',
+            label: 'Operaciones', icon: 'checklist', page: 'actividades.html',
             items: [
-                { label:'Tareas', icon:'checklist', href:'tareas.html' },
-                { label:'Gestión tareas', icon:'admin_panel_settings', href:'tareas-admin.html' },
-                { label:'Pendientes', icon:'playlist_add_check', href:'pendientes.html' },
+                { label:'Actividades', icon:'account_tree', href:'actividades.html' },
+                { label:'Temporada', icon:'wb_sunny', href:'temporada.html' },
+                { label:'Análisis limpiezas', icon:'cleaning_services', href:'limpieza-stats.html' },
             ]
         },
         {
@@ -579,45 +580,56 @@
         }
     };
 
-    var reservas = [], tareas = [], pendientes = [];
+    var reservas = [], actividades = [];
 
     try {
-        var [resSnap, tarSnap, presSnap, pendSnap, honSnap] = await Promise.all([
+        var [resSnap, actSnap, presSnap, honSnap] = await Promise.all([
             db.collection('reservas').get().catch(function() { return { docs:[] }; }),
-            db.collection('tareas').get().catch(function() { return { docs:[] }; }),
+            db.collection('actividades').get().catch(function() { return { docs:[] }; }),
             db.collection('presupuestos').get().catch(function() { return { docs:[] }; }),
-            db.collection('pendientes').get().catch(function() { return { docs:[] }; }),
             esAdmin ? Promise.resolve({ docs:[] }) : db.collection('honorarios').where('uid', '==', user.uid).get().catch(function() { return { docs:[] }; }),
         ]);
 
-        reservas   = resSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
-        tareas     = tarSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
-        pendientes = pendSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+        if (typeof CVC.actCargarTemporada === 'function') { try { await CVC.actCargarTemporada(); } catch (e) {} }
+
+        reservas = resSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+
+        // Actividades: solo hojas trabajables (sin proyectos ni categorías) y visibles para quien mira.
+        var actTodas = actSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+        var conHijos = {};
+        actTodas.forEach(function(a) { if (a.parentId) conHijos[a.parentId] = true; });
+        function esContenedor(a) {
+            if (conHijos[a.id]) return true;                          // tiene hijos -> categoría/proyecto
+            if (a.tipoRaiz === 'proyecto' && !a.parentId) return true; // proyecto raíz
+            return false;
+        }
+        function visibleAct(a) {
+            if (esAdmin) return true;
+            if (a.alcance === 'equipo') return true;
+            if (a.creadoPor === user.uid) return true;
+            return (a.competencias || []).indexOf(user.uid) !== -1;
+        }
+        actividades = actTodas.filter(function(a) { return visibleAct(a) && !esContenedor(a); });
+
         var presupuestos = presSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
 
         if (esAdmin) {
-            renderKPIs(reservas, tareas, pendientes);
+            renderKPIs(reservas, actividades);
             renderCheckins(reservas);
-            renderPendientes(pendientes);
-            renderTareasUrgentes(tareas);
+            renderPendientes(actividades);
+            renderTareasUrgentes(actividades);
             renderReservasPendientes(reservas);
             renderPresupuestos(presupuestos);
-            cargarAlertas(reservas, tareas);
+            cargarAlertas(reservas, actividades);
             cargarWidgetCuentas();
         } else {
-            // -- Vista del colaborador: tareas, sus pendientes y saldo ----
-            var misPendientes = pendientes.filter(function(p) {
-                if (p.visibilidad === 'admin') return false;   // privado del admin
-                if (p.visibilidad === 'todos') return true;     // general
-                return p.asignadoA === user.uid;                // asignado a mí
-            });
             prepararVistaColaborador();
             renderSaldoColaborador(honSnap);
-            renderTareasUrgentes(tareas);
-            renderPendientes(misPendientes);
+            renderTareasUrgentes(actividades);
+            renderPendientes(actividades);
             renderCheckins(reservas);
-            renderKPIs(reservas, tareas, misPendientes);
-            cargarAlertas(reservas, tareas);
+            renderKPIs(reservas, actividades);
+            cargarAlertas(reservas, actividades);
         }
 
         cargarComunicacionDash();
@@ -627,12 +639,12 @@
         showError('#kpiGrid', 'Error al cargar', e.message, function() { location.reload(); })
     }
 
-    function renderKPIs(reservas, tareas, pendientes) {
+    function renderKPIs(reservas, acts) {
         var resActivas  = reservas.filter(function(r) { return ['confirmada','airbnb_activa','pendiente'].includes(r.estado); })
         var resPend     = reservas.filter(function(r) { return r.estado === 'pendiente'; })
-        var tarPend     = tareas.filter(function(t) { return t.estado !== 'finalizada' && t.activa !== false; })
-        var tarUrg      = tarPend.filter(function(t) { return urgenciaTarea(t).color === 'rojo'; })
-        var pendPend    = pendientes.filter(function(p) { return !p.completado; })
+        var abiertas    = acts.filter(function(a) { return a.estado !== 'finalizada' && !a.hecho; })
+        var urgentes    = abiertas.filter(function(a) { return urgenciaTarea(a).color === 'rojo'; })
+        var puntuales   = abiertas.filter(function(a) { return (parseInt(a.recurrencia, 10) || 0) <= 0; })
 
         var mesActual   = new Date().toISOString().slice(0,7);
         var ingMes      = reservas
@@ -643,12 +655,12 @@
         var kpiData = [
             { cls:'reservas',   icon:'event',          num: resActivas.length,  label:'Reservas activas', sub: resPend.length > 0 ? resPend.length + ' sin confirmar' : 'Todas confirmadas', href:'reservas.html',
               ayuda:'Reservas activas incluye confirmadas, pendientes y de Airbnb. Las pendientes requieren tu confirmación.' },
-            { cls:'pendientes', icon:'playlist_add_check', num: pendPend.length, label:'Pendientes', sub:'Sin completar', href:'pendientes.html',
-              ayuda:'Cantidad de items pendientes sin marcar como completados.' },
-            { cls:'tareas',     icon:'checklist',      num: tarPend.length,     label:'Tareas activas', sub: tarUrg.length > 0 ? tarUrg.length + ' urgentes' : 'Sin urgencias', href:'tareas.html',
-              ayuda:'Tareas activas (pendientes + en curso). El contador de urgentes son las que superaron su fecha esperada.' },
-            { cls:'urgentes',   icon:'priority_high',  num: tarUrg.length,      label:'Tareas urgentes', sub:'Con atraso crítico', href:'tareas.html',
-              ayuda:'Tareas cuya fecha de inicio ya pasó y superaron el ciclo de recurrencia. Requieren atención inmediata.' },
+            { cls:'pendientes', icon:'playlist_add_check', num: puntuales.length, label:'Pendientes', sub:'Tareas puntuales sin hacer', href:'actividades.html',
+              ayuda:'Actividades puntuales (no recurrentes) todavía sin marcar como hechas.' },
+            { cls:'tareas',     icon:'account_tree',   num: abiertas.length,     label:'Actividades', sub: urgentes.length > 0 ? urgentes.length + ' urgentes' : 'Sin urgencias', href:'actividades.html',
+              ayuda:'Actividades abiertas (pendientes + en curso), recurrentes y puntuales.' },
+            { cls:'urgentes',   icon:'priority_high',  num: urgentes.length,     label:'Urgentes', sub:'Con atraso crítico', href:'actividades.html',
+              ayuda:'Actividades en rojo: vencidas, recurrentes que pasaron su ciclo, o limpiezas con check-in/checkout encima.' },
             { cls:'ingresos',   icon:'payments',       num: 'R$ ' + Math.round(ingMes / 1000) + 'k', label:'Ingresos del mes', sub:'Reservas confirmadas', href:'panel-financiero.html',
               ayuda:'Estimado basado en el total de reservas confirmadas con check-in en el mes actual. Para el balance real usá el Panel Financiero.' },
         ];
@@ -705,71 +717,68 @@
             }).join('') + '</div>';
     }
 
-    function renderPendientes(pendientes) {
+    function renderPendientes(acts) {
         var el = document.getElementById('pendientesContainer');
-        var activos = pendientes
-            .filter(function(p) { return !p.realizado; })
-            .sort(function(a,b) {
-                var ord = { rojo:0, amarillo:1, verde:2, gris:3 };
-                return (ord[a.semaforo]||3) - (ord[b.semaforo]||3);
-            })
+        var activos = acts
+            .filter(function(a) { return a.estado !== 'finalizada' && !a.hecho && (parseInt(a.recurrencia, 10) || 0) <= 0; })
+            .map(function(a) { return Object.assign({}, a, { _s: urgenciaTarea(a) }); })
+            .sort(function(a,b) { return (a._s.rank || 9) - (b._s.rank || 9); })
             .slice(0, 8);
 
         if (!activos.length) {
             el.innerHTML = '<div class="compact-empty">' +
                 '<span class="material-icons" style="font-size:16px;color:var(--color-success);">task_alt</span>' +
-                '¡Todo al día! Sin pendientes activos</div>';
+                '¡Todo al día! Sin pendientes puntuales</div>';
             return;
         }
         el.innerHTML = '<div class="compact-list">' +
-            activos.map(function(p) {
-                var semColor = p.semaforo === 'rojo' ? 'urg-rojo'
-                    : p.semaforo === 'amarillo' ? 'urg-amarillo'
-                    : p.semaforo === 'verde'    ? 'urg-verde'
+            activos.map(function(a) {
+                var c = a._s.color;
+                var semColor = c === 'rojo' ? 'urg-rojo'
+                    : c === 'amarillo' ? 'urg-amarillo'
+                    : c === 'verde'    ? 'urg-verde'
                     : 'urg-gris';
-                var semLabel = p.semaforo === 'rojo' ? 'Urgente'
-                    : p.semaforo === 'amarillo' ? 'Atención'
-                    : p.semaforo === 'verde'    ? 'Normal'
+                var semLabel = c === 'rojo' ? 'Urgente'
+                    : c === 'amarillo' ? 'Atención'
+                    : c === 'verde'    ? 'Normal'
                     : 'Sin prioridad';
-                return '<div class="pend-row">' +
+                var nom = a.titulo || a.nombre || '--';
+                return '<a href="actividades.html" class="pend-row" style="text-decoration:none;color:inherit;">' +
                     '<div class="urg-dot ' + semColor + '"></div>' +
                     '<div style="flex:1;min-width:0;">' +
                         '<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
-                            escapeHtml(p.texto||'--') +
+                            escapeHtml(nom) +
                         '</div>' +
-                        (p.asignadoNom ? '<div style="font-size:11px;color:var(--color-text-muted);">' + escapeHtml(p.asignadoNom) + '</div>' : '') +
+                        (a.creadoNombre ? '<div style="font-size:11px;color:var(--color-text-muted);">' + escapeHtml(a.creadoNombre) + '</div>' : '') +
                     '</div>' +
-                    '<span class="pend-badge ' + (p.semaforo === 'rojo' ? 'alta' : p.semaforo === 'amarillo' ? 'media' : 'baja') + '">' +
+                    '<span class="pend-badge ' + (c === 'rojo' ? 'alta' : c === 'amarillo' ? 'media' : 'baja') + '">' +
                         semLabel +
                     '</span>' +
-                '</div>';
+                '</a>';
             }).join('') + '</div>';
     }
 
-    function renderTareasUrgentes(tareas) {
+    function renderTareasUrgentes(acts) {
         var el = document.getElementById('tareasUrgentesContainer');
-        var activas = tareas.filter(function(t) { return t.estado !== 'finalizada' && t.activa !== false; })
-        var urgentes = activas
-            .map(function(t) { return Object.assign({}, t, { urg: urgenciaTarea(t) }); })
-            .filter(function(t) { return t.urg.color === 'rojo' || t.urg.color === 'amarillo'; })
-            .sort(function(a,b) {
-                var ord = { rojo:0, amarillo:1 };
-                return (ord[a.urg.color]||2) - (ord[b.urg.color]||2);
-            })
+        var urgentes = acts
+            .filter(function(a) { return a.estado !== 'finalizada' && !a.hecho && (parseInt(a.recurrencia, 10) || 0) > 0; })
+            .map(function(a) { return Object.assign({}, a, { urg: urgenciaTarea(a) }); })
+            .filter(function(a) { return a.urg.color === 'rojo' || a.urg.color === 'amarillo'; })
+            .sort(function(a,b) { return (a.urg.rank || 9) - (b.urg.rank || 9); })
             .slice(0, 8);
 
         if (!urgentes.length) {
             el.innerHTML = '<div class="compact-empty">' +
                 '<span class="material-icons" style="font-size:16px;color:var(--color-success);">check_circle</span>' +
-                'Sin tareas urgentes -- todo en plazo</div>';
+                'Sin actividades urgentes -- todo en plazo</div>';
             return;
         }
         el.innerHTML = '<div class="compact-list">' +
-            urgentes.map(function(t) { return '<a href="tareas.html?id=' + t.id + '" class="compact-row">' +
+            urgentes.map(function(t) { return '<a href="actividades.html" class="compact-row">' +
                     '<div class="urg-dot ' + (t.urg.color === 'rojo' ? 'urg-rojo' : 'urg-amarillo') + '"></div>' +
                     '<div class="compact-row__main">' +
-                        '<div class="compact-row__title">' + escapeHtml(t.nombre||'--') + '</div>' +
-                        '<div class="compact-row__sub">' + (t.fechaInicio||'Sin fecha') + '</div>' +
+                        '<div class="compact-row__title">' + escapeHtml(t.titulo || t.nombre || '--') + '</div>' +
+                        '<div class="compact-row__sub">' + (t.fechaInicio || 'Sin fecha') + '</div>' +
                     '</div>' +
                     '<div class="compact-row__side">' +
                         '<span style="font-size:11px;font-weight:700;color:' +(t.urg.color === 'rojo' ? 'var(--color-danger)' : '#9B5400') + ';">' +
@@ -896,23 +905,23 @@
             return ci >= hoy && ci <= hoy48;
         });
         for (var r of prox48) {
-            var tieneTask = tareas.some(function(t) { return t.reservaId === r.id && t.tipo === 'limpieza' && t.estado !== 'finalizada'; });
+            var tieneTask = tareas.some(function(t) { return t.reservaId === r.id && t.tipo === 'limpieza' && t.estado !== 'finalizada' && !t.hecho; });
             if (!tieneTask) {
                 var ci   = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
                 var difH = Math.round((ci - hoy) / 3600000);
                 alertas.push({ nivel:'critico', icon:'cleaning_services',
                     title:'Sin tarea de limpieza -- ' + escapeHtml(r.nombre||'Reserva'),
                     desc:'Check-in en ' + (difH < 24 ? difH + 'hs' : 'mañana') + ' . Cabaña ' + r.caba,
-                    href:'tareas.html' });
+                    href:'actividades.html' });
             }
         }
 
-        var tarRojas = tareas.filter(function(t) { return t.estado !== 'finalizada' && t.activa !== false && urgenciaTarea(t).color === 'rojo'; });
+        var tarRojas = tareas.filter(function(t) { return t.estado !== 'finalizada' && !t.hecho && urgenciaTarea(t).color === 'rojo'; });
         if (tarRojas.length) {
             alertas.push({ nivel:'critico', icon:'warning',
-                title: tarRojas.length + ' tarea' + (tarRojas.length > 1 ? 's' : '') + ' con atraso crítico',
-                desc: tarRojas.slice(0,3).map(function(t) { return t.nombre; }).join(' . ') + (tarRojas.length > 3 ? ' y mas...' : ''),
-                href:'tareas.html' });
+                title: tarRojas.length + ' actividad' + (tarRojas.length > 1 ? 'es' : '') + ' con atraso crítico',
+                desc: tarRojas.slice(0,3).map(function(t) { return t.titulo || t.nombre; }).join(' . ') + (tarRojas.length > 3 ? ' y mas...' : ''),
+                href:'actividades.html' });
         }
 
         try {

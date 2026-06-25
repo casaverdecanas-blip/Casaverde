@@ -1395,46 +1395,63 @@ function inyectarBotonGasto(paginaActiva) {
     } catch (e) { /* no bloquea */ }
 }
 
+function _cerrarUnDrop(dropEl) {
+    if (!dropEl) return;
+    dropEl.classList.remove('open');
+    var panel = document.querySelector('.nav-dropdown__panel[data-drop="' + dropEl.id + '"]');
+    if (!panel) panel = dropEl.querySelector('.nav-dropdown__panel');
+    if (panel) {
+        panel.style.display = '';
+        panel.style.position = '';
+        panel.style.top = '';
+        panel.style.left = '';
+        panel.style.zIndex = '';
+        panel.removeAttribute('data-drop');
+        if (panel.parentNode === document.body) dropEl.appendChild(panel);
+    }
+}
+
 function toggleNavDrop(e, id) {
     e.stopPropagation();
 
-    const dropEl = document.getElementById(id);
+    var dropEl = document.getElementById(id);
     if (!dropEl) return;
 
-    const estaAbierto = dropEl.classList.contains('open');
+    var yaAbierto = dropEl.classList.contains('open');
 
-    // Cerrar todos los dropdowns abiertos
-    document.querySelectorAll('.nav-dropdown.open').forEach(function(d) {
-        d.classList.remove('open');
-        const p = d.querySelector('.nav-dropdown__panel');
-        if (p) { p.style.top = ''; p.style.left = ''; }
-    });
+    // Cerrar todos los dropdowns abiertos (devuelve el panel a su lugar)
+    document.querySelectorAll('.nav-dropdown.open').forEach(_cerrarUnDrop);
 
-    if (estaAbierto) return;
+    if (yaAbierto) return;
 
-    // Posicionar el panel con fixed (escapa del overflow del nav)
-    const trigger = dropEl.querySelector('.nav-dropdown__trigger');
-    const rect    = trigger.getBoundingClientRect();
-    const panel   = dropEl.querySelector('.nav-dropdown__panel');
+    var trigger = dropEl.querySelector('.nav-dropdown__trigger');
+    var panel   = dropEl.querySelector('.nav-dropdown__panel');
+    if (!trigger || !panel) return;
 
-    panel.style.top  = (rect.bottom + 2) + 'px';
-    panel.style.left = rect.left + 'px';
+    var rect = trigger.getBoundingClientRect();
+
+    // Colgar el panel del body: asi 'fixed' no lo recorta un overflow del nav
+    // ni lo descoloca un ancestro con transform (era el bug en tablet/iPad).
+    panel.setAttribute('data-drop', id);
+    document.body.appendChild(panel);
+    panel.style.position = 'fixed';
+    panel.style.zIndex   = '4000';
+    panel.style.display  = 'block';
+    panel.style.top      = (rect.bottom + 2) + 'px';
+    panel.style.left     = rect.left + 'px';
 
     dropEl.classList.add('open');
 
-    // Ajustar si se sale por la derecha de la pantalla
-    const panelRect = panel.getBoundingClientRect();
-    if (panelRect.right > window.innerWidth - 8) {
-        panel.style.left = (rect.right - panelRect.width) + 'px';
+    // Si se sale por la derecha de la pantalla, alinear al borde del trigger
+    var pr = panel.getBoundingClientRect();
+    if (pr.right > window.innerWidth - 8) {
+        var nl = rect.right - pr.width;
+        panel.style.left = (nl < 8 ? 8 : nl) + 'px';
     }
 }
 
 function _cerrarDropdowns() {
-    document.querySelectorAll('.nav-dropdown.open').forEach(function(d) {
-        d.classList.remove('open');
-        const p = d.querySelector('.nav-dropdown__panel');
-        if (p) { p.style.top = ''; p.style.left = ''; }
-    });
+    document.querySelectorAll('.nav-dropdown.open').forEach(_cerrarUnDrop);
 }
 
 window.toggleNavDrop = toggleNavDrop;
