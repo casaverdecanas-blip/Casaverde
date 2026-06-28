@@ -946,34 +946,30 @@
             }
         } catch(e) {}
 
-        // ── Novedades de TU agenda personal (recordatorios hoy / vencidos) ──
+        // ── Tus actividades con fecha (hoy / vencidas) ──
         try {
             var hIso = new Date().toISOString().slice(0, 10);
-            var agSnap = await db.collection('agenda_items').where('uid', '==', user.uid).get();
-            var agHoy = 0, agVenc = 0, aNotificar = [];
-            agSnap.forEach(function(d) {
-                var x = d.data(); x.id = d.id;
-                if (x.hecho) return;
-                if (x.fecha === hIso) agHoy++;
-                else if (x.fecha && x.fecha < hIso) agVenc++;
-                if (!x.notificado && x.fecha && x.fecha <= hIso) aNotificar.push(x);
+            var fechaRefAct = function(a) { return a.fechaVencimiento || a.fechaCheckIn || a.fechaInicio || ''; };
+            var esMia = function(a) { return a.creadoPor === user.uid || (a.competencias || []).indexOf(user.uid) !== -1; };
+            var agHoy = 0, agVenc = 0;
+            tareas.forEach(function(a) {
+                if (a.estado === 'finalizada' || a.hecho) return;
+                if (!esMia(a)) return;
+                var f = String(fechaRefAct(a)).slice(0, 10);
+                if (!f) return;
+                if (f === hIso) agHoy++;
+                else if (f < hIso) agVenc++;
             });
             if (agHoy || agVenc) {
                 var partesAg = [];
                 if (agHoy) partesAg.push(agHoy + ' para hoy');
-                if (agVenc) partesAg.push(agVenc + ' vencido' + (agVenc > 1 ? 's' : ''));
+                if (agVenc) partesAg.push(agVenc + ' vencida' + (agVenc > 1 ? 's' : ''));
                 alertas.push({ nivel: agVenc ? 'atencion' : 'info', icon: 'event_note',
-                    title: 'Agenda: ' + partesAg.join(' y '),
-                    desc: 'Recordatorios y tareas personales pendientes',
-                    href: 'agenda.html' });
+                    title: 'Tus actividades: ' + partesAg.join(' y '),
+                    desc: 'Actividades tuyas con fecha, sin completar',
+                    href: 'actividades.html' });
             }
-            // Surfacing en Notificaciones: registrar una vez los vencidos/de hoy
-            aNotificar.forEach(function(it) {
-                var cuando = (it.fecha === hIso) ? 'hoy' : ('vencido (' + it.fecha + ')');
-                if (CVC.registrarEvento) CVC.registrarEvento('recordatorio', 'Recordatorio ' + cuando + ': ' + (it.titulo || ''), [user.uid]);
-                db.collection('agenda_items').doc(it.id).update({ notificado: true }).catch(function() {});
-            });
-        } catch (e) { /* agenda no disponible: no bloquea el dashboard */ }
+        } catch (e) { /* no bloquea el dashboard */ }
 
         if (!alertas.length) return;
         document.getElementById('alertasList').innerHTML = alertas.map(function(a) {
