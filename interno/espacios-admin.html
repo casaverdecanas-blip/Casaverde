@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Espacios comunes · Casa Verde Canas</title>
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        /* ── Sección label ───────────────────────────────────── */
+        .sec-label {
+            font-size: var(--text-xs); font-weight: 700;
+            text-transform: uppercase; letter-spacing: .07em;
+            color: var(--color-text-muted);
+            margin: var(--space-5) 0 var(--space-3);
+            padding-bottom: var(--space-2);
+            border-bottom: 1px solid var(--color-border);
+            display: flex; align-items: center; gap: var(--space-2);
+        }
+        .sec-label .material-icons { font-size: 15px; }
+
+        /* ── Lang tabs ───────────────────────────────────────── */
+        .lang-tabs { display: flex; gap: var(--space-1); margin-bottom: var(--space-3); }
+        .lang-tab {
+            padding: 4px 12px; border-radius: var(--radius-sm);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface); font-size: var(--text-xs);
+            font-weight: 600; cursor: pointer; transition: all .15s;
+        }
+        .lang-tab.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+        .lang-panel { display: none; }
+        .lang-panel.active { display: block; }
+
+        /* ── Espacio card en lista ───────────────────────────── */
+        .esp-list-card {
+            display: flex; justify-content: space-between; align-items: center;
+            gap: var(--space-4); padding: var(--space-4);
+            border: 1.5px solid var(--color-border);
+            border-radius: var(--radius-md); margin-bottom: var(--space-3);
+            background: var(--color-surface);
+            transition: border-color .15s, box-shadow .15s;
+        }
+        .esp-list-card:hover {
+            border-color: var(--color-primary-light);
+            box-shadow: 0 2px 8px rgba(45,90,39,.08);
+        }
+        .esp-list-card__foto {
+            width: 64px; height: 64px;
+            border-radius: var(--radius-sm);
+            object-fit: cover; flex-shrink: 0;
+            background: var(--color-surface-2);
+        }
+        .esp-list-card__body { flex: 1; min-width: 0; }
+        .esp-list-card__nombre { font-weight: 700; font-size: var(--text-md); color: var(--color-text-primary); }
+        .esp-list-card__meta { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 3px; line-height: 1.7; }
+
+        /* ── Editor de fotos ─────────────────────────────────── */
+        .foto-edit-card {
+            display: flex; gap: var(--space-3); align-items: flex-start;
+            padding: var(--space-3);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            background: var(--color-surface-2);
+            margin-bottom: var(--space-3);
+        }
+        .foto-edit-card__thumb {
+            width: 90px; height: 90px; flex-shrink: 0;
+            border-radius: var(--radius-sm);
+            object-fit: cover; background: var(--color-surface);
+            border: 1px solid var(--color-border);
+        }
+        .foto-edit-card__fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+        .foto-edit-card__actions { display: flex; flex-direction: column; gap: var(--space-2); flex-shrink: 0; }
+
+        /* ── FIX: spinner nativo para inputs numéricos ── */
+        input[type="number"].form-control { appearance: auto; -webkit-appearance: auto; }
+    </style>
+</head>
+<body>
+
+<!-- ── HEADER ──────────────────────────────────────────────── -->
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">cottage</span>
+        Casa Verde Canas
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip">
+            <span class="material-icons">person</span>
+            <span id="userName">—</span>
+        </div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons">logout</span> Salir
+        </button>
+    </div>
+</header>
+
+<!-- ── NAV ─────────────────────────────────────────────────── -->
+<nav class="admin-nav" id="appNav"></nav>
+
+<!-- ── CONTENIDO ───────────────────────────────────────────── -->
+<main class="admin-content">
+
+    <!-- Lista -->
+    <div class="card" id="listaCard">
+        <div class="card__header">
+            <h2 class="card__title">
+                <span class="material-icons">photo_library</span>
+                Espacios comunes
+            </h2>
+            <button class="btn btn-primary" onclick="nuevoEspacio()">
+                <span class="material-icons">add</span> Nuevo espacio
+            </button>
+        </div>
+        <p class="form-hint" style="margin:0 0 var(--space-3);">Estos espacios se muestran en el carrusel "Espacios comunes" del sitio público. Un espacio sin fotos no aparece.</p>
+        <div id="listaEspacios">
+            <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+        </div>
+    </div>
+
+    <!-- Formulario (oculto hasta nuevo/editar) -->
+    <div class="card" id="formCard" style="display:none;">
+        <div class="card__header">
+            <h2 class="card__title" id="formTitle">
+                <span class="material-icons">edit</span> Editar espacio
+            </h2>
+            <button class="btn btn-ghost" onclick="cancelarEdicion()">
+                <span class="material-icons">close</span> Cancelar
+            </button>
+        </div>
+
+        <input type="hidden" id="editDocId">
+
+        <!-- Nombre -->
+        <div class="sec-label"><span class="material-icons">badge</span> Nombre del espacio</div>
+        <div class="lang-tabs" id="nombreLangTabs">
+            <button class="lang-tab active" data-lang="es" data-group="nombre" onclick="switchLang(this)">🇪🇸 ES</button>
+            <button class="lang-tab" data-lang="pt" data-group="nombre" onclick="switchLang(this)">🇧🇷 PT</button>
+            <button class="lang-tab" data-lang="en" data-group="nombre" onclick="switchLang(this)">🇺🇸 EN</button>
+        </div>
+        <div class="lang-panel active" id="nombre-es">
+            <div class="form-group"><input id="nombreEs" class="form-control" placeholder="🇪🇸 Ej: Piscina"></div>
+        </div>
+        <div class="lang-panel" id="nombre-pt">
+            <div class="form-group"><input id="nombrePt" class="form-control" placeholder="🇧🇷 Ex: Piscina"></div>
+        </div>
+        <div class="lang-panel" id="nombre-en">
+            <div class="form-group"><input id="nombreEn" class="form-control" placeholder="🇺🇸 Ex: Pool"></div>
+        </div>
+
+        <!-- Orden -->
+        <div class="sec-label"><span class="material-icons">sort</span> Orden</div>
+        <div class="form-group">
+            <label class="form-label">Posición en el carrusel</label>
+            <input type="number" id="orden" class="form-control" step="1" min="0" value="0">
+            <p class="form-hint">Número más bajo aparece primero.</p>
+        </div>
+
+        <!-- Fotos -->
+        <div class="sec-label"><span class="material-icons">collections</span> Fotos</div>
+        <div style="display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-3);">
+            <button class="btn btn-secondary" id="btnAgregarFoto" onclick="agregarFoto()">
+                <span class="material-icons">add_a_photo</span> Agregar foto
+            </button>
+            <span id="fotoSubiendo" style="display:none;align-items:center;gap:6px;color:var(--color-text-muted);font-size:var(--text-sm);">
+                <span class="spinner" style="width:16px;height:16px;"></span> Subiendo foto...
+            </span>
+        </div>
+        <p class="form-hint" style="margin:0 0 var(--space-3);">Se suben desde la cámara o la galería del dispositivo. Se comprimen automáticamente.</p>
+        <div id="fotosEditor"></div>
+
+        <!-- Error -->
+        <div class="alert alert-danger" id="formError" style="display:none;margin-top:var(--space-4);">
+            <span class="material-icons">error</span>
+            <span id="formErrorText"></span>
+        </div>
+
+        <!-- Guardar -->
+        <div style="display:flex;gap:var(--space-3);flex-wrap:wrap;margin-top:var(--space-5);">
+            <button class="btn btn-primary" id="btnGuardar" onclick="guardarEspacio()">
+                <span class="material-icons">save</span> <span id="btnGuardarText">Guardar espacio</span>
+            </button>
+            <button class="btn btn-ghost" onclick="cancelarEdicion()">Cancelar</button>
+        </div>
+    </div>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async function() {
+    // Solo-admin por declaración; un colaborador entra solo si el admin
+    // le otorgó el permiso 'espacios-admin' (verificarAuth respeta el
+    // permiso granular por encima del rol fijo de la página).
+    var sesion = await CVC.verificarAuth(['admin']);
+    var user = sesion.user, userData = sesion.userData;
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+    CVC.renderNav('espacios-admin.html', userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('espacios-admin.html');
+
+    var db = CVC.db;
+    var escapeHtml = CVC.escapeHtml;
+    var showToast = CVC.showToast;
+
+    var _espacios = [];   // cache de la lista
+    var _fotos = [];      // fotos del espacio en edición: [{url, titulo, descripcion}]
+
+    // ── Tabs de idioma ────────────────────────────────────────
+    window.switchLang = function(btn) {
+        var group = btn.getAttribute('data-group');
+        var lang = btn.getAttribute('data-lang');
+        var tabs = document.querySelectorAll('[data-group="' + group + '"]');
+        for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+        btn.classList.add('active');
+        var panels = document.querySelectorAll('[id^="' + group + '-"]');
+        for (var j = 0; j < panels.length; j++) panels[j].classList.remove('active');
+        var target = document.getElementById(group + '-' + lang);
+        if (target) target.classList.add('active');
+    };
+
+    // ── Cargar lista ──────────────────────────────────────────
+    async function cargarEspacios() {
+        var cont = document.getElementById('listaEspacios');
+        try {
+            var snap = await db.collection('espacios_comunes').get();
+            _espacios = snap.docs.map(function(d) { return Object.assign({ docId: d.id }, d.data()); })
+                .sort(function(a, b) { return (a.orden || 0) - (b.orden || 0); });
+        } catch (e) {
+            cont.innerHTML = '<div style="color:var(--color-danger);">Error al cargar: ' + escapeHtml(e.message) + '</div>';
+            return;
+        }
+        if (!_espacios.length) {
+            cont.innerHTML = '<div class="state-empty" style="text-align:center;padding:var(--space-6);color:var(--color-text-muted);">' +
+                '<span class="material-icons" style="font-size:40px;margin-bottom:8px;display:block;">photo_library</span>' +
+                'No hay espacios comunes. Creá el primero.</div>';
+            return;
+        }
+        cont.innerHTML = _espacios.map(function(e) {
+            var nombre = escapeHtml((e.nombre && e.nombre.es) || e.docId);
+            var fotos = (e.fotos || []).filter(function(f) { return f && f.url; });
+            var foto = fotos.length ? fotos[0].url : '';
+            var thumb = foto
+                ? '<img class="esp-list-card__foto" src="' + escapeHtml(foto) + '" alt="' + nombre + '" onerror="this.style.display=\'none\'">'
+                : '<div class="esp-list-card__foto" style="display:flex;align-items:center;justify-content:center;"><span class="material-icons" style="color:var(--color-text-muted);font-size:28px;">image_not_supported</span></div>';
+            return '<div class="esp-list-card">' +
+                thumb +
+                '<div class="esp-list-card__body">' +
+                    '<div class="esp-list-card__nombre">' + nombre + '</div>' +
+                    '<div class="esp-list-card__meta">Orden ' + (e.orden != null ? e.orden : '—') + ' · ' + fotos.length + ' foto' + (fotos.length !== 1 ? 's' : '') + '</div>' +
+                    (fotos.length === 0 ? '<div style="margin-top:var(--space-2);"><span class="badge badge-neutral" style="color:var(--color-danger);">⚠ Sin fotos (no se muestra en el sitio)</span></div>' : '') +
+                '</div>' +
+                '<div style="display:flex;flex-direction:column;gap:var(--space-2);flex-shrink:0;">' +
+                    '<button class="btn btn-secondary btn-sm" onclick="editarEspacio(\'' + e.docId + '\')"><span class="material-icons">edit</span> Editar</button>' +
+                    '<button class="btn btn-danger btn-sm" onclick="eliminarEspacio(\'' + e.docId + '\')"><span class="material-icons">delete</span></button>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+    }
+
+    // ── Nuevo / Editar ────────────────────────────────────────
+    window.nuevoEspacio = function() {
+        document.getElementById('formTitle').innerHTML = '<span class="material-icons">add_circle</span> Nuevo espacio';
+        document.getElementById('editDocId').value = '';
+        document.getElementById('nombreEs').value = '';
+        document.getElementById('nombrePt').value = '';
+        document.getElementById('nombreEn').value = '';
+        var maxOrden = 0;
+        for (var i = 0; i < _espacios.length; i++) {
+            if ((_espacios[i].orden || 0) > maxOrden) maxOrden = _espacios[i].orden || 0;
+        }
+        document.getElementById('orden').value = (maxOrden + 1);
+        _fotos = [];
+        renderFotos();
+        document.getElementById('formError').style.display = 'none';
+        mostrarForm();
+    };
+
+    window.editarEspacio = async function(docId) {
+        var snap;
+        try { snap = await db.collection('espacios_comunes').doc(docId).get(); }
+        catch (e) { showToast('Error: ' + e.message, 'error'); return; }
+        if (!snap.exists) return;
+        var e = snap.data();
+        document.getElementById('formTitle').innerHTML = '<span class="material-icons">edit</span> Editar espacio';
+        document.getElementById('editDocId').value = docId;
+        document.getElementById('nombreEs').value = (e.nombre && e.nombre.es) || '';
+        document.getElementById('nombrePt').value = (e.nombre && e.nombre.pt) || '';
+        document.getElementById('nombreEn').value = (e.nombre && e.nombre.en) || '';
+        document.getElementById('orden').value = (e.orden != null ? e.orden : '');
+        _fotos = (e.fotos || []).filter(function(f) { return f && f.url; }).map(function(f) {
+            return { url: f.url, titulo: f.titulo || '', descripcion: f.descripcion || '' };
+        });
+        renderFotos();
+        document.getElementById('formError').style.display = 'none';
+        mostrarForm();
+    };
+
+    // ── Editor de fotos ───────────────────────────────────────
+    function renderFotos() {
+        var cont = document.getElementById('fotosEditor');
+        if (!_fotos.length) {
+            cont.innerHTML = '<div style="color:var(--color-text-muted);font-size:var(--text-sm);padding:var(--space-3) 0;">Todavía no hay fotos. Tocá "Agregar foto".</div>';
+            return;
+        }
+        cont.innerHTML = _fotos.map(function(f, i) {
+            return '<div class="foto-edit-card">' +
+                '<img class="foto-edit-card__thumb" src="' + escapeHtml(f.url) + '" loading="lazy">' +
+                '<div class="foto-edit-card__fields">' +
+                    '<input class="form-control fe-titulo" data-idx="' + i + '" placeholder="Título (opcional)" value="' + escapeHtml(f.titulo || '') + '">' +
+                    '<input class="form-control fe-desc" data-idx="' + i + '" placeholder="Descripción (opcional)" value="' + escapeHtml(f.descripcion || '') + '">' +
+                '</div>' +
+                '<div class="foto-edit-card__actions">' +
+                    '<button class="btn btn-ghost btn-sm" title="Subir" onclick="moverFoto(' + i + ',-1)"' + (i === 0 ? ' disabled' : '') + '><span class="material-icons">arrow_upward</span></button>' +
+                    '<button class="btn btn-ghost btn-sm" title="Bajar" onclick="moverFoto(' + i + ',1)"' + (i === _fotos.length - 1 ? ' disabled' : '') + '><span class="material-icons">arrow_downward</span></button>' +
+                    '<button class="btn btn-danger btn-sm" title="Eliminar" onclick="eliminarFoto(' + i + ')"><span class="material-icons">delete</span></button>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+        // Listeners de texto (actualizan _fotos sin re-render para no perder el foco)
+        var titulos = cont.querySelectorAll('.fe-titulo');
+        for (var t = 0; t < titulos.length; t++) {
+            titulos[t].addEventListener('input', function(ev) {
+                var idx = parseInt(ev.target.getAttribute('data-idx'), 10);
+                if (_fotos[idx]) _fotos[idx].titulo = ev.target.value;
+            });
+        }
+        var descs = cont.querySelectorAll('.fe-desc');
+        for (var d = 0; d < descs.length; d++) {
+            descs[d].addEventListener('input', function(ev) {
+                var idx = parseInt(ev.target.getAttribute('data-idx'), 10);
+                if (_fotos[idx]) _fotos[idx].descripcion = ev.target.value;
+            });
+        }
+    }
+
+    window.moverFoto = function(idx, delta) {
+        var ni = idx + delta;
+        if (ni < 0 || ni >= _fotos.length) return;
+        var tmp = _fotos[idx];
+        _fotos[idx] = _fotos[ni];
+        _fotos[ni] = tmp;
+        renderFotos();
+    };
+
+    window.eliminarFoto = function(idx) {
+        _fotos.splice(idx, 1);
+        renderFotos();
+    };
+
+    window.agregarFoto = function() {
+        CVC.elegirFuenteFoto(function(file) {
+            if (!file) return;
+            var btn = document.getElementById('btnAgregarFoto');
+            var estado = document.getElementById('fotoSubiendo');
+            btn.disabled = true;
+            estado.style.display = 'inline-flex';
+            CVC.subirComprobante(file, 'espacios', null).then(function(url) {
+                _fotos.push({ url: url, titulo: '', descripcion: '' });
+                renderFotos();
+            }).catch(function(e) {
+                showToast('No se pudo subir la foto: ' + e.message, 'error');
+            }).then(function() {
+                btn.disabled = false;
+                estado.style.display = 'none';
+            });
+        });
+    };
+
+    // ── Guardar / Eliminar ────────────────────────────────────
+    window.guardarEspacio = async function() {
+        var docId = document.getElementById('editDocId').value;
+        var nombreEs = document.getElementById('nombreEs').value.trim();
+        document.getElementById('formError').style.display = 'none';
+        if (!nombreEs) { mostrarErrorForm('El nombre en español es requerido.'); return; }
+        var orden = parseInt(document.getElementById('orden').value, 10);
+        if (isNaN(orden)) orden = 0;
+
+        var btn = document.getElementById('btnGuardar');
+        var text = document.getElementById('btnGuardarText');
+        btn.disabled = true; text.textContent = 'Guardando...';
+        try {
+            var data = {
+                nombre: {
+                    es: nombreEs,
+                    pt: document.getElementById('nombrePt').value.trim(),
+                    en: document.getElementById('nombreEn').value.trim()
+                },
+                orden: orden,
+                fotos: _fotos.map(function(f) {
+                    return { url: f.url, titulo: (f.titulo || '').trim(), descripcion: (f.descripcion || '').trim() };
+                }),
+                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            if (docId) {
+                await db.collection('espacios_comunes').doc(docId).update(data);
+            } else {
+                data.creadoEn = firebase.firestore.FieldValue.serverTimestamp();
+                await db.collection('espacios_comunes').add(data);
+            }
+            showToast('Espacio "' + nombreEs + '" guardado.', 'success');
+            cancelarEdicion();
+            await cargarEspacios();
+        } catch (e) {
+            mostrarErrorForm('Error al guardar: ' + e.message);
+        } finally {
+            btn.disabled = false; text.textContent = 'Guardar espacio';
+        }
+    };
+
+    window.cancelarEdicion = function() {
+        document.getElementById('formCard').style.display = 'none';
+        document.getElementById('listaCard').scrollIntoView({ behavior: 'smooth' });
+    };
+
+    window.eliminarEspacio = async function(docId) {
+        var nombre = docId;
+        for (var i = 0; i < _espacios.length; i++) {
+            if (_espacios[i].docId === docId) {
+                nombre = (_espacios[i].nombre && _espacios[i].nombre.es) || docId;
+                break;
+            }
+        }
+        if (!confirm('¿Eliminar el espacio "' + nombre + '"?\nEsta acción no se puede deshacer.')) return;
+        try {
+            await db.collection('espacios_comunes').doc(docId).delete();
+            showToast('Espacio "' + nombre + '" eliminado.', 'warning');
+            await cargarEspacios();
+        } catch (e) {
+            showToast('Error: ' + e.message, 'error');
+        }
+    };
+
+    function mostrarForm() {
+        document.getElementById('formCard').style.display = 'block';
+        document.getElementById('formCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function mostrarErrorForm(msg) {
+        document.getElementById('formErrorText').textContent = msg;
+        document.getElementById('formError').style.display = 'flex';
+        document.getElementById('formError').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // ── Init ──────────────────────────────────────────────────
+    await cargarEspacios();
+})();
+</script>
+</body>
+</html>
