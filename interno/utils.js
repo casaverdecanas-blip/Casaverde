@@ -211,8 +211,7 @@ const NAV_ADMIN_ITEMS = [
         group: 'Config.',
         icon:  'settings',
         items: [
-            { href: 'cabanas-admin.html',  icon: 'cottage',         label: 'Cabañas'  },
-            { href: 'espacios-admin.html', icon: 'photo_library',   label: 'Espacios comunes' },
+            { href: 'contenido-sitio.html', icon: 'collections',      label: 'Contenido del sitio' },
             { href: 'usuarios.html',       icon: 'manage_accounts', label: 'Usuarios' },
             { href: 'notificaciones.html', icon: 'notifications',   label: 'Notificaciones' },
             { sep: true },
@@ -284,9 +283,8 @@ var CATALOGO_PERMISOS = [
         { href: 'fiscal.html',          icon: 'receipt',        label: 'Panel fiscal' },
         { href: 'acceso-contador.html', icon: 'person_outline', label: 'Acceso contador' }
     ]},
-    { grupo: 'Contenido del sitio', icon: 'cottage', items: [
-        { href: 'cabanas-admin.html', icon: 'cottage', label: 'Cabañas (contenido)' },
-        { href: 'espacios-admin.html', icon: 'photo_library', label: 'Espacios comunes (contenido)' }
+    { grupo: 'Contenido del sitio', icon: 'collections', items: [
+        { href: 'contenido-sitio.html', icon: 'collections', label: 'Contenido del sitio (cabañas y espacios)' }
     ]}
 ];
 
@@ -311,7 +309,7 @@ function construirNavColaborador() {
 var SECCIONES_SOLO_ADMIN = [
     'panel-financiero', 'fiscal', 'cuentas', 'movimientos',
     'herramientas-btg', 'categorias', 'pagos', 'informes-airbnb',
-    'acceso-contador', 'cabanas-admin', 'espacios-admin', 'usuarios', 'tareas-admin', 'gastos',
+    'acceso-contador', 'contenido-sitio', 'usuarios', 'tareas-admin', 'gastos',
     'analisis-gastos', 'proyeccion-anual', 'cotizaciones', 'transferencias', 'clasificacion-masiva', 'temporada'
 ];
 function puede(seccion, rol, permisos) {

@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contenido del sitio · Casa Verde Canas</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        /* ── FIX: Restaurar spinner nativo para inputs numéricos ── */
+        input[type="number"].form-control {
+            appearance: auto;
+            -webkit-appearance: auto;
+        }
+
+        /* ── Foto grid ──────────────────────────────────────────── */
+        .fotos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: var(--space-3);
+            margin-top: var(--space-3);
+        }
+        .foto-thumb {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            border: 2px solid var(--color-border);
+            background: var(--color-surface-2);
+            transition: border-color .15s;
+        }
+        .foto-thumb:hover { border-color: var(--color-primary); }
+        .foto-thumb img {
+            width: 100%; height: 100%;
+            object-fit: cover; display: block;
+        }
+        .foto-thumb__del {
+            position: absolute; top: 4px; right: 4px;
+            width: 22px; height: 22px;
+            background: rgba(192,57,43,.9); color: #fff;
+            border: none; border-radius: 50%;
+            font-size: 13px; line-height: 1;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            opacity: 0; transition: opacity .15s;
+        }
+        .foto-thumb:hover .foto-thumb__del { opacity: 1; }
+        .foto-thumb__orden {
+            position: absolute; bottom: 4px; left: 4px;
+            background: rgba(0,0,0,.55); color: #fff;
+            font-size: 10px; font-weight: 700;
+            padding: 1px 5px; border-radius: 4px;
+        }
+
+        /* ── Cabaña card en lista ────────────────────────────── */
+        .cabana-list-card {
+            display: flex; justify-content: space-between; align-items: center;
+            gap: var(--space-4); padding: var(--space-4);
+            border: 1.5px solid var(--color-border);
+            border-radius: var(--radius-md); margin-bottom: var(--space-3);
+            background: var(--color-surface);
+            transition: border-color .15s, box-shadow .15s;
+        }
+        .cabana-list-card:hover {
+            border-color: var(--color-primary-light);
+            box-shadow: 0 2px 8px rgba(45,90,39,.08);
+        }
+        .cabana-list-card__foto {
+            width: 64px; height: 64px;
+            border-radius: var(--radius-sm);
+            object-fit: cover; flex-shrink: 0;
+            background: var(--color-surface-2);
+        }
+        .cabana-list-card__body { flex: 1; min-width: 0; }
+        .cabana-list-card__nombre { font-weight: 700; font-size: var(--text-md); color: var(--color-text-primary); }
+        .cabana-list-card__meta { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 3px; line-height: 1.7; }
+
+        /* ── Intervalo de tarifas ────────────────────────────── */
+        .intervalo-card {
+            background: var(--color-surface-2);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-4);
+            margin-bottom: var(--space-3);
+        }
+        .intervalo-card__header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: var(--space-3);
+        }
+
+        /* ── Lang tabs ───────────────────────────────────────── */
+        .lang-tabs { display: flex; gap: var(--space-1); margin-bottom: var(--space-3); }
+        .lang-tab {
+            padding: 4px 12px; border-radius: var(--radius-sm);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface); font-size: var(--text-xs);
+            font-weight: 600; cursor: pointer; transition: all .15s;
+        }
+        .lang-tab.active {
+            background: var(--color-primary); color: #fff; border-color: var(--color-primary);
+        }
+        .lang-panel { display: none; }
+        .lang-panel.active { display: block; }
+
+        /* ── Sección label ───────────────────────────────────── */
+        .sec-label {
+            font-size: var(--text-xs); font-weight: 700;
+            text-transform: uppercase; letter-spacing: .07em;
+            color: var(--color-text-muted);
+            margin: var(--space-5) 0 var(--space-3);
+            padding-bottom: var(--space-2);
+            border-bottom: 1px solid var(--color-border);
+            display: flex; align-items: center; gap: var(--space-2);
+        }
+        .sec-label .material-icons { font-size: 15px; }
+
+        /* ── Editor de fotos (Cloudinary) ────────────────────── */
+        .foto-edit-card {
+            display: flex; gap: var(--space-3); align-items: center;
+            padding: var(--space-3);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            background: var(--color-surface-2);
+            margin-bottom: var(--space-3);
+        }
+        .foto-edit-card__thumb {
+            width: 90px; height: 90px; flex-shrink: 0;
+            border-radius: var(--radius-sm);
+            object-fit: cover; background: var(--color-surface);
+            border: 1px solid var(--color-border);
+        }
+        .foto-edit-card__fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+        .foto-edit-card__actions { display: flex; flex-direction: column; gap: var(--space-2); flex-shrink: 0; }
+    </style>
+</head>
+<body>
+
+<!-- ── HEADER ──────────────────────────────────────────────── -->
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">cottage</span>
+        Casa Verde Canas
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip">
+            <span class="material-icons">person</span>
+            <span id="userName">—</span>
+        </div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons">logout</span> Salir
+        </button>
+    </div>
+</header>
+
+<!-- ── NAV ─────────────────────────────────────────────────── -->
+<nav class="admin-nav" id="appNav"></nav>
+
+<!-- ── CONTENIDO ───────────────────────────────────────────── -->
+<main class="admin-content">
+
+    <!-- Tabs principales -->
+    <div class="tabs-bar" style="margin-bottom:var(--space-5);">
+        <button class="tab-btn active" data-tab="cabanas">
+            <span class="material-icons" style="font-size:15px;">collections</span> Contenido del sitio
+        </button>
+        <button class="tab-btn" data-tab="tarifas">
+            <span class="material-icons" style="font-size:15px;">date_range</span> Tarifas por temporada
+        </button>
+    </div>
+
+    <!-- ═══ TAB CONTENIDO ═════════════════════════════════════ -->
+    <div id="cabanasPanel">
+
+        <!-- Lista unificada (cabañas + espacios comunes) -->
+        <div class="card" id="listaCard">
+            <div class="card__header">
+                <h2 class="card__title">
+                    <span class="material-icons">list</span>
+                    Contenido del sitio público
+                </h2>
+                <button class="btn btn-primary" onclick="nuevoEspacio()">
+                    <span class="material-icons">add</span> Nuevo espacio común
+                </button>
+            </div>
+            <p class="form-hint" style="margin:0 0 var(--space-3);">Las cabañas y los espacios comunes que se muestran en el sitio. Tocá un item para editar su contenido y fotos.</p>
+            <div id="cabanasList">
+                <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+            </div>
+        </div>
+
+        <!-- Formulario (oculto hasta nueva/editar) -->
+        <div class="card" id="formCard" style="display:none;">
+            <div class="card__header">
+                <h2 class="card__title" id="formTitle">
+                    <span class="material-icons">edit</span> Editar cabaña
+                </h2>
+                <button class="btn btn-ghost" onclick="cancelarEdicion()">
+                    <span class="material-icons">close</span> Cancelar
+                </button>
+            </div>
+
+            <input type="hidden" id="editDocId">
+
+            <!-- Identificación (solo cabañas) -->
+            <div class="solo-cabana">
+                <div class="sec-label"><span class="material-icons">tag</span> Identificación</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">ID numérico <span class="required">*</span></label>
+                        <input type="number" id="idNum" class="form-control" min="1" placeholder="1">
+                        <p class="form-hint">Número único que identifica la cabaña en el sistema.</p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Estado</label>
+                        <select id="activa" class="form-control">
+                            <option value="true">✅ Activa — visible al público</option>
+                            <option value="false">🔒 Inactiva — oculta</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Orden (común) -->
+            <div class="sec-label"><span class="material-icons">sort</span> Orden de visualización</div>
+            <div class="form-group" style="max-width:260px;">
+                <input type="number" id="orden" class="form-control" min="0" placeholder="1">
+                <p class="form-hint">Posición en el sitio público (número más bajo aparece primero).</p>
+            </div>
+
+            <!-- Nombre multilenguaje -->
+            <div class="sec-label"><span class="material-icons">translate</span> Nombre</div>
+            <div class="lang-tabs" id="nombreLangTabs">
+                <button class="lang-tab active" data-lang="es" data-group="nombre" onclick="switchLang(this)">🇪🇸 ES</button>
+                <button class="lang-tab" data-lang="pt" data-group="nombre" onclick="switchLang(this)">🇧🇷 PT</button>
+                <button class="lang-tab" data-lang="en" data-group="nombre" onclick="switchLang(this)">🇺🇸 EN</button>
+            </div>
+            <div class="lang-panel active" id="nombre-es">
+                <div class="form-group"><input id="nombreEs" class="form-control" placeholder="🇪🇸 Cabaña 1 — Vista al Bosque"></div>
+            </div>
+            <div class="lang-panel" id="nombre-pt">
+                <div class="form-group"><input id="nombrePt" class="form-control" placeholder="🇧🇷 Cabana 1 — Vista para a Floresta"></div>
+            </div>
+            <div class="lang-panel" id="nombre-en">
+                <div class="form-group"><input id="nombreEn" class="form-control" placeholder="🇺🇸 Cabin 1 — Forest View"></div>
+            </div>
+
+            <!-- ░░ Bloque solo cabañas (descripción, capacidad, comodidades) ░░ -->
+            <div class="solo-cabana">
+            <!-- Descripción multilenguaje -->
+            <div class="sec-label"><span class="material-icons">description</span> Descripción</div>
+            <div class="lang-tabs" id="descLangTabs">
+                <button class="lang-tab active" data-lang="es" data-group="desc" onclick="switchLang(this)">🇪🇸 ES</button>
+                <button class="lang-tab" data-lang="pt" data-group="desc" onclick="switchLang(this)">🇧🇷 PT</button>
+                <button class="lang-tab" data-lang="en" data-group="desc" onclick="switchLang(this)">🇺🇸 EN</button>
+            </div>
+            <div class="lang-panel active" id="desc-es">
+                <div class="form-group"><textarea id="descEs" class="form-control" rows="4" placeholder="🇪🇸 Descripción en español..."></textarea></div>
+            </div>
+            <div class="lang-panel" id="desc-pt">
+                <div class="form-group"><textarea id="descPt" class="form-control" rows="4" placeholder="🇧🇷 Descrição em português..."></textarea></div>
+            </div>
+            <div class="lang-panel" id="desc-en">
+                <div class="form-group"><textarea id="descEn" class="form-control" rows="4" placeholder="🇺🇸 Description in English..."></textarea></div>
+            </div>
+
+            <!-- Capacidad -->
+            <div class="sec-label"><span class="material-icons">people</span> Capacidad y camas</div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Capacidad base</label>
+                    <input type="number" id="capBase" class="form-control" value="2" min="1">
+                    <p class="form-hint">Personas incluidas en el precio base.</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Capacidad máxima</label>
+                    <input type="number" id="capMax" class="form-control" value="4" min="1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Camas dobles</label>
+                    <input type="number" id="camasDobles" class="form-control" value="1" min="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Camas individuales</label>
+                    <input type="number" id="camasIndiv" class="form-control" value="0" min="0">
+                </div>
+            </div>
+
+            <!-- Comodidades -->
+            <div class="sec-label"><span class="material-icons">star</span> Comodidades</div>
+            <div class="form-group">
+                <label class="form-label">Una por línea</label>
+                <textarea id="comodidades" class="form-control" rows="5"
+                    placeholder="WiFi&#10;Aire acondicionado&#10;Cocina equipada&#10;TV&#10;Heladera&#10;Parrilla"></textarea>
+                <p class="form-hint">Se muestran como íconos en el sitio público.</p>
+            </div>
+
+            </div>
+            <!-- ░░ Fin bloque solo cabañas ░░ -->
+
+            <!-- Fotos (común: cabañas y espacios) -->
+            <div class="sec-label"><span class="material-icons">photo_library</span> Fotos</div>
+            <div style="display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap; margin-bottom:var(--space-3);">
+                <button type="button" class="btn btn-secondary" id="btnAgregarFoto" onclick="agregarFoto()">
+                    <span class="material-icons">add_a_photo</span> Agregar foto
+                </button>
+                <span id="fotoSubiendo" style="display:none; align-items:center; gap:6px; color:var(--color-text-muted); font-size:var(--text-sm);">
+                    <span class="spinner" style="width:16px; height:16px;"></span> Subiendo foto...
+                </span>
+            </div>
+            <p class="form-hint" style="margin:0 0 var(--space-3);">Se suben desde la cámara o la galería del dispositivo y se comprimen automáticamente. La primera foto es la principal; reordenalas con las flechas. El título y la descripción se muestran sobre la foto en el sitio.</p>
+            <div id="fotosPreview"></div>
+
+            <!-- ░░ Bloque solo cabañas (tarifas, integraciones, nota, inventario) ░░ -->
+            <div class="solo-cabana">
+            <!-- Tarifas -->
+            <div class="sec-label"><span class="material-icons">payments</span> Tarifas base</div>
+            <div class="alert alert-info" style="margin-bottom:var(--space-3);">
+                <span class="material-icons">info</span>
+                Estas son las tarifas por defecto. Podés agregar tarifas especiales por temporada en la pestaña "Tarifas por temporada".
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Precio base / noche (R$)</label>
+                    <input type="number" id="precioBase" class="form-control" step="10" value="250" min="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Extra por persona adicional (R$/noche)</label>
+                    <input type="number" id="precioExtra" class="form-control" step="10" value="50" min="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Cargo de limpieza (R$)</label>
+                    <input type="number" id="precioLimpieza" class="form-control" step="10" value="150" min="0">
+                </div>
+            </div>
+
+            <!-- Preview de precio -->
+            <div id="precioPreview" style="background:var(--color-primary-xlight); border:1px solid var(--color-primary-light); border-radius:var(--radius-md); padding:var(--space-3); margin-bottom:var(--space-4); font-size:var(--text-sm); display:none;">
+            </div>
+
+            <!-- Integraciones -->
+            <div class="sec-label"><span class="material-icons">integration_instructions</span> Integraciones</div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">URL del anuncio en Airbnb</label>
+                    <input type="url" id="airbnbUrl" class="form-control"
+                        placeholder="https://airbnb.com/rooms/...">
+                    <p class="form-hint">Link público del anuncio. No es el iCal.</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Google Calendar ID</label>
+                    <input id="googleCalendarId" class="form-control"
+                        placeholder="abc123@import.calendar.google.com"
+                        oninput="validarCalendarId(this)">
+                    <p class="form-hint" id="calIdHint">Extraído automáticamente del iframe. Usá Diagnóstico Calendarios si falta.</p>
+                </div>
+            </div>
+
+            <!-- Nota especial -->
+            <div class="sec-label"><span class="material-icons">campaign</span> Nota especial (opcional)</div>
+            <div class="lang-tabs" id="notaLangTabs">
+                <button class="lang-tab active" data-lang="es" data-group="nota" onclick="switchLang(this)">🇪🇸 ES</button>
+                <button class="lang-tab" data-lang="pt" data-group="nota" onclick="switchLang(this)">🇧🇷 PT</button>
+                <button class="lang-tab" data-lang="en" data-group="nota" onclick="switchLang(this)">🇺🇸 EN</button>
+            </div>
+            <div class="lang-panel active" id="nota-es">
+                <div class="form-group"><input id="notaEs" class="form-control" placeholder="🇪🇸 Ej: A solo 3 cuadras de la playa..."></div>
+            </div>
+            <div class="lang-panel" id="nota-pt">
+                <div class="form-group"><input id="notaPt" class="form-control" placeholder="🇧🇷 Ex: A apenas 3 quadras da praia..."></div>
+            </div>
+            <div class="lang-panel" id="nota-en">
+                <div class="form-group"><input id="notaEn" class="form-control" placeholder="🇺🇸 Ex: Just 3 blocks from the beach..."></div>
+            </div>
+
+            <!-- Lista base de inventario -->
+            <div style="margin-top:var(--space-5); padding-top:var(--space-4); border-top:1px solid var(--color-border);">
+                <h3 style="font-size:var(--text-md); font-weight:700; margin:0 0 4px;">
+                    <span class="material-icons" style="vertical-align:middle; color:var(--color-primary);">checklist</span>
+                    Lista base de inventario
+                </h3>
+                <p class="form-hint" style="margin-bottom:var(--space-3);">Componentes de la cabaña con su cantidad por defecto. Se usa en la limpieza de ingreso (se cargan cantidades) y en el control de salida (se verifican).</p>
+                <div id="ckRows"></div>
+                <div style="display:flex; gap:var(--space-2); flex-wrap:wrap; margin-top:var(--space-2);">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="ckAgregar()"><span class="material-icons">add</span> Agregar ítem</button>
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="ckSugeridos()"><span class="material-icons">auto_awesome</span> Cargar sugeridos</button>
+                </div>
+                <datalist id="ckCategorias">
+                    <option value="Cocina"></option>
+                    <option value="Ropa blanca"></option>
+                    <option value="Electrodomésticos"></option>
+                    <option value="Baño"></option>
+                    <option value="Iluminación"></option>
+                    <option value="Mobiliario"></option>
+                </datalist>
+            </div>
+
+            </div>
+            <!-- ░░ Fin bloque solo cabañas ░░ -->
+
+            <!-- Error -->
+            <div class="alert alert-error" id="formError" style="display:none; margin-top:var(--space-3);">
+                <span class="material-icons">error_outline</span>
+                <span id="formErrorText"></span>
+            </div>
+
+            <!-- Acciones -->
+            <div style="display:flex; gap:var(--space-3); flex-wrap:wrap; margin-top:var(--space-5); padding-top:var(--space-4); border-top:1px solid var(--color-border);">
+                <button class="btn btn-primary" id="btnGuardar" onclick="guardarItem()">
+                    <span class="material-icons">save</span>
+                    <span id="btnGuardarText">Guardar</span>
+                </button>
+                <button class="btn btn-ghost" onclick="cancelarEdicion()">Cancelar</button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ═══ TAB TARIFAS ════════════════════════════════════════ -->
+    <div id="tarifasPanel" style="display:none;">
+        <div class="card">
+            <div class="card__header">
+                <h2 class="card__title">
+                    <span class="material-icons">date_range</span>
+                    Tarifas por temporada
+                </h2>
+            </div>
+
+            <div class="form-group" style="max-width:340px; margin-bottom:var(--space-5);">
+                <label class="form-label">Cabaña</label>
+                <select id="tarifaCabanaSelect" class="form-control">
+                    <option value="">— Seleccionar cabaña —</option>
+                </select>
+            </div>
+
+            <div class="alert alert-info" style="margin-bottom:var(--space-4);">
+                <span class="material-icons">info</span>
+                Los períodos especiales sobreescriben el precio base durante esas fechas.
+                Las noches no cubiertas por ningún período usan el precio base de la cabaña.
+            </div>
+
+            <div id="intervalosContainer">
+                <div class="state-empty" style="padding:var(--space-6); text-align:center; color:var(--color-text-muted);">
+                    Seleccioná una cabaña para ver sus períodos de precio.
+                </div>
+            </div>
+
+            <div style="display:flex; gap:var(--space-3); flex-wrap:wrap; margin-top:var(--space-4);">
+                <button class="btn btn-secondary" onclick="agregarIntervalo()">
+                    <span class="material-icons">add</span> Agregar período
+                </button>
+                <button class="btn btn-primary" onclick="guardarIntervalos()">
+                    <span class="material-icons">save</span> Guardar períodos
+                </button>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async () => {
+    const { user, userData } = await CVC.verificarAuth(['admin']);
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+    CVC.renderNav('contenido-sitio.html', userData.rol);
+    CVC.initAyuda('contenido-sitio.html');
+
+    const db = CVC.db;
+    const { escapeHtml, showToast } = CVC;
+
+    let cabanasCache      = [];
+    let espaciosCache     = [];
+    let _tipoActual       = 'cabana';   // 'cabana' | 'espacio' — item en edición
+    let _fotos            = [];   // fotos del formulario en edición: [{url, titulo, descripcion}]
+    let intervalosActuales = [];
+
+    // ── Tabs principales ──────────────────────────────────────
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('cabanasPanel').style.display = btn.dataset.tab === 'cabanas' ? 'block' : 'none';
+            document.getElementById('tarifasPanel').style.display = btn.dataset.tab === 'tarifas' ? 'block' : 'none';
+            if (btn.dataset.tab === 'tarifas') cargarSelectTarifas();
+        });
+    });
+
+    // ── Tabs de idioma ────────────────────────────────────────
+    window.switchLang = function(btn) {
+        const group = btn.dataset.group;
+        const lang  = btn.dataset.lang;
+        document.querySelectorAll('[data-group="' + group + '"]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('[id^="' + group + '-"]').forEach(p => p.classList.remove('active'));
+        const _lp = document.getElementById(group + '-' + lang);
+        if (_lp) _lp.classList.add('active');
+    };
+
+    // ── Cargar lista unificada (cabañas + espacios comunes) ───
+    async function cargarItems() {
+        const container = document.getElementById('cabanasList');
+        try {
+            const [snapCab, snapEsp] = await Promise.all([
+                db.collection('cabanas').get(),
+                db.collection('espacios_comunes').get()
+            ]);
+            cabanasCache  = snapCab.docs.map(d => ({ docId: d.id, ...d.data() })).sort((a, b) => (a.orden || 0) - (b.orden || 0));
+            espaciosCache = snapEsp.docs.map(d => ({ docId: d.id, ...d.data() })).sort((a, b) => (a.orden || 0) - (b.orden || 0));
+        } catch (e) {
+            container.innerHTML = '<div style="color:var(--color-danger);">Error al cargar: ' + escapeHtml(e.message) + '</div>';
+            return;
+        }
+
+        let html = '';
+
+        // Cabañas
+        html += '<div class="sec-label"><span class="material-icons">cottage</span> Cabañas</div>';
+        if (!cabanasCache.length) {
+            html += '<div style="color:var(--color-text-muted); font-size:var(--text-sm); padding:0 0 var(--space-3);">No hay cabañas registradas.</div>';
+        } else {
+            html += cabanasCache.map(c => {
+                const nombre = escapeHtml((c.nombre && c.nombre.es) || ('Cabaña ' + c.id));
+                const fotos  = (c.fotos || []).map(f => typeof f === 'string' ? f : (f && f.url)).filter(Boolean);
+                const cap    = c.capacidad || {};
+                const tar    = c.tarifas || {};
+                const badgeCal = c.google_calendar_id
+                    ? '<span class="badge badge-neutral" style="background:var(--color-info-bg);color:var(--color-info);">📅 Calendar</span>'
+                    : '<span class="badge badge-neutral" style="color:var(--color-warning);">⚠ Sin Calendar</span>';
+                const badgeFotos = fotos.length === 0 ? '<span class="badge badge-neutral" style="color:var(--color-danger);">⚠ Sin fotos</span>' : '';
+                return _itemCard('cabana', c.docId, nombre, fotos[0] || '',
+                    'image_not_supported',
+                    '🏠 Cabaña · Orden ' + (c.orden || '—') + ' · Cap. ' + (cap.base || '?') + '–' + (cap.max || '?') + ' · ' + fotos.length + ' foto' + (fotos.length !== 1 ? 's' : '') + ' · R$ ' + (tar.precioBase || 0) + '/noche',
+                    '<span class="badge ' + (c.activa ? 'badge-confirmada' : 'badge-anulada') + '">' + (c.activa ? '✅ Activa' : '🔒 Inactiva') + '</span>' + badgeCal + badgeFotos);
+            }).join('');
+        }
+
+        // Espacios comunes
+        html += '<div class="sec-label" style="margin-top:var(--space-5);"><span class="material-icons">park</span> Espacios comunes</div>';
+        if (!espaciosCache.length) {
+            html += '<div style="color:var(--color-text-muted); font-size:var(--text-sm); padding:var(--space-3) 0;">No hay espacios comunes. Tocá "Nuevo espacio común" para crear el primero.</div>';
+        } else {
+            html += espaciosCache.map(e => {
+                const nombre = escapeHtml((e.nombre && e.nombre.es) || e.docId);
+                const fotos  = (e.fotos || []).filter(f => f && f.url);
+                const badgeFotos = fotos.length === 0 ? '<span class="badge badge-neutral" style="color:var(--color-danger);">⚠ Sin fotos (no se muestra)</span>' : '';
+                return _itemCard('espacio', e.docId, nombre, fotos.length ? fotos[0].url : '',
+                    'park',
+                    '🌳 Espacio · Orden ' + (e.orden != null ? e.orden : '—') + ' · ' + fotos.length + ' foto' + (fotos.length !== 1 ? 's' : ''),
+                    badgeFotos);
+            }).join('');
+        }
+
+        container.innerHTML = html;
+    }
+
+    // Render de una tarjeta de item (cabaña o espacio)
+    function _itemCard(tipo, docId, nombre, fotoUrl, iconoVacio, meta, badges) {
+        const thumb = fotoUrl
+            ? '<img class="cabana-list-card__foto" src="' + escapeHtml(fotoUrl) + '" alt="' + nombre + '" onerror="this.style.display=\'none\'">'
+            : '<div class="cabana-list-card__foto" style="display:flex;align-items:center;justify-content:center;"><span class="material-icons" style="color:var(--color-text-muted);font-size:28px;">' + iconoVacio + '</span></div>';
+        return '<div class="cabana-list-card">' +
+            thumb +
+            '<div class="cabana-list-card__body">' +
+                '<div class="cabana-list-card__nombre">' + nombre + '</div>' +
+                '<div class="cabana-list-card__meta">' + meta + '</div>' +
+                (badges ? '<div style="display:flex; gap:var(--space-2); flex-wrap:wrap; margin-top:var(--space-2);">' + badges + '</div>' : '') +
+            '</div>' +
+            '<div style="display:flex; flex-direction:column; gap:var(--space-2); flex-shrink:0;">' +
+                '<button class="btn btn-secondary btn-sm" onclick="editarItem(\'' + tipo + '\',\'' + docId + '\')"><span class="material-icons">edit</span> Editar</button>' +
+                '<button class="btn btn-danger btn-sm" onclick="eliminarItem(\'' + tipo + '\',\'' + docId + '\')"><span class="material-icons">delete</span></button>' +
+            '</div>' +
+        '</div>';
+    }
+
+    // Ruteo de edición/borrado por tipo
+    window.editarItem = function(tipo, docId) {
+        if (tipo === 'espacio') return editarEspacio(docId);
+        return editarCabana(docId);
+    };
+    window.eliminarItem = function(tipo, docId) {
+        if (tipo === 'espacio') return eliminarEspacio(docId);
+        return eliminarCabana(docId);
+    };
+
+    // Mostrar u ocultar las secciones que son solo de cabañas
+    function mostrarSeccionesPorTipo(tipo) {
+        _tipoActual = tipo;
+        const ocultar = (tipo !== 'cabana');
+        document.querySelectorAll('.solo-cabana').forEach(el => { el.style.display = ocultar ? 'none' : ''; });
+    }
+
+    // ── Nueva cabaña ──────────────────────────────────────────
+    window.nuevaCabana = function() {
+        mostrarSeccionesPorTipo('cabana');
+        document.getElementById('formTitle').innerHTML =
+            '<span class="material-icons">add_circle</span> Nueva cabaña';
+        document.getElementById('btnGuardarText').textContent = 'Guardar cabaña';
+        document.getElementById('editDocId').value = '';
+        limpiarForm();
+        mostrarForm();
+    };
+
+    // ── Espacios comunes ──────────────────────────────────────
+    window.nuevoEspacio = function() {
+        mostrarSeccionesPorTipo('espacio');
+        document.getElementById('formTitle').innerHTML =
+            '<span class="material-icons">add_circle</span> Nuevo espacio común';
+        document.getElementById('btnGuardarText').textContent = 'Guardar espacio';
+        document.getElementById('editDocId').value = '';
+        document.getElementById('nombreEs').value = '';
+        document.getElementById('nombrePt').value = '';
+        document.getElementById('nombreEn').value = '';
+        let maxOrden = 0;
+        espaciosCache.forEach(e => { if ((e.orden || 0) > maxOrden) maxOrden = e.orden || 0; });
+        document.getElementById('orden').value = (maxOrden + 1);
+        _fotos = [];
+        renderFotos();
+        document.getElementById('formError').style.display = 'none';
+        mostrarForm();
+    };
+
+    window.editarEspacio = async function(docId) {
+        const docSnap = await db.collection('espacios_comunes').doc(docId).get();
+        if (!docSnap.exists) return;
+        const e = docSnap.data();
+        mostrarSeccionesPorTipo('espacio');
+        document.getElementById('formTitle').innerHTML =
+            '<span class="material-icons">edit</span> Editar espacio común';
+        document.getElementById('btnGuardarText').textContent = 'Guardar espacio';
+        document.getElementById('editDocId').value = docId;
+        document.getElementById('nombreEs').value = (e.nombre && e.nombre.es) || '';
+        document.getElementById('nombrePt').value = (e.nombre && e.nombre.pt) || '';
+        document.getElementById('nombreEn').value = (e.nombre && e.nombre.en) || '';
+        document.getElementById('orden').value = (e.orden != null ? e.orden : '');
+        _fotos = (e.fotos || []).filter(f => f && f.url).map(f => ({ url: f.url, titulo: f.titulo || '', descripcion: f.descripcion || '' }));
+        renderFotos();
+        document.getElementById('formError').style.display = 'none';
+        mostrarForm();
+    };
+
+    window.guardarEspacio = async function() {
+        const docId = document.getElementById('editDocId').value;
+        const nombreEs = document.getElementById('nombreEs').value.trim();
+        document.getElementById('formError').style.display = 'none';
+        if (!nombreEs) { mostrarErrorForm('El nombre en español es requerido.'); return; }
+        let orden = parseInt(document.getElementById('orden').value, 10);
+        if (isNaN(orden)) orden = 0;
+
+        const btn  = document.getElementById('btnGuardar');
+        const text = document.getElementById('btnGuardarText');
+        btn.disabled = true; text.textContent = 'Guardando...';
+        try {
+            const data = {
+                nombre: {
+                    es: nombreEs,
+                    pt: document.getElementById('nombrePt').value.trim(),
+                    en: document.getElementById('nombreEn').value.trim()
+                },
+                orden: orden,
+                fotos: _fotos.map(f => ({ url: f.url, titulo: (f.titulo || '').trim(), descripcion: (f.descripcion || '').trim() })),
+                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            if (docId) {
+                await db.collection('espacios_comunes').doc(docId).update(data);
+            } else {
+                data.creadoEn = firebase.firestore.FieldValue.serverTimestamp();
+                await db.collection('espacios_comunes').add(data);
+            }
+            showToast('Espacio "' + nombreEs + '" guardado.', 'success');
+            cancelarEdicion();
+            await cargarItems();
+        } catch (e) {
+            mostrarErrorForm('Error al guardar: ' + e.message);
+        } finally {
+            btn.disabled = false; text.textContent = 'Guardar espacio';
+        }
+    };
+
+    window.eliminarEspacio = async function(docId) {
+        let nombre = docId;
+        for (let i = 0; i < espaciosCache.length; i++) {
+            if (espaciosCache[i].docId === docId) { nombre = (espaciosCache[i].nombre && espaciosCache[i].nombre.es) || docId; break; }
+        }
+        if (!confirm('¿Eliminar el espacio común "' + nombre + '"?\nEsta acción no se puede deshacer.')) return;
+        try {
+            await db.collection('espacios_comunes').doc(docId).delete();
+            showToast('Espacio "' + nombre + '" eliminado.', 'warning');
+            await cargarItems();
+        } catch (e) {
+            showToast('Error: ' + e.message, 'error');
+        }
+    };
+
+    // Ruteo del botón Guardar según el tipo de item en edición
+    window.guardarItem = function() {
+        return _tipoActual === 'espacio' ? guardarEspacio() : guardarCabana();
+    };
+
+    // ── Editar cabaña ─────────────────────────────────────────
+    window.editarCabana = async function(docId) {
+        const docSnap = await db.collection('cabanas').doc(docId).get();
+        if (!docSnap.exists) return;
+        const c = docSnap.data();
+
+        mostrarSeccionesPorTipo('cabana');
+        document.getElementById('formTitle').innerHTML =
+            '<span class="material-icons">edit</span> Editar cabaña';
+        document.getElementById('btnGuardarText').textContent = 'Guardar cabaña';
+        document.getElementById('editDocId').value = docId;
+
+        // Identificación
+        document.getElementById('idNum').value    = c.id    || '';
+        document.getElementById('orden').value    = c.orden || '';
+        document.getElementById('activa').value   = c.activa ? 'true' : 'false';
+
+        // Nombre
+        document.getElementById('nombreEs').value = (c.nombre && c.nombre.es) || '';
+        document.getElementById('nombrePt').value = (c.nombre && c.nombre.pt) || '';
+        document.getElementById('nombreEn').value = (c.nombre && c.nombre.en) || '';
+
+        // Descripción
+        document.getElementById('descEs').value   = (c.descripcion && c.descripcion.es) || '';
+        document.getElementById('descPt').value   = (c.descripcion && c.descripcion.pt) || '';
+        document.getElementById('descEn').value   = (c.descripcion && c.descripcion.en) || '';
+
+        // Nota especial
+        document.getElementById('notaEs').value   = (c.specialNote && c.specialNote.es) || (c.notaEspecial && c.notaEspecial.es) || '';
+        document.getElementById('notaPt').value   = (c.specialNote && c.specialNote.pt) || (c.notaEspecial && c.notaEspecial.pt) || '';
+        document.getElementById('notaEn').value   = (c.specialNote && c.specialNote.en) || (c.notaEspecial && c.notaEspecial.en) || '';
+
+        // Capacidad
+        const _cap = c.capacidad || {};
+        const _cam = c.camas || {};
+        document.getElementById('capBase').value      = _cap.base != null ? _cap.base : 2;
+        document.getElementById('capMax').value       = _cap.max  != null ? _cap.max  : 4;
+        document.getElementById('camasDobles').value  = _cam.dobles       != null ? _cam.dobles       : 1;
+        document.getElementById('camasIndiv').value   = _cam.individuales  != null ? _cam.individuales  : 0;
+
+        // Comodidades
+        document.getElementById('comodidades').value = (c.comodidades || []).join('\n');
+
+        // Fotos — normalizar a estado interno [{url, titulo, descripcion}]
+        _fotos = (c.fotos || [])
+            .map(f => {
+                const url = typeof f === 'string' ? f : (f && f.url);
+                return url ? { url: url, titulo: (f && f.titulo) || '', descripcion: (f && f.descripcion) || '' } : null;
+            })
+            .filter(Boolean);
+        renderFotos();
+
+        // Tarifas
+        const _tar = c.tarifas || {};
+        document.getElementById('precioBase').value     = _tar.precioBase         != null ? _tar.precioBase         : 250;
+        document.getElementById('precioExtra').value    = _tar.precioExtraPersona  != null ? _tar.precioExtraPersona  : 50;
+        document.getElementById('precioLimpieza').value = _tar.precioLimpieza      != null ? _tar.precioLimpieza      : 150;
+        actualizarPrecioPreview();
+
+        // Integraciones
+        document.getElementById('airbnbUrl').value       = c.airbnb_url          || '';
+        document.getElementById('googleCalendarId').value= c.google_calendar_id  || '';
+        validarCalendarId(document.getElementById('googleCalendarId'));
+
+        ckRender(c.checklistInventario || []);
+        mostrarForm();
+    };
+
+    // ── Guardar cabaña ────────────────────────────────────────
+    window.guardarCabana = async function() {
+        const docId = document.getElementById('editDocId').value;
+        const idNum = parseInt(document.getElementById('idNum').value);
+        const nombreEs = document.getElementById('nombreEs').value.trim();
+
+        document.getElementById('formError').style.display = 'none';
+
+        if (!idNum || idNum < 1) {
+            mostrarErrorForm('El ID numérico es requerido y debe ser mayor a 0.');
+            return;
+        }
+        if (!nombreEs) {
+            mostrarErrorForm('El nombre en español es requerido.');
+            return;
+        }
+
+        // Validar que el ID no esté en uso por otra cabaña (solo al crear)
+        if (!docId) {
+            const idEnUso = cabanasCache.some(c => c.id === idNum);
+            if (idEnUso) {
+                mostrarErrorForm('El ID ' + idNum + ' ya está en uso. Elegí un número diferente.');
+                return;
+            }
+        }
+
+        const btn  = document.getElementById('btnGuardar');
+        const text = document.getElementById('btnGuardarText');
+
+        // Validar precios
+        const precioBase     = parseFloat(document.getElementById('precioBase').value)     || 0;
+        const precioExtra    = parseFloat(document.getElementById('precioExtra').value)    || 0;
+        const precioLimpieza = parseFloat(document.getElementById('precioLimpieza').value) || 0;
+        const capBase        = parseInt(document.getElementById('capBase').value)           || 2;
+        const capMax         = parseInt(document.getElementById('capMax').value)            || 4;
+
+        if (precioBase < 0 || precioExtra < 0 || precioLimpieza < 0) {
+            mostrarErrorForm('Los precios no pueden ser negativos.');
+            return;
+        }
+        if (capMax < capBase) {
+            mostrarErrorForm('La capacidad máxima no puede ser menor a la capacidad base.');
+            return;
+        }
+
+        btn.disabled = true; text.textContent = 'Guardando...';
+
+        try {
+            // Fotos como objetos (desde el estado interno cargado por Cloudinary)
+            const fotos = _fotos.map((f, i) => ({ url: f.url, orden: i, titulo: (f.titulo || '').trim(), descripcion: (f.descripcion || '').trim() }));
+            const comodidades = document.getElementById('comodidades').value
+                .split('\n').map(l => l.trim()).filter(Boolean);
+
+            // Preservar intervalos de tarifas existentes
+            let intervalosExistentes = [];
+            if (docId) {
+                const docActual = await db.collection('cabanas').doc(docId).get();
+                const _dd = docActual.data();
+                intervalosExistentes = (_dd && _dd.tarifas && _dd.tarifas.intervalos) || [];
+            }
+
+            const data = {
+                id:    idNum,
+                orden: parseInt(document.getElementById('orden').value) || idNum,
+                activa: document.getElementById('activa').value === 'true',
+                nombre: {
+                    es: nombreEs,
+                    pt: document.getElementById('nombrePt').value.trim(),
+                    en: document.getElementById('nombreEn').value.trim()
+                },
+                descripcion: {
+                    es: document.getElementById('descEs').value.trim(),
+                    pt: document.getElementById('descPt').value.trim(),
+                    en: document.getElementById('descEn').value.trim()
+                },
+                specialNote: {
+                    es: document.getElementById('notaEs').value.trim(),
+                    pt: document.getElementById('notaPt').value.trim(),
+                    en: document.getElementById('notaEn').value.trim()
+                },
+                capacidad:   { base: capBase, max: capMax },
+                camas:       { dobles: parseInt(document.getElementById('camasDobles').value) || 0, individuales: parseInt(document.getElementById('camasIndiv').value) || 0 },
+                comodidades,
+                fotos,
+                tarifas: {
+                    precioBase,
+                    precioExtraPersona: precioExtra,
+                    precioLimpieza,
+                    intervalos: intervalosExistentes
+                },
+                airbnb_url:         document.getElementById('airbnbUrl').value.trim(),
+                google_calendar_id: document.getElementById('googleCalendarId').value.trim(),
+                checklistInventario: ckLeer(),
+                actualizadoEn:      firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            if (docId) {
+                await db.collection('cabanas').doc(docId).update(data);
+            } else {
+                data.creadoEn = firebase.firestore.FieldValue.serverTimestamp();
+                await db.collection('cabanas').doc(idNum.toString()).set(data);
+            }
+
+            showToast('Cabaña "' + nombreEs + '" guardada correctamente.', 'success');
+            cancelarEdicion();
+            await cargarItems();
+            await cargarSelectTarifas();
+
+        } catch(e) {
+            mostrarErrorForm('Error al guardar: ' + e.message);
+        } finally {
+            btn.disabled = false; text.textContent = 'Guardar cabaña';
+        }
+    };
+
+    window.cancelarEdicion = function() {
+        document.getElementById('formCard').style.display = 'none';
+        document.getElementById('listaCard').scrollIntoView({ behavior: 'smooth' });
+    };
+
+    window.eliminarCabana = async function(docId) {
+        let nombre = docId;
+        for (let i = 0; i < cabanasCache.length; i++) {
+            if (cabanasCache[i].docId === docId) {
+                nombre = (cabanasCache[i].nombre && cabanasCache[i].nombre.es) || docId;
+                break;
+            }
+        }
+        if (!confirm('¿Eliminar la cabaña "' + nombre + '"?\nEsta acción no se puede deshacer.')) return;
+        try {
+            await db.collection('cabanas').doc(docId).delete();
+            showToast('Cabaña "' + nombre + '" eliminada.', 'warning');
+            await cargarItems();
+            await cargarSelectTarifas();
+        } catch(e) {
+            showToast('Error: ' + e.message, 'error');
+        }
+    };
+
+    // ── Fotos: editor con subida Cloudinary (título + descripción) ──
+    function renderFotos() {
+        const cont = document.getElementById('fotosPreview');
+        if (!_fotos.length) {
+            cont.innerHTML = '<div style="color:var(--color-text-muted); font-size:var(--text-sm); padding:var(--space-3) 0;">Todavía no hay fotos. Tocá "Agregar foto".</div>';
+            return;
+        }
+        cont.innerHTML = _fotos.map((f, i) =>
+            '<div class="foto-edit-card">' +
+                '<img class="foto-edit-card__thumb" src="' + escapeHtml(f.url) + '" loading="lazy">' +
+                '<div class="foto-edit-card__fields">' +
+                    '<div style="font-size:var(--text-xs); color:var(--color-text-muted);">Foto ' + (i + 1) + (i === 0 ? ' · principal' : '') + '</div>' +
+                    '<input class="form-control fe-titulo" data-idx="' + i + '" placeholder="Título (opcional)" value="' + escapeHtml(f.titulo || '') + '">' +
+                    '<input class="form-control fe-desc" data-idx="' + i + '" placeholder="Descripción (opcional)" value="' + escapeHtml(f.descripcion || '') + '">' +
+                '</div>' +
+                '<div class="foto-edit-card__actions">' +
+                    '<button type="button" class="btn btn-ghost btn-sm" title="Subir" onclick="moverFoto(' + i + ',-1)"' + (i === 0 ? ' disabled' : '') + '><span class="material-icons">arrow_upward</span></button>' +
+                    '<button type="button" class="btn btn-ghost btn-sm" title="Bajar" onclick="moverFoto(' + i + ',1)"' + (i === _fotos.length - 1 ? ' disabled' : '') + '><span class="material-icons">arrow_downward</span></button>' +
+                    '<button type="button" class="btn btn-danger btn-sm" title="Eliminar" onclick="eliminarFoto(' + i + ')"><span class="material-icons">delete</span></button>' +
+                '</div>' +
+            '</div>'
+        ).join('');
+        // Listeners de texto (actualizan _fotos sin re-render para no perder el foco)
+        cont.querySelectorAll('.fe-titulo').forEach(inp => inp.addEventListener('input', e => {
+            const idx = parseInt(e.target.dataset.idx, 10);
+            if (_fotos[idx]) _fotos[idx].titulo = e.target.value;
+        }));
+        cont.querySelectorAll('.fe-desc').forEach(inp => inp.addEventListener('input', e => {
+            const idx = parseInt(e.target.dataset.idx, 10);
+            if (_fotos[idx]) _fotos[idx].descripcion = e.target.value;
+        }));
+    }
+
+    window.moverFoto = function(idx, delta) {
+        const ni = idx + delta;
+        if (ni < 0 || ni >= _fotos.length) return;
+        const tmp = _fotos[idx];
+        _fotos[idx] = _fotos[ni];
+        _fotos[ni] = tmp;
+        renderFotos();
+    };
+
+    window.eliminarFoto = function(idx) {
+        _fotos.splice(idx, 1);
+        renderFotos();
+    };
+
+    window.agregarFoto = function() {
+        CVC.elegirFuenteFoto(function(file) {
+            if (!file) return;
+            const btn = document.getElementById('btnAgregarFoto');
+            const estado = document.getElementById('fotoSubiendo');
+            const carpeta = (_tipoActual === 'espacio') ? 'espacios' : 'cabanas';
+            btn.disabled = true;
+            estado.style.display = 'inline-flex';
+            CVC.subirComprobante(file, carpeta, null).then(function(url) {
+                _fotos.push({ url: url, titulo: '', descripcion: '' });
+                renderFotos();
+            }).catch(function(e) {
+                showToast('No se pudo subir la foto: ' + e.message, 'error');
+            }).then(function() {
+                btn.disabled = false;
+                estado.style.display = 'none';
+            });
+        });
+    };
+
+    // ── Preview precio ────────────────────────────────────────
+    function actualizarPrecioPreview() {
+        const base     = parseFloat(document.getElementById('precioBase').value)     || 0;
+        const extra    = parseFloat(document.getElementById('precioExtra').value)    || 0;
+        const limpieza = parseFloat(document.getElementById('precioLimpieza').value) || 0;
+        const capBase  = parseInt(document.getElementById('capBase').value)           || 2;
+        const fmt = n => 'R$ ' + n.toLocaleString('pt-BR', {minimumFractionDigits:2});
+        const ej2n = base * 2 + limpieza;
+        const ejCap = base * 2 + (extra * (parseInt(document.getElementById('capMax').value) - capBase)) * 2 + limpieza;
+        const capMaxVal = document.getElementById('capMax').value || capBase;
+
+        document.getElementById('precioPreview').style.display = 'block';
+        document.getElementById('precioPreview').innerHTML =
+            '<strong>Vista previa de precios:</strong><br>' +
+            '2 noches · ' + capBase + ' personas: <strong>' + fmt(ej2n) + '</strong>' +
+            '&nbsp;|&nbsp;' +
+            '2 noches · ' + capMaxVal + ' personas (máx): <strong>' + fmt(ejCap) + '</strong>' +
+            '&nbsp;·&nbsp; Limpieza: ' + fmt(limpieza);
+    }
+
+    ['precioBase','precioExtra','precioLimpieza','capBase','capMax'].forEach(id => {
+        document.getElementById(id).addEventListener('input', actualizarPrecioPreview);
+    });
+
+    // ── Validar Calendar ID ───────────────────────────────────
+    window.validarCalendarId = function(input) {
+        const val  = input.value.trim();
+        const hint = document.getElementById('calIdHint');
+        if (!val) {
+            input.style.borderColor = '';
+            hint.textContent = 'Usá la herramienta Diagnóstico Calendarios si necesitás encontrar este ID.';
+            hint.style.color = '';
+        } else if (val.includes('@') && (val.includes('calendar.google.com') || val.includes('import.calendar'))) {
+            input.style.borderColor = 'var(--color-success)';
+            hint.textContent = '✅ Formato válido';
+            hint.style.color = 'var(--color-success)';
+        } else {
+            input.style.borderColor = 'var(--color-warning)';
+            hint.textContent = '⚠ Verificá el formato — debe ser algo como: abc123@import.calendar.google.com';
+            hint.style.color = 'var(--color-warning)';
+        }
+    };
+
+    // ── Helpers ───────────────────────────────────────────────
+    // ── Lista base de inventario ──────────────────────────────
+    function ckAgregar(nombre, categoria, cantidad) {
+        var cont = document.getElementById('ckRows');
+        var row = document.createElement('div');
+        row.className = 'ck-row';
+        row.style.cssText = 'display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap;';
+
+        var inNombre = document.createElement('input');
+        inNombre.className = 'form-control ck-nombre';
+        inNombre.placeholder = 'Ítem (ej: Vasos)';
+        inNombre.style.cssText = 'flex:2 1 140px;';
+        inNombre.value = nombre || '';
+
+        var inCat = document.createElement('input');
+        inCat.className = 'form-control ck-cat';
+        inCat.placeholder = 'Categoría';
+        inCat.setAttribute('list', 'ckCategorias');
+        inCat.style.cssText = 'flex:1 1 120px;';
+        inCat.value = categoria || '';
+
+        var inCant = document.createElement('input');
+        inCant.type = 'number';
+        inCant.min = '0';
+        inCant.className = 'form-control ck-cant';
+        inCant.placeholder = 'Cant.';
+        inCant.style.cssText = 'flex:0 0 80px; width:80px;';
+        inCant.value = (cantidad !== undefined && cantidad !== null) ? cantidad : '';
+
+        var del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'btn btn-ghost btn-sm';
+        del.innerHTML = '<span class="material-icons">delete</span>';
+        del.onclick = function() { row.parentNode.removeChild(row); };
+
+        row.appendChild(inNombre);
+        row.appendChild(inCat);
+        row.appendChild(inCant);
+        row.appendChild(del);
+        cont.appendChild(row);
+    }
+
+    function ckRender(items) {
+        document.getElementById('ckRows').innerHTML = '';
+        (items || []).forEach(function(it) {
+            ckAgregar(it.nombre, it.categoria, it.cantidadBase);
+        });
+    }
+
+    function ckLeer() {
+        var out = [];
+        var rows = document.querySelectorAll('#ckRows .ck-row');
+        for (var i = 0; i < rows.length; i++) {
+            var nombre = rows[i].querySelector('.ck-nombre').value.trim();
+            if (!nombre) continue;
+            var categoria = rows[i].querySelector('.ck-cat').value.trim() || 'General';
+            var cantidad = parseInt(rows[i].querySelector('.ck-cant').value, 10);
+            if (isNaN(cantidad) || cantidad < 0) cantidad = 0;
+            out.push({ nombre: nombre, categoria: categoria, cantidadBase: cantidad });
+        }
+        return out;
+    }
+
+    function ckSugeridos() {
+        var sug = [
+            ['Vasos', 'Cocina', 6], ['Platos', 'Cocina', 6], ['Juegos de cubiertos', 'Cocina', 6],
+            ['Tazas', 'Cocina', 6], ['Ollas', 'Cocina', 2], ['Sartén', 'Cocina', 1],
+            ['Juegos de sábanas', 'Ropa blanca', 2], ['Toallas', 'Ropa blanca', 4], ['Almohadas', 'Ropa blanca', 4],
+            ['Ventiladores grandes', 'Electrodomésticos', 1], ['Ventiladores chicos', 'Electrodomésticos', 1],
+            ['Licuadora', 'Electrodomésticos', 1], ['Pava eléctrica', 'Electrodomésticos', 1]
+        ];
+        sug.forEach(function(s) { ckAgregar(s[0], s[1], s[2]); });
+    }
+    window.ckAgregar = ckAgregar;
+    window.ckSugeridos = ckSugeridos;
+
+    function limpiarForm() {
+        ['idNum','orden','nombreEs','nombrePt','nombreEn',
+         'descEs','descPt','descEn','notaEs','notaPt','notaEn',
+         'comodidades','airbnbUrl','googleCalendarId'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        document.getElementById('activa').value          = 'true';
+        document.getElementById('capBase').value         = '2';
+        document.getElementById('capMax').value          = '4';
+        document.getElementById('camasDobles').value     = '1';
+        document.getElementById('camasIndiv').value      = '0';
+        document.getElementById('precioBase').value      = '250';
+        document.getElementById('precioExtra').value     = '50';
+        document.getElementById('precioLimpieza').value  = '150';
+        _fotos = [];
+        renderFotos();
+        document.getElementById('precioPreview').style.display = 'none';
+        document.getElementById('formError').style.display    = 'none';
+        ckRender([]);
+    }
+
+    function mostrarForm() {
+        document.getElementById('formCard').style.display = 'block';
+        document.getElementById('formCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function mostrarErrorForm(msg) {
+        document.getElementById('formErrorText').textContent = msg;
+        document.getElementById('formError').style.display = 'flex';
+        document.getElementById('formError').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // ── TARIFAS POR TEMPORADA ─────────────────────────────────
+    async function cargarSelectTarifas() {
+        const snap   = await db.collection('cabanas').get();
+        const select = document.getElementById('tarifaCabanaSelect');
+        const val    = select.value;
+        select.innerHTML = '<option value="">— Seleccionar cabaña —</option>';
+        snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .sort((a,b) => (a.orden||0)-(b.orden||0))
+            .forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = (c.nombre && c.nombre.es) || ('Cabaña ' + c.id);
+                select.appendChild(opt);
+            });
+        if (val) { select.value = val; cargarIntervalos(val); }
+    }
+
+    async function cargarIntervalos(cabanaId) {
+        if (!cabanaId) {
+            document.getElementById('intervalosContainer').innerHTML =
+                '<div style="color:var(--color-text-muted); padding:var(--space-4);">Seleccioná una cabaña.</div>';
+            return;
+        }
+        const docSnap = await db.collection('cabanas').doc(cabanaId).get();
+        const _di = docSnap.data();
+        intervalosActuales = (_di && _di.tarifas && _di.tarifas.intervalos) || [];
+        renderIntervalos();
+    }
+
+    function renderIntervalos() {
+        const container = document.getElementById('intervalosContainer');
+        if (!intervalosActuales.length) {
+            container.innerHTML = '<div style="text-align:center; padding:var(--space-6); color:var(--color-text-muted);">Sin períodos especiales. Las fechas usan el precio base de la cabaña.</div>';
+            return;
+        }
+        container.innerHTML = intervalosActuales.map((int, idx) =>
+            '<div class="intervalo-card">' +
+                '<div class="intervalo-card__header">' +
+                    '<strong style="font-size:var(--text-sm); color:var(--color-text-primary);">' +
+                        'Período ' + (idx + 1) + (int.descripcion ? ' — ' + escapeHtml(int.descripcion) : '') +
+                    '</strong>' +
+                    '<button class="btn btn-danger btn-sm" onclick="eliminarIntervalo(' + idx + ')"><span class="material-icons">delete</span> Eliminar</button>' +
+                '</div>' +
+                '<div class="form-row">' +
+                    '<div class="form-group">' +
+                        '<label class="form-label">Desde</label>' +
+                        '<input type="date" class="form-control int-desde" data-idx="' + idx + '" value="' + (int.desde || '') + '">' +
+                    '</div>' +
+                    '<div class="form-group">' +
+                        '<label class="form-label">Hasta</label>' +
+                        '<input type="date" class="form-control int-hasta" data-idx="' + idx + '" value="' + (int.hasta || '') + '">' +
+                    '</div>' +
+                    '<div class="form-group">' +
+                        '<label class="form-label">Precio noche (R$)</label>' +
+                        '<input type="number" step="10" class="form-control int-precio" data-idx="' + idx + '" value="' + (int.precioNoche || 0) + '">' +
+                    '</div>' +
+                    '<div class="form-group">' +
+                        '<label class="form-label">Extra por persona (R$)</label>' +
+                        '<input type="number" step="10" class="form-control int-extra" data-idx="' + idx + '" value="' + (int.precioExtra || 0) + '">' +
+                    '</div>' +
+                    '<div class="form-group">' +
+                        '<label class="form-label">Descripción</label>' +
+                        '<input type="text" class="form-control int-desc" data-idx="' + idx + '" value="' + escapeHtml(int.descripcion || '') + '" placeholder="Ej: Temporada alta">' +
+                    '</div>' +
+                '</div>' +
+            '</div>'
+        ).join('');
+
+        // Listeners
+        container.querySelectorAll('.int-desde').forEach(i  => i.addEventListener('input', e => { intervalosActuales[e.target.dataset.idx].desde       = e.target.value; }));
+        container.querySelectorAll('.int-hasta').forEach(i  => i.addEventListener('input', e => { intervalosActuales[e.target.dataset.idx].hasta       = e.target.value; }));
+        container.querySelectorAll('.int-precio').forEach(i => i.addEventListener('input', e => { intervalosActuales[e.target.dataset.idx].precioNoche  = parseFloat(e.target.value)||0; }));
+        container.querySelectorAll('.int-extra').forEach(i  => i.addEventListener('input', e => { intervalosActuales[e.target.dataset.idx].precioExtra  = parseFloat(e.target.value)||0; }));
+        container.querySelectorAll('.int-desc').forEach(i   => i.addEventListener('input', e => { intervalosActuales[e.target.dataset.idx].descripcion  = e.target.value; }));
+    }
+
+    window.agregarIntervalo = function() {
+        intervalosActuales.push({ desde:'', hasta:'', precioNoche:0, precioExtra:0, descripcion:'' });
+        renderIntervalos();
+        const _last = document.querySelector('.intervalo-card:last-child');
+        if (_last) _last.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    };
+
+    window.eliminarIntervalo = function(idx) {
+        intervalosActuales.splice(idx, 1);
+        renderIntervalos();
+    };
+
+    window.guardarIntervalos = async function() {
+        const cabanaId = document.getElementById('tarifaCabanaSelect').value;
+        if (!cabanaId) { showToast('Seleccioná una cabaña primero.', 'error'); return; }
+
+        // Validar fechas completas
+        if (intervalosActuales.some(i => !i.desde || !i.hasta)) {
+            showToast('Completá las fechas de todos los períodos.', 'error');
+            return;
+        }
+
+        // Validar que desde < hasta en cada intervalo
+        if (intervalosActuales.some(i => i.desde >= i.hasta)) {
+            showToast('En cada período, "Desde" debe ser anterior a "Hasta".', 'error');
+            return;
+        }
+
+        // Validar solapamiento entre intervalos
+        for (let i = 0; i < intervalosActuales.length; i++) {
+            for (let j = i + 1; j < intervalosActuales.length; j++) {
+                const a = intervalosActuales[i];
+                const b = intervalosActuales[j];
+                if (a.desde < b.hasta && a.hasta > b.desde) {
+                    showToast('Los períodos ' + (i + 1) + ' y ' + (j + 1) + ' se superponen. Corregí las fechas antes de guardar.', 'error');
+                    return;
+                }
+            }
+        }
+
+        try {
+            await db.collection('cabanas').doc(cabanaId).update({
+                'tarifas.intervalos': intervalosActuales
+            });
+            showToast('Períodos de tarifa guardados correctamente.', 'success');
+        } catch(e) {
+            showToast('Error: ' + e.message, 'error');
+        }
+    };
+
+    document.getElementById('tarifaCabanaSelect').addEventListener('change', e => cargarIntervalos(e.target.value));
+
+    // ── Init ──────────────────────────────────────────────────
+    await cargarItems();
+})();
+</script>
+</body>
+</html>
