@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cabañas · Casa Verde Canas</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="design-system.css">
     <style>
         /* ── FIX: Restaurar spinner nativo para inputs numéricos ── */
@@ -111,6 +112,24 @@
             display: flex; align-items: center; gap: var(--space-2);
         }
         .sec-label .material-icons { font-size: 15px; }
+
+        /* ── Editor de fotos (Cloudinary) ────────────────────── */
+        .foto-edit-card {
+            display: flex; gap: var(--space-3); align-items: center;
+            padding: var(--space-3);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            background: var(--color-surface-2);
+            margin-bottom: var(--space-3);
+        }
+        .foto-edit-card__thumb {
+            width: 90px; height: 90px; flex-shrink: 0;
+            border-radius: var(--radius-sm);
+            object-fit: cover; background: var(--color-surface);
+            border: 1px solid var(--color-border);
+        }
+        .foto-edit-card__fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+        .foto-edit-card__actions { display: flex; flex-direction: column; gap: var(--space-2); flex-shrink: 0; }
     </style>
 </head>
 <body>
@@ -269,13 +288,16 @@
 
             <!-- Fotos -->
             <div class="sec-label"><span class="material-icons">photo_library</span> Fotos</div>
-            <div class="form-group">
-                <label class="form-label">URLs de fotos — una por línea</label>
-                <textarea id="fotosUrls" class="form-control" rows="5"
-                    placeholder="https://raw.githubusercontent.com/casaverdecanas-blip/Casaverde/main/img/..."></textarea>
-                <p class="form-hint">Las fotos se muestran en el orden ingresado. Usá URLs del repositorio GitHub del proyecto.</p>
+            <div style="display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap; margin-bottom:var(--space-3);">
+                <button type="button" class="btn btn-secondary" id="btnAgregarFoto" onclick="agregarFoto()">
+                    <span class="material-icons">add_a_photo</span> Agregar foto
+                </button>
+                <span id="fotoSubiendo" style="display:none; align-items:center; gap:6px; color:var(--color-text-muted); font-size:var(--text-sm);">
+                    <span class="spinner" style="width:16px; height:16px;"></span> Subiendo foto...
+                </span>
             </div>
-            <div id="fotosPreview" class="fotos-grid"></div>
+            <p class="form-hint" style="margin:0 0 var(--space-3);">Se suben desde la cámara o la galería del dispositivo y se comprimen automáticamente. La primera foto es la principal; reordenalas con las flechas.</p>
+            <div id="fotosPreview"></div>
 
             <!-- Tarifas -->
             <div class="sec-label"><span class="material-icons">payments</span> Tarifas base</div>
@@ -425,15 +447,16 @@
 <script src="utils.js"></script>
 <script>
 (async () => {
-    const { user, userData } = await CVC.verificarAuth('admin');
+    const { user, userData } = await CVC.verificarAuth(['admin']);
     document.getElementById('userName').textContent = userData.nombre || user.email;
-    CVC.renderNav('cabanas-admin.html');
+    CVC.renderNav('cabanas-admin.html', userData.rol);
     CVC.initAyuda('cabanas-admin.html');
 
     const db = CVC.db;
     const { escapeHtml, showToast } = CVC;
 
     let cabanasCache      = [];
+    let _fotos            = [];   // fotos del formulario en edición: [{url, categoria}]
     let intervalosActuales = [];
 
     // ── Tabs principales ──────────────────────────────────────
@@ -451,10 +474,11 @@
     window.switchLang = function(btn) {
         const group = btn.dataset.group;
         const lang  = btn.dataset.lang;
-        document.querySelectorAll(`[data-group="${group}"]`).forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('[data-group="' + group + '"]').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        document.querySelectorAll(`[id^="${group}-"]`).forEach(p => p.classList.remove('active'));
-        document.getElementById(`${group}-${lang}`).classList.add('active');
+        document.querySelectorAll('[id^="' + group + '-"]').forEach(p => p.classList.remove('active'));
+        const _lp = document.getElementById(group + '-' + lang);
+        if (_lp) _lp.classList.add('active');
     };
 
     // ── Cargar lista de cabañas ───────────────────────────────
@@ -467,57 +491,48 @@
         const container = document.getElementById('cabanasList');
 
         if (!cabanasCache.length) {
-            container.innerHTML = `
-                <div class="state-empty" style="text-align:center; padding:var(--space-6); color:var(--color-text-muted);">
-                    <span class="material-icons" style="font-size:40px; margin-bottom:8px; display:block;">cottage</span>
-                    No hay cabañas registradas. Creá la primera.
-                </div>`;
+            container.innerHTML = '<div class="state-empty" style="text-align:center; padding:var(--space-6); color:var(--color-text-muted);">' +
+                '<span class="material-icons" style="font-size:40px; margin-bottom:8px; display:block;">cottage</span>' +
+                'No hay cabañas registradas. Creá la primera.</div>';
             return;
         }
 
         container.innerHTML = cabanasCache.map(c => {
-            const nombre = escapeHtml(c.nombre?.es || `Cabaña ${c.id}`);
-            const fotos  = (c.fotos || []).map(f => typeof f === 'string' ? f : f?.url).filter(Boolean);
+            const nombre = escapeHtml((c.nombre && c.nombre.es) || ('Cabaña ' + c.id));
+            const fotos  = (c.fotos || []).map(f => typeof f === 'string' ? f : (f && f.url)).filter(Boolean);
             const foto   = fotos[0] || '';
-            return `
-            <div class="cabana-list-card">
-                ${foto
-                    ? `<img class="cabana-list-card__foto" src="${escapeHtml(foto)}" alt="${nombre}" onerror="this.style.display='none'">`
-                    : `<div class="cabana-list-card__foto" style="display:flex;align-items:center;justify-content:center;">
-                         <span class="material-icons" style="color:var(--color-text-muted);font-size:28px;">image_not_supported</span>
-                       </div>`
-                }
-                <div class="cabana-list-card__body">
-                    <div class="cabana-list-card__nombre">${nombre}</div>
-                    <div class="cabana-list-card__meta">
-                        ID ${c.id} · Orden ${c.orden || '—'} ·
-                        Cap. ${c.capacidad?.base || '?'}–${c.capacidad?.max || '?'} personas ·
-                        ${fotos.length} foto${fotos.length !== 1 ? 's' : ''} ·
-                        R$ ${c.tarifas?.precioBase || 0}/noche
-                    </div>
-                    <div style="display:flex; gap:var(--space-2); flex-wrap:wrap; margin-top:var(--space-2);">
-                        <span class="badge ${c.activa ? 'badge-confirmada' : 'badge-anulada'}">
-                            ${c.activa ? '✅ Activa' : '🔒 Inactiva'}
-                        </span>
-                        ${c.google_calendar_id
-                            ? `<span class="badge badge-neutral" style="background:var(--color-info-bg);color:var(--color-info);">📅 Calendar vinculado</span>`
-                            : `<span class="badge badge-neutral" style="color:var(--color-warning);">⚠ Sin Calendar</span>`
-                        }
-                        ${fotos.length === 0
-                            ? `<span class="badge badge-neutral" style="color:var(--color-danger);">⚠ Sin fotos</span>`
-                            : ''
-                        }
-                    </div>
-                </div>
-                <div style="display:flex; flex-direction:column; gap:var(--space-2); flex-shrink:0;">
-                    <button class="btn btn-secondary btn-sm" onclick="editarCabana('${c.docId}')">
-                        <span class="material-icons">edit</span> Editar
-                    </button>
-                    <button class="btn btn-danger btn-sm" onclick="eliminarCabana('${c.docId}', '${escapeHtml(c.nombre?.es || c.docId)}')">
-                        <span class="material-icons">delete</span>
-                    </button>
-                </div>
-            </div>`;
+            const cap    = c.capacidad || {};
+            const tar    = c.tarifas || {};
+            const thumb  = foto
+                ? '<img class="cabana-list-card__foto" src="' + escapeHtml(foto) + '" alt="' + nombre + '" onerror="this.style.display=\'none\'">'
+                : '<div class="cabana-list-card__foto" style="display:flex;align-items:center;justify-content:center;"><span class="material-icons" style="color:var(--color-text-muted);font-size:28px;">image_not_supported</span></div>';
+            const badgeCal = c.google_calendar_id
+                ? '<span class="badge badge-neutral" style="background:var(--color-info-bg);color:var(--color-info);">📅 Calendar vinculado</span>'
+                : '<span class="badge badge-neutral" style="color:var(--color-warning);">⚠ Sin Calendar</span>';
+            const badgeFotos = fotos.length === 0
+                ? '<span class="badge badge-neutral" style="color:var(--color-danger);">⚠ Sin fotos</span>'
+                : '';
+            return '<div class="cabana-list-card">' +
+                thumb +
+                '<div class="cabana-list-card__body">' +
+                    '<div class="cabana-list-card__nombre">' + nombre + '</div>' +
+                    '<div class="cabana-list-card__meta">' +
+                        'ID ' + c.id + ' · Orden ' + (c.orden || '—') + ' · ' +
+                        'Cap. ' + (cap.base || '?') + '–' + (cap.max || '?') + ' personas · ' +
+                        fotos.length + ' foto' + (fotos.length !== 1 ? 's' : '') + ' · ' +
+                        'R$ ' + (tar.precioBase || 0) + '/noche' +
+                    '</div>' +
+                    '<div style="display:flex; gap:var(--space-2); flex-wrap:wrap; margin-top:var(--space-2);">' +
+                        '<span class="badge ' + (c.activa ? 'badge-confirmada' : 'badge-anulada') + '">' + (c.activa ? '✅ Activa' : '🔒 Inactiva') + '</span>' +
+                        badgeCal +
+                        badgeFotos +
+                    '</div>' +
+                '</div>' +
+                '<div style="display:flex; flex-direction:column; gap:var(--space-2); flex-shrink:0;">' +
+                    '<button class="btn btn-secondary btn-sm" onclick="editarCabana(\'' + c.docId + '\')"><span class="material-icons">edit</span> Editar</button>' +
+                    '<button class="btn btn-danger btn-sm" onclick="eliminarCabana(\'' + c.docId + '\')"><span class="material-icons">delete</span></button>' +
+                '</div>' +
+            '</div>';
         }).join('');
     }
 
@@ -546,39 +561,45 @@
         document.getElementById('activa').value   = c.activa ? 'true' : 'false';
 
         // Nombre
-        document.getElementById('nombreEs').value = c.nombre?.es || '';
-        document.getElementById('nombrePt').value = c.nombre?.pt || '';
-        document.getElementById('nombreEn').value = c.nombre?.en || '';
+        document.getElementById('nombreEs').value = (c.nombre && c.nombre.es) || '';
+        document.getElementById('nombrePt').value = (c.nombre && c.nombre.pt) || '';
+        document.getElementById('nombreEn').value = (c.nombre && c.nombre.en) || '';
 
         // Descripción
-        document.getElementById('descEs').value   = c.descripcion?.es || '';
-        document.getElementById('descPt').value   = c.descripcion?.pt || '';
-        document.getElementById('descEn').value   = c.descripcion?.en || '';
+        document.getElementById('descEs').value   = (c.descripcion && c.descripcion.es) || '';
+        document.getElementById('descPt').value   = (c.descripcion && c.descripcion.pt) || '';
+        document.getElementById('descEn').value   = (c.descripcion && c.descripcion.en) || '';
 
         // Nota especial
-        document.getElementById('notaEs').value   = c.specialNote?.es || c.notaEspecial?.es || '';
-        document.getElementById('notaPt').value   = c.specialNote?.pt || c.notaEspecial?.pt || '';
-        document.getElementById('notaEn').value   = c.specialNote?.en || c.notaEspecial?.en || '';
+        document.getElementById('notaEs').value   = (c.specialNote && c.specialNote.es) || (c.notaEspecial && c.notaEspecial.es) || '';
+        document.getElementById('notaPt').value   = (c.specialNote && c.specialNote.pt) || (c.notaEspecial && c.notaEspecial.pt) || '';
+        document.getElementById('notaEn').value   = (c.specialNote && c.specialNote.en) || (c.notaEspecial && c.notaEspecial.en) || '';
 
         // Capacidad
-        document.getElementById('capBase').value      = c.capacidad?.base ?? 2;
-        document.getElementById('capMax').value       = c.capacidad?.max  ?? 4;
-        document.getElementById('camasDobles').value  = c.camas?.dobles      ?? 1;
-        document.getElementById('camasIndiv').value   = c.camas?.individuales ?? 0;
+        const _cap = c.capacidad || {};
+        const _cam = c.camas || {};
+        document.getElementById('capBase').value      = _cap.base != null ? _cap.base : 2;
+        document.getElementById('capMax').value       = _cap.max  != null ? _cap.max  : 4;
+        document.getElementById('camasDobles').value  = _cam.dobles       != null ? _cam.dobles       : 1;
+        document.getElementById('camasIndiv').value   = _cam.individuales  != null ? _cam.individuales  : 0;
 
         // Comodidades
         document.getElementById('comodidades').value = (c.comodidades || []).join('\n');
 
-        // Fotos — normalizar objetos a URLs
-        const fotosUrls = (c.fotos || [])
-            .map(f => typeof f === 'string' ? f : f?.url)
+        // Fotos — normalizar a estado interno [{url, categoria}]
+        _fotos = (c.fotos || [])
+            .map(f => {
+                const url = typeof f === 'string' ? f : (f && f.url);
+                return url ? { url: url, categoria: (f && f.categoria) || '' } : null;
+            })
             .filter(Boolean);
-        document.getElementById('fotosUrls').value = fotosUrls.join('\n');
+        renderFotos();
 
         // Tarifas
-        document.getElementById('precioBase').value     = c.tarifas?.precioBase         ?? 250;
-        document.getElementById('precioExtra').value    = c.tarifas?.precioExtraPersona  ?? 50;
-        document.getElementById('precioLimpieza').value = c.tarifas?.precioLimpieza      ?? 150;
+        const _tar = c.tarifas || {};
+        document.getElementById('precioBase').value     = _tar.precioBase         != null ? _tar.precioBase         : 250;
+        document.getElementById('precioExtra').value    = _tar.precioExtraPersona  != null ? _tar.precioExtraPersona  : 50;
+        document.getElementById('precioLimpieza').value = _tar.precioLimpieza      != null ? _tar.precioLimpieza      : 150;
         actualizarPrecioPreview();
 
         // Integraciones
@@ -586,7 +607,6 @@
         document.getElementById('googleCalendarId').value= c.google_calendar_id  || '';
         validarCalendarId(document.getElementById('googleCalendarId'));
 
-        actualizarPreviewFotos();
         ckRender(c.checklistInventario || []);
         mostrarForm();
     };
@@ -612,7 +632,7 @@
         if (!docId) {
             const idEnUso = cabanasCache.some(c => c.id === idNum);
             if (idEnUso) {
-                mostrarErrorForm(`El ID ${idNum} ya está en uso. Elegí un número diferente.`);
+                mostrarErrorForm('El ID ' + idNum + ' ya está en uso. Elegí un número diferente.');
                 return;
             }
         }
@@ -639,10 +659,8 @@
         btn.disabled = true; text.textContent = 'Guardando...';
 
         try {
-            // Fotos como objetos
-            const fotosInput = document.getElementById('fotosUrls').value
-                .split('\n').map(u => u.trim()).filter(Boolean);
-            const fotos = fotosInput.map((url, i) => ({ url, orden: i, categoria: '' }));
+            // Fotos como objetos (desde el estado interno cargado por Cloudinary)
+            const fotos = _fotos.map((f, i) => ({ url: f.url, orden: i, categoria: f.categoria || '' }));
             const comodidades = document.getElementById('comodidades').value
                 .split('\n').map(l => l.trim()).filter(Boolean);
 
@@ -650,7 +668,8 @@
             let intervalosExistentes = [];
             if (docId) {
                 const docActual = await db.collection('cabanas').doc(docId).get();
-                intervalosExistentes = docActual.data()?.tarifas?.intervalos || [];
+                const _dd = docActual.data();
+                intervalosExistentes = (_dd && _dd.tarifas && _dd.tarifas.intervalos) || [];
             }
 
             const data = {
@@ -695,7 +714,7 @@
                 await db.collection('cabanas').doc(idNum.toString()).set(data);
             }
 
-            showToast(`Cabaña "${nombreEs}" guardada correctamente.`, 'success');
+            showToast('Cabaña "' + nombreEs + '" guardada correctamente.', 'success');
             cancelarEdicion();
             await cargarCabanas();
             await cargarSelectTarifas();
@@ -712,11 +731,18 @@
         document.getElementById('listaCard').scrollIntoView({ behavior: 'smooth' });
     };
 
-    window.eliminarCabana = async function(docId, nombre) {
-        if (!confirm(`¿Eliminar la cabaña "${nombre}"?\nEsta acción no se puede deshacer.`)) return;
+    window.eliminarCabana = async function(docId) {
+        let nombre = docId;
+        for (let i = 0; i < cabanasCache.length; i++) {
+            if (cabanasCache[i].docId === docId) {
+                nombre = (cabanasCache[i].nombre && cabanasCache[i].nombre.es) || docId;
+                break;
+            }
+        }
+        if (!confirm('¿Eliminar la cabaña "' + nombre + '"?\nEsta acción no se puede deshacer.')) return;
         try {
             await db.collection('cabanas').doc(docId).delete();
-            showToast(`Cabaña "${nombre}" eliminada.`, 'warning');
+            showToast('Cabaña "' + nombre + '" eliminada.', 'warning');
             await cargarCabanas();
             await cargarSelectTarifas();
         } catch(e) {
@@ -724,30 +750,60 @@
         }
     };
 
-    // ── Fotos preview ─────────────────────────────────────────
-    function actualizarPreviewFotos() {
-        const urls = document.getElementById('fotosUrls').value
-            .split('\n').map(u => u.trim()).filter(Boolean);
-        document.getElementById('fotosPreview').innerHTML = urls.length
-            ? urls.map((url, i) => `
-                <div class="foto-thumb">
-                    <img src="${escapeHtml(url)}" loading="lazy"
-                        onerror="this.parentElement.style.borderColor='var(--color-danger)'">
-                    <span class="foto-thumb__orden">${i + 1}</span>
-                    <button class="foto-thumb__del" onclick="eliminarFoto(${i})" title="Eliminar">✕</button>
-                </div>`).join('')
-            : '';
+    // ── Fotos: editor con subida Cloudinary ──────────────────
+    function renderFotos() {
+        const cont = document.getElementById('fotosPreview');
+        if (!_fotos.length) {
+            cont.innerHTML = '<div style="color:var(--color-text-muted); font-size:var(--text-sm); padding:var(--space-3) 0;">Todavía no hay fotos. Tocá "Agregar foto".</div>';
+            return;
+        }
+        cont.innerHTML = _fotos.map((f, i) =>
+            '<div class="foto-edit-card">' +
+                '<img class="foto-edit-card__thumb" src="' + escapeHtml(f.url) + '" loading="lazy">' +
+                '<div class="foto-edit-card__fields">' +
+                    '<div style="font-size:var(--text-sm); color:var(--color-text-secondary);">Foto ' + (i + 1) + (i === 0 ? ' · principal' : '') + '</div>' +
+                '</div>' +
+                '<div class="foto-edit-card__actions">' +
+                    '<button type="button" class="btn btn-ghost btn-sm" title="Subir" onclick="moverFoto(' + i + ',-1)"' + (i === 0 ? ' disabled' : '') + '><span class="material-icons">arrow_upward</span></button>' +
+                    '<button type="button" class="btn btn-ghost btn-sm" title="Bajar" onclick="moverFoto(' + i + ',1)"' + (i === _fotos.length - 1 ? ' disabled' : '') + '><span class="material-icons">arrow_downward</span></button>' +
+                    '<button type="button" class="btn btn-danger btn-sm" title="Eliminar" onclick="eliminarFoto(' + i + ')"><span class="material-icons">delete</span></button>' +
+                '</div>' +
+            '</div>'
+        ).join('');
     }
 
-    window.eliminarFoto = function(idx) {
-        const urls = document.getElementById('fotosUrls').value
-            .split('\n').map(u => u.trim()).filter(Boolean);
-        urls.splice(idx, 1);
-        document.getElementById('fotosUrls').value = urls.join('\n');
-        actualizarPreviewFotos();
+    window.moverFoto = function(idx, delta) {
+        const ni = idx + delta;
+        if (ni < 0 || ni >= _fotos.length) return;
+        const tmp = _fotos[idx];
+        _fotos[idx] = _fotos[ni];
+        _fotos[ni] = tmp;
+        renderFotos();
     };
 
-    document.getElementById('fotosUrls').addEventListener('input', actualizarPreviewFotos);
+    window.eliminarFoto = function(idx) {
+        _fotos.splice(idx, 1);
+        renderFotos();
+    };
+
+    window.agregarFoto = function() {
+        CVC.elegirFuenteFoto(function(file) {
+            if (!file) return;
+            const btn = document.getElementById('btnAgregarFoto');
+            const estado = document.getElementById('fotoSubiendo');
+            btn.disabled = true;
+            estado.style.display = 'inline-flex';
+            CVC.subirComprobante(file, 'cabanas', null).then(function(url) {
+                _fotos.push({ url: url, categoria: '' });
+                renderFotos();
+            }).catch(function(e) {
+                showToast('No se pudo subir la foto: ' + e.message, 'error');
+            }).then(function() {
+                btn.disabled = false;
+                estado.style.display = 'none';
+            });
+        });
+    };
 
     // ── Preview precio ────────────────────────────────────────
     function actualizarPrecioPreview() {
@@ -755,17 +811,18 @@
         const extra    = parseFloat(document.getElementById('precioExtra').value)    || 0;
         const limpieza = parseFloat(document.getElementById('precioLimpieza').value) || 0;
         const capBase  = parseInt(document.getElementById('capBase').value)           || 2;
-        const fmt = n => `R$ ${n.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+        const fmt = n => 'R$ ' + n.toLocaleString('pt-BR', {minimumFractionDigits:2});
         const ej2n = base * 2 + limpieza;
         const ejCap = base * 2 + (extra * (parseInt(document.getElementById('capMax').value) - capBase)) * 2 + limpieza;
+        const capMaxVal = document.getElementById('capMax').value || capBase;
 
         document.getElementById('precioPreview').style.display = 'block';
-        document.getElementById('precioPreview').innerHTML = `
-            <strong>Vista previa de precios:</strong><br>
-            2 noches · ${capBase} personas: <strong>${fmt(ej2n)}</strong>
-            &nbsp;|&nbsp;
-            2 noches · ${document.getElementById('capMax').value || capBase} personas (máx): <strong>${fmt(ejCap)}</strong>
-            &nbsp;·&nbsp; Limpieza: ${fmt(limpieza)}`;
+        document.getElementById('precioPreview').innerHTML =
+            '<strong>Vista previa de precios:</strong><br>' +
+            '2 noches · ' + capBase + ' personas: <strong>' + fmt(ej2n) + '</strong>' +
+            '&nbsp;|&nbsp;' +
+            '2 noches · ' + capMaxVal + ' personas (máx): <strong>' + fmt(ejCap) + '</strong>' +
+            '&nbsp;·&nbsp; Limpieza: ' + fmt(limpieza);
     }
 
     ['precioBase','precioExtra','precioLimpieza','capBase','capMax'].forEach(id => {
@@ -870,7 +927,7 @@
     function limpiarForm() {
         ['idNum','orden','nombreEs','nombrePt','nombreEn',
          'descEs','descPt','descEn','notaEs','notaPt','notaEn',
-         'comodidades','fotosUrls','airbnbUrl','googleCalendarId'].forEach(id => {
+         'comodidades','airbnbUrl','googleCalendarId'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
@@ -882,7 +939,8 @@
         document.getElementById('precioBase').value      = '250';
         document.getElementById('precioExtra').value     = '50';
         document.getElementById('precioLimpieza').value  = '150';
-        document.getElementById('fotosPreview').innerHTML = '';
+        _fotos = [];
+        renderFotos();
         document.getElementById('precioPreview').style.display = 'none';
         document.getElementById('formError').style.display    = 'none';
         ckRender([]);
@@ -911,7 +969,7 @@
             .forEach(c => {
                 const opt = document.createElement('option');
                 opt.value = c.id;
-                opt.textContent = c.nombre?.es || `Cabaña ${c.id}`;
+                opt.textContent = (c.nombre && c.nombre.es) || ('Cabaña ' + c.id);
                 select.appendChild(opt);
             });
         if (val) { select.value = val; cargarIntervalos(val); }
@@ -924,53 +982,49 @@
             return;
         }
         const docSnap = await db.collection('cabanas').doc(cabanaId).get();
-        intervalosActuales = docSnap.data()?.tarifas?.intervalos || [];
+        const _di = docSnap.data();
+        intervalosActuales = (_di && _di.tarifas && _di.tarifas.intervalos) || [];
         renderIntervalos();
     }
 
     function renderIntervalos() {
         const container = document.getElementById('intervalosContainer');
         if (!intervalosActuales.length) {
-            container.innerHTML = `
-                <div style="text-align:center; padding:var(--space-6); color:var(--color-text-muted);">
-                    Sin períodos especiales. Las fechas usan el precio base de la cabaña.
-                </div>`;
+            container.innerHTML = '<div style="text-align:center; padding:var(--space-6); color:var(--color-text-muted);">Sin períodos especiales. Las fechas usan el precio base de la cabaña.</div>';
             return;
         }
-        container.innerHTML = intervalosActuales.map((int, idx) => `
-            <div class="intervalo-card">
-                <div class="intervalo-card__header">
-                    <strong style="font-size:var(--text-sm); color:var(--color-text-primary);">
-                        Período ${idx + 1}${int.descripcion ? ` — ${escapeHtml(int.descripcion)}` : ''}
-                    </strong>
-                    <button class="btn btn-danger btn-sm" onclick="eliminarIntervalo(${idx})">
-                        <span class="material-icons">delete</span> Eliminar
-                    </button>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Desde</label>
-                        <input type="date" class="form-control int-desde" data-idx="${idx}" value="${int.desde||''}">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Hasta</label>
-                        <input type="date" class="form-control int-hasta" data-idx="${idx}" value="${int.hasta||''}">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Precio noche (R$)</label>
-                        <input type="number" step="10" class="form-control int-precio" data-idx="${idx}" value="${int.precioNoche||0}">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Extra por persona (R$)</label>
-                        <input type="number" step="10" class="form-control int-extra" data-idx="${idx}" value="${int.precioExtra||0}">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Descripción</label>
-                        <input type="text" class="form-control int-desc" data-idx="${idx}"
-                            value="${escapeHtml(int.descripcion||'')}" placeholder="Ej: Temporada alta">
-                    </div>
-                </div>
-            </div>`).join('');
+        container.innerHTML = intervalosActuales.map((int, idx) =>
+            '<div class="intervalo-card">' +
+                '<div class="intervalo-card__header">' +
+                    '<strong style="font-size:var(--text-sm); color:var(--color-text-primary);">' +
+                        'Período ' + (idx + 1) + (int.descripcion ? ' — ' + escapeHtml(int.descripcion) : '') +
+                    '</strong>' +
+                    '<button class="btn btn-danger btn-sm" onclick="eliminarIntervalo(' + idx + ')"><span class="material-icons">delete</span> Eliminar</button>' +
+                '</div>' +
+                '<div class="form-row">' +
+                    '<div class="form-group">' +
+                        '<label class="form-label">Desde</label>' +
+                        '<input type="date" class="form-control int-desde" data-idx="' + idx + '" value="' + (int.desde || '') + '">' +
+                    '</div>' +
+                    '<div class="form-group">' +
+                        '<label class="form-label">Hasta</label>' +
+                        '<input type="date" class="form-control int-hasta" data-idx="' + idx + '" value="' + (int.hasta || '') + '">' +
+                    '</div>' +
+                    '<div class="form-group">' +
+                        '<label class="form-label">Precio noche (R$)</label>' +
+                        '<input type="number" step="10" class="form-control int-precio" data-idx="' + idx + '" value="' + (int.precioNoche || 0) + '">' +
+                    '</div>' +
+                    '<div class="form-group">' +
+                        '<label class="form-label">Extra por persona (R$)</label>' +
+                        '<input type="number" step="10" class="form-control int-extra" data-idx="' + idx + '" value="' + (int.precioExtra || 0) + '">' +
+                    '</div>' +
+                    '<div class="form-group">' +
+                        '<label class="form-label">Descripción</label>' +
+                        '<input type="text" class="form-control int-desc" data-idx="' + idx + '" value="' + escapeHtml(int.descripcion || '') + '" placeholder="Ej: Temporada alta">' +
+                    '</div>' +
+                '</div>' +
+            '</div>'
+        ).join('');
 
         // Listeners
         container.querySelectorAll('.int-desde').forEach(i  => i.addEventListener('input', e => { intervalosActuales[e.target.dataset.idx].desde       = e.target.value; }));
@@ -983,7 +1037,8 @@
     window.agregarIntervalo = function() {
         intervalosActuales.push({ desde:'', hasta:'', precioNoche:0, precioExtra:0, descripcion:'' });
         renderIntervalos();
-        document.querySelector('.intervalo-card:last-child')?.scrollIntoView({ behavior:'smooth', block:'nearest' });
+        const _last = document.querySelector('.intervalo-card:last-child');
+        if (_last) _last.scrollIntoView({ behavior:'smooth', block:'nearest' });
     };
 
     window.eliminarIntervalo = function(idx) {
@@ -1013,10 +1068,7 @@
                 const a = intervalosActuales[i];
                 const b = intervalosActuales[j];
                 if (a.desde < b.hasta && a.hasta > b.desde) {
-                    showToast(
-                        `Los períodos ${i + 1} y ${j + 1} se superponen. Corregí las fechas antes de guardar.`,
-                        'error'
-                    );
+                    showToast('Los períodos ' + (i + 1) + ' y ' + (j + 1) + ' se superponen. Corregí las fechas antes de guardar.', 'error');
                     return;
                 }
             }
