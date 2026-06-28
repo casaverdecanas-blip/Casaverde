@@ -58,6 +58,9 @@
         .fotos-slider { position:relative; border-radius:22px; overflow:hidden; height:380px; background:#c8dfc8; margin-bottom:40px; box-shadow:0 12px 36px rgba(46,90,49,0.15); }
         .foto-slide { position:absolute; inset:0; opacity:0; transition:opacity 0.9s ease-in-out; background-size:cover; background-position:center; }
         .foto-slide.active { opacity:1; }
+        .foto-slide-caption { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(0deg, rgba(0,0,0,.75) 0%, rgba(0,0,0,0) 100%); padding:54px 28px 22px; color:#fff; }
+        .foto-slide-caption .foto-titulo { font-family:'Playfair Display', serif; font-size:clamp(1.05rem, 2.6vw, 1.5rem); font-weight:700; line-height:1.25; margin-bottom:4px; }
+        .foto-slide-caption .foto-desc { font-size:13px; opacity:.9; line-height:1.5; max-width:560px; }
         .foto-nav { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); display:flex; gap:8px; z-index:5; }
         .foto-dot { width:9px; height:9px; border-radius:50%; background:rgba(255,255,255,0.5); cursor:pointer; transition:background 0.3s; border:none; }
         .foto-dot.active { background:white; }
@@ -328,7 +331,7 @@ function renderCabana() {
     const desc     = getText(cabanaData.descripcion);
     // Fotos pueden ser array de strings o array de objetos {url, ...}
     const fotosRaw = cabanaData.fotos || [];
-    const fotos    = fotosRaw.map(f => typeof f === 'string' ? f : f?.url).filter(Boolean);
+    const fotos    = fotosRaw.map(f => typeof f === 'string' ? { url: f } : f).filter(f => f && f.url);
     const capBase  = cabanaData.capacidad?.base || 2;
     const capMax   = cabanaData.capacidad?.max  || 4;
     const camasD   = cabanaData.camas?.dobles   || 0;
@@ -344,7 +347,7 @@ function renderCabana() {
 
     // Slides
     const slidesHtml = fotos.length
-        ? fotos.map((url,i) => `<div class="foto-slide ${i===0?'active':''}" style="background-image:url('${escHtml(url)}')"></div>`).join('')
+        ? fotos.map((f,i) => `<div class="foto-slide ${i===0?'active':''}" style="background-image:url('${escHtml(f.url)}')">${(f.titulo || f.descripcion) ? `<div class="foto-slide-caption">${f.titulo ? `<div class="foto-titulo">${escHtml(f.titulo)}</div>` : ''}${f.descripcion ? `<div class="foto-desc">${escHtml(f.descripcion)}</div>` : ''}</div>` : ''}</div>`).join('')
         : '<div class="foto-slide active"><div class="sin-foto">🏠</div></div>';
     const dotsHtml   = fotos.length > 1 ? fotos.map((_,i) => `<button class="foto-dot ${i===0?'active':''}" onclick="irSlide(${i})"></button>`).join('') : '';
     const arrowsHtml = fotos.length > 1 ? `<button class="foto-arrow prev" onclick="cambiarSlide(-1)">‹</button><button class="foto-arrow next" onclick="cambiarSlide(1)">›</button>` : '';
