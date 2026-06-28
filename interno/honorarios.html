@@ -706,7 +706,8 @@
     };
     window.guardarIngreso = async function() {
         var reservaId     = document.getElementById('iReserva').value;
-        var clienteNombre = reservasCache.find(function(r) { return r.id === reservaId; })?.nombre || '';
+        var _reservaSel    = reservasCache.find(function(r) { return r.id === reservaId; });
+        var clienteNombre  = (_reservaSel && _reservaSel.nombre) || '';
         var monto         = parseFloat(document.getElementById('iMonto').value);
         var monedaPago    = document.getElementById('iMoneda').value;
         document.getElementById('iError').style.display = 'none';
@@ -927,7 +928,9 @@
         var text = document.getElementById('hBtnText');
         btn.disabled = true; text.textContent = 'Guardando...';
         try {
-            var nombre = document.getElementById('hColaborador').options[document.getElementById('hColaborador').selectedIndex]?.text || '';
+            var _selH  = document.getElementById('hColaborador');
+            var _optH  = _selH.options[_selH.selectedIndex];
+            var nombre = (_optH && _optH.text) || '';
             await db.collection('honorarios').add({
                 uid, nombre, monto, horas: parseFloat(document.getElementById('hHoras').value) || 0,
                 concepto, estado, moneda: 'BRL',
@@ -964,216 +967,6 @@
     function mostrarErrorHonorario(msg) {
         document.getElementById('hErrorText').textContent = msg;
         document.getElementById('hError').style.display   = 'flex';
-    }
-
-    // -- Importar factura con IA -------------------------------
-    window.abrirImportarFactura = function() {
-        document.getElementById('fUpZone').style.display     = 'block';
-        document.getElementById('fImgPreview').style.display = 'none';
-        document.getElementById('fLogBox').style.display     = 'none';
-        document.getElementById('fLogBox').innerHTML         = '';
-        document.getElementById('fCampos').style.display     = 'none';
-        document.getElementById('fBtnGuardar').style.display = 'none';
-        document.getElementById('fError').style.display      = 'none';
-        document.getElementById('fImgInput').value           = '';
-        document.getElementById('modalFactura').style.display = 'flex';
-        // Cuentas se cargan al init de la página -- ver abajo
-    };
-    window.cerrarModalFactura = function(e) {
-        if (e && e.target !== document.getElementById('modalFactura')) return;
-        document.getElementById('modalFactura').style.display = 'none';
-    };
-
-    function fLog(msg, tipo) {
-        tipo = tipo || 'info';
-        var b   = document.getElementById('fLogBox');
-        b.style.display = 'block';
-        var col = { ok:'#4ade80', info:'#93c5fd', warn:'#fbbf24', err:'#f87171' }[tipo] || '#93c5fd';
-        b.innerHTML += '<span style="color:' + col + '">' + msg + '</span>\n';
-        b.scrollTop  = b.scrollHeight;
-    }
-
-    async function redimensionarImagen(file, maxPx, quality) {
-        return new Promise(function(resolve, reject) {
-            var img = new Image();
-            var url = URL.createObjectURL(file);
-            img.onload = function() {
-                URL.revokeObjectURL(url);
-                var w = img.width, h = img.height;
-                if (w > maxPx || h > maxPx) {
-                    if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
-                    else       { w = Math.round(w * maxPx / h); h = maxPx; }
-                }
-                var canvas = document.createElement('canvas');
-                canvas.width = w; canvas.height = h;
-                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                canvas.toBlob(function(blob) { resolve(blob); }, 'image/jpeg', quality || 0.82);
-            };
-            img.onerror = function() { reject(new Error('No se pudo cargar la imagen')); };
-            img.src = url;
-        });
-    }
-
-    window.procesarFactura = async function(file) {
-        if (!file) return;
-        document.getElementById('fUpZone').style.display     = 'none';
-        document.getElementById('fLogBox').innerHTML         = '';
-        document.getElementById('fLogBox').classList.add('visible');
-        document.getElementById('fCampos').style.display     = 'none';
-        document.getElementById('fBtnGuardar').style.display = 'none';
-
-        fLog(' ' + file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)', 'info');
-        fLog(' Procesando imagen...', 'info');
-
-        try {
-            var blob = await redimensionarImagen(file, 1400, 0.82);
-            document.getElementById('fImgEl').src = URL.createObjectURL(blob);
-            document.getElementById('fImgPreview').style.display = 'block';
-
-            var b64 = await new Promise(function(res, rej) {
-                var r = new FileReader();
-                r.onload  = function() { res(r.result.split(',')[1]); };
-                r.onerror = function() { rej(new Error('Error leyendo archivo')); };
-                r.readAsDataURL(blob);
-            });
-
-            fLog('OK Imagen lista. Enviando a IA...', 'ok');
-
-            var PROMPT = 'Sos un extractor de datos de facturas y recibos de compra en Brasil.' +
-                ' Extraé los datos del comprobante y respondé UNICAMENTE con JSON valido, sin texto adicional ni markdown:' +
-                ' {"proveedor":"","fecha":"YYYY-MM-DD","monto_total":0,"moneda":"BRL","concepto":"",' +
-                '"numero_factura":"","categoria_sugerida":"","metodo_pago_sugerido":"","items":""}.' +
-                ' Para monto_total: eliminar R$, puntos de miles, reemplazar coma decimal por punto. Ejemplo: R$1.234,56 -> 1234.56.' +
-                ' Para categoria_sugerida usar una de: Materiales, Servicios, Limpieza, Mantenimiento, Alimentos, Transporte, Otros.' +
-                ' Para metodo_pago_sugerido usar: efectivo, debito, credito, pix, transferencia.';
-
-            // Llamar al proxy de Netlify (igual que informes-airbnb)
-            var PROXY_URL = 'https://serene-scone-76bd4e.netlify.app/.netlify/functions/claude-proxy';
-
-            var response = await fetch(PROXY_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: 'gemini-2.5-flash-lite',
-                    max_tokens: 1000,
-                    messages: [{
-                        role: 'user',
-                        content: [
-                            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
-                            { type: 'text', text: PROMPT }
-                        ]
-                    }]
-                })
-            });
-
-            var data = await response.json();
-            if (!response.ok) {
-                fLog('ERR Error del proxy: ' + (data.error || response.status), 'err');
-                document.getElementById('fCampos').style.display     = 'block';
-                document.getElementById('fBtnGuardar').style.display = 'inline-flex';
-                return;
-            }
-            var raw  = data.content && data.content[0] ? data.content[0].text : '';
-            fLog('Interpretando...', 'ok');
-
-            var ext;
-            try { var bt=String.fromCharCode(96); var cleanRaw=raw.split(bt).join('').split(bt+'json').join('').replace('json','').trim(); ext=JSON.parse(cleanRaw); }
-            catch(e) {
-                fLog('ERR Error en JSON: ' + e.message, 'err');
-                document.getElementById('fCampos').style.display     = 'block';
-                document.getElementById('fBtnGuardar').style.display = 'inline-flex';
-                return;
-            }
-            fLog('OK Datos extraídos. Revisalos antes de guardar.', 'ok');
-            poblarCamposFactura(ext);
-        } catch(e) {
-            fLog('ERR Error: ' + e.message, 'err');
-            document.getElementById('fCampos').style.display     = 'block';
-            document.getElementById('fBtnGuardar').style.display = 'inline-flex';
-        }
-    };
-
-    function poblarCamposFactura(d) {
-        if (d.proveedor)         document.getElementById('fProveedor').value  = d.proveedor;
-        if (d.fecha)             document.getElementById('fFecha').value      = d.fecha;
-        if (d.monto_total)       document.getElementById('fMonto').value      = d.monto_total;
-        if (d.moneda)            document.getElementById('fMoneda').value     = d.moneda;
-        if (d.categoria_sugerida) document.getElementById('fCategoria').value = d.categoria_sugerida;
-        if (d.metodo_pago_sugerido && d.metodo_pago_sugerido !== 'desconocido')
-            document.getElementById('fMetodo').value = d.metodo_pago_sugerido;
-        if (d.concepto)        document.getElementById('fConcepto').value   = d.concepto;
-        if (d.numero_factura)  document.getElementById('fReferencia').value = d.numero_factura;
-        // items puede ser string o array de objetos -- convertir a texto legible
-        if (d.items) {
-            var itemsTxt = d.items;
-            if (Array.isArray(d.items)) {
-                itemsTxt = d.items.map(function(it) {
-                    if (typeof it === 'string') return it;
-                    // Objeto con descripcion/cantidad/precio
-                    var partes = [];
-                    if (it.descripcion || it.description || it.nombre || it.item) {
-                        partes.push(it.descripcion || it.description || it.nombre || it.item);
-                    }
-                    if (it.cantidad || it.qty || it.qtde) partes.push('x' + (it.cantidad || it.qty || it.qtde));
-                    if (it.precio || it.price || it.valor || it.vl_total) {
-                        partes.push('R$ ' + (it.precio || it.price || it.valor || it.vl_total));
-                    }
-                    return partes.join(' ');
-                }).join('\n');
-            } else if (typeof d.items === 'object') {
-                itemsTxt = JSON.stringify(d.items);
-            }
-            document.getElementById('fItems').value = itemsTxt;
-        }
-        document.getElementById('fCampos').style.display     = 'block';
-        document.getElementById('fBtnGuardar').style.display = 'inline-flex';
-    }
-
-    window.guardarDesdeFactura = async function() {
-        var concepto = document.getElementById('fConcepto').value.trim() || document.getElementById('fProveedor').value.trim();
-        var monto    = parseFloat(document.getElementById('fMonto').value);
-        var fecha    = document.getElementById('fFecha').value || new Date().toISOString().split('T')[0];
-        if (!concepto)            { mostrarErrorFactura('Ingresá un concepto o proveedor.'); return; }
-        if (!monto || monto <= 0) { mostrarErrorFactura('Ingresá un monto válido.'); return; }
-        var btn = document.getElementById('fBtnGuardar');
-        var txt = document.getElementById('fBtnTxt');
-        btn.disabled = true; txt.textContent = 'Guardando...';
-        try {
-            var ref   = document.getElementById('fReferencia').value.trim();
-            var items = document.getElementById('fItems').value.trim();
-            var selCF    = document.getElementById('fCuentaOrigen');
-            var circuito = document.getElementById('fCircuito') ? document.getElementById('fCircuito').value : 'fiscal';
-            var cuentaId  = selCF ? selCF.value : '';
-            var cuentaNom = selCF && selCF.options[selCF.selectedIndex] ? (selCF.options[selCF.selectedIndex].dataset.nom || '') : '';
-            await db.collection('gastos').add({
-                concepto, monto, fecha,
-                categoria:            document.getElementById('fCategoria').value,
-                moneda:               document.getElementById('fMoneda').value,
-                metodo:               document.getElementById('fMetodo').value,
-                proveedor:            document.getElementById('fProveedor').value.trim(),
-                notas:                ref ? 'Factura: ' + ref : '',
-                items:                items,
-                circuito:             circuito,
-                deducible:            circuito === 'fiscal' || circuito === 'mixto',
-                cuentaOrigenId:       cuentaId,
-                cuentaOrigenNom:      cuentaNom,
-                referenciaComprobante: ref,
-                origen:               'factura_ia',
-                creadoEn:             firebase.firestore.FieldValue.serverTimestamp(),
-                creadoPor:            user.uid
-            });
-            showToast('Gasto registrado desde factura.', 'success');
-            document.getElementById('modalFactura').style.display = 'none';
-            await cargarTodo();
-        } catch(e) {
-            mostrarErrorFactura('Error: ' + e.message);
-            btn.disabled = false; txt.textContent = 'Guardar gasto';
-        }
-    };
-
-    function mostrarErrorFactura(msg) {
-        document.getElementById('fErrorText').textContent = msg;
-        document.getElementById('fError').style.display   = 'flex';
     }
 
     // -- Init --------------------------------------------------

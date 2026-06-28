@@ -28,6 +28,12 @@
         .cm-meta { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 2px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
         .cm-badge { font-size: 10px; padding: 1px 7px; border-radius: 99px; background: var(--color-surface-2); border: 1px solid var(--color-border); white-space: nowrap; }
         .cm-unread-pill { background: var(--color-info); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 99px; }
+        .cm-actions { display: flex; gap: 2px; flex-shrink: 0; }
+        .cm-actions button { background: none; border: none; cursor: pointer; color: var(--color-text-muted); padding: 4px; border-radius: 6px; display: flex; align-items: center; }
+        .cm-actions button:hover { background: var(--color-surface-2); color: var(--color-text); }
+        .cm-actions button.on { color: var(--color-warning); }
+        .cm-actions .material-icons { font-size: 19px; }
+        .cm-thread.pinned { border-left: 3px solid var(--color-warning); }
         .cm-body { display: none; border-top: 1px solid var(--color-border-light); padding: var(--space-3) var(--space-4) var(--space-4); background: var(--color-surface-2); }
         .cm-body.open { display: block; }
         .cm-msgs { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); max-height: 320px; overflow-y: auto; }
@@ -84,6 +90,7 @@
         <button class="cm-chip"        id="fNoLeidas"   onclick="filtrar('no_leidas', this)">No leídas</button>
         <button class="cm-chip"        id="fSugerencias" onclick="filtrar('sitio', this)">💡 Sugerencias</button>
         <button class="cm-chip"        id="fUrgentes"   onclick="filtrar('rojo', this)">🔴 Urgentes</button>
+        <button class="cm-chip"        id="fArchivadas" onclick="filtrar('archivadas', this)">📁 Archivadas</button>
     </div>
 
     <div id="listaHilos">
@@ -168,18 +175,6 @@
     var miNombre   = userData.nombre || user.email;
     var _replyFile = null;   // imagen adjunta a la respuesta del hilo abierto
     var _nuevaFile = null;   // imagen adjunta al primer mensaje (nueva conversación)
-
-    // Subida de imagen a Cloudinary (autocontenida)
-    async function subirImagen(file) {
-        var fd = new FormData();
-        fd.append('file', file);
-        fd.append('upload_preset', 'preset-comprobantes');
-        fd.append('folder', 'comunicacion');
-        var r = await fetch('https://api.cloudinary.com/v1_1/dnwfu8ffn/image/upload', { method: 'POST', body: fd });
-        if (!r.ok) throw new Error('Cloudinary ' + r.status);
-        var d = await r.json();
-        return d.secure_url || d.url;
-    }
 
     var AUD_LABEL = {
         todos: '👥 Todos',
@@ -272,6 +267,9 @@
             _hilos = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
                 .filter(puedeVer)
                 .sort(function(a, b) {
+                    var da = a.destacada ? 1 : 0;
+                    var dbb = b.destacada ? 1 : 0;
+                    if (da !== dbb) return dbb - da;   // destacadas arriba
                     var ta = a.ultimaActividad && a.ultimaActividad.toDate ? a.ultimaActividad.toDate().getTime() : 0;
                     var tb = b.ultimaActividad && b.ultimaActividad.toDate ? b.ultimaActividad.toDate().getTime() : 0;
                     return tb - ta;
@@ -282,6 +280,41 @@
         }
     }
 
+    function _buscarHilo(id) {
+        for (var i = 0; i < _hilos.length; i++) { if (_hilos[i].id === id) return _hilos[i]; }
+        return null;
+    }
+
+    window.toggleArchivar = async function(ev, id) {
+        if (ev) ev.stopPropagation();
+        var h = _buscarHilo(id);
+        if (!h) return;
+        var nuevo = !h.archivada;
+        try {
+            var patch = { archivada: nuevo };
+            if (nuevo) patch.destacada = false;   // al archivar se quita el destacado
+            await db.collection('comunicaciones').doc(id).update(patch);
+            showToast(nuevo ? 'Conversación archivada.' : 'Conversación restaurada.', 'success');
+            await cargar();
+        } catch (e) {
+            showToast('No se pudo archivar: ' + e.message, 'error');
+        }
+    };
+
+    window.toggleDestacar = async function(ev, id) {
+        if (ev) ev.stopPropagation();
+        var h = _buscarHilo(id);
+        if (!h) return;
+        var nuevo = !h.destacada;
+        try {
+            await db.collection('comunicaciones').doc(id).update({ destacada: nuevo });
+            showToast(nuevo ? 'Conversación destacada.' : 'Destacado quitado.', 'success');
+            await cargar();
+        } catch (e) {
+            showToast('No se pudo destacar: ' + e.message, 'error');
+        }
+    };
+
     window.filtrar = function(f, btn) {
         _filtro = f;
         document.querySelectorAll('.cm-chip').forEach(function(c) { c.classList.remove('active'); });
@@ -290,23 +323,47 @@
     };
 
     function aplicarFiltro(lista) {
-        if (_filtro === 'no_leidas') return lista.filter(esNoLeido);
-        if (_filtro === 'sitio')     return lista.filter(function(h) { return h.refTipo === 'sitio'; });
-        if (_filtro === 'rojo')      return lista.filter(function(h) { return h.prioridad === 'rojo'; });
-        return lista;
+        if (_filtro === 'archivadas') return lista.filter(function(h) { return h.archivada === true; });
+        // El resto de los filtros nunca muestran archivadas
+        var base = lista.filter(function(h) { return h.archivada !== true; });
+        if (_filtro === 'no_leidas') return base.filter(esNoLeido);
+        if (_filtro === 'sitio')     return base.filter(function(h) { return h.refTipo === 'sitio'; });
+        if (_filtro === 'rojo')      return base.filter(function(h) { return h.prioridad === 'rojo'; });
+        return base;
     }
 
     function render() {
         var cont = document.getElementById('listaHilos');
+        // Contador en el chip de archivadas
+        var chipArch = document.getElementById('fArchivadas');
+        if (chipArch) {
+            var nArch = _hilos.filter(function(h) { return h.archivada === true; }).length;
+            chipArch.textContent = '📁 Archivadas' + (nArch ? ' (' + nArch + ')' : '');
+        }
         var lista = aplicarFiltro(_hilos);
         if (!lista.length) {
-            cont.innerHTML = '<div style="text-align:center;color:var(--color-text-muted);padding:var(--space-6);">No hay conversaciones para este filtro.</div>';
+            var vacio = _filtro === 'archivadas' ? 'No hay conversaciones archivadas.' : 'No hay conversaciones para este filtro.';
+            cont.innerHTML = '<div style="text-align:center;color:var(--color-text-muted);padding:var(--space-6);">' + vacio + '</div>';
             return;
         }
         cont.innerHTML = lista.map(function(h) {
             var noLeido = esNoLeido(h);
             var fecha = h.ultimaActividad && h.ultimaActividad.toDate ? h.ultimaActividad.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) : '';
-            return '<div class="cm-thread' + (noLeido ? ' unread' : '') + '" id="hilo-' + h.id + '">' +
+            var clases = 'cm-thread' + (noLeido ? ' unread' : '') + (h.destacada && !h.archivada ? ' pinned' : '');
+            var acciones = '';
+            if (esAdmin) {
+                if (h.archivada) {
+                    acciones = '<div class="cm-actions">' +
+                        '<button title="Restaurar" onclick="toggleArchivar(event,\'' + h.id + '\')"><span class="material-icons">unarchive</span></button>' +
+                    '</div>';
+                } else {
+                    acciones = '<div class="cm-actions">' +
+                        '<button class="' + (h.destacada ? 'on' : '') + '" title="' + (h.destacada ? 'Quitar destacado' : 'Destacar') + '" onclick="toggleDestacar(event,\'' + h.id + '\')"><span class="material-icons">push_pin</span></button>' +
+                        '<button title="Archivar" onclick="toggleArchivar(event,\'' + h.id + '\')"><span class="material-icons">archive</span></button>' +
+                    '</div>';
+                }
+            }
+            return '<div class="' + clases + '" id="hilo-' + h.id + '">' +
                 '<div class="cm-head" onclick="toggleHilo(\'' + h.id + '\')">' +
                     '<span class="cm-dot ' + (h.prioridad || 'verde') + '"></span>' +
                     '<div class="cm-head__main">' +
@@ -319,6 +376,7 @@
                         '</div>' +
                     '</div>' +
                     (noLeido ? '<span class="cm-unread-pill">nuevo</span>' : '') +
+                    acciones +
                 '</div>' +
                 '<div class="cm-body" id="body-' + h.id + '"></div>' +
             '</div>';
@@ -405,7 +463,7 @@
         try {
             var imagenUrl = null;
             if (_replyFile) {
-                try { imagenUrl = await subirImagen(_replyFile); }
+                try { imagenUrl = await CVC.subirComprobante(_replyFile, 'comunicacion', id); }
                 catch (se) { showToast('No se pudo subir la imagen: ' + se.message, 'error'); }
             }
             await db.collection('comunicaciones').doc(id).collection('mensajes').add({
@@ -497,7 +555,7 @@
             });
             var imagenUrl = null;
             if (_nuevaFile) {
-                try { imagenUrl = await subirImagen(_nuevaFile); } catch (se) {}
+                try { imagenUrl = await CVC.subirComprobante(_nuevaFile, 'comunicacion', ref.id); } catch (se) {}
             }
             await ref.collection('mensajes').add({
                 texto: mensaje,
