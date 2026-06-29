@@ -212,6 +212,7 @@ const NAV_ADMIN_ITEMS = [
         icon:  'settings',
         items: [
             { href: 'contenido-sitio.html', icon: 'collections',      label: 'Contenido del sitio' },
+            { href: 'moderacion-recuerdos.html', icon: 'rate_review', label: 'Moderar recuerdos' },
             { href: 'usuarios.html',       icon: 'manage_accounts', label: 'Usuarios' },
             { href: 'notificaciones.html', icon: 'notifications',   label: 'Notificaciones' },
             { sep: true },
@@ -284,7 +285,8 @@ var CATALOGO_PERMISOS = [
         { href: 'acceso-contador.html', icon: 'person_outline', label: 'Acceso contador' }
     ]},
     { grupo: 'Contenido del sitio', icon: 'collections', items: [
-        { href: 'contenido-sitio.html', icon: 'collections', label: 'Contenido del sitio (cabañas y espacios)' }
+        { href: 'contenido-sitio.html', icon: 'collections', label: 'Contenido del sitio (cabañas y espacios)' },
+        { href: 'moderacion-recuerdos.html', icon: 'rate_review', label: 'Moderar recuerdos de huéspedes' }
     ]}
 ];
 
@@ -309,7 +311,7 @@ function construirNavColaborador() {
 var SECCIONES_SOLO_ADMIN = [
     'panel-financiero', 'fiscal', 'cuentas', 'movimientos',
     'herramientas-btg', 'categorias', 'pagos', 'informes-airbnb',
-    'acceso-contador', 'contenido-sitio', 'usuarios', 'tareas-admin', 'gastos',
+    'acceso-contador', 'contenido-sitio', 'moderacion-recuerdos', 'usuarios', 'tareas-admin', 'gastos',
     'analisis-gastos', 'proyeccion-anual', 'cotizaciones', 'transferencias', 'clasificacion-masiva', 'temporada'
 ];
 function puede(seccion, rol, permisos) {

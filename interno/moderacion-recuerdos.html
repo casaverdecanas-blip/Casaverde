@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moderar recuerdos · Casa Verde Canas</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .filtros { display:flex; gap:var(--space-2); flex-wrap:wrap; margin-bottom:var(--space-4); }
+        .filtro-chip { padding:7px 16px; border-radius:99px; border:1.5px solid var(--color-border);
+            background:var(--color-surface); font-size:var(--text-sm); font-weight:600; cursor:pointer; }
+        .filtro-chip.active { background:var(--color-primary); color:#fff; border-color:var(--color-primary); }
+        .rec-card { display:flex; gap:var(--space-4); align-items:flex-start; padding:var(--space-4);
+            border:1.5px solid var(--color-border); border-radius:var(--radius-md); margin-bottom:var(--space-3); background:var(--color-surface); }
+        .rec-card__foto { width:96px; height:96px; border-radius:var(--radius-sm); object-fit:cover; flex-shrink:0; background:var(--color-surface-2); }
+        .rec-card__body { flex:1; min-width:0; }
+        .rec-card__texto { font-size:var(--text-md); color:var(--color-text-primary); margin-bottom:6px; }
+        .rec-card__meta { font-size:var(--text-xs); color:var(--color-text-muted); }
+        .rec-card__acc { display:flex; flex-direction:column; gap:var(--space-2); flex-shrink:0; }
+    </style>
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-header__brand"><span class="material-icons">rate_review</span> Casa Verde Canas</div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span> <span id="userName">—</span></div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()"><span class="material-icons">logout</span> Salir</button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+    <div class="card">
+        <div class="card__header">
+            <h2 class="card__title"><span class="material-icons">rate_review</span> Recuerdos de huéspedes</h2>
+        </div>
+        <p class="form-hint" style="margin:0 0 var(--space-4);">Los recuerdos que envían los visitantes entran como <strong>pendientes</strong>. Aprobá los que quieras mostrar en el muro público; rechazá o eliminá el resto.</p>
+
+        <div class="filtros">
+            <button class="filtro-chip active" data-estado="pendiente" onclick="filtrar('pendiente', this)">⏳ Pendientes</button>
+            <button class="filtro-chip" data-estado="aprobado" onclick="filtrar('aprobado', this)">✅ Aprobados</button>
+            <button class="filtro-chip" data-estado="rechazado" onclick="filtrar('rechazado', this)">🚫 Rechazados</button>
+        </div>
+
+        <div id="lista">
+            <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+        </div>
+    </div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async () => {
+    const { user, userData } = await CVC.verificarAuth(['admin']);
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+    CVC.renderNav('moderacion-recuerdos.html', userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('moderacion-recuerdos.html');
+
+    const db = CVC.db;
+    const { escapeHtml, showToast } = CVC;
+
+    let _estado = 'pendiente';
+    let _cache = [];
+
+    window.filtrar = function (estado, btn) {
+        _estado = estado;
+        document.querySelectorAll('.filtro-chip').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        cargar();
+    };
+
+    async function cargar() {
+        const cont = document.getElementById('lista');
+        cont.innerHTML = '<div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>';
+        try {
+            const snap = await db.collection('libro_visitas').where('estado', '==', _estado).get();
+            _cache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            _cache.sort((a, b) => {
+                const ta = a.creadoEn && a.creadoEn.toMillis ? a.creadoEn.toMillis() : 0;
+                const tb = b.creadoEn && b.creadoEn.toMillis ? b.creadoEn.toMillis() : 0;
+                return tb - ta;
+            });
+        } catch (e) {
+            cont.innerHTML = '<div style="color:var(--color-danger);">Error al cargar: ' + escapeHtml(e.message) + '</div>';
+            return;
+        }
+        if (!_cache.length) {
+            cont.innerHTML = '<div style="text-align:center; color:var(--color-text-muted); padding:var(--space-6);">No hay recuerdos en este estado.</div>';
+            return;
+        }
+        cont.innerHTML = _cache.map(r => {
+            const fecha = r.creadoEn && r.creadoEn.toDate ? r.creadoEn.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+            const foto = r.fotoUrl
+                ? '<img class="rec-card__foto" src="' + escapeHtml(r.fotoUrl) + '" alt="" loading="lazy">'
+                : '<div class="rec-card__foto" style="display:flex;align-items:center;justify-content:center;"><span class="material-icons" style="color:var(--color-text-muted);">image</span></div>';
+            const cab = r.cabanaNombre ? ' · ' + escapeHtml(r.cabanaNombre) : '';
+            let acciones = '';
+            if (_estado === 'pendiente') {
+                acciones =
+                    '<button class="btn btn-primary btn-sm" onclick="aprobar(\'' + r.id + '\')"><span class="material-icons">check</span> Aprobar</button>' +
+                    '<button class="btn btn-secondary btn-sm" onclick="rechazar(\'' + r.id + '\')"><span class="material-icons">block</span> Rechazar</button>' +
+                    '<button class="btn btn-danger btn-sm" onclick="eliminar(\'' + r.id + '\')"><span class="material-icons">delete</span></button>';
+            } else if (_estado === 'aprobado') {
+                acciones =
+                    '<button class="btn btn-secondary btn-sm" onclick="rechazar(\'' + r.id + '\')"><span class="material-icons">visibility_off</span> Quitar del muro</button>' +
+                    '<button class="btn btn-danger btn-sm" onclick="eliminar(\'' + r.id + '\')"><span class="material-icons">delete</span></button>';
+            } else {
+                acciones =
+                    '<button class="btn btn-primary btn-sm" onclick="aprobar(\'' + r.id + '\')"><span class="material-icons">check</span> Aprobar</button>' +
+                    '<button class="btn btn-danger btn-sm" onclick="eliminar(\'' + r.id + '\')"><span class="material-icons">delete</span></button>';
+            }
+            return '<div class="rec-card">' +
+                foto +
+                '<div class="rec-card__body">' +
+                    '<div class="rec-card__texto">' + escapeHtml(r.comentario || '') + '</div>' +
+                    '<div class="rec-card__meta">— ' + escapeHtml(r.nombre || 'Huésped') + cab + ' · ' + fecha + '</div>' +
+                '</div>' +
+                '<div class="rec-card__acc">' + acciones + '</div>' +
+            '</div>';
+        }).join('');
+    }
+
+    window.aprobar = async function (id) {
+        try {
+            await db.collection('libro_visitas').doc(id).update({
+                estado: 'aprobado',
+                aprobadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                aprobadoPor: userData.nombre || user.email
+            });
+            showToast('Recuerdo aprobado. Ya aparece en el muro.', 'success');
+            await cargar();
+        } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    window.rechazar = async function (id) {
+        try {
+            await db.collection('libro_visitas').doc(id).update({ estado: 'rechazado' });
+            showToast('Recuerdo quitado del muro.', 'warning');
+            await cargar();
+        } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    window.eliminar = async function (id) {
+        if (!confirm('¿Eliminar este recuerdo definitivamente?\nNo se puede deshacer.')) return;
+        try {
+            await db.collection('libro_visitas').doc(id).delete();
+            showToast('Recuerdo eliminado.', 'warning');
+            await cargar();
+        } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    await cargar();
+})();
+</script>
+</body>
+</html>

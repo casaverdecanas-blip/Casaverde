@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recuerdos de huéspedes · Casa Verde Canas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+        --verde:#2e5a31; --verde-claro:#5a8c4f; --verde-xlight:#eef4ec;
+        --amarillo:#d9a441; --texto:#26331f; --muted:#6b7a63;
+        --borde:#dde6d8; --blanco:#fff; --bg:#f6f9f4;
+    }
+    body { font-family:'Inter', system-ui, sans-serif; color:var(--texto); background:var(--bg); line-height:1.5; }
+    .wrap { max-width:920px; margin:0 auto; padding:0 18px; }
+
+    header { background:var(--verde); color:#fff; padding:38px 0 30px; text-align:center; }
+    header h1 { font-family:'Playfair Display', serif; font-size:clamp(1.6rem, 4.5vw, 2.4rem); font-weight:700; }
+    header p { opacity:.9; margin-top:8px; font-size:15px; }
+    .back { display:inline-block; color:#fff; opacity:.85; text-decoration:none; font-size:13px; margin-bottom:14px; }
+
+    .cta-bar { text-align:center; margin:26px 0 8px; }
+    .btn { display:inline-flex; align-items:center; gap:8px; border:none; cursor:pointer; font-family:inherit;
+        font-size:15px; font-weight:600; padding:12px 22px; border-radius:99px; transition:opacity .15s, transform .1s; }
+    .btn:active { transform:scale(.98); }
+    .btn-primary { background:var(--verde); color:#fff; }
+    .btn-primary:hover { opacity:.92; }
+    .btn-ghost { background:transparent; color:var(--verde); border:1.5px solid var(--borde); }
+
+    /* Muro */
+    .muro { padding:26px 0 60px; }
+    .muro-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:18px; margin-top:18px; }
+    .recuerdo { background:var(--blanco); border:1px solid var(--borde); border-radius:16px; overflow:hidden;
+        box-shadow:0 4px 14px rgba(46,90,49,.06); display:flex; flex-direction:column; }
+    .recuerdo__foto { width:100%; height:200px; object-fit:cover; background:var(--verde-xlight); display:block; }
+    .recuerdo__body { padding:16px 18px 18px; display:flex; flex-direction:column; gap:8px; flex:1; }
+    .recuerdo__texto { font-size:14.5px; color:var(--texto); }
+    .recuerdo__pie { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:auto; padding-top:6px; }
+    .recuerdo__nombre { font-weight:700; font-size:14px; color:var(--verde); }
+    .recuerdo__cab { font-size:11px; color:var(--muted); background:var(--verde-xlight); padding:2px 9px; border-radius:99px; }
+    .vacio { text-align:center; color:var(--muted); padding:50px 20px; font-size:15px; }
+
+    /* Modal formulario */
+    .overlay { position:fixed; inset:0; background:rgba(20,30,16,.55); display:none; align-items:flex-start;
+        justify-content:center; padding:24px 16px; overflow-y:auto; z-index:50; }
+    .overlay.open { display:flex; }
+    .modal { background:var(--blanco); border-radius:18px; max-width:460px; width:100%; padding:26px 22px 24px; margin-top:20px; }
+    .modal h2 { font-family:'Playfair Display', serif; font-size:1.45rem; color:var(--verde); margin-bottom:4px; }
+    .modal p.sub { font-size:13px; color:var(--muted); margin-bottom:18px; }
+    .campo { margin-bottom:15px; }
+    .campo label { display:block; font-size:13px; font-weight:600; margin-bottom:6px; }
+    .campo .req { color:#c0392b; }
+    .campo input, .campo textarea, .campo select {
+        width:100%; font-family:inherit; font-size:15px; padding:11px 13px; border:1.5px solid var(--borde);
+        border-radius:11px; background:#fcfdfb; color:var(--texto); }
+    .campo textarea { resize:vertical; min-height:96px; }
+    .campo .hint { font-size:12px; color:var(--muted); margin-top:5px; }
+    .foto-zona { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    .foto-prev { width:64px; height:64px; border-radius:10px; object-fit:cover; border:1px solid var(--borde); display:none; }
+    .modal-acciones { display:flex; gap:10px; margin-top:20px; }
+    .modal-acciones .btn { flex:1; justify-content:center; }
+    .msg { padding:11px 14px; border-radius:11px; font-size:14px; margin-bottom:14px; display:none; }
+    .msg-error { background:#fdecea; color:#9b2c20; display:block; }
+    .msg-ok { background:var(--verde-xlight); color:var(--verde); display:block; }
+    .gracias { text-align:center; padding:12px 4px; }
+    .gracias .tick { font-size:44px; }
+    .gracias h3 { font-family:'Playfair Display', serif; color:var(--verde); font-size:1.4rem; margin:8px 0 6px; }
+    .gracias p { color:var(--muted); font-size:14px; }
+    .spin { width:16px; height:16px; border:2px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:50%;
+        display:inline-block; animation:gira .7s linear infinite; }
+    @keyframes gira { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+    <div class="wrap">
+        <a href="index.html" class="back">‹ Volver al sitio</a>
+        <h1>Recuerdos de nuestros huéspedes</h1>
+        <p>Momentos compartidos en Casa Verde Canas</p>
+    </div>
+</header>
+
+<div class="wrap">
+    <div class="cta-bar" id="ctaBar" style="display:none;">
+        <button class="btn btn-primary" onclick="abrirForm()">✍️ Dejá tu recuerdo</button>
+    </div>
+    <div class="cta-bar" id="ctaBloqueada" style="display:none;">
+        <p style="color:var(--muted); font-size:14px; max-width:460px; margin:0 auto;">¿Te alojaste con nosotros? 🌿 Escaneá el código QR que está en tu alojamiento para dejar tu recuerdo.</p>
+    </div>
+
+    <section class="muro">
+        <div id="muroGrid" class="muro-grid"></div>
+        <div id="muroVacio" class="vacio" style="display:none;">Todavía no hay recuerdos publicados. ¡Sé el primero en dejar el tuyo!</div>
+    </section>
+</div>
+
+<!-- Modal de envío -->
+<div class="overlay" id="overlay">
+    <div class="modal">
+        <div id="formWrap">
+            <h2>Dejá tu recuerdo</h2>
+            <p class="sub">Tu mensaje se publica después de una breve revisión. ¡Gracias por compartir!</p>
+
+            <div class="msg" id="formMsg"></div>
+
+            <div class="campo">
+                <label>Tu nombre <span class="req">*</span></label>
+                <input id="fNombre" maxlength="60" placeholder="Nombre o como quieras firmar">
+            </div>
+            <div class="campo">
+                <label>Tu comentario <span class="req">*</span></label>
+                <textarea id="fComentario" maxlength="600" placeholder="Contanos cómo la pasaste..."></textarea>
+                <div class="hint"><span id="fContador">0</span>/600</div>
+            </div>
+            <div class="campo">
+                <label>¿En qué alojamiento te quedaste?</label>
+                <select id="fCabana"><option value="">Prefiero no decir</option></select>
+            </div>
+            <div class="campo">
+                <label>Una foto (opcional)</label>
+                <div class="foto-zona">
+                    <input type="file" id="fFoto" accept="image/*" style="font-size:13px;">
+                    <img id="fFotoPrev" class="foto-prev" alt="">
+                </div>
+                <div class="hint">Se reduce de tamaño automáticamente antes de enviarse.</div>
+            </div>
+
+            <div class="modal-acciones">
+                <button class="btn btn-ghost" onclick="cerrarForm()">Cancelar</button>
+                <button class="btn btn-primary" id="btnEnviar" onclick="enviarRecuerdo()">Enviar</button>
+            </div>
+        </div>
+
+        <div id="graciasWrap" class="gracias" style="display:none;">
+            <div class="tick">🌿</div>
+            <h3>¡Gracias por tu recuerdo!</h3>
+            <p>Lo vamos a revisar y, si todo está bien, aparecerá pronto en el muro.</p>
+            <div style="margin-top:18px;">
+                <button class="btn btn-primary" onclick="cerrarForm()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script>
+(function () {
+    var firebaseConfig = {
+        apiKey:    "AIzaSyAUwzXfj-eVeOKX1IcVrQwusblTvr0WrT4",
+        authDomain:"casaverdecanas-199.firebaseapp.com",
+        projectId: "casaverdecanas-199"
+    };
+    firebase.initializeApp(firebaseConfig);
+    var db = firebase.firestore();
+
+    var CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dnwfu8ffn/image/upload";
+    var CLOUDINARY_PRESET = "preset-comprobantes";
+    var NETLIFY_BASE = "https://serene-scone-76bd4e.netlify.app/.netlify/functions";
+
+    // Token del QR. El valor real se valida en el servidor (reglas Firestore + función);
+    // acá solo miramos que venga uno, para habilitar el formulario.
+    var _token = new URLSearchParams(window.location.search).get('k') || '';
+
+    function escapeHtml(s) {
+        s = (s == null) ? '' : String(s);
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ── Muro: cargar recuerdos aprobados ──────────────────────
+    function cargarMuro() {
+        db.collection('libro_visitas').where('estado', '==', 'aprobado').get().then(function (snap) {
+            var items = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+            // Orden por fecha desc en cliente (sin índice compuesto)
+            items.sort(function (a, b) {
+                var ta = a.creadoEn && a.creadoEn.toMillis ? a.creadoEn.toMillis() : 0;
+                var tb = b.creadoEn && b.creadoEn.toMillis ? b.creadoEn.toMillis() : 0;
+                return tb - ta;
+            });
+            var grid = document.getElementById('muroGrid');
+            if (!items.length) {
+                grid.innerHTML = '';
+                document.getElementById('muroVacio').style.display = 'block';
+                return;
+            }
+            document.getElementById('muroVacio').style.display = 'none';
+            grid.innerHTML = items.map(function (r) {
+                var foto = r.fotoUrl
+                    ? '<img class="recuerdo__foto" src="' + escapeHtml(r.fotoUrl) + '" alt="" loading="lazy">'
+                    : '';
+                var cab = r.cabanaNombre
+                    ? '<span class="recuerdo__cab">' + escapeHtml(r.cabanaNombre) + '</span>'
+                    : '';
+                return '<article class="recuerdo">' +
+                    foto +
+                    '<div class="recuerdo__body">' +
+                        '<div class="recuerdo__texto">' + escapeHtml(r.comentario || '') + '</div>' +
+                        '<div class="recuerdo__pie">' +
+                            '<span class="recuerdo__nombre">' + escapeHtml(r.nombre || 'Huésped') + '</span>' +
+                            cab +
+                        '</div>' +
+                    '</div>' +
+                '</article>';
+            }).join('');
+        }).catch(function (e) {
+            document.getElementById('muroVacio').style.display = 'block';
+            document.getElementById('muroVacio').textContent = 'No se pudieron cargar los recuerdos en este momento.';
+        });
+    }
+
+    // ── Cargar cabañas para el select ─────────────────────────
+    var _cabanas = [];
+    function cargarCabanas() {
+        db.collection('cabanas').get().then(function (snap) {
+            _cabanas = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); })
+                .filter(function (c) { return c.activa !== false; })
+                .sort(function (a, b) { return (a.orden || 0) - (b.orden || 0); });
+            var sel = document.getElementById('fCabana');
+            _cabanas.forEach(function (c) {
+                var nombre = (c.nombre && c.nombre.es) || ('Cabaña ' + c.id);
+                var opt = document.createElement('option');
+                opt.value = String(c.id);
+                opt.textContent = nombre;
+                sel.appendChild(opt);
+            });
+            aplicarCabanaDeURL();
+        }).catch(function () {});
+    }
+
+    // Estado del acceso al formulario según token (inmediato, no depende de cargar cabañas)
+    function aplicarGatingToken() {
+        if (_token) {
+            document.getElementById('ctaBar').style.display = 'block';
+            document.getElementById('ctaBloqueada').style.display = 'none';
+        } else {
+            document.getElementById('ctaBar').style.display = 'none';
+            document.getElementById('ctaBloqueada').style.display = 'block';
+        }
+    }
+
+    // Si el QR trae ?cabana=ID, preseleccionar. Solo auto-abre si además hay token.
+    function aplicarCabanaDeURL() {
+        var params = new URLSearchParams(window.location.search);
+        var cab = params.get('cabana');
+        if (cab) {
+            var sel = document.getElementById('fCabana');
+            for (var i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].value === String(cab)) { sel.selectedIndex = i; break; }
+            }
+        }
+        if (_token && cab) abrirForm();
+    }
+
+    // ── Compresión de imagen (canvas) ─────────────────────────
+    function comprimirImagen(file, maxPx, quality) {
+        return new Promise(function (resolve, reject) {
+            var reader = new FileReader();
+            reader.onload = function (ev) {
+                var img = new Image();
+                img.onload = function () {
+                    var w = img.width, h = img.height;
+                    if (w > maxPx || h > maxPx) {
+                        if (w >= h) { h = Math.round(h * maxPx / w); w = maxPx; }
+                        else { w = Math.round(w * maxPx / h); h = maxPx; }
+                    }
+                    var canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    canvas.toBlob(function (blob) {
+                        if (blob) resolve(blob); else reject(new Error('No se pudo procesar la imagen'));
+                    }, 'image/jpeg', quality);
+                };
+                img.onerror = function () { reject(new Error('Imagen inválida')); };
+                img.src = ev.target.result;
+            };
+            reader.onerror = function () { reject(new Error('No se pudo leer el archivo')); };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function subirAFoto(file) {
+        return comprimirImagen(file, 1600, 0.8).then(function (blob) {
+            var fd = new FormData();
+            fd.append('file', blob);
+            fd.append('upload_preset', CLOUDINARY_PRESET);
+            fd.append('folder', 'recuerdos');
+            return fetch(CLOUDINARY_URL, { method: 'POST', body: fd }).then(function (r) {
+                if (!r.ok) throw new Error('Error al subir la foto');
+                return r.json();
+            }).then(function (d) { return d.secure_url || d.url; });
+        });
+    }
+
+    // ── Formulario ────────────────────────────────────────────
+    window.abrirForm = function () {
+        document.getElementById('formWrap').style.display = 'block';
+        document.getElementById('graciasWrap').style.display = 'none';
+        document.getElementById('overlay').classList.add('open');
+    };
+    window.cerrarForm = function () {
+        document.getElementById('overlay').classList.remove('open');
+    };
+
+    var _fotoFile = null;
+    document.getElementById('fFoto').addEventListener('change', function (e) {
+        _fotoFile = (e.target.files && e.target.files[0]) || null;
+        var prev = document.getElementById('fFotoPrev');
+        if (_fotoFile) {
+            prev.src = URL.createObjectURL(_fotoFile);
+            prev.style.display = 'block';
+        } else {
+            prev.style.display = 'none';
+        }
+    });
+    document.getElementById('fComentario').addEventListener('input', function (e) {
+        document.getElementById('fContador').textContent = e.target.value.length;
+    });
+
+    function mostrarMsg(texto, tipo) {
+        var m = document.getElementById('formMsg');
+        m.textContent = texto;
+        m.className = 'msg ' + (tipo === 'ok' ? 'msg-ok' : 'msg-error');
+    }
+
+    window.enviarRecuerdo = function () {
+        var nombre = document.getElementById('fNombre').value.trim();
+        var comentario = document.getElementById('fComentario').value.trim();
+        var sel = document.getElementById('fCabana');
+        var cabanaId = sel.value;
+        var cabanaNombre = cabanaId ? sel.options[sel.selectedIndex].text : '';
+
+        document.getElementById('formMsg').className = 'msg';
+        if (!nombre) { mostrarMsg('Por favor escribí tu nombre.', 'error'); return; }
+        if (!comentario) { mostrarMsg('Por favor escribí un comentario.', 'error'); return; }
+
+        var btn = document.getElementById('btnEnviar');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spin"></span> Enviando...';
+
+        var paso = _fotoFile ? subirAFoto(_fotoFile) : Promise.resolve('');
+        paso.then(function (fotoUrl) {
+            var doc = {
+                nombre: nombre,
+                comentario: comentario,
+                cabanaId: cabanaId || '',
+                cabanaNombre: cabanaNombre || '',
+                fotoUrl: fotoUrl || '',
+                estado: 'pendiente',
+                token: _token,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            return db.collection('libro_visitas').add(doc);
+        }).then(function () {
+            // Aviso a administradores (WhatsApp + mail) vía Netlify. No bloquea el éxito.
+            try {
+                fetch(NETLIFY_BASE + '/notify-recuerdo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre: nombre, comentario: comentario, cabana: cabanaNombre, token: _token })
+                }).catch(function () {});
+            } catch (e) {}
+            document.getElementById('formWrap').style.display = 'none';
+            document.getElementById('graciasWrap').style.display = 'block';
+            // limpiar
+            document.getElementById('fNombre').value = '';
+            document.getElementById('fComentario').value = '';
+            document.getElementById('fContador').textContent = '0';
+            sel.selectedIndex = 0;
+            _fotoFile = null;
+            document.getElementById('fFoto').value = '';
+            document.getElementById('fFotoPrev').style.display = 'none';
+        }).catch(function (e) {
+            mostrarMsg('No se pudo enviar: ' + e.message, 'error');
+        }).then(function () {
+            btn.disabled = false;
+            btn.textContent = 'Enviar';
+        });
+    };
+
+    // Cerrar al tocar el fondo
+    document.getElementById('overlay').addEventListener('click', function (e) {
+        if (e.target === this) cerrarForm();
+    });
+
+    // ── Init ──────────────────────────────────────────────────
+    aplicarGatingToken();
+    cargarMuro();
+    cargarCabanas();
+})();
+</script>
+</body>
+</html>
