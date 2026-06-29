@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Test inventario · Casa Verde Canas</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<link rel="stylesheet" href="design-system.css">
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<style>
+  .tst-wrap { max-width: 720px; margin: 0 auto; }
+  .tst-card { background: #fff; border: 1px solid #e7ece4; border-radius: 12px; padding: 14px; margin-bottom: 16px; }
+  .tst-card h3 { margin: 0 0 10px; font-size: 15px; color: #2a3328; }
+  .muted-note { font-size: 12.5px; color: #66735f; background: #f4f7f3; border: 1px dashed #cdd8c8; border-radius: 8px; padding: 8px 11px; margin-bottom: 12px; }
+  .muted-note.warn { border-color: #e0a3a3; background: #fdf3f3; color: #a33; border-style: solid; }
+  .act-list { display: flex; flex-direction: column; border: 1px solid #e7ece4; border-radius: 12px; overflow: hidden; background: #fff; }
+  .act-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 9px 10px; border-bottom: 1px solid #eef2ec; min-height: 40px; }
+  .act-row:last-child { border-bottom: none; }
+  .act-tit { flex: 1 1 auto; min-width: 110px; font-size: 13.5px; color: #2a3328; word-break: break-word; }
+  .act-acc { display: flex; gap: 6px; flex-wrap: wrap; }
+  .act-acc button { border: 1px solid #dfe6dd; background: #fff; cursor: pointer; font-size: 12.5px; padding: 6px 10px; border-radius: 9px; color: #44513f; }
+  .act-acc button:hover { background: #eef2ee; }
+  .paso-ico { width: 22px; flex: 0 0 auto; text-align: center; }
+  select.form-control, input.form-control, textarea.form-control { width: 100%; padding: 8px; border: 1px solid #dfe6dd; border-radius: 8px; font-size: 14px; box-sizing: border-box; }
+  .form-label { display: block; font-size: 12.5px; color: #46583f; margin-bottom: 4px; font-weight: 600; }
+  .btn { border: none; cursor: pointer; padding: 10px 14px; border-radius: 9px; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: #2d5a27; color: #fff; }
+  .btn-secondary { background: #eef2ee; color: #2a3328; }
+  .btn-danger { background: #c0271f; color: #fff; }
+  .lnk-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+  .lnk-row a { font-size: 13.5px; }
+</style>
+</head>
+<body>
+
+<header class="admin-header">
+  <div class="admin-header__brand">
+    <span class="material-icons">science</span>
+    Test inventario
+  </div>
+  <div class="admin-header__actions">
+    <div class="user-chip">
+      <span class="material-icons">person</span>
+      <span id="userName">—</span>
+    </div>
+    <button class="btn-logout" onclick="CVC.cerrarSesion()">
+      <span class="material-icons">logout</span> Salir
+    </button>
+  </div>
+</header>
+
+<main class="admin-content tst-wrap">
+
+  <div class="muted-note warn">
+    <span class="material-icons" style="font-size:16px;vertical-align:-3px">science</span>
+    Herramienta de testing. Crea una reserva <b>real</b> en Firestore (marcada como prueba) para poder
+    probar de punta a punta el inventario de limpieza sin tener reservas reales todavía. Al terminar, borrala
+    con el botón ③ de más abajo — no se borra sola.
+  </div>
+
+  <div id="zonaExistentes"></div>
+
+  <div class="tst-card">
+    <h3>① Crear reserva de prueba</h3>
+    <div class="form-group" style="margin-bottom:10px">
+      <label class="form-label">Cabaña</label>
+      <select id="selCabana" class="form-control"></select>
+    </div>
+    <button class="btn btn-primary" onclick="crearPrueba()"><span class="material-icons" style="font-size:18px">play_arrow</span> Crear reserva y disparar limpieza/control</button>
+    <div class="muted-note" style="margin-top:10px;margin-bottom:0">
+      Hace exactamente lo que hace <code>reservas.html</code> al confirmar una reserva: crea el documento en
+      <code>reservas</code> y llama a <code>CVC.crearTareaLimpieza</code>, que genera las dos actividades
+      (Limpieza ingreso 📦 y Control de salida ✅) en Actividades → Limpiezas → la cabaña elegida.
+    </div>
+  </div>
+
+  <div id="zonaPasos"></div>
+
+  <div id="zonaAcciones" style="display:none" class="tst-card">
+    <h3>Reserva de prueba activa</h3>
+    <div class="lnk-row">
+      <a id="lnkReservas" href="reservas.html" target="_blank" class="btn btn-secondary"><span class="material-icons" style="font-size:16px">event</span> Abrir Reservas</a>
+      <a id="lnkActividades" href="actividades.html" target="_blank" class="btn btn-secondary"><span class="material-icons" style="font-size:16px">account_tree</span> Abrir Actividades</a>
+    </div>
+    <div class="muted-note" style="margin-bottom:10px">
+      Probá ahora en Actividades: abrí la actividad "Limpieza ingreso" y tocá 📦 Inventario; después abrí
+      "Control de salida" y tocá ✅ Control salida, marcá algún faltante y guardá.
+    </div>
+    <button class="btn btn-secondary" onclick="verificarResultado()"><span class="material-icons" style="font-size:18px">fact_check</span> ② Releer resultado</button>
+    <div id="zonaResultado" style="margin-top:10px"></div>
+    <hr style="border:none;border-top:1px solid #eef2ec;margin:14px 0">
+    <button class="btn btn-danger" onclick="eliminarPrueba()"><span class="material-icons" style="font-size:18px">delete</span> ③ Eliminar todo lo de esta prueba</button>
+  </div>
+
+</main>
+
+<script type="module">
+
+// ── Arranque ───────────────────────────────────────────────
+var sesion   = await CVC.verificarAuth(['admin']);
+var user     = sesion.user;
+var userData = sesion.userData;
+document.getElementById('userName').textContent = userData.nombre || user.email;
+
+var db       = CVC.db;
+var uid      = user.uid;
+var miNombre = userData.nombre || user.email;
+
+function esc(s) { return (CVC.escapeHtml ? CVC.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s)); }
+function toast(m, t) { if (CVC.showToast) { CVC.showToast(m, t || 'info'); } }
+function serverTs() { return firebase.firestore.FieldValue.serverTimestamp(); }
+
+var testReservaId = null;
+var pasos = [];
+
+// ── Pasos en pantalla ────────────────────────────────────────
+function paso(texto, estado) {
+  pasos.push({ texto: texto, estado: estado, extra: '' });
+  renderPasos();
+}
+function actualizarUltimo(estado, extra) {
+  if (!pasos.length) return;
+  pasos[pasos.length - 1].estado = estado;
+  if (extra) pasos[pasos.length - 1].extra = extra;
+  renderPasos();
+}
+function renderPasos() {
+  var h = '<div class="act-list">';
+  for (var i = 0; i < pasos.length; i++) {
+    var p = pasos[i];
+    var icon = p.estado === 'ok' ? '\u2705' : p.estado === 'error' ? '\u274c' : '\u23f3';
+    h += '<div class="act-row"><span class="paso-ico">' + icon + '</span><span class="act-tit">' + esc(p.texto) + (p.extra ? ' ' + esc(p.extra) : '') + '</span></div>';
+  }
+  h += '</div>';
+  document.getElementById('zonaPasos').innerHTML = pasos.length ? h : '';
+}
+
+// ── Esperar a que aparezca un doc (crearTareaLimpieza no devuelve promesa) ──
+function esperarDoc(coleccion, id, intentos, esperaMs) {
+  return new Promise(function (resolve) {
+    var i = 0;
+    function intentar() {
+      db.collection(coleccion).doc(id).get().then(function (snap) {
+        if (snap.exists) { resolve(snap); return; }
+        i++;
+        if (i >= intentos) { resolve(null); return; }
+        setTimeout(intentar, esperaMs);
+      }).catch(function () { resolve(null); });
+    }
+    intentar();
+  });
+}
+
+function chunked(arr, n) {
+  var out = [];
+  for (var i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
+}
+async function borrarPorTareaId(coleccion, tareaIds) {
+  if (!tareaIds.length) return 0;
+  var total = 0;
+  var grupos = chunked(tareaIds, 10);
+  for (var g = 0; g < grupos.length; g++) {
+    var snap = await db.collection(coleccion).where('tareaId', 'in', grupos[g]).get();
+    var b = db.batch();
+    snap.forEach(function (d) { b.delete(d.ref); });
+    if (snap.size) await b.commit();
+    total += snap.size;
+  }
+  return total;
+}
+async function borrarSubcoleccion(actId, sub) {
+  var snap = await db.collection('actividades').doc(actId).collection(sub).get();
+  var b = db.batch();
+  snap.forEach(function (d) { b.delete(d.ref); });
+  if (snap.size) await b.commit();
+  return snap.size;
+}
+
+// ── Cabañas para el selector ─────────────────────────────────
+async function cargarCabanas() {
+  var sel = document.getElementById('selCabana');
+  try {
+    var snap = await db.collection('cabanas').get();
+    var arr = [];
+    snap.forEach(function (d) { arr.push(Object.assign({ id: d.id }, d.data())); });
+    arr.sort(function (a, b) { return String(a.id).localeCompare(String(b.id), undefined, { numeric: true }); });
+    var h = '';
+    for (var i = 0; i < arr.length; i++) {
+      var c = arr[i];
+      var nom = (c.nombre && c.nombre.es) ? c.nombre.es : (c.nombre || ('Caba\u00f1a ' + c.id));
+      h += '<option value="' + esc(c.id) + '">' + esc(nom) + ' (id ' + esc(c.id) + ')</option>';
+    }
+    sel.innerHTML = h || '<option value="">(no hay caba\u00f1as cargadas en config/cabanas)</option>';
+  } catch (e) {
+    sel.innerHTML = '<option value="">Error: ' + esc(e.message) + '</option>';
+  }
+}
+
+// ── Pruebas previas sin borrar (por si se recarg\u00f3 la p\u00e1gina) ──
+async function listarExistentes() {
+  var z = document.getElementById('zonaExistentes');
+  try {
+    var snap = await db.collection('reservas').where('origen', '==', 'test-inventario').get();
+    var lista = [];
+    snap.forEach(function (d) { lista.push(Object.assign({ id: d.id }, d.data())); });
+    if (!lista.length) { z.innerHTML = ''; return; }
+    var h = '<div class="muted-note warn">Hay ' + lista.length + ' reserva(s) de prueba de una sesi\u00f3n anterior, sin borrar:</div><div class="act-list" style="margin-bottom:16px">';
+    for (var i = 0; i < lista.length; i++) {
+      var r = lista[i];
+      h += '<div class="act-row"><span class="act-tit">' + esc(r.nombre || r.id) + ' \u00b7 Caba\u00f1a ' + esc(r.caba) + '</span>'
+        + '<span class="act-acc">'
+        + '<button onclick="usarExistente(\'' + r.id + '\')">Usar esta</button>'
+        + '<button onclick="eliminarPrueba(\'' + r.id + '\')">\ud83d\uddd1 Borrar</button>'
+        + '</span></div>';
+    }
+    h += '</div>';
+    z.innerHTML = h;
+  } catch (e) {
+    z.innerHTML = '<div class="muted-note warn">No se pudo revisar pruebas previas: ' + esc(e.message) + '</div>';
+  }
+}
+window.usarExistente = function (id) {
+  testReservaId = id;
+  document.getElementById('zonaAcciones').style.display = 'block';
+  toast('Usando la reserva de prueba ' + id, 'info');
+};
+
+// ── ① Crear la reserva de prueba y disparar el pipeline real ──
+window.crearPrueba = async function () {
+  pasos = [];
+  document.getElementById('zonaResultado').innerHTML = '';
+  document.getElementById('zonaAcciones').style.display = 'none';
+  var caba = document.getElementById('selCabana').value;
+  if (!caba) { toast('Eleg\u00ed una caba\u00f1a.', 'info'); return; }
+
+  paso('Revisando la lista base de inventario de la caba\u00f1a\u2026', 'curso');
+  var cabSnap;
+  try { cabSnap = await db.collection('cabanas').doc(String(caba)).get(); }
+  catch (e) { actualizarUltimo('error', '\u2014 ' + e.message); return; }
+  var checklist = (cabSnap.exists && cabSnap.data().checklistInventario) ? cabSnap.data().checklistInventario : [];
+  if (!checklist.length) {
+    actualizarUltimo('error', '\u2014 esta caba\u00f1a no tiene lista base. El check-in no va a tener \u00edtems para precargar (carg\u00e1la en Contenido del sitio si quer\u00e9s probar eso tambi\u00e9n). Sigo igual.');
+  } else {
+    actualizarUltimo('ok', '\u2014 ' + checklist.length + ' \u00edtem(s) en la lista base.');
+  }
+
+  paso('Creando la reserva de prueba en Firestore\u2026', 'curso');
+  var hoy = new Date();
+  var ci = new Date(hoy); ci.setDate(ci.getDate() + 10);
+  var co = new Date(hoy); co.setDate(co.getDate() + 13);
+  var ref = db.collection('reservas').doc();
+  var caId = isNaN(parseInt(caba, 10)) ? caba : parseInt(caba, 10);
+  var reservaData = {
+    nombre: '\ud83e\uddea TEST inventario \u2014 borrar',
+    caba: caId,
+    checkIn: firebase.firestore.Timestamp.fromDate(ci),
+    checkOut: firebase.firestore.Timestamp.fromDate(co),
+    horaLlegada: '15:00',
+    horaSalida: '11:00',
+    adultos: 2, ninos: 0, huespedes: 2,
+    estado: 'confirmada',
+    origen: 'test-inventario',
+    totalBRL: 0, pagadoBRL: 0, costoLimpiezaBRL: 80,
+    mascotas: 'no', ninosPequenos: 'no',
+    notas: 'Reserva de prueba generada por test-inventario.html para validar el flujo de inventario de limpieza. Borrar con el bot\u00f3n \u2462 de esa misma herramienta.',
+    creadoEn: serverTs(), creadoPor: uid, creadoPorNombre: miNombre
+  };
+  try { await ref.set(reservaData); }
+  catch (e) { actualizarUltimo('error', '\u2014 ' + e.message); return; }
+  actualizarUltimo('ok', '\u2014 id ' + ref.id);
+
+  paso('Disparando CVC.crearTareaLimpieza (lo mismo que hace reservas.html al confirmar)\u2026', 'curso');
+  try {
+    if (!CVC.crearTareaLimpieza) throw new Error('Falta crearTareaLimpieza en utils.js');
+    CVC.crearTareaLimpieza(ref.id, reservaData, uid);
+  } catch (e) { actualizarUltimo('error', '\u2014 ' + e.message); return; }
+  actualizarUltimo('ok');
+
+  paso('Esperando la actividad "Limpieza ingreso" (limp-' + ref.id + ')\u2026', 'curso');
+  var limpSnap = await esperarDoc('actividades', 'limp-' + ref.id, 12, 900);
+  if (limpSnap) actualizarUltimo('ok'); else actualizarUltimo('error', '\u2014 no apareci\u00f3 en ~11s. Revis\u00e1 las reglas de Firestore o la consola.');
+
+  paso('Esperando la actividad "Control de salida" (ctrl-' + ref.id + ')\u2026', 'curso');
+  var ctrlSnap = await esperarDoc('actividades', 'ctrl-' + ref.id, 12, 900);
+  if (ctrlSnap) actualizarUltimo('ok'); else actualizarUltimo('error', '\u2014 no apareci\u00f3 en ~11s.');
+
+  testReservaId = ref.id;
+  document.getElementById('zonaAcciones').style.display = 'block';
+  toast('Reserva de prueba creada. Ya pod\u00e9s ir a Actividades a probar \ud83d\udce6 y \u2705.', 'success');
+  await listarExistentes();
+};
+
+// ── ② Releer qué se guardó ────────────────────────────────────
+window.verificarResultado = async function () {
+  if (!testReservaId) { toast('No hay una prueba activa. Eleg\u00ed una de la lista de arriba o cre\u00e1 una nueva.', 'info'); return; }
+  var z = document.getElementById('zonaResultado');
+  z.innerHTML = '<div class="state-loading"><div class="spinner"></div><span>Releyendo\u2026</span></div>';
+  try {
+    var rSnap = await db.collection('reservas').doc(testReservaId).get();
+    if (!rSnap.exists) { z.innerHTML = '<div class="muted-note warn">Esta reserva de prueba ya no existe.</div>'; return; }
+    var rd = rSnap.data();
+    var h = '';
+    h += '<div class="muted-note">Inventario de entrada: ' + (rd.inventarioEntrada
+      ? ('\u2705 guardado \u2014 ' + (rd.inventarioEntrada.items || []).length + ' \u00edtem(s), por ' + esc(rd.inventarioEntrada.porNombre || ''))
+      : '\u23f3 todav\u00eda no se guard\u00f3 (probalo con \ud83d\udce6 en Actividades)') + '</div>';
+    h += '<div class="muted-note">Inventario de salida: ' + (rd.inventarioSalida
+      ? ('\u2705 guardado \u2014 ' + (rd.inventarioSalida.faltantes || []).length + ' faltante(s)/da\u00f1o(s)')
+      : '\u23f3 todav\u00eda no se guard\u00f3 (probalo con \u2705 en Actividades)') + '</div>';
+
+    var actSnap = await db.collection('actividades').where('reservaId', '==', testReservaId).get();
+    var lista = [];
+    actSnap.forEach(function (d) { lista.push(Object.assign({ id: d.id }, d.data())); });
+    var mant = lista.filter(function (a) { return a.origen === 'control-salida'; });
+    h += '<div class="muted-note">Actividades de mantenimiento generadas por faltantes/da\u00f1os: ' + (mant.length || 'ninguna todav\u00eda') + '</div>';
+    if (mant.length) {
+      h += '<div class="act-list">';
+      for (var i = 0; i < mant.length; i++) h += '<div class="act-row"><span class="act-tit">' + esc(mant[i].titulo) + '</span></div>';
+      h += '</div>';
+    }
+    z.innerHTML = h;
+  } catch (e) {
+    z.innerHTML = '<div class="muted-note warn">Error: ' + esc(e.message) + '</div>';
+  }
+};
+
+// ── ③ Borrar todo lo que generó esta prueba ───────────────────
+window.eliminarPrueba = async function (idForzado) {
+  var id = idForzado || testReservaId;
+  if (!id) { toast('No hay reserva de prueba para borrar.', 'info'); return; }
+  if (!confirm('Esto borra la reserva de prueba, sus actividades de limpieza/control y todo lo que hayan generado (faltantes, historial, honorarios). \u00bfSeguro?')) return;
+
+  pasos = [];
+  paso('Buscando todo lo asociado a la reserva ' + id + '\u2026', 'curso');
+  try {
+    var actSnap = await db.collection('actividades').where('reservaId', '==', id).get();
+    var actIds = [];
+    actSnap.forEach(function (d) { actIds.push(d.id); });
+    actualizarUltimo('ok', '\u2014 ' + actIds.length + ' actividad(es) encontrada(s).');
+
+    if (actIds.length) {
+      paso('Borrando sesiones de cron\u00f3metro abiertas\u2026', 'curso');
+      var totalSes = 0;
+      for (var i = 0; i < actIds.length; i++) totalSes += await borrarSubcoleccion(actIds[i], 'sesiones');
+      actualizarUltimo('ok', '\u2014 ' + totalSes + ' sesi\u00f3n(es).');
+
+      paso('Borrando historial_tareas asociado\u2026', 'curso');
+      var nHist = await borrarPorTareaId('historial_tareas', actIds);
+      actualizarUltimo('ok', '\u2014 ' + nHist + ' registro(s).');
+
+      paso('Borrando honorarios asociados\u2026', 'curso');
+      var nHon = await borrarPorTareaId('honorarios', actIds);
+      actualizarUltimo('ok', '\u2014 ' + nHon + ' registro(s).');
+
+      paso('Borrando las actividades de limpieza/control/mantenimiento\u2026', 'curso');
+      var b = db.batch();
+      for (var j = 0; j < actIds.length; j++) b.delete(db.collection('actividades').doc(actIds[j]));
+      await b.commit();
+      actualizarUltimo('ok');
+    }
+
+    paso('Borrando la reserva de prueba\u2026', 'curso');
+    await db.collection('reservas').doc(id).delete();
+    actualizarUltimo('ok');
+
+    toast('Prueba eliminada. La base qued\u00f3 limpia.', 'success');
+    if (id === testReservaId) {
+      testReservaId = null;
+      document.getElementById('zonaAcciones').style.display = 'none';
+      document.getElementById('zonaResultado').innerHTML = '';
+    }
+    await listarExistentes();
+  } catch (e) {
+    actualizarUltimo('error', '\u2014 ' + e.message);
+  }
+};
+
+// ── Init ───────────────────────────────────────────────────
+await cargarCabanas();
+await listarExistentes();
+
+</script>
+
+</body>
+</html>
