@@ -286,6 +286,135 @@
     await cerrarCiclo(ref, t, [], user, false);
   }
 
+  // ── Chequeo de inventario (check-in/check-out por sub-ítems, Fase 2-bis) ──────
+  // Cada ítem hoja (tipo:'item-chequeo') se valida con una cantidad confirmada. Cuando TODOS
+  // los hermanos de un chequeo quedan validados, se consolida: se escribe reservas.inventario
+  // Entrada/Salida (mismo shape que siempre tuvo) y se actualiza cabanas.inventarioActual (la
+  // "foto" real más reciente, distinta de cabanas.checklistInventario que sigue siendo la lista
+  // base/ideal editable). Si el chequeo es de ENTRADA, además se genera ahí mismo el chequeo de
+  // SALIDA (recién ahí se sabe qué quedó realmente confirmado para usarlo como base).
+  function _faltanteONota(cantSugerida, cantConfirmada, nota) {
+    return (cantConfirmada < (cantSugerida || 0)) || !!(nota && nota.trim());
+  }
+
+  // Evita duplicar: si ya hay un faltante ABIERTO (hecho:false) para ese ítem en esa cabaña, no crea otro.
+  async function actRegistrarFaltante(cabana, itemNombre, origen, reservaId, nota, user) {
+    var parentCat = 'faltantes-cab-' + cabana;
+    var snap = await db.collection('actividades').where('parentId', '==', parentCat).get();
+    var yaAbierto = false;
+    snap.forEach(function (d) {
+      var x = d.data();
+      if (x.itemNombre === itemNombre && x.hecho === false) yaAbierto = true;
+    });
+    if (yaAbierto) return;
+    var padre = null;
+    var pSnap = await db.collection('actividades').doc(parentCat).get();
+    if (pSnap.exists) padre = pSnap.data();
+    var ref = db.collection('actividades').doc();
+    await ref.set({
+      titulo: itemNombre + (nota ? ' \u2014 ' + nota : ''), nombre: itemNombre, detalle: '',
+      tipo: 'faltante-inventario', itemNombre: itemNombre,
+      origen: origen, cabana: cabana, reservaId: reservaId || null,
+      parentId: parentCat, raizId: (padre && padre.raizId) || 'proj-limpiezas',
+      tipoRaiz: (padre && padre.tipoRaiz) || 'proyecto', color: '',
+      alcance: (padre && padre.alcance) || 'equipo', competencias: (padre && padre.competencias) || [],
+      cronometrable: false, monto: 0, recurrencia: 0, esCompra: false,
+      estado: 'pendiente', prioridad: 'rojo', hecho: false, hechoPor: null, hechoEn: null,
+      orden: Date.now(), creadoPor: (user && user.uid) || null, creadoNombre: (user && user.nombre) || '',
+      creadoEn: serverTs()
+    });
+  }
+
+  // Genera, una sola vez (idempotente), el chequeo de SALIDA como hijo de ctrl-<reservaId>,
+  // usando como base las cantidades que se acaban de confirmar en el chequeo de entrada.
+  async function actCrearChequeoSalida(reservaId, cabana, itemsConfirmados, user) {
+    var chequeoId = 'chk-ctrl-' + reservaId;
+    var refChk = db.collection('actividades').doc(chequeoId);
+    var s = await refChk.get();
+    if (s.exists) return;
+    var padreSnap = await db.collection('actividades').doc('ctrl-' + reservaId).get();
+    if (!padreSnap.exists) return; // no hay control de salida para esta reserva
+    await refChk.set({
+      titulo: 'Chequeo de inventario \u2014 salida', nombre: 'Chequeo de inventario \u2014 salida', detalle: '',
+      tipo: 'chequeo-inventario', tipoChequeo: 'salida',
+      tipoRaiz: 'proyecto', color: '', parentId: 'ctrl-' + reservaId, raizId: 'proj-limpiezas', orden: 0,
+      alcance: 'equipo', competencias: [], cronometrable: false, estado: 'pendiente', prioridad: 'gris',
+      monto: 0, recurrencia: 0, esCompra: false, hecho: false, cabana: cabana, reservaId: reservaId,
+      creadoPor: (user && user.uid) || null, creadoNombre: (user && user.nombre) || '', creadoEn: serverTs()
+    });
+    var lista = itemsConfirmados || [];
+    for (var n = 0; n < lista.length; n++) {
+      var it = lista[n];
+      await db.collection('actividades').doc('item-' + chequeoId + '-' + n).set({
+        titulo: it.nombre, nombre: it.nombre, detalle: '', tipo: 'item-chequeo', tipoChequeo: 'salida',
+        itemNombre: it.nombre, itemCategoria: it.categoria || 'General',
+        cantidadSugerida: it.cantidad != null ? it.cantidad : 0, cantidadConfirmada: null,
+        tipoRaiz: 'proyecto', color: '', parentId: chequeoId, raizId: 'proj-limpiezas', orden: n,
+        alcance: 'equipo', competencias: [], cronometrable: false, estado: 'pendiente', prioridad: 'gris',
+        monto: 0, recurrencia: 0, esCompra: false, hecho: false, cabana: cabana, reservaId: reservaId,
+        creadoPor: (user && user.uid) || null, creadoNombre: (user && user.nombre) || '', creadoEn: serverTs()
+      });
+    }
+  }
+
+  // Se dispara cuando el último ítem de un chequeo queda validado.
+  async function actConsolidarChequeo(chequeoId, user) {
+    var chkSnap = await db.collection('actividades').doc(chequeoId).get();
+    if (!chkSnap.exists) return;
+    var chk = chkSnap.data();
+    var hijosSnap = await db.collection('actividades').where('parentId', '==', chequeoId).get();
+    var items = [];
+    hijosSnap.forEach(function (d) {
+      var h = d.data();
+      items.push({ nombre: h.itemNombre, categoria: h.itemCategoria, cantidad: h.cantidadConfirmada || 0 });
+    });
+    var fecha = serverTs();
+    var porUid = (user && user.uid) || null, porNombre = (user && user.nombre) || '';
+
+    if (chk.tipoChequeo === 'entrada') {
+      await db.collection('reservas').doc(chk.reservaId).update({
+        inventarioEntrada: { items: items, fecha: fecha, porUid: porUid, porNombre: porNombre }
+      });
+      await db.collection('cabanas').doc(String(chk.cabana)).set({ inventarioActual: items }, { merge: true });
+      await actCrearChequeoSalida(chk.reservaId, chk.cabana, items, user);
+    } else {
+      var faltantes = [];
+      hijosSnap.forEach(function (d) {
+        var h = d.data();
+        var falta = (h.cantidadSugerida || 0) - (h.cantidadConfirmada || 0);
+        if (falta > 0) faltantes.push({ nombre: h.itemNombre, falta: falta });
+      });
+      await db.collection('reservas').doc(chk.reservaId).update({
+        inventarioSalida: { items: items, faltantes: faltantes, fecha: fecha, porUid: porUid, porNombre: porNombre }
+      });
+      await db.collection('cabanas').doc(String(chk.cabana)).set({ inventarioActual: items }, { merge: true });
+    }
+  }
+
+  // ── Validar un ítem del chequeo (llamado desde actividades.html) ──
+  async function actValidarItemChequeo(itemId, cantidadConfirmada, nota, user) {
+    var ref = db.collection('actividades').doc(itemId);
+    var snap = await ref.get();
+    if (!snap.exists) throw new Error('El \u00edtem no existe.');
+    var item = snap.data();
+    await ref.update({
+      cantidadConfirmada: cantidadConfirmada, hecho: true,
+      hechoPor: (user && user.uid) || null, hechoEn: tsAhora(),
+      notaChequeo: nota || ''
+    });
+    if (_faltanteONota(item.cantidadSugerida, cantidadConfirmada, nota)) {
+      await actRegistrarFaltante(item.cabana, item.itemNombre, (item.tipoChequeo === 'entrada' ? 'check-in' : 'check-out'), item.reservaId, nota, user);
+    }
+    var hermanos = await db.collection('actividades').where('parentId', '==', item.parentId).get();
+    var todosListos = true;
+    hermanos.forEach(function (d) {
+      if (d.id === itemId) return;
+      var h = d.data();
+      if (!h.hecho) todosListos = false;
+    });
+    if (todosListos) await actConsolidarChequeo(item.parentId, user);
+  }
+
   // ── Enganche a CVC (sin redefinirlo) ────────────────────
   CVC.actIniciar = actIniciar;
   CVC.actPausar = actPausar;
@@ -294,4 +423,5 @@
   CVC.actCiclo = actCiclo;
   CVC.actSemaforo = actSemaforo;
   CVC.actCargarTemporada = actCargarTemporada;
+  CVC.actValidarItemChequeo = actValidarItemChequeo;
 })();

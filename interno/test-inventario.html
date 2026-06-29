@@ -72,8 +72,9 @@
     <button class="btn btn-primary" onclick="crearPrueba()"><span class="material-icons" style="font-size:18px">play_arrow</span> Crear reserva y disparar limpieza/control</button>
     <div class="muted-note" style="margin-top:10px;margin-bottom:0">
       Hace exactamente lo que hace <code>reservas.html</code> al confirmar una reserva: crea el documento en
-      <code>reservas</code> y llama a <code>CVC.crearTareaLimpieza</code>, que genera las dos actividades
-      (Limpieza ingreso 📦 y Control de salida ✅) en Actividades → Limpiezas → la cabaña elegida.
+      <code>reservas</code> y llama a <code>CVC.crearTareaLimpieza</code>, que genera la limpieza de ingreso,
+      el control de salida, y el "Chequeo de inventario" con un sub-ítem por cada artículo de la lista base
+      de la cabaña, listo para validar en Actividades.
     </div>
   </div>
 
@@ -86,8 +87,9 @@
       <a id="lnkActividades" href="actividades.html" target="_blank" class="btn btn-secondary"><span class="material-icons" style="font-size:16px">account_tree</span> Abrir Actividades</a>
     </div>
     <div class="muted-note" style="margin-bottom:10px">
-      Probá ahora en Actividades: abrí la actividad "Limpieza ingreso" y tocá 📦 Inventario; después abrí
-      "Control de salida" y tocá ✅ Control salida, marcá algún faltante y guardá.
+      Prob\u00e1 ahora en Actividades: desplegá la limpieza de ingreso → vas a ver "Chequeo de inventario \u2014 entrada"
+      como sub-\u00edtem → desplegalo y validá cada \u00edtem (toc\u00e1 el checkbox, te pide la cantidad confirmada).
+      Cuando valides el \u00faltimo, se genera solo el chequeo de salida dentro del control de salida.
     </div>
     <button class="btn btn-secondary" onclick="verificarResultado()"><span class="material-icons" style="font-size:18px">fact_check</span> ② Releer resultado</button>
     <div id="zonaResultado" style="margin-top:10px"></div>
@@ -242,8 +244,9 @@ window.crearPrueba = async function () {
   try { cabSnap = await db.collection('cabanas').doc(String(caba)).get(); }
   catch (e) { actualizarUltimo('error', '\u2014 ' + e.message); return; }
   var checklist = (cabSnap.exists && cabSnap.data().checklistInventario) ? cabSnap.data().checklistInventario : [];
+  var invActualPrevio = (cabSnap.exists && cabSnap.data().inventarioActual) ? cabSnap.data().inventarioActual : null;
   if (!checklist.length) {
-    actualizarUltimo('error', '\u2014 esta caba\u00f1a no tiene lista base. El check-in no va a tener \u00edtems para precargar (carg\u00e1la en Contenido del sitio si quer\u00e9s probar eso tambi\u00e9n). Sigo igual.');
+    actualizarUltimo('error', '\u2014 esta caba\u00f1a no tiene lista base. El chequeo no va a tener \u00edtems para precargar (carg\u00e1la en Contenido del sitio si quer\u00e9s probar eso tambi\u00e9n). Sigo igual.');
   } else {
     actualizarUltimo('ok', '\u2014 ' + checklist.length + ' \u00edtem(s) en la lista base.');
   }
@@ -267,6 +270,7 @@ window.crearPrueba = async function () {
     totalBRL: 0, pagadoBRL: 0, costoLimpiezaBRL: 80,
     mascotas: 'no', ninosPequenos: 'no',
     notas: 'Reserva de prueba generada por test-inventario.html para validar el flujo de inventario de limpieza. Borrar con el bot\u00f3n \u2462 de esa misma herramienta.',
+    _invActualPrevioCabana: invActualPrevio,
     creadoEn: serverTs(), creadoPor: uid, creadoPorNombre: miNombre
   };
   try { await ref.set(reservaData); }
@@ -288,6 +292,11 @@ window.crearPrueba = async function () {
   var ctrlSnap = await esperarDoc('actividades', 'ctrl-' + ref.id, 12, 900);
   if (ctrlSnap) actualizarUltimo('ok'); else actualizarUltimo('error', '\u2014 no apareci\u00f3 en ~11s.');
 
+  paso('Esperando el "Chequeo de inventario \u2014 entrada" (chk-limp-' + ref.id + ')\u2026', 'curso');
+  var chkSnap = await esperarDoc('actividades', 'chk-limp-' + ref.id, 12, 900);
+  if (chkSnap) actualizarUltimo('ok', checklist.length ? ('\u2014 deber\u00eda tener ' + checklist.length + ' \u00edtem(s) adentro.') : '\u2014 sin \u00edtems (la lista base estaba vac\u00eda).');
+  else actualizarUltimo('error', '\u2014 no apareci\u00f3 en ~11s.');
+
   testReservaId = ref.id;
   document.getElementById('zonaAcciones').style.display = 'block';
   toast('Reserva de prueba creada. Ya pod\u00e9s ir a Actividades a probar \ud83d\udce6 y \u2705.', 'success');
@@ -304,21 +313,32 @@ window.verificarResultado = async function () {
     if (!rSnap.exists) { z.innerHTML = '<div class="muted-note warn">Esta reserva de prueba ya no existe.</div>'; return; }
     var rd = rSnap.data();
     var h = '';
-    h += '<div class="muted-note">Inventario de entrada: ' + (rd.inventarioEntrada
-      ? ('\u2705 guardado \u2014 ' + (rd.inventarioEntrada.items || []).length + ' \u00edtem(s), por ' + esc(rd.inventarioEntrada.porNombre || ''))
-      : '\u23f3 todav\u00eda no se guard\u00f3 (probalo con \ud83d\udce6 en Actividades)') + '</div>';
-    h += '<div class="muted-note">Inventario de salida: ' + (rd.inventarioSalida
-      ? ('\u2705 guardado \u2014 ' + (rd.inventarioSalida.faltantes || []).length + ' faltante(s)/da\u00f1o(s)')
-      : '\u23f3 todav\u00eda no se guard\u00f3 (probalo con \u2705 en Actividades)') + '</div>';
 
     var actSnap = await db.collection('actividades').where('reservaId', '==', testReservaId).get();
     var lista = [];
     actSnap.forEach(function (d) { lista.push(Object.assign({ id: d.id }, d.data())); });
-    var mant = lista.filter(function (a) { return a.origen === 'control-salida'; });
-    h += '<div class="muted-note">Actividades de mantenimiento generadas por faltantes/da\u00f1os: ' + (mant.length || 'ninguna todav\u00eda') + '</div>';
-    if (mant.length) {
+
+    var chkEntrada = lista.filter(function (a) { return a.tipo === 'chequeo-inventario' && a.tipoChequeo === 'entrada'; })[0];
+    var chkSalida = lista.filter(function (a) { return a.tipo === 'chequeo-inventario' && a.tipoChequeo === 'salida'; })[0];
+    var itemsEntrada = lista.filter(function (a) { return a.tipo === 'item-chequeo' && a.tipoChequeo === 'entrada'; });
+    var itemsSalida = lista.filter(function (a) { return a.tipo === 'item-chequeo' && a.tipoChequeo === 'salida'; });
+    var faltantes = lista.filter(function (a) { return a.tipo === 'faltante-inventario'; });
+
+    function progBadge(items) {
+      if (!items.length) return '\u2014 sin \u00edtems';
+      var hechos = items.filter(function (i) { return i.hecho; }).length;
+      return hechos + '/' + items.length + ' validado(s)' + (hechos === items.length ? ' \u2705 completo' : '');
+    }
+
+    h += '<div class="muted-note">Chequeo de entrada: ' + (chkEntrada ? progBadge(itemsEntrada) : '\u23f3 todav\u00eda no se gener\u00f3') + '</div>';
+    h += '<div class="muted-note">Chequeo de salida: ' + (chkSalida ? progBadge(itemsSalida) : '\u23f3 se genera al completar el de entrada') + '</div>';
+    h += '<div class="muted-note">Inventario consolidado en la reserva: entrada ' + (rd.inventarioEntrada ? '\u2705' : '\u23f3') + ' \u00b7 salida ' + (rd.inventarioSalida ? '\u2705' : '\u23f3') + '</div>';
+    h += '<div class="muted-note">Faltantes/da\u00f1os generados en "Faltantes o da\u00f1os" de la caba\u00f1a: ' + (faltantes.length || 'ninguno todav\u00eda') + '</div>';
+    if (faltantes.length) {
       h += '<div class="act-list">';
-      for (var i = 0; i < mant.length; i++) h += '<div class="act-row"><span class="act-tit">' + esc(mant[i].titulo) + '</span></div>';
+      for (var i = 0; i < faltantes.length; i++) {
+        h += '<div class="act-row"><span class="act-tit">' + esc(faltantes[i].titulo) + (faltantes[i].hecho ? ' \u2014 resuelto' : '') + '</span></div>';
+      }
       h += '</div>';
     }
     z.innerHTML = h;
@@ -336,6 +356,10 @@ window.eliminarPrueba = async function (idForzado) {
   pasos = [];
   paso('Buscando todo lo asociado a la reserva ' + id + '\u2026', 'curso');
   try {
+    var reservaSnap = await db.collection('reservas').doc(id).get();
+    var cabanaDeLaPrueba = reservaSnap.exists ? reservaSnap.data().caba : null;
+    var invPrevio = reservaSnap.exists ? reservaSnap.data()._invActualPrevioCabana : undefined;
+
     var actSnap = await db.collection('actividades').where('reservaId', '==', id).get();
     var actIds = [];
     actSnap.forEach(function (d) { actIds.push(d.id); });
@@ -365,6 +389,19 @@ window.eliminarPrueba = async function (idForzado) {
     paso('Borrando la reserva de prueba\u2026', 'curso');
     await db.collection('reservas').doc(id).delete();
     actualizarUltimo('ok');
+
+    if (cabanaDeLaPrueba !== null && cabanaDeLaPrueba !== undefined) {
+      paso('Restaurando el inventario actual de la caba\u00f1a a como estaba antes de la prueba\u2026', 'curso');
+      try {
+        if (invPrevio) {
+          await db.collection('cabanas').doc(String(cabanaDeLaPrueba)).set({ inventarioActual: invPrevio }, { merge: true });
+          actualizarUltimo('ok', '\u2014 restaurado.');
+        } else {
+          await db.collection('cabanas').doc(String(cabanaDeLaPrueba)).update({ inventarioActual: firebase.firestore.FieldValue.delete() });
+          actualizarUltimo('ok', '\u2014 no ten\u00eda antes, se quit\u00f3.');
+        }
+      } catch (e2) { actualizarUltimo('error', '\u2014 ' + e2.message); }
+    }
 
     toast('Prueba eliminada. La base qued\u00f3 limpia.', 'success');
     if (id === testReservaId) {

@@ -656,14 +656,60 @@ function crearTareaLimpieza(reservaId, reservaData, creadorUid) {
             return ref.get().then(function (s) { if (!s.exists) return ref.set(meta); });
         };
 
+        // Genera, una sola vez (idempotente: no regenera si ya existe), el contenedor "Chequeo de
+        // inventario" de una limpieza (entrada o salida) con un ítem hoja por cada artículo de la
+        // fuente de inventario dada. Cada ítem lleva cantidadSugerida (de cabanas.inventarioActual
+        // si ya hay una foto real, sino de la lista base) y cantidadConfirmada:null hasta validarlo.
+        var crearChequeoInventario = function (chequeoId, parentActId, tituloChk, tipoChequeo, fuenteItems) {
+            var refChk = col.doc(chequeoId);
+            return refChk.get().then(function (s) {
+                if (s.exists) return;
+                var metaChk = {
+                    titulo: tituloChk, nombre: tituloChk, detalle: '', tipo: 'chequeo-inventario', tipoChequeo: tipoChequeo,
+                    tipoRaiz: 'proyecto', color: '', parentId: parentActId, raizId: 'proj-limpiezas', orden: 0,
+                    alcance: 'equipo', competencias: [], cronometrable: false, estado: 'pendiente', prioridad: 'gris',
+                    monto: 0, recurrencia: 0, esCompra: false, hecho: false, cabana: caba, reservaId: actual.id,
+                    creadoPor: creadorUid || null, creadoNombre: 'Sistema (reservas)', creadoEn: ahora
+                };
+                var jobsItems = [refChk.set(metaChk)];
+                var lista = fuenteItems || [];
+                for (var n = 0; n < lista.length; n++) {
+                    var itf = lista[n];
+                    var metaItem = {
+                        titulo: itf.nombre, nombre: itf.nombre, detalle: '', tipo: 'item-chequeo', tipoChequeo: tipoChequeo,
+                        itemNombre: itf.nombre, itemCategoria: itf.categoria || 'General',
+                        cantidadSugerida: (itf.cantidad != null ? itf.cantidad : (itf.cantidadBase != null ? itf.cantidadBase : 0)),
+                        cantidadConfirmada: null,
+                        tipoRaiz: 'proyecto', color: '', parentId: chequeoId, raizId: 'proj-limpiezas', orden: n,
+                        alcance: 'equipo', competencias: [], cronometrable: false, estado: 'pendiente', prioridad: 'gris',
+                        monto: 0, recurrencia: 0, esCompra: false, hecho: false, cabana: caba, reservaId: actual.id,
+                        creadoPor: creadorUid || null, creadoNombre: 'Sistema (reservas)', creadoEn: ahora
+                    };
+                    jobsItems.push(col.doc('item-' + chequeoId + '-' + n).set(metaItem));
+                }
+                return Promise.all(jobsItems);
+            });
+        };
+
         return ensureDoc(col.doc('proj-limpiezas'), contenedor('Limpiezas', '', 'proj-limpiezas', '#3f6f8f'))
         .then(function () { return ensureDoc(col.doc(parentCat), contenedor(nombreCabana, 'proj-limpiezas', 'proj-limpiezas', '', caba)); })
+        .then(function () { return ensureDoc(col.doc('faltantes-cab-' + caba), contenedor('Faltantes o daños \u2014 ' + nombreCabana, parentCat, 'proj-limpiezas', '', caba)); })
         .then(function () {
             var jobs = [];
 
             // 1) Limpieza de la reserva actual.
             var cl = camposLimpieza(actual);
             if (cl) jobs.push(upsert(col.doc('limp-' + actual.id), cl.base, cl.soloCrear));
+
+            // 1b) Chequeo de inventario de ENTRADA, como hijo de la limpieza. Se genera una sola vez
+            //     (idempotente); la fuente es la foto real más reciente de la cabaña si existe, sino la
+            //     lista base. El chequeo de SALIDA se genera recién cuando se completa este de entrada
+            //     (ver CVC.actValidarItemChequeo en actividades-core.js), porque hasta entonces no se
+            //     sabe qué quedó realmente confirmado.
+            if (cl) {
+                var fuenteInv = (cData.inventarioActual && cData.inventarioActual.length) ? cData.inventarioActual : (cData.checklistInventario || []);
+                jobs.push(crearChequeoInventario('chk-limp-' + actual.id, 'limp-' + actual.id, 'Chequeo de inventario \u2014 entrada', 'entrada', fuenteInv));
+            }
 
             // 2) Control de salida de la reserva actual.
             if (actual.co) {
@@ -734,7 +780,21 @@ function crearTareaLimpieza(reservaId, reservaData, creadorUid) {
 // Al anular/eliminar una reserva: borra sus tareas y recalcula la ventana del huésped siguiente.
 function alAnularReserva(reservaId) {
     var col = db.collection('actividades');
-    return col.doc('limp-' + reservaId).delete().catch(function() {})
+    var borrarHijosDe = function (parentId) {
+        return col.where('parentId', '==', parentId).get().then(function (snap) {
+            var b = db.batch();
+            snap.forEach(function (d) { b.delete(d.ref); });
+            return snap.size ? b.commit() : null;
+        }).catch(function () {});
+    };
+    // Los chequeos de inventario (entrada/salida) son hijos de limp-/ctrl-; se borran sus ítems
+    // y el contenedor antes de borrar la limpieza/control en sí. 'Faltantes o daños' de la cabaña
+    // NO se toca: refleja faltantes reales que pueden seguir vigentes aunque se anule la reserva.
+    return borrarHijosDe('chk-limp-' + reservaId)
+    .then(function () { return borrarHijosDe('chk-ctrl-' + reservaId); })
+    .then(function () { return col.doc('chk-limp-' + reservaId).delete().catch(function () {}); })
+    .then(function () { return col.doc('chk-ctrl-' + reservaId).delete().catch(function () {}); })
+    .then(function () { return col.doc('limp-' + reservaId).delete().catch(function() {}); })
     .then(function() { return col.doc('ctrl-' + reservaId).delete().catch(function() {}); })
     .then(function() { return db.collection('reservas').doc(reservaId).get(); })
     .then(function(snap) {

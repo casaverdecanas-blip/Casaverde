@@ -271,32 +271,6 @@
   </div>
 </div>
 
-<!-- ══ MODAL: inventario de ingreso (check-in) ══════════════════════ -->
-<div class="modal-cv" id="modalInventario">
-  <div class="box">
-    <h3><span class="material-icons" style="vertical-align:-5px;color:#33508f">checklist</span> <span id="invInfo">Inventario</span></h3>
-    <div id="invRows"></div>
-    <div class="modal-foot">
-      <button class="btn btn-secondary" onclick="cerrarInventario()">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarInventarioEntrada(this)"><span class="material-icons" style="font-size:18px;vertical-align:-4px">save</span> Guardar inventario</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══ MODAL: control de salida (check-out) ═════════════════════════ -->
-<div class="modal-cv" id="modalControl">
-  <div class="box">
-    <h3><span class="material-icons" style="vertical-align:-5px;color:#1f7a32">fact_check</span> <span id="ctrlInfo">Control de salida</span></h3>
-    <p class="muted-note" style="margin-bottom:8px">Cont&aacute; lo que queda en la caba&ntilde;a. Si falta o algo est&aacute; da&ntilde;ado, escribilo en la nota: se registra en la reserva y genera una actividad en rojo en Limpiezas &rarr; esta caba&ntilde;a.</p>
-    <div id="ctrlRows"></div>
-    <textarea id="ctrlObs" class="form-control" rows="2" placeholder="Observaciones generales (opcional)" style="margin-top:8px"></textarea>
-    <div class="modal-foot">
-      <button class="btn btn-secondary" onclick="cerrarControlSalida()">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarControlSalida(this)"><span class="material-icons" style="font-size:18px;vertical-align:-4px">save</span> Guardar control</button>
-    </div>
-  </div>
-</div>
-
 <script type="module">
 
 // ── Arranque ───────────────────────────────────────────────
@@ -507,11 +481,22 @@ function nodoHTML(it, nivel) {
   // Fila compacta. Un clic en la fila (menos el check) despliega detalle + acciones + subítems.
   h += '<div class="act-row act-clic' + (ab ? ' abierto' : '') + '" onclick="toggleAbierto(\'' + it.id + '\')">';
   h += '<span class="act-caret' + (tiene ? ' tiene' : '') + '">' + (ab ? '\u25be' : '\u25b8') + '</span>';
-  h += '<input type="checkbox" class="act-chk" ' + (it.hecho ? 'checked' : '') + ' onclick="event.stopPropagation();toggleHecho(\'' + it.id + '\')">';
+  if (it.tipo === 'item-chequeo') {
+    h += '<input type="checkbox" class="act-chk" ' + (it.hecho ? 'checked' : '') + ' onclick="event.stopPropagation();validarItemChequeo(\'' + it.id + '\')">';
+  } else {
+    h += '<input type="checkbox" class="act-chk" ' + (it.hecho ? 'checked' : '') + ' onclick="event.stopPropagation();toggleHecho(\'' + it.id + '\')">';
+  }
   h += '<span class="dot ' + dotClase(sem.color) + '"></span>';
   h += '<span class="act-tit' + (it.hecho ? ' done' : '') + '">' + esc(it.titulo) + '</span>';
 
   h += '<span class="act-badges">';
+  if (it.tipo === 'chequeo-inventario') h += '<span class="act-badge">\ud83d\udccb ' + (it.tipoChequeo === 'entrada' ? 'check-in' : 'check-out') + '</span>';
+  if (it.tipo === 'faltante-inventario') h += '<span class="act-badge rojo">\u26a0 ' + esc(it.origen || 'faltante') + '</span>';
+  if (it.tipo === 'item-chequeo') {
+    h += it.hecho
+      ? ('<span class="act-badge">confirmado ' + (it.cantidadConfirmada != null ? it.cantidadConfirmada : '\u2014') + '</span>')
+      : ('<span class="act-badge">sugerido ' + (it.cantidadSugerida != null ? it.cantidadSugerida : '\u2014') + '</span>');
+  }
   if (!it.hecho && sem && sem.color !== 'gris' && sem.label) h += '<span class="act-badge ' + sem.color + '">' + esc(sem.label) + '</span>';
   if (!it.hecho && sem && sem.fecha) {
     var pref = (sem.fechaTipo === 'prox') ? 'pr\u00f3x ' : (sem.fechaTipo === 'vencio') ? 'venci\u00f3 ' : 'l\u00edmite ';
@@ -552,12 +537,6 @@ function nodoHTML(it, nivel) {
       } else {
         h += '<button onclick="cronoIniciar(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#1f5fb0">play_arrow</span> Iniciar</button>';
       }
-    }
-    if (it.tipo === 'limpieza' && it.rol === 'ingreso' && it.reservaId && !it.hecho) {
-      h += '<button onclick="abrirInventario(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#33508f">checklist</span> Inventario</button>';
-    }
-    if (it.tipo === 'control' && it.rol === 'salida' && it.reservaId && !it.hecho) {
-      h += '<button onclick="abrirControlSalida(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#1f7a32">fact_check</span> Control salida</button>';
     }
     h += '<button onclick="nuevoHijo(\'' + it.id + '\')">\uff0b Sub-\u00edtem</button>';
     h += '<button onclick="abrirReporte(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#b8860b">campaign</span> Reportar</button>';
@@ -1039,210 +1018,35 @@ window.cronoFinalizar = async function (id) {
   } catch (e) { toast('No se pudo finalizar: ' + e.message, 'error'); }
 };
 
-// ── Inventario de limpieza: check-in / check-out (Fase 2 — portado de tareas.html) ──
-var _invActId = null, _invDef = [];
-window.abrirInventario = async function (actId) {
-  var t = byId[actId];
-  if (!t || !t.reservaId) { toast('Esta actividad no tiene reserva asociada.', 'info'); return; }
-  _invActId = actId; _invDef = [];
-  document.getElementById('invInfo').textContent = t.titulo || 'Inventario';
-  document.getElementById('invRows').innerHTML = '<div class="state-loading"><div class="spinner"></div><span>Cargando lista\u2026</span></div>';
-  abrirModal('modalInventario');
+// ── Validar un ítem del chequeo de inventario (check-in/check-out) ──
+// Pide la cantidad confirmada con un cuadro nativo (simple y funciona bien en iPad). Si la
+// cantidad confirmada es menor a la sugerida, o si se anota algo, ese ítem se agrega solo a la
+// lista "Faltantes o daños" de la cabaña (sin duplicar si ya hay uno abierto para ese ítem).
+// Cuando se valida el último ítem del chequeo, CVC.actValidarItemChequeo consolida todo en
+// reservas.inventarioEntrada/Salida + cabanas.inventarioActual, y si es el de entrada, genera
+// ahí mismo el chequeo de salida.
+window.validarItemChequeo = async function (itemId) {
+  var it = byId[itemId];
+  if (!it) return;
+  var sugerida = (it.cantidadSugerida != null) ? it.cantidadSugerida : 0;
+  var valActual = (it.cantidadConfirmada != null) ? it.cantidadConfirmada : sugerida;
+  var val = window.prompt('Cantidad confirmada de "' + (it.itemNombre || it.titulo) + '" (sugerido: ' + sugerida + '):', String(valActual));
+  if (val === null) return;
+  var cant = parseInt(val, 10);
+  if (isNaN(cant) || cant < 0) { toast('Ingres\u00e1 un n\u00famero v\u00e1lido.', 'error'); return; }
+  var nota = '';
+  if (cant < sugerida) {
+    nota = window.prompt('Faltan ' + (sugerida - cant) + '. \u00bfAlgo para anotar (opcional)?', '') || '';
+  } else {
+    var notaOp = window.prompt('\u00bfAlgo da\u00f1ado para anotar? (dejalo vac\u00edo si no)', '');
+    if (notaOp) nota = notaOp;
+  }
   try {
-    var cabSnap = await db.collection('cabanas').doc(String(t.cabana)).get();
-    var base = (cabSnap.exists && cabSnap.data().checklistInventario) ? cabSnap.data().checklistInventario : [];
-    var resSnap = await db.collection('reservas').doc(t.reservaId).get();
-    var rdata = resSnap.exists ? resSnap.data() : {};
-    var entrada = (rdata.inventarioEntrada && rdata.inventarioEntrada.items) ? rdata.inventarioEntrada.items : null;
-    var personas = rdata.huespedes || ((rdata.adultos || 0) + (rdata.ninos || 0)) || '';
-    document.getElementById('invInfo').textContent = (t.titulo || 'Inventario') + (personas ? ' \u00b7 ' + personas + ' personas' : '');
-    var prev = {};
-    if (entrada) entrada.forEach(function (e) { prev[e.nombre] = e.cantidad; });
-    if (base.length) {
-      base.forEach(function (b) {
-        var sug = prev.hasOwnProperty(b.nombre) ? prev[b.nombre] : b.cantidadBase;
-        _invDef.push({ nombre: b.nombre, categoria: b.categoria || 'General', cantidad: sug });
-      });
-    } else if (entrada) {
-      entrada.forEach(function (e) { _invDef.push({ nombre: e.nombre, categoria: e.categoria || 'General', cantidad: e.cantidad }); });
-    }
-    renderInvRows();
-  } catch (e) {
-    document.getElementById('invRows').innerHTML = '<p style="color:var(--color-danger);font-size:13px;">Error al cargar: ' + esc(e.message) + '</p>';
-  }
-};
-function renderInvRows() {
-  if (!_invDef.length) {
-    document.getElementById('invRows').innerHTML = '<p style="color:var(--color-text-muted);font-size:13px;">Esta caba\u00f1a no tiene lista base de inventario. Carg\u00e1la en Contenido del sitio \u2192 editar caba\u00f1a \u2192 Lista base de inventario.</p>';
-    return;
-  }
-  var cats = {};
-  for (var i = 0; i < _invDef.length; i++) { var c = _invDef[i].categoria; (cats[c] = cats[c] || []).push(i); }
-  var html = '';
-  Object.keys(cats).forEach(function (cat) {
-    html += '<div style="font-weight:600;font-size:11px;color:var(--color-text-muted);margin:10px 0 2px;text-transform:uppercase;letter-spacing:.4px;">' + esc(cat) + '</div>';
-    cats[cat].forEach(function (i) {
-      var it2 = _invDef[i];
-      html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--color-border);">'
-        + '<span style="flex:1;">' + esc(it2.nombre) + '</span>'
-        + '<input type="number" min="0" id="inv-' + i + '" value="' + (it2.cantidad != null ? it2.cantidad : '') + '" style="width:84px;padding:6px;border:1px solid var(--color-border);border-radius:8px;text-align:center;">'
-        + '</div>';
-    });
-  });
-  document.getElementById('invRows').innerHTML = html;
-}
-window.cerrarInventario = function () { cerrarModal('modalInventario'); };
-window.guardarInventarioEntrada = async function (btn) {
-  if (!_invActId) return;
-  var t = byId[_invActId];
-  if (!t || !t.reservaId) return;
-  if (!_invDef.length) { toast('No hay lista base que guardar.', 'info'); return; }
-  var items = [];
-  for (var i = 0; i < _invDef.length; i++) {
-    var el = document.getElementById('inv-' + i);
-    var cant = el ? parseInt(el.value, 10) : NaN;
-    if (isNaN(cant) || cant < 0) cant = 0;
-    items.push({ nombre: _invDef[i].nombre, categoria: _invDef[i].categoria, cantidad: cant });
-  }
-  btn.disabled = true; btn.textContent = 'Guardando\u2026';
-  try {
-    await db.collection('reservas').doc(t.reservaId).update({
-      inventarioEntrada: { items: items, fecha: serverTs(), porUid: uid, porNombre: miNombre }
-    });
-    toast('Inventario de entrada guardado.', 'success');
-    cerrarInventario();
-  } catch (e) { toast('No se pudo guardar: ' + e.message, 'error'); }
-  btn.disabled = false; btn.innerHTML = '<span class="material-icons" style="font-size:18px;vertical-align:-4px">save</span> Guardar inventario';
-};
-
-// ── Control de salida (check-out) ───────────────────────────
-var _ctrlActId = null, _ctrlReservaId = null, _ctrlCabana = null, _ctrlNombreCab = '', _ctrlGuest = '', _ctrlDef = [];
-window.abrirControlSalida = async function (actId) {
-  var t = byId[actId];
-  if (!t || !t.reservaId) { toast('Esta actividad no tiene reserva asociada.', 'info'); return; }
-  _ctrlActId = actId; _ctrlReservaId = t.reservaId; _ctrlCabana = t.cabana; _ctrlDef = [];
-  document.getElementById('ctrlInfo').textContent = t.titulo || 'Control de salida';
-  document.getElementById('ctrlObs').value = '';
-  document.getElementById('ctrlRows').innerHTML = '<div class="state-loading"><div class="spinner"></div><span>Cargando inventario\u2026</span></div>';
-  abrirModal('modalControl');
-  try {
-    var resSnap = await db.collection('reservas').doc(t.reservaId).get();
-    var rdata = resSnap.exists ? resSnap.data() : {};
-    _ctrlGuest = rdata.nombre || '';
-    var entrada = (rdata.inventarioEntrada && rdata.inventarioEntrada.items) ? rdata.inventarioEntrada.items : null;
-    var salida = (rdata.inventarioSalida && rdata.inventarioSalida.items) ? rdata.inventarioSalida.items : null;
-    var fuente = entrada;
-    if (!fuente) {
-      var cabSnap = await db.collection('cabanas').doc(String(t.cabana)).get();
-      var base = (cabSnap.exists && cabSnap.data().checklistInventario) ? cabSnap.data().checklistInventario : [];
-      fuente = base.map(function (b) { return { nombre: b.nombre, categoria: b.categoria || 'General', cantidad: b.cantidadBase }; });
-    }
-    var prevSalida = {};
-    if (salida) salida.forEach(function (s) { prevSalida[s.nombre] = s; });
-    _ctrlNombreCab = (t.titulo || '').replace('Control de salida \u2014 ', '');
-    _ctrlDef = fuente.map(function (it2) {
-      var ps = prevSalida[it2.nombre];
-      return {
-        nombre: it2.nombre,
-        categoria: it2.categoria || 'General',
-        entrada: (it2.cantidad != null ? it2.cantidad : 0),
-        salida: (ps && ps.cantidadSalida != null) ? ps.cantidadSalida : (it2.cantidad != null ? it2.cantidad : 0),
-        nota: (ps && ps.nota) ? ps.nota : ''
-      };
-    });
-    document.getElementById('ctrlInfo').textContent = (t.titulo || 'Control de salida') + (_ctrlGuest ? ' \u00b7 sale ' + _ctrlGuest : '') + (entrada ? '' : ' \u00b7 (sin inventario de entrada \u2014 usando lista base)');
-    renderCtrlRows();
-  } catch (e) {
-    document.getElementById('ctrlRows').innerHTML = '<p style="color:var(--color-danger);font-size:13px;">Error al cargar: ' + esc(e.message) + '</p>';
-  }
-};
-function renderCtrlRows() {
-  if (!_ctrlDef.length) {
-    document.getElementById('ctrlRows').innerHTML = '<p style="color:var(--color-text-muted);font-size:13px;">No hay inventario de entrada ni lista base para esta caba\u00f1a.</p>';
-    return;
-  }
-  var cats = {};
-  for (var i = 0; i < _ctrlDef.length; i++) { var c = _ctrlDef[i].categoria; (cats[c] = cats[c] || []).push(i); }
-  var html = '';
-  Object.keys(cats).forEach(function (cat) {
-    html += '<div style="font-weight:600;font-size:11px;color:var(--color-text-muted);margin:10px 0 2px;text-transform:uppercase;letter-spacing:.4px;">' + esc(cat) + '</div>';
-    cats[cat].forEach(function (i) {
-      var it2 = _ctrlDef[i];
-      html += '<div style="padding:7px 0;border-bottom:1px solid var(--color-border);">'
-        + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">'
-        + '<span style="flex:1;">' + esc(it2.nombre) + ' <span style="color:var(--color-text-muted);font-size:12px;">(entr\u00f3 ' + it2.entrada + ')</span></span>'
-        + '<input type="number" min="0" id="ctrl-c-' + i + '" value="' + it2.salida + '" oninput="ctrlChequear(' + i + ')" style="width:78px;padding:6px;border:1px solid var(--color-border);border-radius:8px;text-align:center;">'
-        + '</div>'
-        + '<input type="text" id="ctrl-n-' + i + '" value="' + esc(it2.nota) + '" placeholder="Nota / da\u00f1o (opcional)" style="width:100%;margin-top:5px;padding:6px;border:1px solid var(--color-border);border-radius:8px;font-size:12px;">'
-        + '<div id="ctrl-f-' + i + '" style="font-size:11px;color:var(--color-danger);margin-top:2px;"></div>'
-        + '</div>';
-    });
-  });
-  document.getElementById('ctrlRows').innerHTML = html;
-  for (var k = 0; k < _ctrlDef.length; k++) ctrlChequear(k);
-}
-window.ctrlChequear = function (i) {
-  var el = document.getElementById('ctrl-c-' + i);
-  var fdiv = document.getElementById('ctrl-f-' + i);
-  if (!el || !fdiv) return;
-  var sal = parseInt(el.value, 10);
-  if (isNaN(sal)) sal = 0;
-  var falta = _ctrlDef[i].entrada - sal;
-  fdiv.textContent = falta > 0 ? ('\u26a0 Faltan ' + falta) : '';
-};
-window.cerrarControlSalida = function () { cerrarModal('modalControl'); };
-window.guardarControlSalida = async function (btn) {
-  if (!_ctrlReservaId || !_ctrlDef.length) { toast('No hay inventario para controlar.', 'info'); return; }
-  var items = [], faltantes = [], pendientesTexto = [];
-  for (var i = 0; i < _ctrlDef.length; i++) {
-    var sal = parseInt(document.getElementById('ctrl-c-' + i).value, 10);
-    if (isNaN(sal) || sal < 0) sal = 0;
-    var nota = (document.getElementById('ctrl-n-' + i).value || '').trim();
-    var falta = _ctrlDef[i].entrada - sal;
-    items.push({ nombre: _ctrlDef[i].nombre, categoria: _ctrlDef[i].categoria, cantidadEntrada: _ctrlDef[i].entrada, cantidadSalida: sal, falta: falta > 0 ? falta : 0, nota: nota });
-    if (falta > 0 || nota) {
-      var detalle = _ctrlDef[i].nombre + (falta > 0 ? ': faltan ' + falta + ' (entr\u00f3 ' + _ctrlDef[i].entrada + ', qued\u00f3 ' + sal + ')' : '') + (nota ? ' \u2014 ' + nota : '');
-      faltantes.push({ nombre: _ctrlDef[i].nombre, falta: falta > 0 ? falta : 0, nota: nota });
-      pendientesTexto.push(detalle);
-    }
-  }
-  var obs = (document.getElementById('ctrlObs').value || '').trim();
-  btn.disabled = true; btn.textContent = 'Guardando\u2026';
-  try {
-    await db.collection('reservas').doc(_ctrlReservaId).update({
-      inventarioSalida: { items: items, faltantes: faltantes, observaciones: obs, fecha: serverTs(), porUid: uid, porNombre: miNombre }
-    });
-    // Cada faltante/da\u00f1o genera una ACTIVIDAD en rojo dentro de Limpiezas \u2192 categor\u00eda de la caba\u00f1a (decisi\u00f3n Mauro: no va a 'pendientes').
-    var cabLabel = _ctrlNombreCab || ('Caba\u00f1a ' + _ctrlCabana);
-    var parentCat = 'limpiezas-cab-' + _ctrlCabana;
-    var padreCat = byId[parentCat] || {};
-    for (var j = 0; j < pendientesTexto.length; j++) {
-      var refP = db.collection('actividades').doc();
-      await refP.set({
-        titulo: '[' + cabLabel + (_ctrlGuest ? ' \u00b7 salida ' + _ctrlGuest : '') + '] ' + pendientesTexto[j],
-        detalle: '', fechaInicio: '', fechaVencimiento: '', hora: '',
-        prioridad: 'rojo', esCompra: false, categoriaCompra: '',
-        cronometrable: false, monto: 0, actualizadoEn: serverTs(),
-        parentId: parentCat,
-        raizId: padreCat.raizId || 'proj-limpiezas',
-        orden: Date.now(),
-        tipoRaiz: padreCat.tipoRaiz || 'proyecto',
-        color: '',
-        creadoPor: uid, creadoNombre: miNombre, creadoEn: serverTs(),
-        alcance: padreCat.alcance || 'equipo',
-        competencias: (padreCat.competencias || []).slice(),
-        hecho: false, hechoPor: null, hechoEn: null, notificado: false,
-        estado: 'pendiente', recurrencia: 0, tiempoEstimado: 0,
-        tipo: 'mantenimiento', origen: 'control-salida',
-        cabana: _ctrlCabana, reservaId: _ctrlReservaId, sesionesActivas: []
-      });
-    }
-    var msg = pendientesTexto.length ? ('Control guardado. ' + pendientesTexto.length + ' actividad(es) de mantenimiento generada(s) en Limpiezas.') : 'Control guardado. Sin faltantes ni da\u00f1os.';
-    toast(msg, 'success');
-    cerrarControlSalida();
+    if (!CVC.actValidarItemChequeo) { toast('Falta actividades-core.js actualizado.', 'error'); return; }
+    await CVC.actValidarItemChequeo(itemId, cant, nota, { uid: uid, nombre: miNombre });
+    toast('\u00cdtem validado.', 'success');
     await cargar();
-  } catch (e) { toast('No se pudo guardar: ' + e.message, 'error'); }
-  btn.disabled = false; btn.innerHTML = '<span class="material-icons" style="font-size:18px;vertical-align:-4px">save</span> Guardar control';
+  } catch (e) { toast('No se pudo validar: ' + e.message, 'error'); }
 };
 
 // ── Reportar / observación al admin (con foto, como en facturas) ──
