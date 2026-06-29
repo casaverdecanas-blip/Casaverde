@@ -505,7 +505,7 @@ function mensajeConflicto(reserva) {
 
 
 // ── GESTIÓN AUTOMÁTICA DE LIMPIEZA ───────────────────────────────────────────
-function crearTareaLimpieza(reservaId, reservaData, creadorUid) {
+function crearActividadLimpieza(reservaId, reservaData, creadorUid) {
     // Por reserva se mantienen DOS tareas (ahora en la colección 'actividades',
     // dentro del proyecto Limpiezas → categoría por cabaña):
     //  • limp-<id>  LIMPIEZA de ingreso → ventana [salida del anterior, check-in]; rojo desde 2 días antes.
@@ -816,7 +816,7 @@ function alAnularReserva(reservaId) {
                     if (!follower || ci.getTime() < follower.ci.getTime()) follower = { id: d.id, data: r, ci: ci };
                 }
             });
-            if (follower) crearTareaLimpieza(follower.id, follower.data);
+            if (follower) crearActividadLimpieza(follower.id, follower.data);
         });
     }).catch(function(err) { console.warn('alAnularReserva:', err.message); });
 }
@@ -2357,7 +2357,8 @@ window.CVC = {
     calcularPrecio,
     verificarDisponibilidadCabana,
     mensajeConflicto,
-    crearTareaLimpieza,
+    crearActividadLimpieza: crearActividadLimpieza,
+    crearTareaLimpieza: crearActividadLimpieza, // alias Fase 3 — sacar cuando reservas.html use el nombre nuevo
     alAnularReserva,
     sincronizarDisponibilidad,
     sincronizarDesdeGCal,
