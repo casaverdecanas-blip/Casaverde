@@ -2075,21 +2075,24 @@ function _toggleAyudaDetalle(id, btn) {
 
 function initAyuda(paginaActual) {
     try {
-        _cargarAyudaFirestore().then(function() {
-            if (!AYUDA_ITEMS[paginaActual] || !AYUDA_ITEMS[paginaActual].length) return;
-            if (document.getElementById('cvcAyudaFab')) return;
+        if (document.getElementById('cvcAyudaFab')) return;
 
-            const fab = document.createElement('button');
-            fab.id = 'cvcAyudaFab';
-            fab.title = 'Ayuda de esta página';
-            fab.style.cssText = 'position:fixed;bottom:84px;right:20px;width:48px;height:48px;'
-                + 'border-radius:50%;background:#2d5a27;color:#fff;border:none;cursor:pointer;'
-                + 'font-size:20px;font-weight:700;box-shadow:0 4px 16px rgba(45,90,39,.35);'
-                + 'z-index:997;font-family:inherit;';
-            fab.textContent = '?';
-            fab.onclick = function() { mostrarAyuda(paginaActual); };
-            document.body.appendChild(fab);
-        });
+        var fab = document.createElement('button');
+        fab.id = 'cvcAyudaFab';
+        fab.title = 'Ayuda de esta página';
+        fab.style.cssText = 'position:fixed;bottom:84px;right:20px;width:48px;height:48px;'
+            + 'border-radius:50%;background:#2d5a27;color:#fff;border:none;cursor:pointer;'
+            + 'display:flex;align-items:center;justify-content:center;'
+            + 'box-shadow:0 4px 16px rgba(45,90,39,.35);z-index:997;';
+        fab.innerHTML = '<span class="material-icons" style="font-size:24px;">live_help</span>';
+        fab.onclick = function () { mostrarAyuda(paginaActual); };
+        document.body.appendChild(fab);
+
+        // Las células se cargan en segundo plano; no condicionan si el botón se muestra
+        // (eso ya hac\u00eda que p\u00e1ginas sin c\u00e9lula todav\u00eda cargada se quedaran sin ning\u00fan
+        // acceso a ayuda). Si todav\u00eda no hay c\u00e9lulas para esta p\u00e1gina, mostrarAyuda() ahora
+        // muestra una descripci\u00f3n general en vez de un simple aviso de "no hay ayuda".
+        _cargarAyudaFirestore();
     } catch (e) {
         console.warn('initAyuda:', e.message);
     }
@@ -2099,7 +2102,14 @@ function mostrarAyuda(pagina) {
     _cargarAyudaFirestore().then(function() {
         const celulas = AYUDA_ITEMS[pagina];
         if (!celulas || !celulas.length) {
-            showToast('No hay ayuda disponible para esta sección.', 'info');
+            var nombre = pagina.replace('.html', '').replace(/-/g, ' ');
+            _renderCelulasEnPanel([{
+                titulo: 'Sobre esta secci\u00f3n',
+                resumen: 'Todav\u00eda no hay una ayuda espec\u00edfica cargada para "' + nombre + '". '
+                    + 'Esta secci\u00f3n forma parte del panel de administraci\u00f3n de Casa Verde Canas. '
+                    + 'Si algo no se entiende, consult\u00e1 con un administrador o escribile por Comunicaci\u00f3n.',
+                contenido: ''
+            }], 'Ayuda \u2014 ' + pagina.replace('.html', ''));
             return;
         }
         _renderCelulasEnPanel(celulas, 'Ayuda — ' + pagina.replace('.html', ''));
