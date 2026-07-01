@@ -431,6 +431,13 @@
                 </div>
             </div>
 
+            <div class="form-group">
+                <label class="form-label">Destino <span style="font-weight:400;color:var(--color-text-muted);font-size:11px;">(a qué economía se imputa: compartido, niños o personal)</span></label>
+                <select id="eDestino" class="form-control">
+                    <option value="">— Sin asignar (clasificar después) —</option>
+                </select>
+            </div>
+
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Monto <span class="required">*</span></label>
@@ -656,6 +663,12 @@
                         </select>
                     </div>
                     <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Destino <span style="font-weight:400;color:var(--color-text-muted);font-size:11px;">(compartido / ni&ntilde;os / personal)</span></label>
+                        <select id="ngDestino" class="form-control">
+                            <option value="">-- Sin asignar --</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
                         <label class="form-label">Proveedor</label>
                         <input type="text" id="ngProveedor" class="form-control" placeholder="Nombre del comercio">
                     </div>
@@ -753,6 +766,12 @@
                             <option value="personal">Personal</option>
                             <option value="mixto">Mixto</option>
                             <option value="">Sin clasificar -- revisar despues</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:var(--space-3);">
+                        <label class="form-label">Destino <span style="font-weight:400;color:var(--color-text-muted);font-size:11px;">(compartido / ni&ntilde;os / personal)</span></label>
+                        <select id="ngFDestino" class="form-control">
+                            <option value="">-- Sin asignar --</option>
                         </select>
                     </div>
                     <div class="form-group" style="margin-bottom:var(--space-3);">
@@ -868,6 +887,33 @@
     var reservasCache     = [];
     var ingresosCache     = [];
     var egresosCache      = [];
+    var destinosCache     = [];
+
+    // -- Destinos (economías: compartido / niños / personal) ----
+    function ordenTipoDestino(t) { return t === 'negocio' ? 0 : t === 'ninos' ? 1 : t === 'personal' ? 2 : 3; }
+    function iconoTipoDestino(t) { return t === 'negocio' ? '\ud83c\udfe0 ' : t === 'ninos' ? '\ud83e\uddd2 ' : t === 'personal' ? '\ud83d\udc64 ' : ''; }
+    function poblarSelectsDestino() {
+        var ids = ['eDestino', 'ngDestino', 'ngFDestino'];
+        for (var s = 0; s < ids.length; s++) {
+            var sel = document.getElementById(ids[s]);
+            if (!sel) continue;
+            var actual = sel.value;
+            var h = '<option value="">' + (ids[s] === 'eDestino' ? '\u2014 Sin asignar (clasificar despu\u00e9s) \u2014' : '-- Sin asignar --') + '</option>';
+            for (var i = 0; i < destinosCache.length; i++) {
+                var d = destinosCache[i];
+                h += '<option value="' + d.id + '" data-nom="' + escapeHtml(d.nombre || d.id) + '">'
+                   + iconoTipoDestino(d.tipo) + escapeHtml(d.nombre || d.id) + '</option>';
+            }
+            sel.innerHTML = h;
+            if (actual) sel.value = actual;
+        }
+    }
+    function leerDestino(selId) {
+        var sel = document.getElementById(selId);
+        if (!sel || !sel.value) return { destino: '', destinoNom: '' };
+        var opt = sel.options[sel.selectedIndex];
+        return { destino: sel.value, destinoNom: (opt && opt.dataset.nom) || '' };
+    }
     var honorariosCache   = [];
     var presupuestosCache = [];
     var retirosCache      = [];
@@ -941,9 +987,10 @@
     async function cargarTodo() {
         try {
             if (esAdmin) {
-                var [egS, cuentS] = await Promise.all([
+                var [egS, cuentS, destS] = await Promise.all([
                     db.collection('gastos').get(),
-                    db.collection('cuentas').get()
+                    db.collection('cuentas').get(),
+                    db.collection('destinos').get()
                 ]);
                 var sortDesc = function(a, b) {
                     return (b.creadoEn && b.creadoEn.toDate ? b.creadoEn.toDate().getTime() : 0)
@@ -951,6 +998,14 @@
                 };
                 egresosCache = egS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); }).sort(sortDesc);
                 cuentasCache = cuentS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+                destinosCache = destS.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
+                    .filter(function(d) { return d.activo !== false; })
+                    .sort(function(a, b) {
+                        var ta = ordenTipoDestino(a.tipo), tb = ordenTipoDestino(b.tipo);
+                        if (ta !== tb) return ta - tb;
+                        return (a.orden || 0) - (b.orden || 0);
+                    });
+                poblarSelectsDestino();
                 poblarSelectMes();
                 renderEgresos();
             } else {
@@ -1039,10 +1094,13 @@
             var compBtn = g.comprobanteUrl
                 ? '<button class="btn btn-ghost btn-sm" onclick="abrirComprobante(\'' + g.comprobanteUrl + '\')" title="Ver comprobante"><span class="material-icons" style="font-size:16px;">attach_file</span></button>'
                 : '';
+            var destChip = g.destinoNom
+                ? '<div style="font-size:10px;color:#3a6b3a;background:#EAF4EA;display:inline-block;padding:1px 6px;border-radius:3px;margin-top:2px;">' + escapeHtml(g.destinoNom) + '</div>'
+                : '<div style="font-size:10px;color:#9a8b5a;background:#F7F2E4;display:inline-block;padding:1px 6px;border-radius:3px;margin-top:2px;">sin destino</div>';
             return '<tr>' +
                 '<td>' + escapeHtml(g.fecha || '--') + '</td>' +
                 '<td><strong>' + escapeHtml(g.concepto || '--') + '</strong> ' + circBadge + ' ' + chipPais(g.pais) + '</td>' +
-                '<td>' + escapeHtml(CATS[g.categoria] || g.categoria || '--') + '</td>' +
+                '<td>' + escapeHtml(CATS[g.categoria] || g.categoria || '--') + destChip + '</td>' +
                 '<td class="fila-monto fila-egreso">' + sim + ' ' + (g.monto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td>' +
                 '<td>' + escapeHtml(g.metodo || '--') + '</td>' +
                 '<td class="text-muted text-xs">' + escapeHtml(g.responsableNom || g.proveedor || '--') + '</td>' +
@@ -1299,6 +1357,7 @@
         document.getElementById('eNotas').value         = '';
         document.getElementById('eMonto').value         = '';
         document.getElementById('eCategoria').value     = 'limpieza';
+        if (document.getElementById('eDestino')) document.getElementById('eDestino').value = '';
         document.getElementById('eMoneda').value        = 'BRL';
         document.getElementById('eMetodo').value        = 'pix';
         document.getElementById('eFecha').value         = new Date().toISOString().split('T')[0];
@@ -1346,9 +1405,12 @@
             var selCuenta = document.getElementById('eCuentaOrigen');
             var cuentaOrigenId  = selCuenta.value || '';
             var cuentaOrigenNom = selCuenta.options[selCuenta.selectedIndex] ? (selCuenta.options[selCuenta.selectedIndex].dataset.nom || '') : '';
+            var destinoSel = leerDestino('eDestino');
             var docData = {
                 concepto, monto, moneda: document.getElementById('eMoneda').value,
                 categoria:   document.getElementById('eCategoria').value,
+                destino:     destinoSel.destino,
+                destinoNom:  destinoSel.destinoNom,
                 metodo:      document.getElementById('eMetodo').value,
                 proveedor:   document.getElementById('eProveedor').value.trim(),
                 notas:       document.getElementById('eNotas').value.trim(),
@@ -1846,6 +1908,7 @@
             var proveedor = (esFoto ? document.getElementById('ngFProveedor').value : document.getElementById('ngProveedor').value || '').trim();
             var items    = esFoto ? (document.getElementById('ngFItems').value || '') : '';
             var itemsDet = esFoto ? _ngItemsDetalle : [];
+            var destinoNG = leerDestino(esFoto ? 'ngFDestino' : 'ngDestino');
             var ref      = esFoto ? (document.getElementById('ngFReferencia').value || '') : '';
             var cat      = esFoto ? document.getElementById('ngFCategoria').value : 'otro';
 
@@ -1859,6 +1922,8 @@
                 deducible: circuito === 'fiscal' || circuito === 'mixto',
                 proveedor: proveedor,
                 categoria: cat,
+                destino:   destinoNG.destino,
+                destinoNom: destinoNG.destinoNom,
                 cuentaOrigenId:  esPropio ? '' : cuentaId,
                 cuentaOrigenNom: esPropio ? 'Fondos propios' : cuentaNom,
                 pais: (esPropio || !cuentaId) ? 'BR' : paisDeCuenta(cuentaId),
