@@ -657,9 +657,18 @@ function crearActividadLimpieza(reservaId, reservaData, creadorUid) {
         };
 
         // Genera, una sola vez (idempotente: no regenera si ya existe), el contenedor "Chequeo de
-        // inventario" de una limpieza (entrada o salida) con un ítem hoja por cada artículo de la
-        // fuente de inventario dada. Cada ítem lleva cantidadSugerida (de cabanas.inventarioActual
-        // si ya hay una foto real, sino de la lista base) y cantidadConfirmada:null hasta validarlo.
+        // inventario" de una limpieza (entrada o salida), organizado en árbol:
+        //   chequeo → categoría (Cocina, Ropa blanca, …) → ítem (con cantidad).
+        // Cada ítem lleva cantidadSugerida (de cabanas.inventarioActual si ya hay foto real, sino
+        // de la lista base), cantidadConfirmada:null hasta validarlo, y chequeoId para que la
+        // consolidación pueda encontrar todos los ítems del chequeo sin importar la categoría.
+        // Lectura defensiva de campos de la lista base: cantidadBase|cantidad, categoria|cat.
+        var slugCat = function (s) {
+            return String(s || 'general').toLowerCase()
+                .replace(/[áàâã]/g, 'a').replace(/[éèê]/g, 'e').replace(/[íì]/g, 'i')
+                .replace(/[óòôõ]/g, 'o').replace(/[úù]/g, 'u').replace(/ñ/g, 'n')
+                .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'general';
+        };
         var crearChequeoInventario = function (chequeoId, parentActId, tituloChk, tipoChequeo, fuenteItems) {
             var refChk = col.doc(chequeoId);
             return refChk.get().then(function (s) {
@@ -673,19 +682,42 @@ function crearActividadLimpieza(reservaId, reservaData, creadorUid) {
                 };
                 var jobsItems = [refChk.set(metaChk)];
                 var lista = fuenteItems || [];
+
+                // Agrupar por categoría preservando el orden de aparición.
+                var cats = [], porCat = {};
                 for (var n = 0; n < lista.length; n++) {
                     var itf = lista[n];
-                    var metaItem = {
-                        titulo: itf.nombre, nombre: itf.nombre, detalle: '', tipo: 'item-chequeo', tipoChequeo: tipoChequeo,
-                        itemNombre: itf.nombre, itemCategoria: itf.categoria || 'General',
-                        cantidadSugerida: (itf.cantidad != null ? itf.cantidad : (itf.cantidadBase != null ? itf.cantidadBase : 0)),
-                        cantidadConfirmada: null,
-                        tipoRaiz: 'proyecto', color: '', parentId: chequeoId, raizId: 'proj-limpiezas', orden: n,
+                    var catNom = itf.categoria || itf.cat || 'General';
+                    if (!porCat[catNom]) { porCat[catNom] = []; cats.push(catNom); }
+                    porCat[catNom].push(itf);
+                }
+
+                for (var c = 0; c < cats.length; c++) {
+                    var catNombre = cats[c];
+                    var catId = 'cat-' + chequeoId + '-' + slugCat(catNombre);
+                    jobsItems.push(col.doc(catId).set({
+                        titulo: catNombre, nombre: catNombre, detalle: '', tipo: 'categoria-chequeo', tipoChequeo: tipoChequeo,
+                        chequeoId: chequeoId,
+                        tipoRaiz: 'proyecto', color: '', parentId: chequeoId, raizId: 'proj-limpiezas', orden: c,
                         alcance: 'equipo', competencias: [], cronometrable: false, estado: 'pendiente', prioridad: 'gris',
                         monto: 0, recurrencia: 0, esCompra: false, hecho: false, cabana: caba, reservaId: actual.id,
                         creadoPor: creadorUid || null, creadoNombre: 'Sistema (reservas)', creadoEn: ahora
-                    };
-                    jobsItems.push(col.doc('item-' + chequeoId + '-' + n).set(metaItem));
+                    }));
+                    var itemsCat = porCat[catNombre];
+                    for (var m = 0; m < itemsCat.length; m++) {
+                        var itf2 = itemsCat[m];
+                        var cantSug = (itf2.cantidad != null ? itf2.cantidad : (itf2.cantidadBase != null ? itf2.cantidadBase : 0));
+                        jobsItems.push(col.doc('item-' + catId + '-' + m).set({
+                            titulo: itf2.nombre, nombre: itf2.nombre, detalle: '', tipo: 'item-chequeo', tipoChequeo: tipoChequeo,
+                            itemNombre: itf2.nombre, itemCategoria: catNombre,
+                            chequeoId: chequeoId,
+                            cantidadSugerida: cantSug, cantidadConfirmada: null,
+                            tipoRaiz: 'proyecto', color: '', parentId: catId, raizId: 'proj-limpiezas', orden: m,
+                            alcance: 'equipo', competencias: [], cronometrable: false, estado: 'pendiente', prioridad: 'gris',
+                            monto: 0, recurrencia: 0, esCompra: false, hecho: false, cabana: caba, reservaId: actual.id,
+                            creadoPor: creadorUid || null, creadoNombre: 'Sistema (reservas)', creadoEn: ahora
+                        }));
+                    }
                 }
                 return Promise.all(jobsItems);
             });
@@ -780,18 +812,19 @@ function crearActividadLimpieza(reservaId, reservaData, creadorUid) {
 // Al anular/eliminar una reserva: borra sus tareas y recalcula la ventana del huésped siguiente.
 function alAnularReserva(reservaId) {
     var col = db.collection('actividades');
-    var borrarHijosDe = function (parentId) {
-        return col.where('parentId', '==', parentId).get().then(function (snap) {
+    // Borra categorías e ítems de un chequeo (todos llevan el campo chequeoId).
+    var borrarDeChequeo = function (chequeoId) {
+        return col.where('chequeoId', '==', chequeoId).get().then(function (snap) {
             var b = db.batch();
             snap.forEach(function (d) { b.delete(d.ref); });
             return snap.size ? b.commit() : null;
         }).catch(function () {});
     };
-    // Los chequeos de inventario (entrada/salida) son hijos de limp-/ctrl-; se borran sus ítems
-    // y el contenedor antes de borrar la limpieza/control en sí. 'Faltantes o daños' de la cabaña
+    // Los chequeos de inventario (entrada/salida) cuelgan de limp-/ctrl-; se borra su árbol
+    // completo antes de borrar la limpieza/control en sí. 'Faltantes o daños' de la cabaña
     // NO se toca: refleja faltantes reales que pueden seguir vigentes aunque se anule la reserva.
-    return borrarHijosDe('chk-limp-' + reservaId)
-    .then(function () { return borrarHijosDe('chk-ctrl-' + reservaId); })
+    return borrarDeChequeo('chk-limp-' + reservaId)
+    .then(function () { return borrarDeChequeo('chk-ctrl-' + reservaId); })
     .then(function () { return col.doc('chk-limp-' + reservaId).delete().catch(function () {}); })
     .then(function () { return col.doc('chk-ctrl-' + reservaId).delete().catch(function () {}); })
     .then(function () { return col.doc('limp-' + reservaId).delete().catch(function() {}); })

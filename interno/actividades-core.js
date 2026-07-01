@@ -327,6 +327,13 @@
 
   // Genera, una sola vez (idempotente), el chequeo de SALIDA como hijo de ctrl-<reservaId>,
   // usando como base las cantidades que se acaban de confirmar en el chequeo de entrada.
+  // Misma estructura de árbol que el de entrada: chequeo → categoría → ítem.
+  function _slugCat(s) {
+    return String(s || 'general').toLowerCase()
+      .replace(/[áàâã]/g, 'a').replace(/[éèê]/g, 'e').replace(/[íì]/g, 'i')
+      .replace(/[óòôõ]/g, 'o').replace(/[úù]/g, 'u').replace(/ñ/g, 'n')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'general';
+  }
   async function actCrearChequeoSalida(reservaId, cabana, itemsConfirmados, user) {
     var chequeoId = 'chk-ctrl-' + reservaId;
     var refChk = db.collection('actividades').doc(chequeoId);
@@ -334,39 +341,65 @@
     if (s.exists) return;
     var padreSnap = await db.collection('actividades').doc('ctrl-' + reservaId).get();
     if (!padreSnap.exists) return; // no hay control de salida para esta reserva
+    var uidC = (user && user.uid) || null, nomC = (user && user.nombre) || '';
     await refChk.set({
       titulo: 'Chequeo de inventario \u2014 salida', nombre: 'Chequeo de inventario \u2014 salida', detalle: '',
       tipo: 'chequeo-inventario', tipoChequeo: 'salida',
       tipoRaiz: 'proyecto', color: '', parentId: 'ctrl-' + reservaId, raizId: 'proj-limpiezas', orden: 0,
       alcance: 'equipo', competencias: [], cronometrable: false, estado: 'pendiente', prioridad: 'gris',
       monto: 0, recurrencia: 0, esCompra: false, hecho: false, cabana: cabana, reservaId: reservaId,
-      creadoPor: (user && user.uid) || null, creadoNombre: (user && user.nombre) || '', creadoEn: serverTs()
+      creadoPor: uidC, creadoNombre: nomC, creadoEn: serverTs()
     });
     var lista = itemsConfirmados || [];
+    var cats = [], porCat = {};
     for (var n = 0; n < lista.length; n++) {
       var it = lista[n];
-      await db.collection('actividades').doc('item-' + chequeoId + '-' + n).set({
-        titulo: it.nombre, nombre: it.nombre, detalle: '', tipo: 'item-chequeo', tipoChequeo: 'salida',
-        itemNombre: it.nombre, itemCategoria: it.categoria || 'General',
-        cantidadSugerida: it.cantidad != null ? it.cantidad : 0, cantidadConfirmada: null,
-        tipoRaiz: 'proyecto', color: '', parentId: chequeoId, raizId: 'proj-limpiezas', orden: n,
+      var catNom = it.categoria || 'General';
+      if (!porCat[catNom]) { porCat[catNom] = []; cats.push(catNom); }
+      porCat[catNom].push(it);
+    }
+    for (var c = 0; c < cats.length; c++) {
+      var catId = 'cat-' + chequeoId + '-' + _slugCat(cats[c]);
+      await db.collection('actividades').doc(catId).set({
+        titulo: cats[c], nombre: cats[c], detalle: '', tipo: 'categoria-chequeo', tipoChequeo: 'salida',
+        chequeoId: chequeoId,
+        tipoRaiz: 'proyecto', color: '', parentId: chequeoId, raizId: 'proj-limpiezas', orden: c,
         alcance: 'equipo', competencias: [], cronometrable: false, estado: 'pendiente', prioridad: 'gris',
         monto: 0, recurrencia: 0, esCompra: false, hecho: false, cabana: cabana, reservaId: reservaId,
-        creadoPor: (user && user.uid) || null, creadoNombre: (user && user.nombre) || '', creadoEn: serverTs()
+        creadoPor: uidC, creadoNombre: nomC, creadoEn: serverTs()
       });
+      var itemsCat = porCat[cats[c]];
+      for (var m = 0; m < itemsCat.length; m++) {
+        var it2 = itemsCat[m];
+        await db.collection('actividades').doc('item-' + catId + '-' + m).set({
+          titulo: it2.nombre, nombre: it2.nombre, detalle: '', tipo: 'item-chequeo', tipoChequeo: 'salida',
+          itemNombre: it2.nombre, itemCategoria: cats[c],
+          chequeoId: chequeoId,
+          cantidadSugerida: it2.cantidad != null ? it2.cantidad : 0, cantidadConfirmada: null,
+          tipoRaiz: 'proyecto', color: '', parentId: catId, raizId: 'proj-limpiezas', orden: m,
+          alcance: 'equipo', competencias: [], cronometrable: false, estado: 'pendiente', prioridad: 'gris',
+          monto: 0, recurrencia: 0, esCompra: false, hecho: false, cabana: cabana, reservaId: reservaId,
+          creadoPor: uidC, creadoNombre: nomC, creadoEn: serverTs()
+        });
+      }
     }
   }
 
   // Se dispara cuando el último ítem de un chequeo queda validado.
+  // Los ítems ya no son hijos directos del chequeo (hay un nivel de categoría en el medio),
+  // así que se buscan por el campo chequeoId.
   async function actConsolidarChequeo(chequeoId, user) {
     var chkSnap = await db.collection('actividades').doc(chequeoId).get();
     if (!chkSnap.exists) return;
     var chk = chkSnap.data();
-    var hijosSnap = await db.collection('actividades').where('parentId', '==', chequeoId).get();
-    var items = [];
-    hijosSnap.forEach(function (d) {
+    var todoSnap = await db.collection('actividades').where('chequeoId', '==', chequeoId).get();
+    var items = [], faltantes = [];
+    todoSnap.forEach(function (d) {
       var h = d.data();
+      if (h.tipo !== 'item-chequeo') return;
       items.push({ nombre: h.itemNombre, categoria: h.itemCategoria, cantidad: h.cantidadConfirmada || 0 });
+      var falta = (h.cantidadSugerida || 0) - (h.cantidadConfirmada || 0);
+      if (falta > 0) faltantes.push({ nombre: h.itemNombre, falta: falta });
     });
     var fecha = serverTs();
     var porUid = (user && user.uid) || null, porNombre = (user && user.nombre) || '';
@@ -378,17 +411,13 @@
       await db.collection('cabanas').doc(String(chk.cabana)).set({ inventarioActual: items }, { merge: true });
       await actCrearChequeoSalida(chk.reservaId, chk.cabana, items, user);
     } else {
-      var faltantes = [];
-      hijosSnap.forEach(function (d) {
-        var h = d.data();
-        var falta = (h.cantidadSugerida || 0) - (h.cantidadConfirmada || 0);
-        if (falta > 0) faltantes.push({ nombre: h.itemNombre, falta: falta });
-      });
       await db.collection('reservas').doc(chk.reservaId).update({
         inventarioSalida: { items: items, faltantes: faltantes, fecha: fecha, porUid: porUid, porNombre: porNombre }
       });
       await db.collection('cabanas').doc(String(chk.cabana)).set({ inventarioActual: items }, { merge: true });
     }
+    // Cerrar el contenedor del chequeo.
+    await db.collection('actividades').doc(chequeoId).update({ hecho: true, hechoPor: porUid, hechoEn: tsAhora() });
   }
 
   // ── Validar un ítem del chequeo (llamado desde actividades.html) ──
@@ -405,14 +434,27 @@
     if (_faltanteONota(item.cantidadSugerida, cantidadConfirmada, nota)) {
       await actRegistrarFaltante(item.cabana, item.itemNombre, (item.tipoChequeo === 'entrada' ? 'check-in' : 'check-out'), item.reservaId, nota, user);
     }
-    var hermanos = await db.collection('actividades').where('parentId', '==', item.parentId).get();
+    // Releer todos los hermanos del chequeo completo (por chequeoId, cruza categorías).
+    var todoSnap = await db.collection('actividades').where('chequeoId', '==', item.chequeoId).get();
     var todosListos = true;
-    hermanos.forEach(function (d) {
-      if (d.id === itemId) return;
+    var itemsPorCat = {}; // parentId (catId) -> { total, hechos }
+    todoSnap.forEach(function (d) {
       var h = d.data();
-      if (!h.hecho) todosListos = false;
+      if (h.tipo !== 'item-chequeo') return;
+      var hecho = (d.id === itemId) ? true : !!h.hecho;
+      if (!hecho) todosListos = false;
+      var pc = itemsPorCat[h.parentId] || { total: 0, hechos: 0 };
+      pc.total++; if (hecho) pc.hechos++;
+      itemsPorCat[h.parentId] = pc;
     });
-    if (todosListos) await actConsolidarChequeo(item.parentId, user);
+    // Marcar como hecha la categoría del ítem si quedó completa (visual del árbol).
+    var pcActual = itemsPorCat[item.parentId];
+    if (pcActual && pcActual.hechos === pcActual.total) {
+      await db.collection('actividades').doc(item.parentId).update({
+        hecho: true, hechoPor: (user && user.uid) || null, hechoEn: tsAhora()
+      }).catch(function () {});
+    }
+    if (todosListos) await actConsolidarChequeo(item.chequeoId, user);
   }
 
   // ── Enganche a CVC (sin redefinirlo) ────────────────────
