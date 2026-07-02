@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Proyección anual · Casa Verde Canas</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="design-system.css">
     <style>
         .pa-bar-tools { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; margin-bottom: var(--space-3); }
@@ -291,6 +292,21 @@
         return 'Sin asignar';
     }
 
+    // Un gasto puede estar dividido entre destinos (destinosDetalle, v4.32).
+    // Devuelve las partes [{eco, monto}] — si no hay división, una sola parte con el gasto entero.
+    function partesDeGasto(g) {
+        if (g.destinosDetalle && g.destinosDetalle.length) {
+            var out = [];
+            for (var i = 0; i < g.destinosDetalle.length; i++) {
+                var p = g.destinosDetalle[i];
+                var eco = (p.destino && _destinoEco[p.destino]) ? _destinoEco[p.destino] : 'Sin asignar';
+                out.push({ eco: eco, monto: p.monto || 0 });
+            }
+            return out;
+        }
+        return [{ eco: economiaDeGasto(g), monto: g.monto || 0 }];
+    }
+
     function recalcBase() {
         var anio = anioBase();
         var disp = moneda();
@@ -302,15 +318,20 @@
             if (f.slice(0, 4) !== anio) return;
             var cat = String(g.categoria || 'sin categoría').trim().toLowerCase();
             var val = CVC.convertir(g.monto || 0, CVC.monedaDe(g), disp);
-            var eco = economiaDeGasto(g);
             var mes = f.slice(5, 7);
             if (!acum[cat]) acum[cat] = { total: 0, meses: {}, eco: {} };
             acum[cat].total += val;
             acum[cat].meses[mes] = true;
-            acum[cat].eco[eco] = (acum[cat].eco[eco] || 0) + val;
-            ecoTot[eco] = (ecoTot[eco] || 0) + val;
-            if (!ecoMeses[eco]) ecoMeses[eco] = {};
-            ecoMeses[eco][mes] = true;
+            // Por economía: si el gasto está dividido, cada parte suma a su economía.
+            var partes = partesDeGasto(g);
+            for (var pi = 0; pi < partes.length; pi++) {
+                var eco = partes[pi].eco;
+                var vparte = CVC.convertir(partes[pi].monto || 0, CVC.monedaDe(g), disp);
+                acum[cat].eco[eco] = (acum[cat].eco[eco] || 0) + vparte;
+                ecoTot[eco] = (ecoTot[eco] || 0) + vparte;
+                if (!ecoMeses[eco]) ecoMeses[eco] = {};
+                ecoMeses[eco][mes] = true;
+            }
         });
         _baseMedia = {};
         _baseDom = {};

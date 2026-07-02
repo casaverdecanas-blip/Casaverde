@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Análisis de gastos · Casa Verde Canas</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="design-system.css">
     <style>
         .ag-filtros { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; margin-bottom: var(--space-4); }
@@ -203,6 +204,18 @@
         lista.forEach(function(g) {
             var monto = conv(g);
             total += monto;
+            if (porFin && g.destinosDetalle && g.destinosDetalle.length) {
+                // Gasto dividido (v4.32): cada parte suma a su propia economía.
+                for (var pi = 0; pi < g.destinosDetalle.length; pi++) {
+                    var p = g.destinosDetalle[pi];
+                    var keyP = (p.destino && _destinoEco[p.destino]) ? _destinoEco[p.destino] : 'Sin asignar';
+                    var montoP = CVC.convertir(p.monto || 0, CVC.monedaDe(g), _disp);
+                    if (!grupos[keyP]) grupos[keyP] = { nombre: keyP, total: 0, items: [] };
+                    grupos[keyP].total += montoP;
+                    if (grupos[keyP].items.indexOf(g) === -1) grupos[keyP].items.push(g);
+                }
+                return;
+            }
             var key = porFin ? economiaDeGasto(g) : String(g.categoria || 'sin categoría').trim().toLowerCase();
             if (!grupos[key]) grupos[key] = { nombre: key, total: 0, items: [] };
             grupos[key].total += monto;

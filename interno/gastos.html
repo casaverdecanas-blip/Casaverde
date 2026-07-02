@@ -436,13 +436,24 @@
                 <select id="eDestino" class="form-control">
                     <option value="">— Sin asignar (clasificar después) —</option>
                 </select>
+                <button type="button" class="btn btn-ghost btn-sm" style="margin-top:4px;font-size:12px;" onclick="toggleSplitDestino()">
+                    <span class="material-icons" style="font-size:15px;vertical-align:-3px;">call_split</span> <span id="eSplitBtnTxt">Dividir entre destinos</span>
+                </button>
+                <div id="eSplitBox" style="display:none;border:1px dashed var(--color-border);border-radius:8px;padding:8px;margin-top:6px;">
+                    <div style="font-size:11.5px;color:var(--color-text-muted);margin-bottom:6px;">Repartí el monto total entre economías (ej.: parte de los niños, parte compartida). La suma tiene que dar igual al monto del gasto.</div>
+                    <div id="eSplitRows"></div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+                        <button type="button" class="btn btn-ghost btn-sm" style="font-size:12px;" onclick="splitAgregarFila()">＋ Agregar parte</button>
+                        <span id="eSplitResto" style="font-size:11.5px;color:var(--color-text-muted);"></span>
+                    </div>
+                </div>
             </div>
 
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Monto <span class="required">*</span></label>
                     <input type="number" id="eMonto" class="form-control" step="0.01" min="0.01"
-                        oninput="actualizarMontoMixto()">
+                        oninput="actualizarMontoMixto();splitActualizarResto()">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Moneda</label>
@@ -914,6 +925,66 @@
         var opt = sel.options[sel.selectedIndex];
         return { destino: sel.value, destinoNom: (opt && opt.dataset.nom) || '' };
     }
+
+    // -- División de un gasto entre destinos (destinosDetalle) --
+    var _splitActivo = false;
+    function opcionesDestinoHTML() {
+        var h = '<option value="">-- destino --</option>';
+        for (var i = 0; i < destinosCache.length; i++) {
+            var d = destinosCache[i];
+            h += '<option value="' + d.id + '" data-nom="' + escapeHtml(d.nombre || d.id) + '">' + iconoTipoDestino(d.tipo) + escapeHtml(d.nombre || d.id) + '</option>';
+        }
+        return h;
+    }
+    window.toggleSplitDestino = function() {
+        _splitActivo = !_splitActivo;
+        document.getElementById('eSplitBox').style.display = _splitActivo ? 'block' : 'none';
+        document.getElementById('eDestino').disabled = _splitActivo;
+        document.getElementById('eSplitBtnTxt').textContent = _splitActivo ? 'Cancelar división (usar un solo destino)' : 'Dividir entre destinos';
+        if (_splitActivo && !document.querySelectorAll('#eSplitRows .split-row').length) {
+            splitAgregarFila(); splitAgregarFila();
+        }
+        splitActualizarResto();
+    };
+    window.splitAgregarFila = function() {
+        var div = document.createElement('div');
+        div.className = 'split-row';
+        div.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:5px;';
+        div.innerHTML = '<select class="form-control split-dest" style="flex:2;">' + opcionesDestinoHTML() + '</select>'
+            + '<input type="number" class="form-control split-monto" step="0.01" min="0" placeholder="monto" style="flex:1;" oninput="splitActualizarResto()">'
+            + '<button type="button" class="btn btn-ghost btn-sm" onclick="this.parentNode.remove();splitActualizarResto()" title="Quitar">✕</button>';
+        document.getElementById('eSplitRows').appendChild(div);
+    };
+    window.splitActualizarResto = function() {
+        if (!_splitActivo) return;
+        var total = parseFloat(document.getElementById('eMonto').value) || 0;
+        var suma = 0;
+        document.querySelectorAll('#eSplitRows .split-monto').forEach(function(inp) { suma += parseFloat(inp.value) || 0; });
+        var resto = Math.round((total - suma) * 100) / 100;
+        var el = document.getElementById('eSplitResto');
+        el.textContent = resto === 0 ? '✓ La suma cierra con el total.' : (resto > 0 ? 'Faltan asignar ' + resto.toFixed(2) : 'Sobran ' + Math.abs(resto).toFixed(2) + ' (la suma supera el total)');
+        el.style.color = resto === 0 ? '#2d6a2d' : '#A32D2D';
+    };
+    // Devuelve null si no hay split; lanza Error si el split está mal armado.
+    function leerSplitDestinos() {
+        if (!_splitActivo) return null;
+        var total = parseFloat(document.getElementById('eMonto').value) || 0;
+        var partes = [], suma = 0;
+        var rows = document.querySelectorAll('#eSplitRows .split-row');
+        for (var i = 0; i < rows.length; i++) {
+            var sel = rows[i].querySelector('.split-dest');
+            var m = parseFloat(rows[i].querySelector('.split-monto').value) || 0;
+            if (!sel.value && m === 0) continue; // fila vacía, ignorar
+            if (!sel.value) throw new Error('Hay una parte de la división sin destino elegido.');
+            if (m <= 0) throw new Error('Hay una parte de la división sin monto.');
+            var opt = sel.options[sel.selectedIndex];
+            partes.push({ destino: sel.value, destinoNom: (opt && opt.dataset.nom) || '', monto: m });
+            suma += m;
+        }
+        if (partes.length < 2) throw new Error('La división necesita al menos dos partes (si es un solo destino, usá el selector de arriba).');
+        if (Math.abs(suma - total) > 0.01) throw new Error('La división no cierra: las partes suman ' + suma.toFixed(2) + ' y el gasto es ' + total.toFixed(2) + '.');
+        return partes;
+    }
     var honorariosCache   = [];
     var presupuestosCache = [];
     var retirosCache      = [];
@@ -1094,7 +1165,9 @@
             var compBtn = g.comprobanteUrl
                 ? '<button class="btn btn-ghost btn-sm" onclick="abrirComprobante(\'' + g.comprobanteUrl + '\')" title="Ver comprobante"><span class="material-icons" style="font-size:16px;">attach_file</span></button>'
                 : '';
-            var destChip = g.destinoNom
+            var destChip = (g.destinosDetalle && g.destinosDetalle.length)
+                ? '<div style="font-size:10px;color:#3a5a8f;background:#EAF0F9;display:inline-block;padding:1px 6px;border-radius:3px;margin-top:2px;">dividido (' + g.destinosDetalle.length + ')</div>'
+                : g.destinoNom
                 ? '<div style="font-size:10px;color:#3a6b3a;background:#EAF4EA;display:inline-block;padding:1px 6px;border-radius:3px;margin-top:2px;">' + escapeHtml(g.destinoNom) + '</div>'
                 : '<div style="font-size:10px;color:#9a8b5a;background:#F7F2E4;display:inline-block;padding:1px 6px;border-radius:3px;margin-top:2px;">sin destino</div>';
             return '<tr>' +
@@ -1358,6 +1431,8 @@
         document.getElementById('eMonto').value         = '';
         document.getElementById('eCategoria').value     = 'limpieza';
         if (document.getElementById('eDestino')) document.getElementById('eDestino').value = '';
+        if (_splitActivo) toggleSplitDestino();
+        document.getElementById('eSplitRows').innerHTML = '';
         document.getElementById('eMoneda').value        = 'BRL';
         document.getElementById('eMetodo').value        = 'pix';
         document.getElementById('eFecha').value         = new Date().toISOString().split('T')[0];
@@ -1406,11 +1481,22 @@
             var cuentaOrigenId  = selCuenta.value || '';
             var cuentaOrigenNom = selCuenta.options[selCuenta.selectedIndex] ? (selCuenta.options[selCuenta.selectedIndex].dataset.nom || '') : '';
             var destinoSel = leerDestino('eDestino');
+            var destinosDetalle = null;
+            try { destinosDetalle = leerSplitDestinos(); }
+            catch(errSplit) { mostrarErrorEgreso(errSplit.message); btn.disabled = false; text.textContent = 'Guardar'; return; }
+            if (destinosDetalle) {
+                // El destino "principal" del gasto pasa a ser la parte mayor, para que los
+                // clasificadores no lo vean como pendiente; el detalle real va en destinosDetalle.
+                var mayor = destinosDetalle[0];
+                for (var dd = 1; dd < destinosDetalle.length; dd++) if (destinosDetalle[dd].monto > mayor.monto) mayor = destinosDetalle[dd];
+                destinoSel = { destino: mayor.destino, destinoNom: mayor.destinoNom };
+            }
             var docData = {
                 concepto, monto, moneda: document.getElementById('eMoneda').value,
                 categoria:   document.getElementById('eCategoria').value,
                 destino:     destinoSel.destino,
                 destinoNom:  destinoSel.destinoNom,
+                destinosDetalle: destinosDetalle || null,
                 metodo:      document.getElementById('eMetodo').value,
                 proveedor:   document.getElementById('eProveedor').value.trim(),
                 notas:       document.getElementById('eNotas').value.trim(),
