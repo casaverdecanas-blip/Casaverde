@@ -204,10 +204,24 @@
             </button>
         </div>
         <div class="leyenda" id="leyendaCabanas"></div>
+
+        <!-- NUEVO: Selector paso a paso -->
+        <div id="selectorFechas" style="display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;margin-bottom:var(--space-3);">
+            <span id="infoFechas" style="font-size:var(--text-sm);color:var(--color-text-secondary);">
+                Seleccioná una fecha de inicio y una de fin en el calendario.
+            </span>
+            <button class="btn btn-primary" id="btnGenerarPresupuesto" style="display:none;" onclick="generarPresupuestoDesdeCalendario()">
+                <span class="material-icons">add</span> Generar presupuesto
+            </button>
+            <button class="btn btn-ghost btn-sm" id="btnLimpiarFechas" style="display:none;" onclick="limpiarSeleccionFechas()">
+                <span class="material-icons">clear</span>
+            </button>
+        </div>
+
         <div id="calendar"></div>
         <div class="fc-hint">
-            💡 Marcá un rango de fechas en el calendario para crear un presupuesto con esas fechas.
-            Tocá un presupuesto para abrirlo y editarlo.
+            💡 Hacé clic en una fecha para el inicio, luego en otra para el fin, y usá el botón <strong>“Generar presupuesto”</strong>.
+            Tocá un presupuesto existente para abrirlo y editarlo.
         </div>
     </div>
 
@@ -505,6 +519,10 @@
     var textoBusqueda     = '';
     var calendar          = null;
 
+    // NUEVAS variables para selección paso a paso
+    var selectedStart = null;
+    var selectedEnd   = null;
+
     //    Init                                                   
     try {
         var res = await Promise.all([
@@ -594,12 +612,9 @@
                 center: 'title',
                 right:  ''
             },
-            selectable:   true,
-            selectMirror: true,
-            select: function(info) {
-                calendar.unselect();
-                // endStr de FullCalendar es exclusivo → coincide con el check-out
-                abrirModalNuevo(info.startStr, info.endStr);
+            // ── NUEVO: reemplazamos select por dateClick ──
+            dateClick: function(info) {
+                manejarClicFecha(info.dateStr);
             },
             events: function(info, success) {
                 success(eventosPresupuestos().concat(eventosReservas()));
@@ -621,6 +636,77 @@
             }
         });
         calendar.render();
+    }
+
+    // ── NUEVAS funciones para manejo de fechas paso a paso ──
+    function manejarClicFecha(fecha) {
+        if (!selectedStart) {
+            selectedStart = fecha;
+            selectedEnd = null;
+            actualizarUI();
+            return;
+        }
+        if (!selectedEnd) {
+            // Si la nueva fecha es anterior al inicio, intercambiamos
+            if (fecha < selectedStart) {
+                selectedEnd = selectedStart;
+                selectedStart = fecha;
+            } else if (fecha === selectedStart) {
+                // Clic en la misma fecha -> deseleccionar todo
+                limpiarSeleccionFechas();
+                return;
+            } else {
+                selectedEnd = fecha;
+            }
+            actualizarUI();
+            return;
+        }
+        // Si ya había inicio y fin, reiniciamos con la nueva fecha como inicio
+        selectedStart = fecha;
+        selectedEnd = null;
+        actualizarUI();
+    }
+
+    function actualizarUI() {
+        var info = document.getElementById('infoFechas');
+        var btnGen = document.getElementById('btnGenerarPresupuesto');
+        var btnLimpiar = document.getElementById('btnLimpiarFechas');
+
+        if (selectedStart && !selectedEnd) {
+            info.textContent = 'Inicio: ' + selectedStart + ' — hacé clic en la fecha de fin.';
+            btnGen.style.display = 'none';
+            btnLimpiar.style.display = 'inline-flex';
+        } else if (selectedStart && selectedEnd) {
+            var noches = calcularNoches(selectedStart, selectedEnd);
+            info.textContent = 'Inicio: ' + selectedStart + ' — Fin: ' + selectedEnd + ' (' + noches + ' noches)';
+            btnGen.style.display = 'inline-flex';
+            btnLimpiar.style.display = 'inline-flex';
+        } else {
+            info.textContent = 'Seleccioná una fecha de inicio y una de fin en el calendario.';
+            btnGen.style.display = 'none';
+            btnLimpiar.style.display = 'none';
+        }
+    }
+
+    function limpiarSeleccionFechas() {
+        selectedStart = null;
+        selectedEnd = null;
+        actualizarUI();
+    }
+
+    function generarPresupuestoDesdeCalendario() {
+        if (selectedStart && selectedEnd) {
+            abrirModalNuevo(selectedStart, selectedEnd);
+            // Opcional: limpiar la selección tras abrir el modal
+            limpiarSeleccionFechas();
+        }
+    }
+
+    function calcularNoches(start, end) {
+        var d1 = new Date(start + 'T00:00:00');
+        var d2 = new Date(end + 'T00:00:00');
+        var diff = (d2 - d1) / (1000 * 60 * 60 * 24);
+        return diff > 0 ? diff : 0;
     }
 
     function eventosPresupuestos() {
