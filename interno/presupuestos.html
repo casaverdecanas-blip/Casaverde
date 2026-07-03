@@ -172,7 +172,6 @@
 </head>
 <body>
 
-<!-- ── HEADER ──────────────────────────────────────────────── -->
 <header class="admin-header">
     <div class="admin-header__brand">
         <span class="material-icons">cottage</span>
@@ -190,13 +189,10 @@
     </div>
 </header>
 
-<!-- ── NAVEGACIÓN ──────────────────────────────────────────── -->
 <nav class="admin-nav" id="appNav"></nav>
 
-<!-- ── CONTENIDO ───────────────────────────────────────────── -->
 <main class="admin-content">
 
-    <!-- ── Calendario de presupuestos ─────────────────────── -->
     <div class="card" style="margin-bottom:var(--space-6);">
         <div class="card__header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:var(--space-3);">
             <h2 class="card__title">
@@ -215,7 +211,6 @@
         </div>
     </div>
 
-    <!-- ── Listado ─────────────────────────────────────────── -->
     <div class="card">
         <div class="card__header">
             <h2 class="card__title">
@@ -239,7 +234,6 @@
 
 </main>
 
-<!-- ── MODAL: Nuevo / Editar presupuesto ───────────────────── -->
 <div class="modal-overlay" id="modalPresupuesto" style="display:none;" onclick="cerrarModalPresupuesto(event)">
     <div class="modal" style="max-width:560px;">
         <div class="modal__header">
@@ -268,7 +262,6 @@
                 </div>
             </div>
 
-            <!-- Alerta de disponibilidad en tiempo real -->
             <div class="alerta-disponibilidad" id="alertaDisponibilidad">
                 <span class="material-icons">event_busy</span>
                 <span id="alertaDisponibilidadText"></span>
@@ -307,11 +300,19 @@
                     placeholder="Requerimientos especiales..."></textarea>
             </div>
 
+            <div class="form-group">
+                <label class="form-label">Moneda del presupuesto</label>
+                <select id="presupuestoMoneda" class="form-control" onchange="cambiarMonedaPresupuesto()">
+                    <option value="BRL">R$ — Real</option>
+                    <option value="USD">US$ — Dólar</option>
+                    <option value="UYU">$U — Peso uruguayo</option>
+                </select>
+            </div>
+
             <button class="btn btn-secondary" id="btnCalcular" style="width:100%;" onclick="calcular()">
                 <span class="material-icons">calculate</span> Calcular precio
             </button>
 
-            <!-- Resultado del cálculo -->
             <div class="precio-box" id="precioBox">
                 <div class="precio-linea"><span>🌙 Noches</span>     <span id="pNoches">—</span></div>
                 <div class="precio-linea"><span>🏠 Alojamiento</span><span id="pSubtotal">—</span></div>
@@ -327,9 +328,8 @@
                     </span>
                 </div>
 
-                <!-- Ajuste manual del total final (opcional) -->
                 <div id="edicionTotal" style="display:none;margin-top:var(--space-3);padding-top:var(--space-3);border-top:1px dashed rgba(45,90,39,0.3);">
-                    <label class="form-label" style="font-size:var(--text-sm);">Total final a cobrar al cliente (R$)</label>
+                    <label class="form-label" id="labelTotalFinalInput" style="font-size:var(--text-sm);">Total final a cobrar al cliente (R$)</label>
                     <div style="display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap;">
                         <input type="number" id="totalFinalInput" class="form-control" step="0.01" min="0"
                                style="max-width:160px;" oninput="actualizarTotalFinal()">
@@ -346,7 +346,6 @@
                 <span id="errorFormText"></span>
             </div>
 
-            <!-- Historial de cambios (solo en edición) -->
             <div id="histBloque" style="display:none;margin-top:var(--space-4);">
                 <button class="btn btn-ghost btn-sm" onclick="toggleHistorial()" style="padding-left:0;">
                     <span class="material-icons" style="font-size:16px;">history</span>
@@ -375,7 +374,6 @@
     </div>
 </div>
 
-<!-- ── MODAL: Registrar pago y confirmar ───────────────────── -->
 <div class="modal-overlay" id="modalOverlay" style="display:none;" onclick="cerrarModalPago(event)">
     <div class="modal" style="max-width:520px;">
         <div class="modal__header">
@@ -388,7 +386,6 @@
         <div class="modal__body">
             <input type="hidden" id="presupuestoId">
 
-            <!-- Resumen del presupuesto -->
             <div class="resumen-pago" id="resumenPago" style="font-size:var(--text-sm);line-height:1.7;background:var(--color-primary-light);border-radius:var(--radius-md);padding:var(--space-3);margin-bottom:var(--space-4);"></div>
 
             <div class="alert alert-success" style="margin-bottom:var(--space-4);">
@@ -396,7 +393,6 @@
                 El pago confirma la reserva automáticamente y bloquea el calendario.
             </div>
 
-            <!-- ⚠️ Alerta de conflicto (se muestra si hay solapamiento) -->
             <div class="alert alert-error" id="alertaConflictoModal" style="display:none; margin-bottom:var(--space-4);">
                 <span class="material-icons">event_busy</span>
                 <span id="alertaConflictoModalText"></span>
@@ -691,13 +687,19 @@
         }, 600);
     }
 
-    // Cambios en cabaña / fechas / huéspedes invalidan el cálculo vigente
-    ['cabanaSelect', 'checkIn', 'checkOut', 'adultos', 'ninos'].forEach(function(id) {
+    // Cambios en cabaña / fechas / huéspedes / moneda invalidan el cálculo vigente
+    ['cabanaSelect', 'checkIn', 'checkOut', 'adultos', 'ninos', 'presupuestoMoneda'].forEach(function(id) {
         document.getElementById(id).addEventListener('change', function() {
-            if (id !== 'adultos' && id !== 'ninos') verificarDisponibilidadLive();
+            if (id !== 'adultos' && id !== 'ninos' && id !== 'presupuestoMoneda') verificarDisponibilidadLive();
             invalidarCalculo();
         });
     });
+
+    window.cambiarMonedaPresupuesto = function() {
+        if (ultimoCalculo) {
+            pintarPrecio();
+        }
+    };
 
     function invalidarCalculo() {
         ultimoCalculo = null;
@@ -746,6 +748,7 @@
         document.getElementById('clienteEmail').value  = p.email    || '';
         document.getElementById('clienteTel').value    = p.telefono || '';
         document.getElementById('notas').value         = p.notas    || '';
+        document.getElementById('presupuestoMoneda').value = p.moneda || 'BRL';
 
         var esConf = p.estado === 'confirmado';
         document.getElementById('modalPresTitulo').textContent = esConf
@@ -765,7 +768,8 @@
             subtotal:   p.subtotalBRL || 0,
             limpieza:   p.costoLimpiezaBRL || 0,
             total:      totalCalc,
-            totalFinal: (typeof p.totalBRL === 'number') ? p.totalBRL : totalCalc,
+            totalFinal: typeof p.totalOriginal === 'number' ? p.totalOriginal : ((typeof p.totalBRL === 'number') ? p.totalBRL : totalCalc),
+            monedaActual: p.moneda || 'BRL',
             cabaId:     p.caba,
             checkIn:    p.checkIn,
             checkOut:   p.checkOut,
@@ -795,7 +799,7 @@
 
     function habilitarFormulario(habilitar) {
         ['cabanaSelect','checkIn','checkOut','adultos','ninos',
-         'clienteNombre','clienteEmail','clienteTel','notas'].forEach(function(id) {
+         'clienteNombre','clienteEmail','clienteTel','notas', 'presupuestoMoneda'].forEach(function(id) {
             document.getElementById(id).disabled = !habilitar;
         });
         document.getElementById('btnCalcular').style.display  = habilitar ? '' : 'none';
@@ -809,6 +813,7 @@
         });
         document.getElementById('adultos').value = 2;
         document.getElementById('ninos').value   = 0;
+        document.getElementById('presupuestoMoneda').value = 'BRL';
         if (cabanasCache.length) document.getElementById('cabanaSelect').value = cabanasCache[0].id;
         document.getElementById('errorForm').style.display            = 'none';
         document.getElementById('alertaDisponibilidad').style.display = 'none';
@@ -842,7 +847,6 @@
             return;
         }
 
-        // Blindaje: el cálculo debe devolver siempre números completos.
         if (!calc || typeof calc.subtotal !== 'number' || typeof calc.total !== 'number') {
             mostrarErrorForm('El cálculo devolvió un resultado incompleto. Revisá que la cabaña tenga tarifas configuradas en Contenido del sitio.');
             return;
@@ -854,24 +858,51 @@
         ultimoCalculo = Object.assign({}, calc, {
             cabaId: cabaId, checkIn: checkIn, checkOut: checkOut,
             adultos: adultos, ninos: ninos,
-            totalFinal: calc.total
+            totalFinal: null,
+            monedaActual: null
         });
         pintarPrecio();
     };
 
-    function pintarPrecio() {
+    async function pintarPrecio() {
         if (!ultimoCalculo) return;
+        var moneda = document.getElementById('presupuestoMoneda').value;
+
+        var subtotalDisp = ultimoCalculo.subtotal;
+        var limpiezaDisp = ultimoCalculo.limpieza;
+        var totalCalcDisp = ultimoCalculo.total;
+
+        if (moneda !== 'BRL') {
+            try {
+                var cot = await cargarCotizaciones();
+                if (cot && cot.rates) {
+                    subtotalDisp = convertir(ultimoCalculo.subtotal, 'BRL', moneda, cot.rates);
+                    limpiezaDisp = convertir(ultimoCalculo.limpieza, 'BRL', moneda, cot.rates);
+                    totalCalcDisp = convertir(ultimoCalculo.total, 'BRL', moneda, cot.rates);
+                }
+            } catch (e) {
+                console.error('Error al convertir moneda en presupuesto:', e);
+            }
+        }
+
+        if (ultimoCalculo.monedaActual !== moneda || ultimoCalculo.totalFinal === null) {
+            ultimoCalculo.totalFinal = totalCalcDisp;
+            ultimoCalculo.monedaActual = moneda;
+        }
+
         document.getElementById('pNoches').textContent   = ultimoCalculo.noches;
-        document.getElementById('pSubtotal').textContent = fmtMonto(ultimoCalculo.subtotal, 'BRL');
-        document.getElementById('pLimpieza').textContent = fmtMonto(ultimoCalculo.limpieza, 'BRL');
-        document.getElementById('pTotal').textContent    = fmtMonto(ultimoCalculo.totalFinal, 'BRL');
+        document.getElementById('pSubtotal').textContent = fmtMonto(subtotalDisp, moneda);
+        document.getElementById('pLimpieza').textContent = fmtMonto(limpiezaDisp, moneda);
+        document.getElementById('pTotal').textContent    = fmtMonto(ultimoCalculo.totalFinal, moneda);
         document.getElementById('precioBox').style.display = 'block';
 
+        document.getElementById('labelTotalFinalInput').textContent = 'Total final a cobrar al cliente (' + (SIMBOLO[moneda] || 'R$') + ')';
         document.getElementById('edicionTotal').style.display = 'none';
         document.getElementById('totalFinalInput').value      = ultimoCalculo.totalFinal.toFixed(2);
         document.getElementById('indicadorAjuste').innerHTML  = '';
-        if (Math.abs(ultimoCalculo.totalFinal - ultimoCalculo.total) >= 0.01) {
-            // Ya venía con ajuste guardado: mostrar el detalle abierto
+        
+        var dif = totalCalcDisp - ultimoCalculo.totalFinal;
+        if (Math.abs(dif) >= 0.01) {
             document.getElementById('edicionTotal').style.display = 'block';
             actualizarTotalFinal();
         }
@@ -890,8 +921,9 @@
         }
     };
 
-    window.actualizarTotalFinal = function() {
+    window.actualizarTotalFinal = async function() {
         if (!ultimoCalculo) return;
+        var moneda = document.getElementById('presupuestoMoneda').value;
         var val = parseFloat(document.getElementById('totalFinalInput').value);
         var ind = document.getElementById('indicadorAjuste');
 
@@ -901,23 +933,44 @@
         }
 
         ultimoCalculo.totalFinal = Math.round(val * 100) / 100;
-        var dif = ultimoCalculo.total - ultimoCalculo.totalFinal;
-        var pct = ultimoCalculo.total > 0 ? Math.abs(dif / ultimoCalculo.total * 100).toFixed(1) : '0';
+        
+        var totalCalcDisp = ultimoCalculo.total;
+        if (moneda !== 'BRL') {
+            try {
+                var cot = await cargarCotizaciones();
+                if (cot && cot.rates) {
+                    totalCalcDisp = convertir(ultimoCalculo.total, 'BRL', moneda, cot.rates);
+                }
+            } catch(e) {}
+        }
 
-        document.getElementById('pTotal').textContent = fmtMonto(ultimoCalculo.totalFinal, 'BRL');
+        document.getElementById('pTotal').textContent = fmtMonto(ultimoCalculo.totalFinal, moneda);
+
+        var dif = totalCalcDisp - ultimoCalculo.totalFinal;
+        var pct = totalCalcDisp > 0 ? Math.abs(dif / totalCalcDisp * 100).toFixed(1) : '0';
 
         if (Math.abs(dif) < 0.01) {
             ind.innerHTML = '<span style="color:var(--color-text-muted);">Sin ajuste — igual al precio calculado.</span>';
         } else if (dif > 0) {
-            ind.innerHTML = '<span style="color:var(--color-success);">↓ Descuento ' + fmtMonto(dif, 'BRL') + ' (' + pct + '%)</span>';
+            ind.innerHTML = '<span style="color:var(--color-success);">↓ Descuento ' + fmtMonto(dif, moneda) + ' (' + pct + '%)</span>';
         } else {
-            ind.innerHTML = '<span style="color:#e07b00;">↑ Adicional ' + fmtMonto(Math.abs(dif), 'BRL') + ' (' + pct + '%)</span>';
+            ind.innerHTML = '<span style="color:#e07b00;">↑ Adicional ' + fmtMonto(Math.abs(dif), moneda) + ' (' + pct + '%)</span>';
         }
     };
 
-    window.restaurarTotal = function() {
+    window.restaurarTotal = async function() {
         if (!ultimoCalculo) return;
-        document.getElementById('totalFinalInput').value = ultimoCalculo.total.toFixed(2);
+        var moneda = document.getElementById('presupuestoMoneda').value;
+        var totalCalcDisp = ultimoCalculo.total;
+        if (moneda !== 'BRL') {
+            try {
+                var cot = await cargarCotizaciones();
+                if (cot && cot.rates) {
+                    totalCalcDisp = convertir(ultimoCalculo.total, 'BRL', moneda, cot.rates);
+                }
+            } catch(e) {}
+        }
+        document.getElementById('totalFinalInput').value = totalCalcDisp.toFixed(2);
         actualizarTotalFinal();
     };
 
@@ -969,9 +1022,26 @@
         var text = document.getElementById('btnGuardarText');
         btn.disabled = true; text.textContent = 'Guardando...';
 
+        var moneda = document.getElementById('presupuestoMoneda').value;
         var totalFinal = (typeof ultimoCalculo.totalFinal === 'number' && !isNaN(ultimoCalculo.totalFinal))
             ? ultimoCalculo.totalFinal
             : ultimoCalculo.total;
+
+        var totalFinalBRL = ultimoCalculo.total;
+        var totalOriginal = totalFinal;
+
+        if (moneda === 'BRL') {
+            totalFinalBRL = totalFinal;
+        } else {
+            try {
+                var cot = await cargarCotizaciones();
+                if (cot && cot.rates) {
+                    totalFinalBRL = Math.round(convertir(totalFinal, moneda, 'BRL', cot.rates) * 100) / 100;
+                }
+            } catch(e) {
+                console.error('Error al convertir total a BRL para guardar:', e);
+            }
+        }
 
         var datos = {
             caba:              ultimoCalculo.cabaId,
@@ -980,9 +1050,11 @@
             adultos:           ultimoCalculo.adultos,
             ninos:             ultimoCalculo.ninos,
             huespedes:         ultimoCalculo.adultos + ultimoCalculo.ninos,
-            totalBRL:          totalFinal,
+            moneda:            moneda,
+            totalOriginal:     totalOriginal,
+            totalBRL:          totalFinalBRL,
             totalCalculadoBRL: ultimoCalculo.total,
-            descuentoAplicado: Math.round((ultimoCalculo.total - totalFinal) * 100) / 100,
+            descuentoAplicado: Math.round((ultimoCalculo.total - totalFinalBRL) * 100) / 100,
             subtotalBRL:       ultimoCalculo.subtotal,
             costoLimpiezaBRL:  ultimoCalculo.limpieza,
             noches:            ultimoCalculo.noches,
@@ -1007,7 +1079,8 @@
                 datos.creadoEn  = firebase.firestore.FieldValue.serverTimestamp();
                 datos.creadoPor = user.uid;
                 datos.historial = [entradaHistorial('Creación',
-                    'Total ' + fmtMonto(totalFinal, 'BRL')
+                    'Total ' + fmtMonto(totalOriginal, moneda)
+                    + (moneda !== 'BRL' ? ' (≈ ' + fmtMonto(totalFinalBRL, 'BRL') + ')' : '')
                     + (Math.abs(datos.descuentoAplicado) >= 0.01
                         ? ' (calculado ' + fmtMonto(ultimoCalculo.total, 'BRL') + ')' : ''))];
                 await db.collection('presupuestos').add(datos);
@@ -1094,6 +1167,9 @@
             var cabana = cabanaPorId(p.caba);
             var esConf = p.estado === 'confirmado';
 
+            var displayMoneda = p.moneda || 'BRL';
+            var displayTotal = typeof p.totalOriginal === 'number' ? p.totalOriginal : p.totalBRL;
+
             var conflictoBadge = p._tieneConflicto
                 ? '<div class="badge-conflicto"><span class="material-icons" style="font-size:11px;">event_busy</span>Fechas ocupadas</div>'
                 : '';
@@ -1125,7 +1201,8 @@
                         + conflictoBadge
                     + '</div>'
                     + '<div style="text-align:right;">'
-                        + '<div class="pres-total">' + fmtMonto(p.totalBRL, 'BRL') + '</div>'
+                        + '<div class="pres-total">' + fmtMonto(displayTotal, displayMoneda) + '</div>'
+                        + (displayMoneda !== 'BRL' ? '<div style="font-size:var(--text-xs);color:var(--color-text-muted);">≈ ' + fmtMonto(p.totalBRL, 'BRL') + '</div>' : '')
                         + ajustado
                         + '<span class="badge ' + (esConf ? 'badge-confirmada' : 'badge-pendiente') + '" style="margin-top:4px;display:inline-block;">'
                             + (esConf ? 'Confirmado' : 'Pendiente')
@@ -1231,25 +1308,30 @@
         var p = presupuestosCache.find(function(x) { return x.id === id; });
         if (!p) return;
 
+        var displayMoneda = p.moneda || 'BRL';
+        var displayTotal = typeof p.totalOriginal === 'number' ? p.totalOriginal : p.totalBRL;
+
         document.getElementById('presupuestoId').value = id;
-        document.getElementById('montoPago').value     = (p.totalBRL || 0).toFixed(2);
-        document.getElementById('monedaPago').value    = 'BRL';
+        document.getElementById('montoPago').value     = displayTotal.toFixed(2);
+        document.getElementById('monedaPago').value    = displayMoneda;
         document.getElementById('metodoPago').value    = 'pix';
         document.getElementById('tipoPago').value      = 'senia';
         document.getElementById('obsPago').value       = '';
         document.getElementById('equivalenciaBRL').textContent        = '';
         document.getElementById('errorModal').style.display           = 'none';
         document.getElementById('alertaConflictoModal').style.display = 'none';
-        renderCuentasSelect('BRL');
+        
+        renderCuentasSelect(displayMoneda);
 
         var cabana = cabanaPorId(p.caba);
         document.getElementById('resumenPago').innerHTML = '<strong>Cliente:</strong> ' + escapeHtml(p.clienteNombre || ' ') + '<br>'
             + '<strong>Cabaña:</strong> ' + escapeHtml(nombreCabana(cabana) || ('Cabaña ' + p.caba)) + '<br>'
             + '<strong>Fechas:</strong> ' + p.checkIn + ' → ' + p.checkOut + ' (' + p.noches + ' noches)<br>'
             + '<strong>Huéspedes:</strong> ' + p.adultos + ' adulto(s)' + (p.ninos ? ', ' + p.ninos + ' niño(s)' : '') + '<br>'
-            + '<strong>Total:</strong> ' + fmtMonto(p.totalBRL, 'BRL');
+            + '<strong>Total:</strong> ' + fmtMonto(displayTotal, displayMoneda) + (displayMoneda !== 'BRL' ? ' (≈ ' + fmtMonto(p.totalBRL, 'BRL') + ')' : '');
 
         document.getElementById('modalOverlay').style.display = 'flex';
+        await actualizarEquivalencia();
 
         // Verificar disponibilidad al abrir el modal (consulta fresca)
         if (p.checkIn && p.checkOut && p.caba) {
