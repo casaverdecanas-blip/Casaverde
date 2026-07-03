@@ -423,84 +423,100 @@ function cerrarSesion() {
 }
 
 
-// ── MOTOR DE PRECIOS Y DISPONIBILIDAD (base v4.2 — revisar con presupuestos) ─
-function calcularPrecio(cabanaId, checkingStr, checkoutStr, callback) {
-    if (!cabanaId || !checkingStr || !checkoutStr) return callback(0);
+// ── MOTOR DE PRECIOS Y DISPONIBILIDAD ────────────────────────────────────────
+//
+//  calcularPrecio(cabana, checkIn, checkOut, adultos, ninos)
+//
+//  Cálculo 100% LOCAL — no toca la red. Usa las tarifas del documento de la
+//  cabaña (cabanas/{id}.tarifas): precioBase, precioExtraPersona,
+//  precioLimpieza e intervalos por temporada. Devuelve SIEMPRE un objeto
+//  completo { noches, subtotal, limpieza, total } con números válidos,
+//  aunque la cabaña no tenga tarifas configuradas (en ese caso: ceros).
+//
+//  Firma esperada por presupuestos.html, calendario.html y reservas.html:
+//    var r = CVC.calcularPrecio(cabanaObj, 'YYYY-MM-DD', 'YYYY-MM-DD', 2, 1);
+//
+function calcularPrecio(cabana, checkIn, checkOut, adultos, ninos) {
+    const vacio = { noches: 0, subtotal: 0, limpieza: 0, total: 0 };
+    if (!cabana || !checkIn || !checkOut || checkOut <= checkIn) return vacio;
 
-    const p1 = db.collection('config_precios').doc(String(cabanaId)).get();
-    const p2 = db.collection('config_precios').doc('global').get();
+    const tarifas       = cabana.tarifas || {};
+    const capacidadBase = (cabana.capacidad && cabana.capacidad.base) || 2;
+    const personasExtra = Math.max(0, ((adultos || 0) + (ninos || 0)) - capacidadBase);
 
-    Promise.all([p1, p2]).then(function(results) {
-        const resCabana = results[0].exists ? results[0].data() : {};
-        const resGlobal = results[1].exists ? results[1].data() : {};
+    let subtotal = 0, noches = 0;
+    let fecha    = new Date(checkIn  + 'T12:00:00');
+    const fin    = new Date(checkOut + 'T12:00:00');
+    if (isNaN(fecha.getTime()) || isNaN(fin.getTime())) return vacio;
 
-        const ini = new Date(checkingStr + 'T12:00:00');
-        const fin = new Date(checkoutStr + 'T12:00:00');
-        let total = 0;
+    while (fecha < fin) {
+        const fechaStr  = fecha.toISOString().split('T')[0];
+        const intervalo = (tarifas.intervalos || []).find(function(i) {
+            return i.desde <= fechaStr && i.hasta >= fechaStr;
+        });
+        const precioNoche = Number(intervalo ? intervalo.precioNoche : tarifas.precioBase)         || 0;
+        const precioExtra = Number(intervalo ? intervalo.precioExtra : tarifas.precioExtraPersona) || 0;
+        subtotal += precioNoche + (precioExtra * personasExtra);
+        fecha.setDate(fecha.getDate() + 1);
+        noches++;
+    }
 
-        for (let d = new Date(ini); d < fin; d.setDate(d.getDate() + 1)) {
-            const yyyy = d.getFullYear();
-            const mm   = String(d.getMonth() + 1).padStart(2, '0');
-            const dd   = String(d.getDate()).padStart(2, '0');
-            const iso  = yyyy + '-' + mm + '-' + dd;
+    const limpieza = Number(tarifas.precioLimpieza) || 0;
+    return { noches: noches, subtotal: subtotal, limpieza: limpieza, total: subtotal + limpieza };
+}
 
-            if (resCabana.fechasEspecificas && resCabana.fechasEspecificas[iso] !== undefined) {
-                total += Number(resCabana.fechasEspecificas[iso]);
-            } else if (resGlobal.fechasEspecificas && resGlobal.fechasEspecificas[iso] !== undefined) {
-                total += Number(resGlobal.fechasEspecificas[iso]);
-            } else {
-                const diaSemana = d.getDay();
-                if (diaSemana === 5 || diaSemana === 6) {
-                    total += Number(resCabana.precioFinde || resGlobal.precioFinde || 0);
-                } else {
-                    total += Number(resCabana.precioBase || resGlobal.precioBase || 0);
+//  verificarDisponibilidadCabana(cabaId, checkIn, checkOut, editandoId?)
+//
+//  Consulta de red (Firestore) — devuelve una PROMESA que resuelve a
+//  { disponible: boolean, conflicto: objeto|null }. Solo bloquean los
+//  estados de ESTADOS_BLOQUEANTES. Si estamos editando una reserva,
+//  pasarle su id en editandoId para excluirla del chequeo.
+//
+async function verificarDisponibilidadCabana(cabaId, checkIn, checkOut, editandoId) {
+    const checkInDate  = new Date(checkIn  + 'T12:00:00');
+    const checkOutDate = new Date(checkOut + 'T12:00:00');
+
+    const snap = await db.collection('reservas')
+        .where('caba',   '==', Number(cabaId))
+        .where('estado', 'in', ESTADOS_BLOQUEANTES)
+        .get();
+
+    for (const doc of snap.docs) {
+        if (editandoId && doc.id === editandoId) continue;
+
+        const r = doc.data();
+        if (!r.checkIn || !r.checkOut) continue;
+
+        const rIn  = r.checkIn.toDate  ? r.checkIn.toDate()  : new Date(r.checkIn);
+        const rOut = r.checkOut.toDate ? r.checkOut.toDate() : new Date(r.checkOut);
+
+        // Hay solapamiento si: nuevaEntrada < existenteSalida Y nuevaSalida > existenteEntrada
+        if (checkInDate < rOut && checkOutDate > rIn) {
+            return {
+                disponible: false,
+                conflicto: {
+                    id:       doc.id,
+                    nombre:   r.nombre || 'Sin nombre',
+                    checkIn:  rIn.toISOString().slice(0, 10),
+                    checkOut: rOut.toISOString().slice(0, 10),
+                    estado:   r.estado
                 }
-            }
+            };
         }
-        callback(total);
-    }).catch(function(e) {
-        console.error('Error calculando precio:', e);
-        callback(0);
-    });
+    }
+
+    return { disponible: true, conflicto: null };
 }
 
-function verificarDisponibilidadCabana(cabanaId, checkinStr, checkoutStr, reservaIdEditar, callback) {
-    const ini = new Date(checkinStr + 'T00:00:00');
-    const fin = new Date(checkoutStr + 'T23:59:59');
-
-    db.collection('reservas')
-      .where('caba', '==', Number(cabanaId))
-      .where('estado', 'in', ESTADOS_BLOQUEANTES)
-      .get()
-      .then(function(snap) {
-          let disponible = true;
-          let reservaConflictiva = null;
-
-          snap.forEach(function(doc) {
-              if (reservaIdEditar && doc.id === reservaIdEditar) return;
-              const data = doc.data();
-              if (!data.checkIn || !data.checkOut) return;
-
-              const rIni = data.checkIn.toDate();
-              const rFin = data.checkOut.toDate();
-
-              if (ini < rFin && fin > rIni) {
-                  disponible = false;
-                  reservaConflictiva = Object.assign({ id: doc.id }, data);
-              }
-          });
-          callback(disponible, reservaConflictiva);
-      })
-      .catch(function(err) {
-          console.error('Error verificando disponibilidad:', err);
-          callback(false, null);
-      });
-}
-
-function mensajeConflicto(reserva) {
-    if (!reserva) return '';
-    return 'Conflicto con Reserva de ' + (reserva.nombre || 'Huésped') +
-           ' (' + formatFecha(reserva.checkIn) + ' al ' + formatFecha(reserva.checkOut) + ').';
+// Texto amigable cuando hay conflicto de fechas
+function mensajeConflicto(conflicto) {
+    if (!conflicto) return '⚠️ Fechas no disponibles — ya existe una reserva en ese rango.';
+    const etiqueta = (ESTADOS_RESERVA[conflicto.estado] && ESTADOS_RESERVA[conflicto.estado].label) || conflicto.estado;
+    const ci = String(conflicto.checkIn  || '').split('-').reverse().join('/');
+    const co = String(conflicto.checkOut || '').split('-').reverse().join('/');
+    return '⚠️ Fechas no disponibles — ya existe una reserva ('
+        + etiqueta + ') del ' + ci + ' al ' + co
+        + ' para ' + (conflicto.nombre !== 'Sin nombre' ? conflicto.nombre : 'otro huésped') + '.';
 }
 
 
@@ -855,10 +871,40 @@ function alAnularReserva(reservaId) {
 }
 
 
-// ── SINCRONIZADOR DE CANALES ─────────────────────────────────────────────────
-function sincronizarDisponibilidad() {
-    console.log('Sincronizando iCal / Airbnb / Booking Channels...');
-    return Promise.resolve({ procesados: 0, nuevos: 0 });
+// ── SINCRONIZAR DISPONIBILIDAD PÚBLICA ───────────────────────────────────────
+//
+//  Actualiza la colección `disponibilidad` que lee el sitio público.
+//  Solo bloquean las reservas CONFIRMADAS y AIRBNB_ACTIVA; los estados
+//  libres (anulada, finalizada, cancelada, pendiente) borran el documento.
+//  Llamar SIEMPRE al crear, confirmar, anular o finalizar una reserva:
+//    CVC.sincronizarDisponibilidad(reservaId, reservaData)
+//
+async function sincronizarDisponibilidad(reservaId, reservaData) {
+    if (!reservaId || !reservaData) return { procesados: 0, nuevos: 0 };
+    try {
+        const estado     = reservaData.estado || 'pendiente';
+        const bloqueante = ESTADOS_BLOQUEANTES.includes(estado);
+        const libre      = ['anulada', 'finalizada', 'airbnb_cancelada', 'pendiente'].includes(estado);
+
+        if (libre) {
+            await db.collection('disponibilidad').doc(reservaId).delete();
+            return;
+        }
+
+        if (bloqueante) {
+            await db.collection('disponibilidad').doc(reservaId).set({
+                caba:          reservaData.caba,
+                checkIn:       reservaData.checkIn,
+                checkOut:      reservaData.checkOut,
+                estado:        estado,
+                bloqueante:    true,
+                origen:        reservaData.origen || 'directa',
+                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+    } catch (e) {
+        console.warn('sincronizarDisponibilidad:', e.message);
+    }
 }
 
 // PENDIENTE v4.3: la sincronización real con Google Calendar se restaurará

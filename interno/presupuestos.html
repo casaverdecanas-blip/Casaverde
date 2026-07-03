@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Presupuestos · Casa Verde Canas</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="design-system.css">
     <style>
         /* ── FIX: Restaurar spinner nativo para inputs tipo number ── */
@@ -236,7 +237,29 @@
                 <div class="precio-linea"><span>🌙 Noches</span>     <span id="pNoches">—</span></div>
                 <div class="precio-linea"><span>🏠 Alojamiento</span><span id="pSubtotal">—</span></div>
                 <div class="precio-linea"><span>🧹 Limpieza</span>   <span id="pLimpieza">—</span></div>
-                <div class="precio-total"><span>💰 Total</span>      <span id="pTotal">—</span></div>
+                <div class="precio-total">
+                    <span>💰 Total</span>
+                    <span style="display:flex;align-items:center;gap:8px;">
+                        <span id="pTotal">—</span>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="toggleEdicionTotal()"
+                                title="Ajustar el total final" style="padding:2px 6px;min-width:0;">
+                            <span class="material-icons" style="font-size:18px;">edit</span>
+                        </button>
+                    </span>
+                </div>
+
+                <!-- Ajuste manual del total final (opcional) -->
+                <div id="edicionTotal" style="display:none;margin-top:var(--space-3);padding-top:var(--space-3);border-top:1px dashed rgba(45,90,39,0.3);">
+                    <label class="form-label" style="font-size:var(--text-sm);">Total final a cobrar al cliente (R$)</label>
+                    <div style="display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap;">
+                        <input type="number" id="totalFinalInput" class="form-control" step="0.01" min="0"
+                               style="max-width:160px;" oninput="actualizarTotalFinal()">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="restaurarTotal()">
+                            <span class="material-icons" style="font-size:16px;">restart_alt</span> Restaurar
+                        </button>
+                    </div>
+                    <div id="indicadorAjuste" style="font-size:var(--text-sm);font-weight:700;margin-top:var(--space-2);"></div>
+                </div>
             </div>
 
             <div class="alert alert-error" id="errorForm" style="display:none;">
@@ -421,7 +444,7 @@
         renderPresupuestos();
 
     } catch (e) {
-        showError('#presupuestosList', 'Error al cargar datos', e.message, function() { location.reload(); })();
+        showError('#presupuestosList', 'Error al cargar datos', e.message, function() { location.reload(); });
     }
 
     //    Verificación de disponibilidad en tiempo real          
@@ -476,14 +499,87 @@
         var cabana = cabanasCache.find(function(c) { return c.id == cabaId; });
         if (!cabana) { mostrarErrorForm('Seleccioná una cabaña válida.'); return; }
 
-        var calc = calcularPrecio(cabana, checkIn, checkOut, adultos, ninos);
-        ultimoCalculo = Object.assign({}, calc, { cabaId: cabaId, checkIn: checkIn, checkOut: checkOut, adultos: adultos, ninos: ninos });
+        var calc;
+        try {
+            calc = calcularPrecio(cabana, checkIn, checkOut, adultos, ninos);
+        } catch (e) {
+            console.error('calcularPrecio:', e);
+            mostrarErrorForm('No se pudo calcular el precio: ' + e.message);
+            return;
+        }
+
+        // Blindaje: el cálculo debe devolver siempre números completos.
+        if (!calc || typeof calc.subtotal !== 'number' || typeof calc.total !== 'number') {
+            mostrarErrorForm('El cálculo devolvió un resultado incompleto. Revisá que la cabaña tenga tarifas configuradas en Contenido del sitio.');
+            return;
+        }
+        if (calc.total === 0) {
+            mostrarErrorForm('El precio calculado es R$ 0,00 — la cabaña no tiene tarifas cargadas para esas fechas. Configuralas en Contenido del sitio.');
+        }
+
+        ultimoCalculo = Object.assign({}, calc, {
+            cabaId: cabaId, checkIn: checkIn, checkOut: checkOut,
+            adultos: adultos, ninos: ninos,
+            totalFinal: calc.total   // arranca igual al calculado; se puede ajustar con el ✏️
+        });
 
         document.getElementById('pNoches').textContent   = ultimoCalculo.noches;
         document.getElementById('pSubtotal').textContent = "R$ " + ultimoCalculo.subtotal.toLocaleString('pt-BR',{minimumFractionDigits:2});
         document.getElementById('pLimpieza').textContent = "R$ " + ultimoCalculo.limpieza.toLocaleString('pt-BR',{minimumFractionDigits:2});
         document.getElementById('pTotal').textContent    = "R$ " + ultimoCalculo.total.toLocaleString('pt-BR',{minimumFractionDigits:2});
         document.getElementById('precioBox').style.display = 'block';
+
+        // Reset del ajuste manual con cada nuevo cálculo
+        document.getElementById('edicionTotal').style.display = 'none';
+        document.getElementById('totalFinalInput').value      = ultimoCalculo.total.toFixed(2);
+        document.getElementById('indicadorAjuste').innerHTML  = '';
+    };
+
+    //    Ajuste manual del total final                          
+    window.toggleEdicionTotal = function() {
+        if (!ultimoCalculo) return;
+        var box = document.getElementById('edicionTotal');
+        var abierto = box.style.display !== 'none';
+        box.style.display = abierto ? 'none' : 'block';
+        if (!abierto) {
+            document.getElementById('totalFinalInput').value = (ultimoCalculo.totalFinal != null ? ultimoCalculo.totalFinal : ultimoCalculo.total).toFixed(2);
+            actualizarTotalFinal();
+        }
+    };
+
+    window.actualizarTotalFinal = function() {
+        if (!ultimoCalculo) return;
+        var val = parseFloat(document.getElementById('totalFinalInput').value);
+        var ind = document.getElementById('indicadorAjuste');
+
+        if (isNaN(val) || val < 0) {
+            ind.innerHTML = '<span style="color:var(--color-danger);">Ingresá un monto válido.</span>';
+            return;
+        }
+
+        ultimoCalculo.totalFinal = Math.round(val * 100) / 100;
+        var dif = ultimoCalculo.total - ultimoCalculo.totalFinal;
+        var pct = ultimoCalculo.total > 0 ? Math.abs(dif / ultimoCalculo.total * 100).toFixed(1) : '0';
+
+        // Actualizar el total visible arriba
+        document.getElementById('pTotal').textContent =
+            "R$ " + ultimoCalculo.totalFinal.toLocaleString('pt-BR',{minimumFractionDigits:2});
+
+        if (Math.abs(dif) < 0.01) {
+            ind.innerHTML = '<span style="color:var(--color-text-muted);">Sin ajuste — igual al precio calculado.</span>';
+        } else if (dif > 0) {
+            ind.innerHTML = '<span style="color:var(--color-success);">↓ Descuento R$ '
+                + dif.toLocaleString('pt-BR',{minimumFractionDigits:2}) + ' (' + pct + '%)</span>';
+        } else {
+            ind.innerHTML = '<span style="color:#e07b00;">↑ Adicional R$ '
+                + Math.abs(dif).toLocaleString('pt-BR',{minimumFractionDigits:2}) + ' (' + pct + '%)</span>';
+        }
+    };
+
+    window.restaurarTotal = function() {
+        if (!ultimoCalculo) return;
+        document.getElementById('totalFinalInput').value = ultimoCalculo.total.toFixed(2);
+        actualizarTotalFinal();
     };
 
     //    Guardar presupuesto                                    
@@ -496,6 +592,10 @@
         btn.disabled = true; text.textContent = 'Guardando...';
 
         try {
+            var totalFinal = (typeof ultimoCalculo.totalFinal === 'number' && !isNaN(ultimoCalculo.totalFinal))
+                ? ultimoCalculo.totalFinal
+                : ultimoCalculo.total;
+
             var doc = await db.collection('presupuestos').add({
                 caba:             ultimoCalculo.cabaId,
                 checkIn:          ultimoCalculo.checkIn,
@@ -503,7 +603,9 @@
                 adultos:          ultimoCalculo.adultos,
                 ninos:            ultimoCalculo.ninos,
                 huespedes:        ultimoCalculo.adultos + ultimoCalculo.ninos,
-                totalBRL:         ultimoCalculo.total,
+                totalBRL:         totalFinal,                                   // lo que ve y paga el cliente
+                totalCalculadoBRL: ultimoCalculo.total,                         // referencia: precio según tarifas
+                descuentoAplicado: Math.round((ultimoCalculo.total - totalFinal) * 100) / 100, // + = descuento, − = adicional
                 subtotalBRL:      ultimoCalculo.subtotal,
                 costoLimpiezaBRL: ultimoCalculo.limpieza,
                 noches:           ultimoCalculo.noches,
@@ -516,7 +618,16 @@
                 creadoPor:        user.uid
             });
 
-            presupuestosCache.unshift(Object.assign({ id: doc.id, estado: 'pendiente', clienteNombre: document.getElementById('clienteNombre').value.trim() || 'Sin nombre' }, ultimoCalculo));
+            presupuestosCache.unshift(Object.assign({
+                id: doc.id,
+                estado: 'pendiente',
+                clienteNombre: document.getElementById('clienteNombre').value.trim() || 'Sin nombre',
+                totalBRL: totalFinal,
+                totalCalculadoBRL: ultimoCalculo.total,
+                subtotalBRL: ultimoCalculo.subtotal,
+                costoLimpiezaBRL: ultimoCalculo.limpieza,
+                caba: ultimoCalculo.cabaId
+            }, ultimoCalculo));
 
             showToast('Presupuesto guardado.', 'success');
 
@@ -580,6 +691,12 @@
                     + '</div>'
                     + '<div style="text-align:right;">'
                         + '<div class="pres-total">R$ ' + (p.totalBRL||0).toLocaleString('pt-BR',{minimumFractionDigits:2}) + '</div>'
+                        + (p.totalCalculadoBRL != null && Math.abs((p.totalCalculadoBRL||0) - (p.totalBRL||0)) >= 0.01
+                            ? '<div style="font-size:var(--text-xs);color:var(--color-text-muted);">'
+                                + ((p.totalCalculadoBRL||0) > (p.totalBRL||0) ? '↓ Ajustado' : '↑ Ajustado')
+                                + ' · calc. R$ ' + (p.totalCalculadoBRL||0).toLocaleString('pt-BR',{minimumFractionDigits:2})
+                              + '</div>'
+                            : '')
                         + '<span class="badge ' + (esConf ? 'badge-confirmada' : 'badge-pendiente') + '" style="margin-top:4px;display:inline-block;">'
                             + (esConf ? 'Confirmado' : 'Pendiente')
                         + '</span>'
