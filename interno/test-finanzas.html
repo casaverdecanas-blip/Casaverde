@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verificación Fase 1 · Flujo unificado · Casa Verde Canas</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
+        .kpi { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); text-align: center; }
+        .kpi .v { font-size: var(--text-lg); font-weight: 800; }
+        .kpi .l { font-size: var(--text-xs); color: var(--color-text-muted); }
+        .kpi.ing .v { color: var(--color-success); }
+        .kpi.egr .v { color: var(--color-danger); }
+        .tabla { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
+        .tabla th, .tabla td { border-bottom: 1px solid var(--color-border-light); padding: 6px 8px; text-align: left; }
+        .tabla th { background: var(--color-bg); }
+        .mas { color: var(--color-success); font-weight: 700; }
+        .menos { color: var(--color-danger); font-weight: 700; }
+        .pend { background: #fef3e2; color: #b45309; border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 700; }
+        .ok-chip { background: #e6f4ea; color: #137333; border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 700; }
+        .scroll-x { overflow-x: auto; }
+    </style>
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">account_tree</span>
+        Fase 1 — Flujo unificado (verificación)
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span><span id="userName">—</span></div>
+        <button class="btn-logout" onclick="window.location.href='dashboard.html'">
+            <span class="material-icons">arrow_back</span> Volver
+        </button>
+    </div>
+</header>
+
+<main class="admin-content">
+
+    <div class="alert alert-info" style="margin-bottom:var(--space-4);">
+        <span class="material-icons">science</span>
+        Página de verificación del cimiento <code>finanzas-core.js</code>. Solo lee — no toca nada.
+        Si estos números te cierran contra la realidad, la Fase 2 (la página Dinero) se construye sobre esto.
+    </div>
+
+    <div id="contenido">
+        <div class="loading-state"><div class="spinner"></div> Unificando el flujo…</div>
+    </div>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script src="finanzas-core.js"></script>
+<script>
+(async function() {
+    var { user, userData } = await CVC.verificarAuth(['admin']);
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+
+    var escapeHtml = CVC.escapeHtml;
+
+    try {
+        var libro = await FIN.cargarTodo();
+        var eventosFlujo = libro.eventos.filter(FIN.enFlujo);
+        var tot = FIN.totales(libro.eventos);
+        var saldos = FIN.saldosTodos(libro.cuentas, libro.eventos);
+        var pend = libro.pendientes;
+
+        var html = '';
+
+        // ── Totales globales ─────────────────────────────────
+        html += '<div class="card" style="margin-bottom:var(--space-4);">'
+            + '<div class="card__header"><h2 class="card__title"><span class="material-icons">public</span> Totales globales (todo el historial, equivalente R$)</h2></div>'
+            + '<div class="kpi-grid">'
+            + '<div class="kpi ing"><div class="v">' + FIN.fmtBRL(tot.ingresosBRL) + '</div><div class="l">Entró</div></div>'
+            + '<div class="kpi egr"><div class="v">' + FIN.fmtBRL(tot.egresosBRL) + '</div><div class="l">Salió</div></div>'
+            + '<div class="kpi"><div class="v">' + FIN.fmtBRL(tot.balanceBRL) + '</div><div class="l">Balance</div></div>'
+            + '<div class="kpi"><div class="v">' + eventosFlujo.length + '</div><div class="l">Eventos de dinero</div></div>'
+            + '<div class="kpi"><div class="v">' + libro.movimientos.length + '</div><div class="l">Movs. de extracto (verifican, no suman)</div></div>'
+            + '</div>'
+            + '<div style="font-size:var(--text-xs);color:var(--color-text-muted);">Por moneda: '
+            + Object.keys(tot.porMoneda).map(function(m) {
+                var x = tot.porMoneda[m];
+                return m + ' (+' + x.ingresos.toLocaleString('pt-BR') + ' / −' + x.egresos.toLocaleString('pt-BR') + ')';
+              }).join(' · ')
+            + (tot.sinEquivalente ? ' · <span class="pend">' + tot.sinEquivalente + ' sin equivalente R$</span>' : '')
+            + '</div></div>';
+
+        // ── Saldos por cuenta (flujo define, extracto verifica) ─
+        html += '<div class="card" style="margin-bottom:var(--space-4);">'
+            + '<div class="card__header"><h2 class="card__title"><span class="material-icons">account_balance</span> Saldos por flujo + verificación contra extracto</h2></div>'
+            + '<div class="scroll-x"><table class="tabla">'
+            + '<tr><th>Cuenta</th><th>Saldo inicial</th><th>Saldo por flujo</th><th>Eventos</th><th>Extracto</th><th>Diferencia flujo↔extracto</th></tr>'
+            + libro.cuentas.map(function(c) {
+                var s = saldos[c.id];
+                var v = FIN.verificacionExtracto(c, libro.eventos, libro.movimientos);
+                return '<tr>'
+                    + '<td><strong>' + escapeHtml(c.nombre || c.id) + '</strong> (' + (c.moneda || 'BRL') + ')'
+                        + (c.activa === false ? ' <span class="pend">inactiva</span>' : '') + '</td>'
+                    + '<td>' + FIN.fmtMon(c.saldoInicial || 0, c.moneda) + '</td>'
+                    + '<td><strong>' + FIN.fmtMon(s.saldo, s.moneda) + '</strong>'
+                        + (s.monedaCruzada ? ' <span class="pend">' + s.monedaCruzada + ' ev. moneda cruzada</span>' : '') + '</td>'
+                    + '<td>' + s.eventos + '</td>'
+                    + '<td>' + (v ? v.movimientos + ' movs' + (v.sinClasificar ? ' <span class="pend">' + v.sinClasificar + ' sin clasificar</span>' : ' <span class="ok-chip">todo clasificado</span>') : '<span style="color:var(--color-text-muted);">sin extracto</span>') + '</td>'
+                    + '<td>' + (v ? (Math.abs(v.diferencia) < 0.01
+                        ? '<span class="ok-chip">✓ cuadra</span>'
+                        : '<span class="menos">' + FIN.fmtBRL(v.diferencia) + '</span>') : '—') + '</td>'
+                    + '</tr>';
+              }).join('')
+            + '</table></div>'
+            + '<div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-top:var(--space-2);">'
+            + 'La diferencia flujo↔extracto es normal mientras haya movimientos sin clasificar: cada movimiento clasificado se convierte en un evento del flujo y la diferencia baja a cero.'
+            + '</div></div>';
+
+        // ── Bandeja de pendientes ────────────────────────────
+        function bloquePend(titulo, lista, renderItem) {
+            return '<div style="margin-bottom:var(--space-3);">'
+                + '<strong>' + titulo + ' (' + lista.length + ')</strong>'
+                + (lista.length
+                    ? '<div style="font-size:var(--text-xs);color:var(--color-text-secondary);margin-top:4px;">'
+                        + lista.slice(0, 8).map(renderItem).join('<br>')
+                        + (lista.length > 8 ? '<br>… y ' + (lista.length - 8) + ' más' : '')
+                      + '</div>'
+                    : ' <span class="ok-chip">nada pendiente</span>')
+                + '</div>';
+        }
+        var evLinea = function(ev) {
+            return ev.fechaStr + ' · ' + (ev.tipo === 'ingreso' ? '+' : '−') + FIN.fmtMon(ev.monto, ev.moneda)
+                + ' · ' + escapeHtml(ev.contraparte || ev.concepto) + ' <em>(' + ev.origen + ')</em>';
+        };
+        html += '<div class="card" style="margin-bottom:var(--space-4);">'
+            + '<div class="card__header"><h2 class="card__title"><span class="material-icons">inbox</span> Bandeja de pendientes — ' + pend.total + ' en total</h2></div>'
+            + bloquePend('💳 Sin cuenta asignada', pend.sinCuenta, evLinea)
+            + bloquePend('💱 Sin cotización (no suman al flujo)', pend.sinCotizacion, evLinea)
+            + bloquePend('🏷️ Gastos sin clasificar (categoría/destino/circuito)', pend.gastosSinClasificar, evLinea)
+            + bloquePend('📄 Movimientos de extracto sin clasificar', pend.movsSinClasificar, function(m) {
+                return m.fechaStr + ' · ' + (m.tipo === 'ingreso' ? '+' : '−') + FIN.fmtBRL(m.monto)
+                    + ' · ' + escapeHtml(m.descripcion.slice(0, 60));
+              })
+            + bloquePend('⏳ A pagar (honorarios y reembolsos pendientes)', pend.aPagar, evLinea)
+            + '</div>';
+
+        // ── Flujo unificado (últimos 60) ─────────────────────
+        html += '<div class="card">'
+            + '<div class="card__header"><h2 class="card__title"><span class="material-icons">timeline</span> Flujo unificado — últimos 60 eventos</h2></div>'
+            + '<div class="scroll-x"><table class="tabla">'
+            + '<tr><th>Fecha</th><th>±</th><th>Monto</th><th>Equiv. R$</th><th>Quién / qué</th><th>Cuenta</th><th>Origen</th></tr>'
+            + eventosFlujo.slice(0, 60).map(function(ev) {
+                return '<tr>'
+                    + '<td>' + (ev.fechaStr || '—') + '</td>'
+                    + '<td class="' + (ev.tipo === 'ingreso' ? 'mas' : 'menos') + '">' + (ev.tipo === 'ingreso' ? '＋' : '−') + '</td>'
+                    + '<td>' + FIN.fmtMon(ev.monto, ev.moneda) + '</td>'
+                    + '<td>' + (ev.moneda === 'BRL' ? '=' : (ev.montoBRL !== null ? FIN.fmtBRL(ev.montoBRL) : '<span class="pend">falta</span>')) + '</td>'
+                    + '<td>' + escapeHtml(ev.contraparte || '') + ' · ' + escapeHtml(ev.concepto || '') + '</td>'
+                    + '<td>' + (ev.cuentaNombre ? escapeHtml(ev.cuentaNombre) : '<span class="pend">sin cuenta</span>') + '</td>'
+                    + '<td>' + ev.origen + '</td>'
+                    + '</tr>';
+              }).join('')
+            + '</table></div></div>';
+
+        document.getElementById('contenido').innerHTML = html;
+
+    } catch(e) {
+        document.getElementById('contenido').innerHTML =
+            '<div class="alert alert-error"><span class="material-icons">error_outline</span> Error: '
+            + escapeHtml(e.message) + '</div>';
+    }
+})();
+</script>
+</body>
+</html>
