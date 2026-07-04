@@ -734,9 +734,18 @@
                 .map(d => ({ id: d.id, ...d.data() }))
                 .sort((a, b) => (a.creadoEn?.toDate?.()?.getTime() || 0) - (b.creadoEn?.toDate?.()?.getTime() || 0));
 
-            const totalPagado = pagos
-                .filter(p => p.moneda === 'BRL')
-                .reduce((s, p) => s + (p.monto || 0), 0);
+            // Aporte real de cada pago al saldo en R$ (v4.34):
+            // BRL → monto · otra moneda con equivalente guardado → montoBRL · sin equivalente → 0
+            const aporteBRL = p => (p.moneda === 'BRL' || !p.moneda)
+                ? (Number(p.monto) || 0)
+                : (typeof p.montoBRL === 'number' && !isNaN(p.montoBRL) ? p.montoBRL : 0);
+            const SIM = { BRL: 'R$', USD: 'US$', UYU: '$U', ARS: '$' };
+            const fmtMonOrig = p => (SIM[p.moneda] || p.moneda || 'R$') + ' '
+                + (p.monto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+
+            const totalPagado = pagos.reduce((s, p) => s + aporteBRL(p), 0);
+            const sinEquiv    = pagos.filter(p => p.moneda && p.moneda !== 'BRL'
+                && (typeof p.montoBRL !== 'number' || isNaN(p.montoBRL)));
             const saldo   = Math.max(0, (r.totalBRL || 0) - totalPagado);
             const fmt     = n => `R$ ${n.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
 
@@ -763,8 +772,20 @@
             }
 
             // Saldo
+            const tratoHtml = (r.monedaTrato && r.monedaTrato !== 'BRL' && r.totalTrato)
+                ? `<div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-bottom:var(--space-2);">
+                       Trato: <strong>${(SIM[r.monedaTrato] || r.monedaTrato)} ${(r.totalTrato || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</strong>
+                       ≈ ${fmt(r.totalBRL || 0)} (cotización congelada del presupuesto)
+                   </div>`
+                : '';
+            const sinEquivHtml = sinEquiv.length
+                ? `<div style="font-size:var(--text-xs);color:var(--color-danger);margin-bottom:var(--space-2);">
+                       ⚠️ ${sinEquiv.length} pago(s) en moneda extranjera sin equivalente en R$ — no suman al saldo.
+                       Se corrigen desde Pagos → ✏️ (cargándoles la cotización).
+                   </div>`
+                : '';
             const saldoColor = saldo <= 0 ? 'var(--color-success)' : 'var(--color-warning)';
-            const saldoHtml  = `
+            const saldoHtml  = tratoHtml + sinEquivHtml + `
                 <div style="display:flex;justify-content:space-between;margin-bottom:var(--space-3);
                     padding-bottom:var(--space-3);border-bottom:1px solid var(--color-border);">
                     <div>
@@ -795,10 +816,15 @@
                                 ${p.creadoEn?.toDate?.()?.toLocaleDateString('es-AR') || '—'}
                             </span>
                             · ${p.metodo || '—'} · ${p.tipo || '—'}
+                            ${p.cuentaDestinoNombre ? `· → ${escapeHtml(p.cuentaDestinoNombre)}` : (p.sinCuenta ? '· <span style="color:#b45309;">sin cuenta</span>' : '')}
                             ${p.observaciones ? `· <em>${escapeHtml(p.observaciones)}</em>` : ''}
                         </div>
                         <strong style="font-family:var(--font-mono);color:var(--color-success);">
-                            +${fmt(p.monto||0)}
+                            +${fmtMonOrig(p)}${(p.moneda && p.moneda !== 'BRL')
+                                ? (typeof p.montoBRL === 'number'
+                                    ? ` <span style="color:var(--color-text-muted);font-weight:400;">≈ ${fmt(p.montoBRL)}</span>`
+                                    : ` <span style="color:var(--color-danger);font-weight:400;">sin equiv.</span>`)
+                                : ''}
                         </strong>
                     </div>`).join('');
 
@@ -1004,13 +1030,42 @@
     window.anularReserva = async function(id) {
         if (!confirm('¿Anular esta reserva? Esta acción libera las fechas en el calendario.')) return;
         try {
+            const rDoc = reservasCache.find(x => x.id === id) || {};
+
             await db.collection('reservas').doc(id).update({
                 estado: 'anulada',
                 actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
             });
             await sincronizarDisponibilidad(id, { estado: 'anulada' });
             if (CVC.alAnularReserva) { try { await CVC.alAnularReserva(id); } catch(e) {} }
-            showToast('Reserva anulada.', 'warning');
+
+            // v4.34 — cascada: el presupuesto de origen deja de figurar "confirmado"
+            if (rDoc.presupuestoId) {
+                try {
+                    await db.collection('presupuestos').doc(rDoc.presupuestoId).update({
+                        estado: 'anulado',
+                        actualizadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                        historial: firebase.firestore.FieldValue.arrayUnion({
+                            t: firebase.firestore.Timestamp.now(),
+                            uid: user.uid,
+                            nombre: (userData && userData.nombre) || user.email || '',
+                            accion: 'Anulación',
+                            detalle: 'La reserva vinculada fue anulada — presupuesto marcado anulado en cascada'
+                        })
+                    });
+                } catch(e) { /* si el presupuesto ya no existe, no bloquea la anulación */ }
+            }
+
+            // Aviso: si la reserva anulada tiene pagos, hay plata que necesita destino
+            try {
+                const pagosSnap = await db.collection('pagos').where('reservaId', '==', id).get();
+                if (!pagosSnap.empty) {
+                    showToast('Reserva anulada. ⚠️ Tiene ' + pagosSnap.size + ' pago(s) vinculado(s) — reasignalos desde Pagos → ✏️.', 'warning');
+                } else {
+                    showToast('Reserva anulada.', 'warning');
+                }
+            } catch(e) { showToast('Reserva anulada.', 'warning'); }
+
             await recargarReservas();
         } catch(e) { showToast('Error: ' + e.message, 'error'); }
     };

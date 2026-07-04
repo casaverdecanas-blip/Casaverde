@@ -172,6 +172,7 @@
 </head>
 <body>
 
+<!-- ── HEADER ──────────────────────────────────────────────── -->
 <header class="admin-header">
     <div class="admin-header__brand">
         <span class="material-icons">cottage</span>
@@ -189,10 +190,13 @@
     </div>
 </header>
 
+<!-- ── NAVEGACIÓN ──────────────────────────────────────────── -->
 <nav class="admin-nav" id="appNav"></nav>
 
+<!-- ── CONTENIDO ───────────────────────────────────────────── -->
 <main class="admin-content">
 
+    <!-- ── Calendario de presupuestos ─────────────────────── -->
     <div class="card" style="margin-bottom:var(--space-6);">
         <div class="card__header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:var(--space-3);">
             <h2 class="card__title">
@@ -204,27 +208,14 @@
             </button>
         </div>
         <div class="leyenda" id="leyendaCabanas"></div>
-
-        <!-- NUEVO: Selector paso a paso -->
-        <div id="selectorFechas" style="display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;margin-bottom:var(--space-3);">
-            <span id="infoFechas" style="font-size:var(--text-sm);color:var(--color-text-secondary);">
-                Seleccioná una fecha de inicio y una de fin en el calendario.
-            </span>
-            <button class="btn btn-primary" id="btnGenerarPresupuesto" style="display:none;" onclick="generarPresupuestoDesdeCalendario()">
-                <span class="material-icons">add</span> Generar presupuesto
-            </button>
-            <button class="btn btn-ghost btn-sm" id="btnLimpiarFechas" style="display:none;" onclick="limpiarSeleccionFechas()">
-                <span class="material-icons">clear</span>
-            </button>
-        </div>
-
         <div id="calendar"></div>
         <div class="fc-hint">
-            💡 Hacé clic en una fecha para el inicio, luego en otra para el fin, y usá el botón <strong>“Generar presupuesto”</strong>.
-            Tocá un presupuesto existente para abrirlo y editarlo.
+            💡 Marcá un rango de fechas en el calendario para crear un presupuesto con esas fechas.
+            Tocá un presupuesto para abrirlo y editarlo.
         </div>
     </div>
 
+    <!-- ── Listado ─────────────────────────────────────────── -->
     <div class="card">
         <div class="card__header">
             <h2 class="card__title">
@@ -239,6 +230,7 @@
             <button class="filtro-tab active" data-f="todos">Todos</button>
             <button class="filtro-tab" data-f="pendiente">Pendientes</button>
             <button class="filtro-tab" data-f="confirmado">Confirmados</button>
+            <button class="filtro-tab" data-f="anulado">Anulados</button>
         </div>
 
         <div id="presupuestosList">
@@ -248,6 +240,7 @@
 
 </main>
 
+<!-- ── MODAL: Nuevo / Editar presupuesto ───────────────────── -->
 <div class="modal-overlay" id="modalPresupuesto" style="display:none;" onclick="cerrarModalPresupuesto(event)">
     <div class="modal" style="max-width:560px;">
         <div class="modal__header">
@@ -276,6 +269,7 @@
                 </div>
             </div>
 
+            <!-- Alerta de disponibilidad en tiempo real -->
             <div class="alerta-disponibilidad" id="alertaDisponibilidad">
                 <span class="material-icons">event_busy</span>
                 <span id="alertaDisponibilidadText"></span>
@@ -314,44 +308,44 @@
                     placeholder="Requerimientos especiales..."></textarea>
             </div>
 
-            <div class="form-group">
-                <label class="form-label">Moneda del presupuesto</label>
-                <select id="presupuestoMoneda" class="form-control" onchange="cambiarMonedaPresupuesto()">
-                    <option value="BRL">R$ — Real</option>
-                    <option value="USD">US$ — Dólar</option>
-                    <option value="UYU">$U — Peso uruguayo</option>
-                </select>
-            </div>
-
             <button class="btn btn-secondary" id="btnCalcular" style="width:100%;" onclick="calcular()">
                 <span class="material-icons">calculate</span> Calcular precio
             </button>
 
+            <!-- Resultado del cálculo -->
             <div class="precio-box" id="precioBox">
                 <div class="precio-linea"><span>🌙 Noches</span>     <span id="pNoches">—</span></div>
                 <div class="precio-linea"><span>🏠 Alojamiento</span><span id="pSubtotal">—</span></div>
                 <div class="precio-linea"><span>🧹 Limpieza</span>   <span id="pLimpieza">—</span></div>
                 <div class="precio-total">
                     <span>💰 Total</span>
-                    <span style="display:flex;align-items:center;gap:8px;">
-                        <span id="pTotal">—</span>
-                        <button type="button" class="btn btn-ghost btn-sm" id="btnEditTotal" onclick="toggleEdicionTotal()"
-                                title="Ajustar el total final" style="padding:2px 6px;min-width:0;">
-                            <span class="material-icons" style="font-size:18px;">edit</span>
-                        </button>
-                    </span>
+                    <span id="pTotal">—</span>
                 </div>
 
-                <div id="edicionTotal" style="display:none;margin-top:var(--space-3);padding-top:var(--space-3);border-top:1px dashed rgba(45,90,39,0.3);">
-                    <label class="form-label" id="labelTotalFinalInput" style="font-size:var(--text-sm);">Total final a cobrar al cliente (R$)</label>
-                    <div style="display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap;">
-                        <input type="number" id="totalFinalInput" class="form-control" step="0.01" min="0"
-                               style="max-width:160px;" oninput="actualizarTotalFinal()">
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="restaurarTotal()">
-                            <span class="material-icons" style="font-size:16px;">restart_alt</span> Restaurar
-                        </button>
+                <!-- Trato: moneda + total final (v4.34) -->
+                <div id="tratoBloque" style="margin-top:var(--space-3);padding-top:var(--space-3);border-top:1px dashed rgba(45,90,39,0.3);">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" style="font-size:var(--text-sm);">Moneda del trato</label>
+                            <select id="monedaTrato" class="form-control" onchange="onMonedaTratoChange()">
+                                <option value="BRL">R$ — Real</option>
+                                <option value="USD">US$ — Dólar</option>
+                                <option value="UYU">$U — Peso uruguayo</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" style="font-size:var(--text-sm);">Total del trato</label>
+                            <div style="display:flex;gap:var(--space-2);align-items:center;">
+                                <input type="number" id="totalTratoInput" class="form-control" step="0.01" min="0"
+                                       style="max-width:150px;" oninput="actualizarTrato()">
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="restaurarTotal()" title="Volver al precio calculado">
+                                    <span class="material-icons" style="font-size:16px;">restart_alt</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div id="indicadorAjuste" style="font-size:var(--text-sm);font-weight:700;margin-top:var(--space-2);"></div>
+                    <div id="tratoEquiv" style="font-size:var(--text-sm);color:var(--color-text-muted);"></div>
+                    <div id="indicadorAjuste" style="font-size:var(--text-sm);font-weight:700;margin-top:var(--space-1);"></div>
                 </div>
             </div>
 
@@ -360,6 +354,7 @@
                 <span id="errorFormText"></span>
             </div>
 
+            <!-- Historial de cambios (solo en edición) -->
             <div id="histBloque" style="display:none;margin-top:var(--space-4);">
                 <button class="btn btn-ghost btn-sm" onclick="toggleHistorial()" style="padding-left:0;">
                     <span class="material-icons" style="font-size:16px;">history</span>
@@ -388,6 +383,7 @@
     </div>
 </div>
 
+<!-- ── MODAL: Registrar pago y confirmar ───────────────────── -->
 <div class="modal-overlay" id="modalOverlay" style="display:none;" onclick="cerrarModalPago(event)">
     <div class="modal" style="max-width:520px;">
         <div class="modal__header">
@@ -400,6 +396,7 @@
         <div class="modal__body">
             <input type="hidden" id="presupuestoId">
 
+            <!-- Resumen del presupuesto -->
             <div class="resumen-pago" id="resumenPago" style="font-size:var(--text-sm);line-height:1.7;background:var(--color-primary-light);border-radius:var(--radius-md);padding:var(--space-3);margin-bottom:var(--space-4);"></div>
 
             <div class="alert alert-success" style="margin-bottom:var(--space-4);">
@@ -407,6 +404,7 @@
                 El pago confirma la reserva automáticamente y bloquea el calendario.
             </div>
 
+            <!-- ⚠️ Alerta de conflicto (se muestra si hay solapamiento) -->
             <div class="alert alert-error" id="alertaConflictoModal" style="display:none; margin-bottom:var(--space-4);">
                 <span class="material-icons">event_busy</span>
                 <span id="alertaConflictoModalText"></span>
@@ -432,8 +430,11 @@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Cuenta de destino</label>
-                    <select id="cuentaPago" class="form-control"></select>
-                    <p class="form-hint">Si todavía no sabés, dejá "Asignar después" — se puede completar desde Pagos.</p>
+                    <select id="cuentaPago" class="form-control" onchange="onCuentaPagoChange()"></select>
+                    <div id="cuentaPagoAviso" style="display:none;background:#fef3e2;color:#b45309;border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);font-size:var(--text-xs);margin-top:6px;">
+                        ⚠️ El dinero quedará <strong>sin cuenta asociada</strong>. Si entró en una cuenta que el sistema no conoce,
+                        <a href="#" onclick="abrirModalCuentaNueva(); return false;" style="color:#b45309;font-weight:700;text-decoration:underline;">registrala ahora</a> — queda creada sin salir del pago.
+                    </div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Concepto</label>
@@ -483,6 +484,52 @@
     </div>
 </div>
 
+<!-- ── MODAL: Registrar cuenta nueva ───────────────────────── -->
+<div class="modal-overlay" id="modalCuentaNueva" style="display:none;" onclick="cerrarModalCuentaNueva(event)">
+    <div class="modal" style="max-width:420px;" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <h3 class="modal__title">Registrar cuenta nueva</h3>
+            <button class="modal__close" onclick="cerrarModalCuentaNueva()"><span class="material-icons">close</span></button>
+        </div>
+        <div class="modal__body">
+            <div class="form-group">
+                <label class="form-label">Nombre <span class="required">*</span></label>
+                <input type="text" id="ncNombre" class="form-control" placeholder="Ej: Midinero Flor">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Moneda</label>
+                    <select id="ncMoneda" class="form-control">
+                        <option value="BRL">BRL (R$)</option>
+                        <option value="USD">USD (US$)</option>
+                        <option value="UYU">UYU ($U)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">País</label>
+                    <select id="ncPais" class="form-control">
+                        <option value="BR">🇧🇷 Brasil</option>
+                        <option value="UY">🇺🇾 Uruguay</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Banco / plataforma</label>
+                <input type="text" id="ncBanco" class="form-control" placeholder="Ej: Midinero, BTG, Prex… (opcional)">
+            </div>
+            <div class="alert alert-error" id="ncError" style="display:none;">
+                <span class="material-icons">error_outline</span><span id="ncErrorText"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModalCuentaNueva()">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarCuentaNueva()">
+                <span class="material-icons">save</span> Crear cuenta
+            </button>
+        </div>
+    </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -510,6 +557,22 @@
     }
     function nombreUsuario() { return userData.nombre || user.email || 'Usuario'; }
 
+    // Cotización del sistema: R$ por 1 unidad de la moneda (null si no hay tabla)
+    var _ratesCache = null;
+    async function rateBRLDe(moneda) {
+        if (moneda === 'BRL') return 1;
+        if (!_ratesCache) {
+            try {
+                var c = await cargarCotizaciones();
+                if (c && c.rates && c.rates['BRL']) _ratesCache = c.rates;
+            } catch(e) {}
+        }
+        if (_ratesCache && _ratesCache[moneda] && _ratesCache['BRL']) {
+            return Math.round((_ratesCache['BRL'] / _ratesCache[moneda]) * 1000000) / 1000000;
+        }
+        return null;
+    }
+
     var cabanasCache      = [];
     var presupuestosCache = [];
     var cuentasCache      = [];
@@ -518,10 +581,6 @@
     var filtroActual      = 'todos';
     var textoBusqueda     = '';
     var calendar          = null;
-
-    // NUEVAS variables para selección paso a paso
-    var selectedStart = null;
-    var selectedEnd   = null;
 
     //    Init                                                   
     try {
@@ -612,9 +671,12 @@
                 center: 'title',
                 right:  ''
             },
-            // ── NUEVO: reemplazamos select por dateClick ──
-            dateClick: function(info) {
-                manejarClicFecha(info.dateStr);
+            selectable:   true,
+            selectMirror: true,
+            select: function(info) {
+                calendar.unselect();
+                // endStr de FullCalendar es exclusivo → coincide con el check-out
+                abrirModalNuevo(info.startStr, info.endStr);
             },
             events: function(info, success) {
                 success(eventosPresupuestos().concat(eventosReservas()));
@@ -638,80 +700,9 @@
         calendar.render();
     }
 
-    // ── NUEVAS funciones para manejo de fechas paso a paso ──
-    function manejarClicFecha(fecha) {
-        if (!selectedStart) {
-            selectedStart = fecha;
-            selectedEnd = null;
-            actualizarUI();
-            return;
-        }
-        if (!selectedEnd) {
-            // Si la nueva fecha es anterior al inicio, intercambiamos
-            if (fecha < selectedStart) {
-                selectedEnd = selectedStart;
-                selectedStart = fecha;
-            } else if (fecha === selectedStart) {
-                // Clic en la misma fecha -> deseleccionar todo
-                limpiarSeleccionFechas();
-                return;
-            } else {
-                selectedEnd = fecha;
-            }
-            actualizarUI();
-            return;
-        }
-        // Si ya había inicio y fin, reiniciamos con la nueva fecha como inicio
-        selectedStart = fecha;
-        selectedEnd = null;
-        actualizarUI();
-    }
-
-    function actualizarUI() {
-        var info = document.getElementById('infoFechas');
-        var btnGen = document.getElementById('btnGenerarPresupuesto');
-        var btnLimpiar = document.getElementById('btnLimpiarFechas');
-
-        if (selectedStart && !selectedEnd) {
-            info.textContent = 'Inicio: ' + selectedStart + ' — hacé clic en la fecha de fin.';
-            btnGen.style.display = 'none';
-            btnLimpiar.style.display = 'inline-flex';
-        } else if (selectedStart && selectedEnd) {
-            var noches = calcularNoches(selectedStart, selectedEnd);
-            info.textContent = 'Inicio: ' + selectedStart + ' — Fin: ' + selectedEnd + ' (' + noches + ' noches)';
-            btnGen.style.display = 'inline-flex';
-            btnLimpiar.style.display = 'inline-flex';
-        } else {
-            info.textContent = 'Seleccioná una fecha de inicio y una de fin en el calendario.';
-            btnGen.style.display = 'none';
-            btnLimpiar.style.display = 'none';
-        }
-    }
-
-    function limpiarSeleccionFechas() {
-        selectedStart = null;
-        selectedEnd = null;
-        actualizarUI();
-    }
-
-    function generarPresupuestoDesdeCalendario() {
-        if (selectedStart && selectedEnd) {
-            abrirModalNuevo(selectedStart, selectedEnd);
-            // Opcional: limpiar la selección tras abrir el modal
-            limpiarSeleccionFechas();
-        }
-    }
-
-    function calcularNoches(start, end) {
-        var d1 = new Date(start + 'T00:00:00');
-        var d2 = new Date(end + 'T00:00:00');
-        var diff = (d2 - d1) / (1000 * 60 * 60 * 24);
-        return diff > 0 ? diff : 0;
-    }
-
     function eventosPresupuestos() {
         return presupuestosCache
-            .filter(function(p) { return p.checkIn && p.checkOut; })
+            .filter(function(p) { return p.checkIn && p.checkOut && p.estado !== 'anulado'; })
             .map(function(p) {
                 return {
                     id:              p.id,
@@ -773,25 +764,19 @@
         }, 600);
     }
 
-    // Cambios en cabaña / fechas / huéspedes / moneda invalidan el cálculo vigente
-    ['cabanaSelect', 'checkIn', 'checkOut', 'adultos', 'ninos', 'presupuestoMoneda'].forEach(function(id) {
+    // Cambios en cabaña / fechas / huéspedes invalidan el cálculo vigente
+    ['cabanaSelect', 'checkIn', 'checkOut', 'adultos', 'ninos'].forEach(function(id) {
         document.getElementById(id).addEventListener('change', function() {
-            if (id !== 'adultos' && id !== 'ninos' && id !== 'presupuestoMoneda') verificarDisponibilidadLive();
+            if (id !== 'adultos' && id !== 'ninos') verificarDisponibilidadLive();
             invalidarCalculo();
         });
     });
-
-    window.cambiarMonedaPresupuesto = function() {
-        if (ultimoCalculo) {
-            pintarPrecio();
-        }
-    };
 
     function invalidarCalculo() {
         ultimoCalculo = null;
         document.getElementById('precioBox').style.display = 'none';
         document.getElementById('indicadorAjuste').innerHTML = '';
-        document.getElementById('edicionTotal').style.display = 'none';
+        document.getElementById('tratoEquiv').textContent = '';
     }
 
     //    Modal presupuesto: abrir / cerrar                      
@@ -834,33 +819,43 @@
         document.getElementById('clienteEmail').value  = p.email    || '';
         document.getElementById('clienteTel').value    = p.telefono || '';
         document.getElementById('notas').value         = p.notas    || '';
-        document.getElementById('presupuestoMoneda').value = p.moneda || 'BRL';
 
         var esConf = p.estado === 'confirmado';
-        document.getElementById('modalPresTitulo').textContent = esConf
-            ? 'Presupuesto confirmado (solo lectura)'
-            : 'Editar presupuesto';
+        var esAnul = p.estado === 'anulado';
+        var soloLectura = esConf || esAnul;
+        document.getElementById('modalPresTitulo').textContent = esAnul
+            ? 'Presupuesto anulado (solo lectura)'
+            : (esConf ? 'Presupuesto confirmado (solo lectura)' : 'Editar presupuesto');
         document.getElementById('btnGuardarText').textContent = 'Guardar cambios';
-        document.getElementById('btnGuardar').style.display   = esConf ? 'none' : '';
-        document.getElementById('btnAbrirPago').style.display = esConf ? 'none' : '';
-        document.getElementById('btnIrReserva').style.display = (esConf && p.reservaId) ? '' : 'none';
+        document.getElementById('btnGuardar').style.display   = soloLectura ? 'none' : '';
+        document.getElementById('btnAbrirPago').style.display = soloLectura ? 'none' : '';
+        document.getElementById('btnIrReserva').style.display = (soloLectura && p.reservaId) ? '' : 'none';
         document.getElementById('btnEliminar').style.display  = '';
-        habilitarFormulario(!esConf);
+        habilitarFormulario(!soloLectura);
 
-        // Restaurar el estado de precio guardado
+        // Restaurar el estado del trato guardado
         var totalCalc = (typeof p.totalCalculadoBRL === 'number') ? p.totalCalculadoBRL : (p.totalBRL || 0);
+        var monedaT   = p.monedaTrato || 'BRL';
+        var rateT     = 1;
+        if (monedaT !== 'BRL') {
+            rateT = (p.cotizacionTrato && p.cotizacionTrato.rateBRL) ? p.cotizacionTrato.rateBRL
+                  : ((p.totalTrato && p.totalBRL) ? Math.round((p.totalBRL / p.totalTrato) * 1000000) / 1000000 : null);
+            if (!rateT) { monedaT = 'BRL'; rateT = 1; }
+        }
         ultimoCalculo = {
-            noches:     p.noches || 0,
-            subtotal:   p.subtotalBRL || 0,
-            limpieza:   p.costoLimpiezaBRL || 0,
-            total:      totalCalc,
-            totalFinal: typeof p.totalOriginal === 'number' ? p.totalOriginal : ((typeof p.totalBRL === 'number') ? p.totalBRL : totalCalc),
-            monedaActual: p.moneda || 'BRL',
-            cabaId:     p.caba,
-            checkIn:    p.checkIn,
-            checkOut:   p.checkOut,
-            adultos:    p.adultos || 1,
-            ninos:      p.ninos || 0
+            noches:      p.noches || 0,
+            subtotal:    p.subtotalBRL || 0,
+            limpieza:    p.costoLimpiezaBRL || 0,
+            total:       totalCalc,
+            monedaTrato: monedaT,
+            rateTrato:   rateT,
+            totalTrato:  (monedaT !== 'BRL' && typeof p.totalTrato === 'number') ? p.totalTrato : ((typeof p.totalBRL === 'number') ? p.totalBRL : totalCalc),
+            totalFinal:  (typeof p.totalBRL === 'number') ? p.totalBRL : totalCalc,
+            cabaId:      p.caba,
+            checkIn:     p.checkIn,
+            checkOut:    p.checkOut,
+            adultos:     p.adultos || 1,
+            ninos:       p.ninos || 0
         };
         pintarPrecio();
 
@@ -869,7 +864,7 @@
         document.getElementById('histBloque').style.display = 'block';
 
         document.getElementById('modalPresupuesto').style.display = 'flex';
-        if (!esConf) verificarDisponibilidadLive();
+        if (!soloLectura) verificarDisponibilidadLive();
     };
 
     window.cerrarModalPresupuesto = function(e) {
@@ -885,12 +880,11 @@
 
     function habilitarFormulario(habilitar) {
         ['cabanaSelect','checkIn','checkOut','adultos','ninos',
-         'clienteNombre','clienteEmail','clienteTel','notas', 'presupuestoMoneda'].forEach(function(id) {
+         'clienteNombre','clienteEmail','clienteTel','notas',
+         'monedaTrato','totalTratoInput'].forEach(function(id) {
             document.getElementById(id).disabled = !habilitar;
         });
-        document.getElementById('btnCalcular').style.display  = habilitar ? '' : 'none';
-        document.getElementById('btnEditTotal').style.display = habilitar ? '' : 'none';
-        document.getElementById('totalFinalInput').disabled   = !habilitar;
+        document.getElementById('btnCalcular').style.display = habilitar ? '' : 'none';
     }
 
     function limpiarFormulario() {
@@ -899,7 +893,6 @@
         });
         document.getElementById('adultos').value = 2;
         document.getElementById('ninos').value   = 0;
-        document.getElementById('presupuestoMoneda').value = 'BRL';
         if (cabanasCache.length) document.getElementById('cabanaSelect').value = cabanasCache[0].id;
         document.getElementById('errorForm').style.display            = 'none';
         document.getElementById('alertaDisponibilidad').style.display = 'none';
@@ -909,7 +902,7 @@
     }
 
     //    Calcular precio                                        
-    window.calcular = function() {
+    window.calcular = async function() {
         var cabaId   = parseInt(document.getElementById('cabanaSelect').value);
         var checkIn  = document.getElementById('checkIn').value;
         var checkOut = document.getElementById('checkOut').value;
@@ -933,6 +926,7 @@
             return;
         }
 
+        // Blindaje: el cálculo debe devolver siempre números completos.
         if (!calc || typeof calc.subtotal !== 'number' || typeof calc.total !== 'number') {
             mostrarErrorForm('El cálculo devolvió un resultado incompleto. Revisá que la cabaña tenga tarifas configuradas en Contenido del sitio.');
             return;
@@ -944,120 +938,115 @@
         ultimoCalculo = Object.assign({}, calc, {
             cabaId: cabaId, checkIn: checkIn, checkOut: checkOut,
             adultos: adultos, ninos: ninos,
-            totalFinal: null,
-            monedaActual: null
+            monedaTrato: 'BRL',
+            rateTrato:   1,
+            totalTrato:  calc.total,
+            totalFinal:  calc.total
         });
-        pintarPrecio();
+        // Si ya había una moneda elegida en el modal, mantenerla
+        var monedaSel = document.getElementById('monedaTrato').value || 'BRL';
+        if (monedaSel !== 'BRL') {
+            await aplicarMonedaTrato(monedaSel);
+        } else {
+            pintarPrecio();
+        }
     };
 
-    async function pintarPrecio() {
+    // Fija la moneda del trato: congela la cotización del día y precarga el total
+    async function aplicarMonedaTrato(moneda) {
         if (!ultimoCalculo) return;
-        var moneda = document.getElementById('presupuestoMoneda').value;
-
-        var subtotalDisp = ultimoCalculo.subtotal;
-        var limpiezaDisp = ultimoCalculo.limpieza;
-        var totalCalcDisp = ultimoCalculo.total;
-
-        if (moneda !== 'BRL') {
-            try {
-                var cot = await cargarCotizaciones();
-                if (cot && cot.rates) {
-                    subtotalDisp = convertir(ultimoCalculo.subtotal, 'BRL', moneda, cot.rates);
-                    limpiezaDisp = convertir(ultimoCalculo.limpieza, 'BRL', moneda, cot.rates);
-                    totalCalcDisp = convertir(ultimoCalculo.total, 'BRL', moneda, cot.rates);
-                }
-            } catch (e) {
-                console.error('Error al convertir moneda en presupuesto:', e);
-            }
+        if (moneda === 'BRL') {
+            ultimoCalculo.monedaTrato = 'BRL';
+            ultimoCalculo.rateTrato   = 1;
+            ultimoCalculo.totalTrato  = ultimoCalculo.totalFinal;
+            pintarPrecio();
+            return;
         }
-
-        if (ultimoCalculo.monedaActual !== moneda || ultimoCalculo.totalFinal === null) {
-            ultimoCalculo.totalFinal = totalCalcDisp;
-            ultimoCalculo.monedaActual = moneda;
+        var rate = await rateBRLDe(moneda);
+        if (!rate) {
+            mostrarErrorForm('No hay cotización cargada para ' + moneda + '. Cargala en Cotizaciones y volvé a intentar — mientras tanto el trato queda en R$.');
+            document.getElementById('monedaTrato').value = 'BRL';
+            ultimoCalculo.monedaTrato = 'BRL';
+            ultimoCalculo.rateTrato   = 1;
+            ultimoCalculo.totalTrato  = ultimoCalculo.totalFinal;
+            pintarPrecio();
+            return;
         }
+        ultimoCalculo.monedaTrato = moneda;
+        ultimoCalculo.rateTrato   = rate;
+        // Precarga: el precio calculado convertido a la moneda del trato (redondeado)
+        ultimoCalculo.totalTrato  = Math.round((ultimoCalculo.total / rate) * 100) / 100;
+        ultimoCalculo.totalFinal  = Math.round(ultimoCalculo.totalTrato * rate * 100) / 100;
+        pintarPrecio();
+    }
 
+    window.onMonedaTratoChange = async function() {
+        if (!ultimoCalculo) return;
+        await aplicarMonedaTrato(document.getElementById('monedaTrato').value);
+    };
+
+    function pintarPrecio() {
+        if (!ultimoCalculo) return;
         document.getElementById('pNoches').textContent   = ultimoCalculo.noches;
-        document.getElementById('pSubtotal').textContent = fmtMonto(subtotalDisp, moneda);
-        document.getElementById('pLimpieza').textContent = fmtMonto(limpiezaDisp, moneda);
-        document.getElementById('pTotal').textContent    = fmtMonto(ultimoCalculo.totalFinal, moneda);
+        document.getElementById('pSubtotal').textContent = fmtMonto(ultimoCalculo.subtotal, 'BRL');
+        document.getElementById('pLimpieza').textContent = fmtMonto(ultimoCalculo.limpieza, 'BRL');
+        document.getElementById('monedaTrato').value     = ultimoCalculo.monedaTrato || 'BRL';
+        document.getElementById('totalTratoInput').value =
+            (typeof ultimoCalculo.totalTrato === 'number' ? ultimoCalculo.totalTrato : ultimoCalculo.totalFinal).toFixed(2);
         document.getElementById('precioBox').style.display = 'block';
+        refrescarTratoUI();
+    }
 
-        document.getElementById('labelTotalFinalInput').textContent = 'Total final a cobrar al cliente (' + (SIMBOLO[moneda] || 'R$') + ')';
-        document.getElementById('edicionTotal').style.display = 'none';
-        document.getElementById('totalFinalInput').value      = ultimoCalculo.totalFinal.toFixed(2);
-        document.getElementById('indicadorAjuste').innerHTML  = '';
-        
-        var dif = totalCalcDisp - ultimoCalculo.totalFinal;
-        if (Math.abs(dif) >= 0.01) {
-            document.getElementById('edicionTotal').style.display = 'block';
-            actualizarTotalFinal();
+    // Recalcula equivalencia, total mostrado e indicador de ajuste a partir del estado
+    function refrescarTratoUI() {
+        if (!ultimoCalculo) return;
+        var m    = ultimoCalculo.monedaTrato || 'BRL';
+        var equiv = document.getElementById('tratoEquiv');
+        var ind   = document.getElementById('indicadorAjuste');
+
+        if (m === 'BRL') {
+            ultimoCalculo.totalFinal = ultimoCalculo.totalTrato;
+            document.getElementById('pTotal').textContent = fmtMonto(ultimoCalculo.totalFinal, 'BRL');
+            equiv.textContent = '';
+        } else {
+            ultimoCalculo.totalFinal = Math.round(ultimoCalculo.totalTrato * ultimoCalculo.rateTrato * 100) / 100;
+            document.getElementById('pTotal').textContent =
+                fmtMonto(ultimoCalculo.totalTrato, m) + ' ≈ ' + fmtMonto(ultimoCalculo.totalFinal, 'BRL');
+            equiv.textContent = 'Cotización congelada: 1 ' + m + ' = R$ ' + ultimoCalculo.rateTrato
+                + ' (del día de hoy — el trato queda fijado a este cambio)';
+        }
+
+        var dif = ultimoCalculo.total - ultimoCalculo.totalFinal;
+        var pct = ultimoCalculo.total > 0 ? Math.abs(dif / ultimoCalculo.total * 100).toFixed(1) : '0';
+        if (Math.abs(dif) < 0.01) {
+            ind.innerHTML = '<span style="color:var(--color-text-muted);">Sin ajuste — igual al precio calculado por tarifas.</span>';
+        } else if (dif > 0) {
+            ind.innerHTML = '<span style="color:var(--color-success);">↓ Descuento ' + fmtMonto(dif, 'BRL') + ' (' + pct + '%) respecto del calculado</span>';
+        } else {
+            ind.innerHTML = '<span style="color:#e07b00;">↑ Adicional ' + fmtMonto(Math.abs(dif), 'BRL') + ' (' + pct + '%) respecto del calculado</span>';
         }
     }
 
-    //    Ajuste manual del total final                          
-    window.toggleEdicionTotal = function() {
+    window.actualizarTrato = function() {
         if (!ultimoCalculo) return;
-        var box = document.getElementById('edicionTotal');
-        var abierto = box.style.display !== 'none';
-        box.style.display = abierto ? 'none' : 'block';
-        if (!abierto) {
-            document.getElementById('totalFinalInput').value =
-                (ultimoCalculo.totalFinal != null ? ultimoCalculo.totalFinal : ultimoCalculo.total).toFixed(2);
-            actualizarTotalFinal();
-        }
-    };
-
-    window.actualizarTotalFinal = async function() {
-        if (!ultimoCalculo) return;
-        var moneda = document.getElementById('presupuestoMoneda').value;
-        var val = parseFloat(document.getElementById('totalFinalInput').value);
-        var ind = document.getElementById('indicadorAjuste');
-
+        var val = parseFloat(document.getElementById('totalTratoInput').value);
         if (isNaN(val) || val < 0) {
-            ind.innerHTML = '<span style="color:var(--color-danger);">Ingresá un monto válido.</span>';
+            document.getElementById('indicadorAjuste').innerHTML =
+                '<span style="color:var(--color-danger);">Ingresá un monto válido.</span>';
             return;
         }
-
-        ultimoCalculo.totalFinal = Math.round(val * 100) / 100;
-        
-        var totalCalcDisp = ultimoCalculo.total;
-        if (moneda !== 'BRL') {
-            try {
-                var cot = await cargarCotizaciones();
-                if (cot && cot.rates) {
-                    totalCalcDisp = convertir(ultimoCalculo.total, 'BRL', moneda, cot.rates);
-                }
-            } catch(e) {}
-        }
-
-        document.getElementById('pTotal').textContent = fmtMonto(ultimoCalculo.totalFinal, moneda);
-
-        var dif = totalCalcDisp - ultimoCalculo.totalFinal;
-        var pct = totalCalcDisp > 0 ? Math.abs(dif / totalCalcDisp * 100).toFixed(1) : '0';
-
-        if (Math.abs(dif) < 0.01) {
-            ind.innerHTML = '<span style="color:var(--color-text-muted);">Sin ajuste — igual al precio calculado.</span>';
-        } else if (dif > 0) {
-            ind.innerHTML = '<span style="color:var(--color-success);">↓ Descuento ' + fmtMonto(dif, moneda) + ' (' + pct + '%)</span>';
-        } else {
-            ind.innerHTML = '<span style="color:#e07b00;">↑ Adicional ' + fmtMonto(Math.abs(dif), moneda) + ' (' + pct + '%)</span>';
-        }
+        ultimoCalculo.totalTrato = Math.round(val * 100) / 100;
+        refrescarTratoUI();
     };
 
-    window.restaurarTotal = async function() {
+    window.restaurarTotal = function() {
         if (!ultimoCalculo) return;
-        var moneda = document.getElementById('presupuestoMoneda').value;
-        var totalCalcDisp = ultimoCalculo.total;
-        if (moneda !== 'BRL') {
-            try {
-                var cot = await cargarCotizaciones();
-                if (cot && cot.rates) {
-                    totalCalcDisp = convertir(ultimoCalculo.total, 'BRL', moneda, cot.rates);
-                }
-            } catch(e) {}
-        }
-        document.getElementById('totalFinalInput').value = totalCalcDisp.toFixed(2);
-        actualizarTotalFinal();
+        var m = ultimoCalculo.monedaTrato || 'BRL';
+        ultimoCalculo.totalTrato = m === 'BRL'
+            ? ultimoCalculo.total
+            : Math.round((ultimoCalculo.total / ultimoCalculo.rateTrato) * 100) / 100;
+        document.getElementById('totalTratoInput').value = ultimoCalculo.totalTrato.toFixed(2);
+        refrescarTratoUI();
     };
 
     //    Historial de cambios                                   
@@ -1108,26 +1097,10 @@
         var text = document.getElementById('btnGuardarText');
         btn.disabled = true; text.textContent = 'Guardando...';
 
-        var moneda = document.getElementById('presupuestoMoneda').value;
         var totalFinal = (typeof ultimoCalculo.totalFinal === 'number' && !isNaN(ultimoCalculo.totalFinal))
             ? ultimoCalculo.totalFinal
             : ultimoCalculo.total;
-
-        var totalFinalBRL = ultimoCalculo.total;
-        var totalOriginal = totalFinal;
-
-        if (moneda === 'BRL') {
-            totalFinalBRL = totalFinal;
-        } else {
-            try {
-                var cot = await cargarCotizaciones();
-                if (cot && cot.rates) {
-                    totalFinalBRL = Math.round(convertir(totalFinal, moneda, 'BRL', cot.rates) * 100) / 100;
-                }
-            } catch(e) {
-                console.error('Error al convertir total a BRL para guardar:', e);
-            }
-        }
+        var monedaT = ultimoCalculo.monedaTrato || 'BRL';
 
         var datos = {
             caba:              ultimoCalculo.cabaId,
@@ -1136,11 +1109,14 @@
             adultos:           ultimoCalculo.adultos,
             ninos:             ultimoCalculo.ninos,
             huespedes:         ultimoCalculo.adultos + ultimoCalculo.ninos,
-            moneda:            moneda,
-            totalOriginal:     totalOriginal,
-            totalBRL:          totalFinalBRL,
+            totalBRL:          totalFinal,
+            monedaTrato:       monedaT,
+            totalTrato:        (typeof ultimoCalculo.totalTrato === 'number') ? ultimoCalculo.totalTrato : totalFinal,
+            cotizacionTrato:   monedaT !== 'BRL'
+                                ? { rateBRL: ultimoCalculo.rateTrato, moneda: monedaT, fuente: 'sistema', fecha: firebase.firestore.Timestamp.now() }
+                                : null,
             totalCalculadoBRL: ultimoCalculo.total,
-            descuentoAplicado: Math.round((ultimoCalculo.total - totalFinalBRL) * 100) / 100,
+            descuentoAplicado: Math.round((ultimoCalculo.total - totalFinal) * 100) / 100,
             subtotalBRL:       ultimoCalculo.subtotal,
             costoLimpiezaBRL:  ultimoCalculo.limpieza,
             noches:            ultimoCalculo.noches,
@@ -1165,10 +1141,11 @@
                 datos.creadoEn  = firebase.firestore.FieldValue.serverTimestamp();
                 datos.creadoPor = user.uid;
                 datos.historial = [entradaHistorial('Creación',
-                    'Total ' + fmtMonto(totalOriginal, moneda)
-                    + (moneda !== 'BRL' ? ' (≈ ' + fmtMonto(totalFinalBRL, 'BRL') + ')' : '')
+                    'Trato ' + (monedaT !== 'BRL'
+                        ? fmtMonto(datos.totalTrato, monedaT) + ' ≈ ' + fmtMonto(totalFinal, 'BRL') + ' (cotización ' + ultimoCalculo.rateTrato + ')'
+                        : fmtMonto(totalFinal, 'BRL'))
                     + (Math.abs(datos.descuentoAplicado) >= 0.01
-                        ? ' (calculado ' + fmtMonto(ultimoCalculo.total, 'BRL') + ')' : ''))];
+                        ? ' · calculado por tarifas ' + fmtMonto(ultimoCalculo.total, 'BRL') : ''))];
                 await db.collection('presupuestos').add(datos);
                 showToast('Presupuesto guardado.', 'success');
             }
@@ -1189,7 +1166,8 @@
             ['caba', 'Cabaña'], ['checkIn', 'Check-in'], ['checkOut', 'Check-out'],
             ['adultos', 'Adultos'], ['ninos', 'Niños'],
             ['clienteNombre', 'Nombre'], ['email', 'Email'], ['telefono', 'Teléfono'],
-            ['notas', 'Notas'], ['totalBRL', 'Total']
+            ['notas', 'Notas'], ['totalBRL', 'Total R$'],
+            ['monedaTrato', 'Moneda del trato'], ['totalTrato', 'Total del trato']
         ];
         var partes = [];
         campos.forEach(function(c) {
@@ -1231,6 +1209,7 @@
     //    Render listado                                         
     function renderPresupuestos() {
         var lista = presupuestosCache.filter(function(p) {
+            if (filtroActual === 'todos' && p.estado === 'anulado') return false;   // no contaminan la vista general
             if (filtroActual !== 'todos' && p.estado !== filtroActual) return false;
             if (textoBusqueda) {
                 var t = textoBusqueda.toLowerCase();
@@ -1252,13 +1231,16 @@
         container.innerHTML = lista.map(function(p) {
             var cabana = cabanaPorId(p.caba);
             var esConf = p.estado === 'confirmado';
+            var esAnul = p.estado === 'anulado';
 
-            var displayMoneda = p.moneda || 'BRL';
-            var displayTotal = typeof p.totalOriginal === 'number' ? p.totalOriginal : p.totalBRL;
-
-            var conflictoBadge = p._tieneConflicto
+            var conflictoBadge = (p._tieneConflicto && !esAnul)
                 ? '<div class="badge-conflicto"><span class="material-icons" style="font-size:11px;">event_busy</span>Fechas ocupadas</div>'
                 : '';
+
+            var montoPrincipal = (p.monedaTrato && p.monedaTrato !== 'BRL' && typeof p.totalTrato === 'number')
+                ? fmtMonto(p.totalTrato, p.monedaTrato)
+                    + '<div style="font-size:var(--text-xs);color:var(--color-text-muted);font-weight:400;">≈ ' + fmtMonto(p.totalBRL, 'BRL') + '</div>'
+                : fmtMonto(p.totalBRL, 'BRL');
 
             var ajustado = (p.totalCalculadoBRL != null && Math.abs((p.totalCalculadoBRL || 0) - (p.totalBRL || 0)) >= 0.01)
                 ? '<div style="font-size:var(--text-xs);color:var(--color-text-muted);">'
@@ -1267,7 +1249,12 @@
                   + '</div>'
                 : '';
 
-            return '<div class="pres-card ' + p.estado + '">'
+            var badge = esAnul
+                ? '<span class="badge badge-neutral" style="margin-top:4px;display:inline-block;">Anulado</span>'
+                : '<span class="badge ' + (esConf ? 'badge-confirmada' : 'badge-pendiente') + '" style="margin-top:4px;display:inline-block;">'
+                    + (esConf ? 'Confirmado' : 'Pendiente') + '</span>';
+
+            return '<div class="pres-card ' + p.estado + '"' + (esAnul ? ' style="opacity:0.65;border-left-color:#9ca3af;"' : '') + '>'
                 + '<div class="pres-header">'
                     + '<div>'
                         + '<div class="pres-nombre">'
@@ -1283,24 +1270,22 @@
                             + (p.telefono ? ' · ' + escapeHtml(p.telefono) : '')
                             + (p.notas    ? '<br>' + escapeHtml(p.notas) : '')
                             + (esConf ? '<br><span style="color:var(--color-success);font-weight:600;">✓ Reserva generada</span>' : '')
+                            + (esAnul ? '<br><span style="color:#6b7280;font-weight:600;">✕ Anulado</span>' : '')
                         + '</div>'
                         + conflictoBadge
                     + '</div>'
                     + '<div style="text-align:right;">'
-                        + '<div class="pres-total">' + fmtMonto(displayTotal, displayMoneda) + '</div>'
-                        + (displayMoneda !== 'BRL' ? '<div style="font-size:var(--text-xs);color:var(--color-text-muted);">≈ ' + fmtMonto(p.totalBRL, 'BRL') + '</div>' : '')
+                        + '<div class="pres-total">' + montoPrincipal + '</div>'
                         + ajustado
-                        + '<span class="badge ' + (esConf ? 'badge-confirmada' : 'badge-pendiente') + '" style="margin-top:4px;display:inline-block;">'
-                            + (esConf ? 'Confirmado' : 'Pendiente')
-                        + '</span>'
+                        + badge
                     + '</div>'
                 + '</div>'
                 + '<div style="display:flex;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-3);">'
                     + '<button class="btn btn-secondary btn-sm" onclick="abrirPresupuesto(\'' + p.id + '\')">'
-                        + '<span class="material-icons">' + (esConf ? 'visibility' : 'edit') + '</span> '
-                        + (esConf ? 'Ver' : 'Editar')
+                        + '<span class="material-icons">' + (esConf || esAnul ? 'visibility' : 'edit') + '</span> '
+                        + (esConf || esAnul ? 'Ver' : 'Editar')
                     + '</button>'
-                    + (!esConf ? '<button class="btn btn-primary btn-sm" onclick="abrirModalPago(\'' + p.id + '\')"><span class="material-icons">payments</span> Registrar pago y confirmar</button>' : '')
+                    + (!esConf && !esAnul ? '<button class="btn btn-primary btn-sm" onclick="abrirModalPago(\'' + p.id + '\')"><span class="material-icons">payments</span> Registrar pago y confirmar</button>' : '')
                     + '<button class="btn btn-danger btn-sm" onclick="eliminarPresupuesto(\'' + p.id + '\', ' + esConf + ')"><span class="material-icons">delete</span></button>'
                 + '</div>'
             + '</div>';
@@ -1339,7 +1324,7 @@
     });
 
     //    Modal de pago                                          
-    function renderCuentasSelect(moneda) {
+    function renderCuentasSelect(moneda, seleccionId) {
         var sel = document.getElementById('cuentaPago');
         var compatibles = cuentasCache.filter(function(c) { return (c.moneda || 'BRL') === moneda; });
         var otras       = cuentasCache.filter(function(c) { return (c.moneda || 'BRL') !== moneda; });
@@ -1355,8 +1340,60 @@
             });
             html += '</optgroup>';
         }
+        html += '<option value="__nueva">➕ Registrar cuenta nueva…</option>';
         sel.innerHTML = html;
+        sel.value = seleccionId || '';
+        if (sel.value !== (seleccionId || '')) sel.value = '';
+        document.getElementById('cuentaPagoAviso').style.display = sel.value ? 'none' : 'block';
     }
+
+    window.onCuentaPagoChange = function() {
+        var sel = document.getElementById('cuentaPago');
+        if (sel.value === '__nueva') {
+            sel.value = '';
+            abrirModalCuentaNueva();
+        }
+        document.getElementById('cuentaPagoAviso').style.display = sel.value ? 'none' : 'block';
+    };
+
+    // ── Cuenta nueva al vuelo ─────────────────────────────────
+    window.abrirModalCuentaNueva = function() {
+        document.getElementById('ncNombre').value = '';
+        document.getElementById('ncBanco').value  = '';
+        document.getElementById('ncMoneda').value = document.getElementById('monedaPago').value || 'BRL';
+        document.getElementById('ncError').style.display = 'none';
+        document.getElementById('modalCuentaNueva').style.display = 'flex';
+    };
+    window.cerrarModalCuentaNueva = function(e) {
+        if (e && e.target !== document.getElementById('modalCuentaNueva')) return;
+        document.getElementById('modalCuentaNueva').style.display = 'none';
+    };
+    window.guardarCuentaNueva = async function() {
+        var nombre = document.getElementById('ncNombre').value.trim();
+        var moneda = document.getElementById('ncMoneda').value;
+        var pais   = document.getElementById('ncPais').value;
+        var banco  = document.getElementById('ncBanco').value.trim();
+        if (!nombre) {
+            document.getElementById('ncErrorText').textContent = 'Poné un nombre para la cuenta.';
+            document.getElementById('ncError').style.display = 'flex';
+            return;
+        }
+        try {
+            var ref = await db.collection('cuentas').add({
+                nombre: nombre, banco: banco, moneda: moneda, pais: pais,
+                activa: true, saldoInicial: 0, saldoActual: 0, orden: 99,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                creadoPor: user.uid
+            });
+            cuentasCache.push({ id: ref.id, nombre: nombre, banco: banco, moneda: moneda, pais: pais, activa: true });
+            document.getElementById('modalCuentaNueva').style.display = 'none';
+            showToast('Cuenta "' + nombre + '" creada.', 'success');
+            renderCuentasSelect(document.getElementById('monedaPago').value, ref.id);
+        } catch(e) {
+            document.getElementById('ncErrorText').textContent = 'Error: ' + e.message;
+            document.getElementById('ncError').style.display = 'flex';
+        }
+    };
 
     async function actualizarEquivalencia() {
         var cont   = document.getElementById('equivalenciaBRL');
@@ -1378,7 +1415,7 @@
     }
 
     window.onMonedaChange = function() {
-        renderCuentasSelect(document.getElementById('monedaPago').value);
+        renderCuentasSelect(document.getElementById('monedaPago').value, document.getElementById('cuentaPago').value);
         actualizarEquivalencia();
     };
     document.getElementById('montoPago').addEventListener('input', actualizarEquivalencia);
@@ -1394,30 +1431,35 @@
         var p = presupuestosCache.find(function(x) { return x.id === id; });
         if (!p) return;
 
-        var displayMoneda = p.moneda || 'BRL';
-        var displayTotal = typeof p.totalOriginal === 'number' ? p.totalOriginal : p.totalBRL;
+        var monedaDefault = p.monedaTrato || 'BRL';
+        var montoDefault  = (monedaDefault !== 'BRL' && typeof p.totalTrato === 'number')
+            ? p.totalTrato
+            : (p.totalBRL || 0);
 
         document.getElementById('presupuestoId').value = id;
-        document.getElementById('montoPago').value     = displayTotal.toFixed(2);
-        document.getElementById('monedaPago').value    = displayMoneda;
+        document.getElementById('montoPago').value     = montoDefault.toFixed(2);
+        document.getElementById('monedaPago').value    = monedaDefault;
         document.getElementById('metodoPago').value    = 'pix';
         document.getElementById('tipoPago').value      = 'senia';
         document.getElementById('obsPago').value       = '';
         document.getElementById('equivalenciaBRL').textContent        = '';
         document.getElementById('errorModal').style.display           = 'none';
         document.getElementById('alertaConflictoModal').style.display = 'none';
-        
-        renderCuentasSelect(displayMoneda);
+        renderCuentasSelect(monedaDefault, '');
+        actualizarEquivalencia();
 
         var cabana = cabanaPorId(p.caba);
+        var totalLinea = (p.monedaTrato && p.monedaTrato !== 'BRL' && typeof p.totalTrato === 'number')
+            ? fmtMonto(p.totalTrato, p.monedaTrato) + ' ≈ ' + fmtMonto(p.totalBRL, 'BRL')
+                + (p.cotizacionTrato && p.cotizacionTrato.rateBRL ? ' (cotización congelada ' + p.cotizacionTrato.rateBRL + ')' : '')
+            : fmtMonto(p.totalBRL, 'BRL');
         document.getElementById('resumenPago').innerHTML = '<strong>Cliente:</strong> ' + escapeHtml(p.clienteNombre || ' ') + '<br>'
             + '<strong>Cabaña:</strong> ' + escapeHtml(nombreCabana(cabana) || ('Cabaña ' + p.caba)) + '<br>'
             + '<strong>Fechas:</strong> ' + p.checkIn + ' → ' + p.checkOut + ' (' + p.noches + ' noches)<br>'
             + '<strong>Huéspedes:</strong> ' + p.adultos + ' adulto(s)' + (p.ninos ? ', ' + p.ninos + ' niño(s)' : '') + '<br>'
-            + '<strong>Total:</strong> ' + fmtMonto(displayTotal, displayMoneda) + (displayMoneda !== 'BRL' ? ' (≈ ' + fmtMonto(p.totalBRL, 'BRL') + ')' : '');
+            + '<strong>Total del trato:</strong> ' + totalLinea;
 
         document.getElementById('modalOverlay').style.display = 'flex';
-        await actualizarEquivalencia();
 
         // Verificar disponibilidad al abrir el modal (consulta fresca)
         if (p.checkIn && p.checkOut && p.caba) {
@@ -1504,6 +1546,9 @@
                 origen:           'presupuesto',
                 estado:           'confirmada',
                 totalBRL:         p.totalBRL,
+                monedaTrato:      p.monedaTrato || 'BRL',
+                totalTrato:       (typeof p.totalTrato === 'number') ? p.totalTrato : p.totalBRL,
+                cotizacionTrato:  p.cotizacionTrato || null,
                 totalCalculadoBRL: (typeof p.totalCalculadoBRL === 'number') ? p.totalCalculadoBRL : p.totalBRL,
                 subtotalBRL:      p.subtotalBRL,
                 costoLimpiezaBRL: p.costoLimpiezaBRL,

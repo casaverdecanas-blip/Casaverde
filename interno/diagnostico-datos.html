@@ -314,7 +314,27 @@
                 );
             }), true);
 
-        var total = c1.length + c2.length + c3.length + c5.length;
+        //    Chequeo 8: pagos atrapados en reservas anuladas                  
+        var c8 = pagos.filter(function(p) {
+            if (!p.reservaId) return false;
+            var r = reservaPorId(p.reservaId);
+            return r && ['anulada', 'airbnb_cancelada'].indexOf(r.estado) !== -1;
+        });
+        html += tarjeta('Pagos atrapados en reservas ANULADAS', c8.length,
+            'Plata real registrada en una reserva que ya no existe operativamente — necesita destino. Se reasignan desde Pagos → botón ✏️ del ingreso → elegir la reserva correcta (los saldos se ajustan solos).',
+            c8.map(function(p) {
+                var r = reservaPorId(p.reservaId);
+                return item(
+                    fechaDe(p.creadoEn) + ' · <strong>' + fmtMon(p.monto, p.moneda) + '</strong>'
+                        + (typeof p.montoBRL === 'number' && p.moneda !== 'BRL' ? ' (≈' + fmt(p.montoBRL) + ')' : '')
+                        + ' · ' + escapeHtml(p.clienteNombre || '')
+                        + ' · reserva <code>' + p.reservaId + '</code> (<span class="flag-mal">' + r.estado + '</span>)'
+                        + (p.cuentaDestinoNombre ? ' · → ' + escapeHtml(p.cuentaDestinoNombre) : (p.sinCuenta ? ' · <span class="flag-mal">sin cuenta</span>' : '')),
+                    ''
+                );
+            }));
+
+        var total = c1.length + c2.length + c3.length + c5.length + c8.length;
         var resumen = total === 0
             ? '<div class="alert alert-success" style="margin-bottom:var(--space-4);"><span class="material-icons">check_circle</span> Sin problemas activos: referencias y saldos consistentes.</div>'
             : '<div class="alert alert-error" style="margin-bottom:var(--space-4);"><span class="material-icons">report</span> ' + total + ' problema(s) activo(s) encontrados — el detalle está abajo, cada uno con su reparación.</div>';

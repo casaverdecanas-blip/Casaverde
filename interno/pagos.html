@@ -267,15 +267,25 @@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Monto <span class="required">*</span></label>
-                    <input type="number" id="iMonto" class="form-control" step="0.01" min="0.01">
+                    <input type="number" id="iMonto" class="form-control" step="0.01" min="0.01" oninput="actualizarEquivIngreso()">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Moneda</label>
-                    <select id="iMoneda" class="form-control">
+                    <select id="iMoneda" class="form-control" onchange="onMonedaIngresoChange()">
                         <option value="BRL">BRL (R$)</option>
                         <option value="USD">USD (US$)</option>
+                        <option value="UYU">UYU ($U)</option>
                         <option value="ARS">ARS ($)</option>
                     </select>
+                </div>
+            </div>
+            <div id="iEquiv" style="font-size:var(--text-sm);color:var(--color-text-muted);margin:-6px 0 var(--space-3) 0;"></div>
+            <div class="form-group">
+                <label class="form-label">Cuenta de destino</label>
+                <select id="iCuenta" class="form-control" onchange="onCuentaSelChange('iCuenta','iCuentaAviso')"></select>
+                <div id="iCuentaAviso" style="display:none;background:#fef3e2;color:#b45309;border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);font-size:var(--text-xs);margin-top:6px;">
+                    ⚠️ El dinero quedará <strong>sin cuenta asociada</strong>. Si entró en una cuenta que el sistema todavía no conoce (ej. Midinero Flor),
+                    <a href="#" onclick="abrirModalCuentaNueva('iCuenta'); return false;" style="color:#b45309;font-weight:700;text-decoration:underline;">registrala ahora</a>.
                 </div>
             </div>
             <div class="form-row">
@@ -318,6 +328,133 @@
 
 
 <!-- ── MODAL: Registrar gasto (EXTENDIDO v4.3) ──────────────── -->
+<!-- ── MODAL: Editar / reasignar ingreso ───────────────────── -->
+<div class="modal-overlay" id="modalEditarIngreso" style="display:none;" onclick="cerrarModalEditarIngreso(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <div class="modal__title"><span class="material-icons">edit</span> Editar ingreso</div>
+            <button class="modal__close" onclick="cerrarModalEditarIngreso()"><span class="material-icons">close</span></button>
+        </div>
+        <div class="modal__body">
+            <input type="hidden" id="eiId">
+            <div class="form-group">
+                <label class="form-label">Reserva (podés moverlo a otra)</label>
+                <select id="eiReserva" class="form-control"></select>
+                <p class="form-hint">Si el pago quedó en una reserva anulada, elegí acá la reserva correcta.</p>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Monto <span class="required">*</span></label>
+                    <input type="number" id="eiMonto" class="form-control" step="0.01" min="0.01" oninput="actualizarEquivEdicion()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Moneda</label>
+                    <select id="eiMoneda" class="form-control" onchange="onMonedaEdicionChange()">
+                        <option value="BRL">BRL (R$)</option>
+                        <option value="USD">USD (US$)</option>
+                        <option value="UYU">UYU ($U)</option>
+                        <option value="ARS">ARS ($)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row" id="eiRateRow" style="display:none;">
+                <div class="form-group">
+                    <label class="form-label">Cotización (R$ por 1 unidad)</label>
+                    <input type="number" id="eiRate" class="form-control" step="0.0001" min="0" oninput="actualizarEquivEdicion()">
+                    <p class="form-hint">Precargada con la del pago o la vigente. Ajustala si el cambio real fue otro.</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Equivalente en R$</label>
+                    <input type="text" id="eiMontoBRL" class="form-control" disabled>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Cuenta de destino</label>
+                <select id="eiCuenta" class="form-control" onchange="onCuentaSelChange('eiCuenta','eiCuentaAviso')"></select>
+                <div id="eiCuentaAviso" style="display:none;background:#fef3e2;color:#b45309;border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);font-size:var(--text-xs);margin-top:6px;">
+                    ⚠️ Sin cuenta asociada —
+                    <a href="#" onclick="abrirModalCuentaNueva('eiCuenta'); return false;" style="color:#b45309;font-weight:700;text-decoration:underline;">registrala ahora</a>.
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Tipo</label>
+                    <select id="eiTipo" class="form-control">
+                        <option value="senia">Seña</option>
+                        <option value="parcial">Parcial</option>
+                        <option value="total">Total</option>
+                        <option value="ingreso_externo">Ingreso externo</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Observaciones</label>
+                    <input type="text" id="eiObs" class="form-control">
+                </div>
+            </div>
+            <div class="alert alert-info" style="font-size:var(--text-xs);">
+                <span class="material-icons">info</span>
+                Al guardar, los saldos de las reservas involucradas se ajustan solos: se descuenta lo que este pago aportaba y se suma lo nuevo.
+            </div>
+            <div class="alert alert-error" id="eiError" style="display:none;">
+                <span class="material-icons">error_outline</span><span id="eiErrorText"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModalEditarIngreso()">Cancelar</button>
+            <button class="btn btn-primary" id="eiBtnGuardar" onclick="guardarEdicionIngreso()">
+                <span class="material-icons">save</span> <span id="eiBtnText">Guardar cambios</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ── MODAL: Registrar cuenta nueva ───────────────────────── -->
+<div class="modal-overlay" id="modalCuentaNueva" style="display:none;" onclick="cerrarModalCuentaNueva(event)">
+    <div class="modal" style="max-width:420px;" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <div class="modal__title"><span class="material-icons">account_balance</span> Registrar cuenta nueva</div>
+            <button class="modal__close" onclick="cerrarModalCuentaNueva()"><span class="material-icons">close</span></button>
+        </div>
+        <div class="modal__body">
+            <div class="form-group">
+                <label class="form-label">Nombre <span class="required">*</span></label>
+                <input type="text" id="ncNombre" class="form-control" placeholder="Ej: Midinero Flor">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Moneda</label>
+                    <select id="ncMoneda" class="form-control">
+                        <option value="BRL">BRL (R$)</option>
+                        <option value="USD">USD (US$)</option>
+                        <option value="UYU">UYU ($U)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">País</label>
+                    <select id="ncPais" class="form-control">
+                        <option value="BR">🇧🇷 Brasil</option>
+                        <option value="UY">🇺🇾 Uruguay</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Banco / plataforma</label>
+                <input type="text" id="ncBanco" class="form-control" placeholder="Ej: Midinero, BTG, Prex… (opcional)">
+            </div>
+            <div class="alert alert-error" id="ncError" style="display:none;">
+                <span class="material-icons">error_outline</span><span id="ncErrorText"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModalCuentaNueva()">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarCuentaNueva()">
+                <span class="material-icons">save</span> Crear cuenta
+            </button>
+        </div>
+    </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -358,6 +495,109 @@
     // -- Estado local ------------------------------------------
     var reservasCache     = [];
     var ingresosCache     = [];
+
+    // ── Helpers multi-moneda y cuentas (v4.34) ────────────────
+    var SIMBOLO_MON = { BRL: 'R$', USD: 'US$', UYU: '$U', ARS: '$' };
+    function fmtMon(n, m) {
+        return (SIMBOLO_MON[m] || m || 'R$') + ' ' + (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    }
+    // Lo que un pago aporta al saldo en R$ de su reserva:
+    // BRL → su monto · otra moneda con equivalente guardado → montoBRL · sin equivalente → 0
+    function aporteBRL(p) {
+        if (!p) return 0;
+        if (p.moneda === 'BRL' || !p.moneda) return Number(p.monto) || 0;
+        if (typeof p.montoBRL === 'number' && !isNaN(p.montoBRL)) return p.montoBRL;
+        return 0;
+    }
+    var _ratesCache = null;
+    async function ratesSistema() {
+        if (_ratesCache) return _ratesCache;
+        try {
+            var c = await CVC.cargarCotizaciones();
+            if (c && c.rates && c.rates['BRL']) _ratesCache = c.rates;
+        } catch(e) {}
+        return _ratesCache;
+    }
+    // Cotización R$ por 1 unidad de la moneda (o null si no hay)
+    async function rateBRLDe(moneda) {
+        if (moneda === 'BRL') return 1;
+        var rates = await ratesSistema();
+        if (rates && rates[moneda] && rates['BRL']) {
+            return Math.round((rates['BRL'] / rates[moneda]) * 1000000) / 1000000;
+        }
+        return null;
+    }
+    function renderCuentaSelectEn(selId, moneda, seleccionId) {
+        var sel = document.getElementById(selId);
+        var compat = cuentasCache.filter(function(c) { return c.activa !== false && (c.moneda || 'BRL') === moneda; });
+        var otras  = cuentasCache.filter(function(c) { return c.activa !== false && (c.moneda || 'BRL') !== moneda; });
+        var html = '<option value="">— Asignar después —</option>';
+        compat.forEach(function(c) { html += '<option value="' + c.id + '">' + escapeHtml(c.nombre || c.id) + ' (' + (c.moneda || 'BRL') + ')</option>'; });
+        if (otras.length) {
+            html += '<optgroup label="Otras monedas">';
+            otras.forEach(function(c) { html += '<option value="' + c.id + '">' + escapeHtml(c.nombre || c.id) + ' (' + (c.moneda || 'BRL') + ')</option>'; });
+            html += '</optgroup>';
+        }
+        html += '<option value="__nueva">➕ Registrar cuenta nueva…</option>';
+        sel.innerHTML = html;
+        sel.value = seleccionId || '';
+        if (sel.value !== (seleccionId || '')) sel.value = '';
+    }
+    window.onCuentaSelChange = function(selId, avisoId) {
+        var sel = document.getElementById(selId);
+        if (sel.value === '__nueva') {
+            sel.value = '';
+            abrirModalCuentaNueva(selId);
+        }
+        document.getElementById(avisoId).style.display = sel.value ? 'none' : 'block';
+    };
+
+    // ── Cuenta nueva al vuelo ─────────────────────────────────
+    var _cuentaNuevaDestinoSel = null;   // a qué <select> devolverle la cuenta creada
+    window.abrirModalCuentaNueva = function(selDestino) {
+        _cuentaNuevaDestinoSel = selDestino || null;
+        document.getElementById('ncNombre').value = '';
+        document.getElementById('ncBanco').value  = '';
+        document.getElementById('ncError').style.display = 'none';
+        document.getElementById('modalCuentaNueva').style.display = 'flex';
+    };
+    window.cerrarModalCuentaNueva = function(e) {
+        if (e && e.target !== document.getElementById('modalCuentaNueva')) return;
+        document.getElementById('modalCuentaNueva').style.display = 'none';
+    };
+    window.guardarCuentaNueva = async function() {
+        var nombre = document.getElementById('ncNombre').value.trim();
+        var moneda = document.getElementById('ncMoneda').value;
+        var pais   = document.getElementById('ncPais').value;
+        var banco  = document.getElementById('ncBanco').value.trim();
+        if (!nombre) {
+            document.getElementById('ncErrorText').textContent = 'Poné un nombre para la cuenta.';
+            document.getElementById('ncError').style.display = 'flex';
+            return;
+        }
+        try {
+            var ref = await db.collection('cuentas').add({
+                nombre: nombre, banco: banco, moneda: moneda, pais: pais,
+                activa: true, saldoInicial: 0, saldoActual: 0, orden: 99,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                creadoPor: user.uid
+            });
+            cuentasCache.push({ id: ref.id, nombre: nombre, banco: banco, moneda: moneda, pais: pais, activa: true });
+            document.getElementById('modalCuentaNueva').style.display = 'none';
+            showToast('Cuenta "' + nombre + '" creada.', 'success');
+            if (_cuentaNuevaDestinoSel) {
+                var monedaCtx = moneda;
+                renderCuentaSelectEn(_cuentaNuevaDestinoSel, monedaCtx, ref.id);
+                var avisoId = _cuentaNuevaDestinoSel === 'iCuenta' ? 'iCuentaAviso' : 'eiCuentaAviso';
+                var aviso = document.getElementById(avisoId);
+                if (aviso) aviso.style.display = 'none';
+            }
+        } catch(e) {
+            document.getElementById('ncErrorText').textContent = 'Error: ' + e.message;
+            document.getElementById('ncError').style.display = 'flex';
+        }
+    };
+
     var egresosCache      = [];
     var honorariosCache   = [];
     var presupuestosCache = [];
@@ -485,7 +725,7 @@
         var ing = ingresosCache.filter(enMes);
         var egr = egresosCache.filter(function(g) { return enMes(g) && (g.circuito || 'fiscal') === 'fiscal'; });
         var hon = honorariosCache.filter(enMes);
-        var tIng = ing.reduce(function(a, p) { return a + (p.monto || 0); }, 0);
+        var tIng = ing.reduce(function(a, p) { return a + aporteBRL(p); }, 0);
         var tEgr = egr.reduce(function(a, g) { return a + (g.monto || 0); }, 0);
         var tHon = hon.reduce(function(a, h) { return a + (h.monto || 0); }, 0);
         var neto = tIng - tEgr - tHon;
@@ -510,20 +750,34 @@
         var container = document.getElementById('ingresosContainer');
         var lista     = ingresosCache.filter(enMes);
         if (!lista.length) { showEmpty(container, 'Sin ingresos', 'No hay cobros en este período.', 'trending_up'); return; }
-        var sumaBRL = lista.filter(function(p) { return p.moneda === 'BRL'; }).reduce(function(a, p) { return a + (p.monto || 0); }, 0);
+        var sumaBRL = lista.reduce(function(a, p) { return a + aporteBRL(p); }, 0);
         var rows = lista.map(function(p) {
             var res = reservasCache.find(function(r) { return r.id === p.reservaId; });
+            var resAnulada = res && ['anulada','airbnb_cancelada'].indexOf(res.estado) !== -1;
+            var montoCell = (p.moneda !== 'BRL' && p.moneda ? p.moneda + ' ' : 'R$ ') + (p.monto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+            if (p.moneda && p.moneda !== 'BRL') {
+                montoCell += (typeof p.montoBRL === 'number')
+                    ? '<br><span style="font-size:10px;color:var(--color-text-muted);">≈ R$ ' + p.montoBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</span>'
+                    : '<br><span style="font-size:10px;color:var(--color-danger);">sin equivalente</span>';
+            }
             return '<tr>' +
                 '<td>' + escapeHtml(p.fecha || (p.creadoEn && p.creadoEn.toDate ? p.creadoEn.toDate().toLocaleDateString('es-AR') : '--')) + '</td>' +
-                '<td><strong>' + escapeHtml(p.clienteNombre || (res ? res.nombre : '--')) + '</strong></td>' +
+                '<td><strong>' + escapeHtml(p.clienteNombre || (res ? res.nombre : '--')) + '</strong>' +
+                    (resAnulada ? '<br><span style="font-size:10px;color:var(--color-danger);font-weight:700;">⚠️ reserva anulada — reasignar</span>' : '') +
+                    (p.cuentaDestinoNombre ? '<br><span style="font-size:10px;color:var(--color-text-muted);">→ ' + escapeHtml(p.cuentaDestinoNombre) + '</span>'
+                        : (p.sinCuenta ? '<br><span style="font-size:10px;color:#b45309;">sin cuenta asignada</span>' : '')) +
+                '</td>' +
                 '<td>' + escapeHtml(p.tipo || '--') + '</td>' +
-                '<td class="fila-monto fila-ingreso">' + (p.moneda !== 'BRL' ? p.moneda + ' ' : 'R$ ') + (p.monto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td>' +
+                '<td class="fila-monto fila-ingreso">' + montoCell + '</td>' +
                 '<td>' + escapeHtml(p.metodo || '--') + '</td>' +
                 '<td class="text-muted text-xs">' + escapeHtml(p.observaciones || '--') + '</td>' +
-                '<td><button class="btn btn-danger btn-sm" onclick="eliminarIngreso(\'' + p.id + '\')"><span class="material-icons">delete</span></button></td>' +
+                '<td style="white-space:nowrap;">' +
+                    '<button class="btn btn-secondary btn-sm" onclick="abrirEditarIngreso(\'' + p.id + '\')"><span class="material-icons">edit</span></button> ' +
+                    '<button class="btn btn-danger btn-sm" onclick="eliminarIngreso(\'' + p.id + '\')"><span class="material-icons">delete</span></button>' +
+                '</td>' +
                 '</tr>';
         }).join('');
-        container.innerHTML = '<div class="table-container"><table class="table table-responsive"><thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Monto</th><th>Método</th><th>Obs.</th><th></th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr style="background:var(--color-success-bg);"><td colspan="3" style="font-weight:700;padding:var(--space-3) var(--space-4);">TOTAL</td><td class="fila-monto fila-ingreso" style="padding:var(--space-3) var(--space-4);">R$ ' + sumaBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td><td colspan="3"></td></tfoot></table></div>';
+        container.innerHTML = '<div class="table-container"><table class="table table-responsive"><thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Monto</th><th>Método</th><th>Obs.</th><th></th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr style="background:var(--color-success-bg);"><td colspan="3" style="font-weight:700;padding:var(--space-3) var(--space-4);">TOTAL (equiv. R$)</td><td class="fila-monto fila-ingreso" style="padding:var(--space-3) var(--space-4);">R$ ' + sumaBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td><td colspan="3"></td></tfoot></table></div>';
     }
 
     // -- Render: Egresos ---------------------------------------
@@ -735,9 +989,27 @@
         document.getElementById('iMetodo').value   = 'pix';
         document.getElementById('iTipo').value     = 'seña';
         document.getElementById('iObs').value      = '';
+        renderCuentaSelectEn('iCuenta', 'BRL', '');
+        document.getElementById('iCuentaAviso').style.display = 'block';
+        document.getElementById('iEquiv').textContent = '';
         document.getElementById('saldoBox').style.display = 'none';
         document.getElementById('iError').style.display   = 'none';
         document.getElementById('modalIngreso').style.display = 'flex';
+    };
+    window.onMonedaIngresoChange = function() {
+        var m = document.getElementById('iMoneda').value;
+        renderCuentaSelectEn('iCuenta', m, document.getElementById('iCuenta').value);
+        actualizarEquivIngreso();
+    };
+    window.actualizarEquivIngreso = async function() {
+        var m     = document.getElementById('iMoneda').value;
+        var monto = parseFloat(document.getElementById('iMonto').value);
+        var cont  = document.getElementById('iEquiv');
+        if (m === 'BRL' || !monto || monto <= 0) { cont.textContent = ''; return; }
+        var rate = await rateBRLDe(m);
+        cont.textContent = rate
+            ? '≈ R$ ' + (Math.round(monto * rate * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ' (cotización ' + rate + ')'
+            : '⚠️ Sin cotización cargada para ' + m + ' — el pago se registra igual pero no sumará al saldo hasta editarlo con cotización.';
     };
     window.cerrarModalIngreso = function(e) {
         if (e && e.target !== document.getElementById('modalIngreso')) return;
@@ -761,6 +1033,9 @@
         var clienteNombre  = (_reservaSel && _reservaSel.nombre) || '';
         var monto         = parseFloat(document.getElementById('iMonto').value);
         var monedaPago    = document.getElementById('iMoneda').value;
+        var cuentaSel     = document.getElementById('iCuenta');
+        var cuentaId      = cuentaSel.value === '__nueva' ? '' : cuentaSel.value;
+        var cuentaDoc     = cuentaId ? cuentasCache.find(function(c) { return c.id === cuentaId; }) : null;
         document.getElementById('iError').style.display = 'none';
         if (!reservaId) { mostrarErrorIngreso('Seleccioná una reserva.'); return; }
         if (!monto || monto <= 0) { mostrarErrorIngreso('Ingresá un monto válido.'); return; }
@@ -768,32 +1043,223 @@
         var text = document.getElementById('iBtnText');
         btn.disabled = true; text.textContent = 'Guardando...';
         try {
+            // Equivalente en R$ (congelado con la cotización del sistema al momento del pago)
+            var montoBRL = null, cotUsada = null;
+            if (monedaPago === 'BRL') {
+                montoBRL = monto;
+            } else {
+                var rate = await rateBRLDe(monedaPago);
+                if (rate) {
+                    montoBRL = Math.round(monto * rate * 100) / 100;
+                    cotUsada = { rateBRL: rate, moneda: monedaPago, fuente: 'sistema' };
+                }
+            }
+
             await db.collection('pagos').add({
-                reservaId, clienteNombre, monto, moneda: monedaPago,
+                reservaId: reservaId, clienteNombre: clienteNombre,
+                monto: monto, moneda: monedaPago,
+                montoBRL: montoBRL,
+                cotizacionUsada: cotUsada,
+                sinCotizacion: (monedaPago !== 'BRL' && montoBRL === null),
+                cuentaDestinoId: cuentaId || null,
+                cuentaDestinoNombre: cuentaDoc ? (cuentaDoc.nombre || null) : null,
+                sinCuenta: !cuentaId,
                 metodo: document.getElementById('iMetodo').value,
                 tipo:   document.getElementById('iTipo').value,
                 observaciones: document.getElementById('iObs').value.trim(),
                 creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
                 creadoPor: user.uid
             });
-            if (reservaId && monedaPago === 'BRL') {
+            if (reservaId && montoBRL !== null) {
                 await db.collection('reservas').doc(reservaId).update({
-                    pagadoBRL: firebase.firestore.FieldValue.increment(monto)
+                    pagadoBRL: firebase.firestore.FieldValue.increment(montoBRL)
                 });
             }
-            showToast('Ingreso registrado.', 'success');
+            showToast('Ingreso registrado' + (montoBRL !== null && monedaPago !== 'BRL' ? ' (≈ R$ ' + montoBRL.toLocaleString('pt-BR', {minimumFractionDigits:2}) + ')' : '') + '.', 'success');
             document.getElementById('modalIngreso').style.display = 'none';
             await cargarTodo();
         } catch(e) { mostrarErrorIngreso('Error: ' + e.message); }
         finally { btn.disabled = false; text.textContent = 'Guardar'; }
     };
     window.eliminarIngreso = async function(id) {
-        if (!confirm('¿Eliminar este ingreso? Esta acción no se puede deshacer.')) return;
+        var p = ingresosCache.find(function(x) { return x.id === id; });
+        var aporte = aporteBRL(p);
+        var msg = '¿Eliminar este ingreso?' + (p && p.reservaId && aporte > 0
+            ? ' Se descontarán R$ ' + aporte.toLocaleString('pt-BR', {minimumFractionDigits:2}) + ' del saldo pagado de su reserva.'
+            : '') + ' Esta acción no se puede deshacer.';
+        if (!confirm(msg)) return;
         try {
+            if (p && p.reservaId && aporte > 0) {
+                var resExiste = reservasCache.find(function(r) { return r.id === p.reservaId; });
+                if (resExiste) {
+                    await db.collection('reservas').doc(p.reservaId).update({
+                        pagadoBRL: firebase.firestore.FieldValue.increment(-aporte)
+                    });
+                }
+            }
             await db.collection('pagos').doc(id).delete();
-            showToast('Ingreso eliminado.', 'warning');
+            showToast('Ingreso eliminado' + (aporte > 0 ? ' y saldo ajustado' : '') + '.', 'warning');
             await cargarTodo();
         } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    // ── Editar / reasignar ingreso (v4.34) ────────────────────
+    window.abrirEditarIngreso = async function(id) {
+        var p = ingresosCache.find(function(x) { return x.id === id; });
+        if (!p) return;
+        document.getElementById('eiId').value     = id;
+        document.getElementById('eiMonto').value  = p.monto || '';
+        document.getElementById('eiMoneda').value = p.moneda || 'BRL';
+        document.getElementById('eiTipo').value   = p.tipo || 'senia';
+        document.getElementById('eiObs').value    = p.observaciones || '';
+        document.getElementById('eiError').style.display = 'none';
+
+        // Reservas: activas primero, anuladas al final (para poder sacar pagos de ellas)
+        var sel = document.getElementById('eiReserva');
+        var opts = '<option value="">— Sin reserva —</option>';
+        var orden = reservasCache.slice().sort(function(a, b) {
+            var pa = ['anulada','airbnb_cancelada'].indexOf(a.estado) !== -1 ? 1 : 0;
+            var pb = ['anulada','airbnb_cancelada'].indexOf(b.estado) !== -1 ? 1 : 0;
+            return pa - pb;
+        });
+        orden.forEach(function(r) {
+            var anulada = ['anulada','airbnb_cancelada'].indexOf(r.estado) !== -1;
+            opts += '<option value="' + r.id + '">'
+                + escapeHtml(r.nombre || 'Sin nombre') + ' · C' + r.caba
+                + (anulada ? ' · ⚠️ ANULADA' : '')
+                + '</option>';
+        });
+        sel.innerHTML = opts;
+        sel.value = p.reservaId || '';
+
+        // Cotización precargada: la del pago, o la vigente del sistema
+        var m = p.moneda || 'BRL';
+        if (m !== 'BRL') {
+            var rate = (p.cotizacionUsada && p.cotizacionUsada.rateBRL)
+                ? p.cotizacionUsada.rateBRL
+                : ((p.cotizacionUsada && p.cotizacionUsada.rateMoneda && p.cotizacionUsada.rateBRL) ? p.cotizacionUsada.rateBRL : null);
+            if (!rate && typeof p.montoBRL === 'number' && p.monto) rate = Math.round((p.montoBRL / p.monto) * 1000000) / 1000000;
+            if (!rate) rate = await rateBRLDe(m);
+            document.getElementById('eiRate').value = rate || '';
+        }
+        onMonedaEdicionChange();
+        renderCuentaSelectEn('eiCuenta', m, p.cuentaDestinoId || '');
+        document.getElementById('eiCuentaAviso').style.display = p.cuentaDestinoId ? 'none' : 'block';
+        actualizarEquivEdicion();
+        document.getElementById('modalEditarIngreso').style.display = 'flex';
+    };
+    window.cerrarModalEditarIngreso = function(e) {
+        if (e && e.target !== document.getElementById('modalEditarIngreso')) return;
+        document.getElementById('modalEditarIngreso').style.display = 'none';
+    };
+    window.onMonedaEdicionChange = async function() {
+        var m = document.getElementById('eiMoneda').value;
+        document.getElementById('eiRateRow').style.display = m === 'BRL' ? 'none' : 'flex';
+        if (m !== 'BRL' && !document.getElementById('eiRate').value) {
+            var rate = await rateBRLDe(m);
+            if (rate) document.getElementById('eiRate').value = rate;
+        }
+        renderCuentaSelectEn('eiCuenta', m, document.getElementById('eiCuenta').value);
+        actualizarEquivEdicion();
+    };
+    window.actualizarEquivEdicion = function() {
+        var m     = document.getElementById('eiMoneda').value;
+        var monto = parseFloat(document.getElementById('eiMonto').value) || 0;
+        var out   = document.getElementById('eiMontoBRL');
+        if (m === 'BRL') { out.value = ''; return; }
+        var rate = parseFloat(document.getElementById('eiRate').value);
+        out.value = (rate && monto)
+            ? 'R$ ' + (Math.round(monto * rate * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+            : 'sin cotización';
+    };
+    window.guardarEdicionIngreso = async function() {
+        var id = document.getElementById('eiId').value;
+        var p  = ingresosCache.find(function(x) { return x.id === id; });
+        if (!p) return;
+
+        var nuevoReservaId = document.getElementById('eiReserva').value;
+        var nuevoMonto     = parseFloat(document.getElementById('eiMonto').value);
+        var nuevaMoneda    = document.getElementById('eiMoneda').value;
+        var cuentaSel      = document.getElementById('eiCuenta');
+        var cuentaId       = cuentaSel.value === '__nueva' ? '' : cuentaSel.value;
+        var cuentaDoc      = cuentaId ? cuentasCache.find(function(c) { return c.id === cuentaId; }) : null;
+        document.getElementById('eiError').style.display = 'none';
+
+        if (!nuevoMonto || nuevoMonto <= 0) {
+            document.getElementById('eiErrorText').textContent = 'Ingresá un monto válido.';
+            document.getElementById('eiError').style.display = 'flex';
+            return;
+        }
+
+        // Nuevo equivalente en R$
+        var nuevoMontoBRL = null, nuevaCot = null;
+        if (nuevaMoneda === 'BRL') {
+            nuevoMontoBRL = nuevoMonto;
+        } else {
+            var rate = parseFloat(document.getElementById('eiRate').value);
+            if (rate && rate > 0) {
+                nuevoMontoBRL = Math.round(nuevoMonto * rate * 100) / 100;
+                nuevaCot = { rateBRL: rate, moneda: nuevaMoneda, fuente: 'manual' };
+            }
+        }
+
+        var btn = document.getElementById('eiBtnGuardar');
+        var txt = document.getElementById('eiBtnText');
+        btn.disabled = true; txt.textContent = 'Guardando...';
+
+        try {
+            var aporteViejo = aporteBRL(p);
+            var aporteNuevo = (nuevoMontoBRL !== null) ? nuevoMontoBRL : 0;
+            var reservaVieja = p.reservaId || '';
+
+            // Ajustar saldos: descontar del origen, sumar al destino
+            if (reservaVieja === nuevoReservaId) {
+                var delta = Math.round((aporteNuevo - aporteViejo) * 100) / 100;
+                if (nuevoReservaId && Math.abs(delta) >= 0.01 && reservasCache.find(function(r) { return r.id === nuevoReservaId; })) {
+                    await db.collection('reservas').doc(nuevoReservaId).update({
+                        pagadoBRL: firebase.firestore.FieldValue.increment(delta)
+                    });
+                }
+            } else {
+                if (reservaVieja && aporteViejo > 0 && reservasCache.find(function(r) { return r.id === reservaVieja; })) {
+                    await db.collection('reservas').doc(reservaVieja).update({
+                        pagadoBRL: firebase.firestore.FieldValue.increment(-aporteViejo)
+                    });
+                }
+                if (nuevoReservaId && aporteNuevo > 0) {
+                    await db.collection('reservas').doc(nuevoReservaId).update({
+                        pagadoBRL: firebase.firestore.FieldValue.increment(aporteNuevo)
+                    });
+                }
+            }
+
+            var resNueva = reservasCache.find(function(r) { return r.id === nuevoReservaId; });
+            await db.collection('pagos').doc(id).update({
+                reservaId: nuevoReservaId || null,
+                clienteNombre: resNueva ? (resNueva.nombre || p.clienteNombre || '') : (p.clienteNombre || ''),
+                monto: nuevoMonto,
+                moneda: nuevaMoneda,
+                montoBRL: nuevoMontoBRL,
+                cotizacionUsada: nuevaCot,
+                sinCotizacion: (nuevaMoneda !== 'BRL' && nuevoMontoBRL === null),
+                cuentaDestinoId: cuentaId || null,
+                cuentaDestinoNombre: cuentaDoc ? (cuentaDoc.nombre || null) : null,
+                sinCuenta: !cuentaId,
+                tipo: document.getElementById('eiTipo').value,
+                observaciones: document.getElementById('eiObs').value.trim(),
+                editadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                editadoPor: user.uid
+            });
+
+            showToast('Ingreso actualizado y saldos ajustados.', 'success');
+            document.getElementById('modalEditarIngreso').style.display = 'none';
+            await cargarTodo();
+        } catch(e) {
+            document.getElementById('eiErrorText').textContent = 'Error: ' + e.message;
+            document.getElementById('eiError').style.display = 'flex';
+        } finally {
+            btn.disabled = false; txt.textContent = 'Guardar cambios';
+        }
     };
 
     // -- Modal: Egreso (EXTENDIDO) -----------------------------
