@@ -37,6 +37,21 @@
             color: var(--color-text-muted);
             margin-top: var(--space-2);
         }
+        /* Rango seleccionado con toques (entrada → salida) */
+        .fc .fc-bg-event.sel-rango { background: var(--color-primary); opacity: 0.28; }
+        .sel-bar {
+            display: none;
+            align-items: center;
+            gap: var(--space-3);
+            flex-wrap: wrap;
+            background: var(--color-primary-light);
+            border: 1px solid rgba(45,90,39,0.25);
+            border-radius: var(--radius-md);
+            padding: var(--space-3) var(--space-4);
+            margin-top: var(--space-3);
+            font-size: var(--text-sm);
+            font-weight: 600;
+        }
 
         /* ── Leyenda de cabañas ───────────────────────────────── */
         .leyenda {
@@ -209,9 +224,11 @@
         </div>
         <div class="leyenda" id="leyendaCabanas"></div>
         <div id="calendar"></div>
+        <div class="sel-bar" id="seleccionBar"></div>
         <div class="fc-hint">
-            💡 Marcá un rango de fechas en el calendario para crear un presupuesto con esas fechas.
-            Tocá un presupuesto para abrirlo y editarlo.
+            💡 Tocá el día de <strong>entrada</strong> y después el de <strong>salida</strong>: el rango queda
+            marcado en verde y aparece el botón para generar el presupuesto con esas fechas.
+            Tocá un presupuesto existente para abrirlo y editarlo.
         </div>
     </div>
 
@@ -675,11 +692,31 @@
             selectMirror: true,
             select: function(info) {
                 calendar.unselect();
-                // endStr de FullCalendar es exclusivo → coincide con el check-out
-                abrirModalNuevo(info.startStr, info.endStr);
+                // Arrastre (desktop): también deja la selección marcada con su botón
+                selInicio = info.startStr;
+                selFin    = info.endStr;   // exclusivo → coincide con el check-out
+                calendar.refetchEvents();
+                renderSeleccionBar();
+            },
+            dateClick: function(info) {
+                var d = info.dateStr;
+                if (!selInicio || selFin) {
+                    // Primer toque (o reinicio tras selección completa): día de entrada
+                    selInicio = d;
+                    selFin    = null;
+                } else if (d > selInicio) {
+                    // Segundo toque: día de salida
+                    selFin = d;
+                } else {
+                    // Tocó un día anterior o el mismo: la entrada se reinicia ahí
+                    selInicio = d;
+                    selFin    = null;
+                }
+                calendar.refetchEvents();
+                renderSeleccionBar();
             },
             events: function(info, success) {
-                success(eventosPresupuestos().concat(eventosReservas()));
+                success(eventosPresupuestos().concat(eventosReservas()).concat(eventosSeleccion()));
             },
             eventClick: function(info) {
                 if (info.event.extendedProps.tipo === 'reserva') {
@@ -715,6 +752,64 @@
                 };
             });
     }
+
+    //    Selección de fechas por toques (entrada → salida)      
+    var selInicio = null;   // 'YYYY-MM-DD' del día de entrada
+    var selFin    = null;   // 'YYYY-MM-DD' del día de salida (check-out)
+
+    function fechaCorta(iso) {
+        if (!iso) return '';
+        var p = iso.split('-');
+        return p[2] + '/' + p[1];
+    }
+
+    function eventosSeleccion() {
+        if (!selInicio) return [];
+        // Pintamos hasta el día de salida INCLUSIVE (end exclusivo → +1 día)
+        var finPintado = selFin || selInicio;
+        var d = new Date(finPintado + 'T12:00:00');
+        d.setDate(d.getDate() + 1);
+        return [{
+            id:         'seleccion-actual',
+            start:      selInicio,
+            end:        d.toISOString().slice(0, 10),
+            display:    'background',
+            classNames: ['sel-rango']
+        }];
+    }
+
+    function renderSeleccionBar() {
+        var bar = document.getElementById('seleccionBar');
+        if (!selInicio) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+
+        if (!selFin) {
+            bar.innerHTML = '📍 Entrada: <strong>' + fechaCorta(selInicio) + '</strong>'
+                + ' — ahora tocá el día de <strong>salida</strong>'
+                + '<button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="limpiarSeleccion()">'
+                + '<span class="material-icons" style="font-size:16px;">close</span> Cancelar</button>';
+        } else {
+            var noches = Math.round((new Date(selFin + 'T12:00:00') - new Date(selInicio + 'T12:00:00')) / 86400000);
+            bar.innerHTML = '✅ <strong>' + fechaCorta(selInicio) + ' → ' + fechaCorta(selFin) + '</strong>'
+                + ' · ' + noches + ' noche' + (noches === 1 ? '' : 's')
+                + '<button class="btn btn-primary btn-sm" style="margin-left:auto;" onclick="realizarPresupuestoSeleccion()">'
+                + '<span class="material-icons" style="font-size:16px;">request_quote</span> Realizar presupuesto</button>'
+                + '<button class="btn btn-ghost btn-sm" onclick="limpiarSeleccion()">'
+                + '<span class="material-icons" style="font-size:16px;">close</span></button>';
+        }
+        bar.style.display = 'flex';
+    }
+
+    window.realizarPresupuestoSeleccion = function() {
+        if (!selInicio || !selFin) return;
+        abrirModalNuevo(selInicio, selFin);
+    };
+
+    window.limpiarSeleccion = function() {
+        selInicio = null;
+        selFin    = null;
+        if (calendar) calendar.refetchEvents();
+        renderSeleccionBar();
+    };
 
     function eventosReservas() {
         return reservasCache.map(function(r) {
@@ -1152,6 +1247,7 @@
 
             document.getElementById('modalPresupuesto').style.display = 'none';
             await recargarPresupuestos();
+            limpiarSeleccion();
 
         } catch (e) {
             mostrarErrorForm('Error al guardar: ' + e.message);

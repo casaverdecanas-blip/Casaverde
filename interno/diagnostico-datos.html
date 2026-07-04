@@ -321,7 +321,7 @@
             return r && ['anulada', 'airbnb_cancelada'].indexOf(r.estado) !== -1;
         });
         html += tarjeta('Pagos atrapados en reservas ANULADAS', c8.length,
-            'Plata real registrada en una reserva que ya no existe operativamente — necesita destino. Se reasignan desde Pagos → botón ✏️ del ingreso → elegir la reserva correcta (los saldos se ajustan solos).',
+            'Plata real registrada en una reserva que ya no existe operativamente — necesita destino. Dos salidas: <strong>reasignarlo</strong> a la reserva correcta desde Pagos → ✏️ (si el pago es válido), o <strong>eliminarlo acá</strong> (si fue una carga de prueba o errónea que vas a volver a registrar bien). Al eliminar se descuenta su aporte del saldo de la reserva.',
             c8.map(function(p) {
                 var r = reservaPorId(p.reservaId);
                 return item(
@@ -330,9 +330,28 @@
                         + ' · ' + escapeHtml(p.clienteNombre || '')
                         + ' · reserva <code>' + p.reservaId + '</code> (<span class="flag-mal">' + r.estado + '</span>)'
                         + (p.cuentaDestinoNombre ? ' · → ' + escapeHtml(p.cuentaDestinoNombre) : (p.sinCuenta ? ' · <span class="flag-mal">sin cuenta</span>' : '')),
-                    ''
+                    '<button class="btn btn-danger btn-sm" onclick="eliminarPagoDiag(\'' + p.id + '\')">'
+                        + '<span class="material-icons">delete</span> Eliminar pago</button>'
                 );
             }));
+
+        //    Chequeo 9: reservas anuladas depurables                          
+        var anuladas = reservas.filter(function(r) {
+            return ['anulada', 'airbnb_cancelada'].indexOf(r.estado) !== -1;
+        });
+        html += tarjeta('Reservas anuladas (depuración)', anuladas.length,
+            'Las anuladas no bloquean nada, pero acumulan ruido. Las que ya no tienen pagos vinculados se pueden <strong>eliminar definitivamente</strong> (se borra también su rastro en la disponibilidad pública). Las que todavía tienen pagos, primero resolvé los pagos (arriba).',
+            anuladas.map(function(r) {
+                var pgs = pagosDeReserva(r.id);
+                return item(
+                    etiquetaRes(r)
+                        + (pgs.length ? ' · <span class="flag-mal">' + pgs.length + ' pago(s) vinculado(s)</span>' : ' · <span class="flag-ok">sin pagos</span>'),
+                    pgs.length
+                        ? '<span style="font-size:var(--text-xs);color:var(--color-text-muted);">resolvé los pagos primero</span>'
+                        : '<button class="btn btn-danger btn-sm" onclick="eliminarReservaDiag(\'' + r.id + '\')">'
+                            + '<span class="material-icons">delete_forever</span> Eliminar definitivamente</button>'
+                );
+            }), true);
 
         var total = c1.length + c2.length + c3.length + c5.length + c8.length;
         var resumen = total === 0
@@ -414,6 +433,44 @@
         try {
             await db.collection('reservas').doc(reservaId).update({ pagadoBRL: suma });
             showToast('Saldo corregido.', 'success');
+            analizar();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    window.eliminarPagoDiag = async function(id) {
+        var p = pagos.find(function(x) { return x.id === id; });
+        if (!p) return;
+        var aporte = aporteBRL(p);
+        var msg = '¿Eliminar definitivamente este pago de ' + fmtMon(p.monto, p.moneda) + '?'
+            + (aporte > 0 && p.reservaId && reservaPorId(p.reservaId)
+                ? ' Se descontarán ' + fmt(aporte) + ' del pagadoBRL de su reserva.' : '')
+            + ' Usalo solo para cargas erróneas o de prueba — si el pago es real, reasignalo desde Pagos → ✏️.';
+        if (!confirm(msg)) return;
+        try {
+            if (aporte > 0 && p.reservaId && reservaPorId(p.reservaId)) {
+                await db.collection('reservas').doc(p.reservaId).update({
+                    pagadoBRL: firebase.firestore.FieldValue.increment(-aporte)
+                });
+            }
+            await db.collection('pagos').doc(id).delete();
+            showToast('Pago eliminado' + (aporte > 0 ? ' y saldo ajustado' : '') + '.', 'warning');
+            analizar();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    window.eliminarReservaDiag = async function(id) {
+        var r = reservaPorId(id);
+        if (!r) return;
+        if (pagosDeReserva(id).length) {
+            showToast('Esta reserva todavía tiene pagos vinculados — resolvelos primero.', 'error');
+            return;
+        }
+        if (!confirm('¿Eliminar DEFINITIVAMENTE la reserva anulada de "' + (r.nombre || 'Sin nombre')
+            + '" (' + fechaDe(r.checkIn) + ' → ' + fechaDe(r.checkOut) + ')? Se borra el documento y su rastro en la disponibilidad pública. No se puede deshacer.')) return;
+        try {
+            try { await db.collection('disponibilidad').doc(id).delete(); } catch(e) {}
+            await db.collection('reservas').doc(id).delete();
+            showToast('Reserva eliminada definitivamente.', 'warning');
             analizar();
         } catch(e) { showToast('Error: ' + e.message, 'error'); }
     };
