@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico de datos · Casa Verde Canas</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .diag-card {
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-4);
+            margin-bottom: var(--space-4);
+            background: var(--color-surface);
+        }
+        .diag-card.ok    { border-left: 5px solid var(--color-success); }
+        .diag-card.warn  { border-left: 5px solid var(--color-warning); }
+        .diag-card.error { border-left: 5px solid var(--color-danger); }
+        .diag-titulo {
+            display: flex; align-items: center; gap: 8px;
+            font-weight: 800; font-size: var(--text-md);
+            margin-bottom: var(--space-2);
+        }
+        .diag-conteo {
+            margin-left: auto;
+            font-size: var(--text-sm);
+            font-weight: 700;
+            border-radius: 12px;
+            padding: 2px 12px;
+        }
+        .diag-card.ok    .diag-conteo { background: #e6f4ea; color: var(--color-success); }
+        .diag-card.warn  .diag-conteo { background: #fef3e2; color: #b45309; }
+        .diag-card.error .diag-conteo { background: #fdecea; color: var(--color-danger); }
+        .diag-desc { font-size: var(--text-sm); color: var(--color-text-secondary); margin-bottom: var(--space-2); }
+        .diag-item {
+            font-size: var(--text-sm);
+            padding: var(--space-2);
+            border-top: 1px dashed var(--color-border);
+            display: flex; flex-wrap: wrap; gap: var(--space-2);
+            align-items: center; justify-content: space-between;
+            line-height: 1.6;
+        }
+        .diag-item code {
+            background: var(--color-bg);
+            border-radius: 4px;
+            padding: 1px 5px;
+            font-size: 11px;
+        }
+        .mini-json {
+            display: none;
+            width: 100%;
+            background: #1e1e1e; color: #ce9;
+            font-family: var(--font-mono); font-size: 11px;
+            border-radius: var(--radius-sm);
+            padding: var(--space-2);
+            overflow-x: auto;
+            white-space: pre;
+        }
+        .tabla-datos { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
+        .tabla-datos th, .tabla-datos td {
+            border-bottom: 1px solid var(--color-border-light);
+            padding: 6px 8px; text-align: left; vertical-align: top;
+        }
+        .tabla-datos th { background: var(--color-bg); position: sticky; top: 0; }
+        .chip-moneda { font-weight: 700; border-radius: 4px; padding: 1px 6px; font-size: 10px; }
+        .chip-BRL { background: #e6f4ea; color: #137333; }
+        .chip-USD { background: #e8f0fe; color: #1a56db; }
+        .chip-UYU { background: #f3e8ff; color: #7e22ce; }
+        .flag-mal { color: var(--color-danger); font-weight: 700; }
+        .flag-ok  { color: var(--color-success); font-weight: 700; }
+        .scroll-x { overflow-x: auto; }
+    </style>
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">troubleshoot</span>
+        Diagnóstico de datos — presupuestos · reservas · pagos
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span><span id="userName">—</span></div>
+        <button class="btn-logout" onclick="window.location.href='dashboard.html'">
+            <span class="material-icons">arrow_back</span> Volver
+        </button>
+    </div>
+</header>
+
+<main class="admin-content">
+
+    <div class="alert alert-info" style="margin-bottom:var(--space-4);">
+        <span class="material-icons">info</span>
+        Esta página es solo de administración y no aparece en el menú. Lee toda la base y cruza
+        los datos. Las reparaciones piden confirmación y hacen exactamente lo que dicen — nada más.
+    </div>
+
+    <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;margin-bottom:var(--space-4);">
+        <button class="btn btn-primary" onclick="analizar()">
+            <span class="material-icons">refresh</span> Volver a analizar
+        </button>
+        <button class="btn btn-secondary" id="btnRepararTodos" style="display:none;" onclick="repararTodosSaldos()">
+            <span class="material-icons">build</span> Recalcular TODOS los saldos con diferencia
+        </button>
+    </div>
+
+    <div id="resultado">
+        <div class="loading-state"><div class="spinner"></div> Analizando la base…</div>
+    </div>
+
+    <!-- Datos crudos -->
+    <div class="card" style="margin-top:var(--space-6);">
+        <div class="card__header"><h2 class="card__title">
+            <span class="material-icons">table_rows</span> Datos crudos (tocá una fila para ver el documento completo)
+        </h2></div>
+        <div class="filtros-bar" style="margin-bottom:var(--space-3);">
+            <input type="text" id="buscadorCrudo" class="form-control" style="max-width:280px;"
+                   placeholder="Filtrar por nombre o id…" oninput="renderCrudos()">
+        </div>
+        <h3 style="font-size:var(--text-sm);margin:var(--space-3) 0 var(--space-2);">PRESUPUESTOS (<span id="cntPres">0</span>)</h3>
+        <div class="scroll-x"><table class="tabla-datos" id="tblPres"></table></div>
+        <h3 style="font-size:var(--text-sm);margin:var(--space-4) 0 var(--space-2);">RESERVAS (<span id="cntRes">0</span>)</h3>
+        <div class="scroll-x"><table class="tabla-datos" id="tblRes"></table></div>
+        <h3 style="font-size:var(--text-sm);margin:var(--space-4) 0 var(--space-2);">PAGOS (<span id="cntPag">0</span>)</h3>
+        <div class="scroll-x"><table class="tabla-datos" id="tblPag"></table></div>
+    </div>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async function() {
+    var { user, userData } = await CVC.verificarAuth(['admin']);
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+
+    var db = CVC.db;
+    var escapeHtml = CVC.escapeHtml;
+    var showToast  = CVC.showToast;
+
+    var presupuestos = [], reservas = [], pagos = [];
+    var saldosConDiferencia = [];   // [{reserva, campo, calculado}]
+
+    function fmt(n) { return 'R$ ' + (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
+    function fmtMon(n, m) {
+        var s = { BRL: 'R$', USD: 'US$', UYU: '$U' };
+        return (s[m] || m || 'R$') + ' ' + (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    }
+    function fechaDe(ts) {
+        if (ts && ts.toDate) return ts.toDate().toLocaleDateString('es-UY');
+        return '—';
+    }
+
+    // El aporte REAL de un pago al saldo en reales de la reserva:
+    // - pago en BRL → su monto
+    // - pago en otra moneda CON equivalente guardado (montoBRL, v4.33) → el equivalente
+    // - pago en otra moneda SIN equivalente → 0 (no se puede sumar sin inventar una cotización)
+    function aporteBRL(p) {
+        if (p.moneda === 'BRL' || !p.moneda) return Number(p.monto) || 0;
+        if (typeof p.montoBRL === 'number' && !isNaN(p.montoBRL)) return p.montoBRL;
+        return 0;
+    }
+
+    //    Carga y análisis                                        
+    window.analizar = async function() {
+        document.getElementById('resultado').innerHTML =
+            '<div class="loading-state"><div class="spinner"></div> Analizando la base…</div>';
+        document.getElementById('btnRepararTodos').style.display = 'none';
+        saldosConDiferencia = [];
+
+        try {
+            var res = await Promise.all([
+                db.collection('presupuestos').get(),
+                db.collection('reservas').get(),
+                db.collection('pagos').get()
+            ]);
+            presupuestos = res[0].docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+            reservas     = res[1].docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+            pagos        = res[2].docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+
+            renderAnalisis();
+            renderCrudos();
+        } catch(e) {
+            document.getElementById('resultado').innerHTML =
+                '<div class="alert alert-error"><span class="material-icons">error_outline</span> Error: '
+                + escapeHtml(e.message) + '</div>';
+        }
+    };
+
+    function reservaPorId(id)     { return reservas.find(function(r) { return r.id === id; }); }
+    function presupuestoPorId(id) { return presupuestos.find(function(p) { return p.id === id; }); }
+    function pagosDeReserva(id)   { return pagos.filter(function(p) { return p.reservaId === id; }); }
+
+    function renderAnalisis() {
+        var html = '';
+
+        //    Chequeo 1: presupuestos confirmados con referencia rota          
+        var c1 = presupuestos.filter(function(p) {
+            return p.estado === 'confirmado' && (!p.reservaId || !reservaPorId(p.reservaId));
+        });
+        html += tarjeta('Presupuestos confirmados con reserva inexistente', c1.length,
+            'Dicen "Confirmado" pero su reserva no existe (fue borrada o nunca se guardó la referencia). Contaminan la lista y confunden.',
+            c1.map(function(p) {
+                return item(
+                    etiquetaPres(p) + ' → reservaId: <code>' + (p.reservaId || 'sin referencia') + '</code>',
+                    botonEliminarPres(p.id) + botonVolverPendiente(p.id)
+                );
+            }));
+
+        //    Chequeo 2: presupuestos que apuntan a una reserva anulada        
+        var c2 = presupuestos.filter(function(p) {
+            if (p.estado !== 'confirmado' || !p.reservaId) return false;
+            var r = reservaPorId(p.reservaId);
+            return r && ['anulada', 'airbnb_cancelada'].indexOf(r.estado) !== -1;
+        });
+        html += tarjeta('Presupuestos "confirmados" cuya reserva fue ANULADA', c2.length,
+            'La reserva se anuló pero el presupuesto quedó como confirmado apuntándole. Si el trato se rehizo con otro presupuesto, este es el origen del cruce de referencias. Lo sano: eliminarlo.',
+            c2.map(function(p) {
+                var r = reservaPorId(p.reservaId);
+                return item(
+                    etiquetaPres(p) + ' → reserva <code>' + p.reservaId + '</code> (' + escapeHtml(r.nombre || '') + ') estado: <span class="flag-mal">' + r.estado + '</span>',
+                    botonEliminarPres(p.id) + botonVolverPendiente(p.id)
+                );
+            }));
+
+        //    Chequeo 3: cruces de referencia presupuesto↔reserva              
+        var c3 = [];
+        presupuestos.forEach(function(p) {
+            if (p.estado !== 'confirmado' || !p.reservaId) return;
+            var r = reservaPorId(p.reservaId);
+            if (r && r.presupuestoId && r.presupuestoId !== p.id) {
+                c3.push({ p: p, r: r });
+            }
+        });
+        html += tarjeta('Referencias CRUZADAS (presupuesto → reserva → OTRO presupuesto)', c3.length,
+            'El presupuesto apunta a una reserva que declara haber nacido de otro presupuesto distinto. Es el cruce que reportó el usuario.',
+            c3.map(function(x) {
+                return item(
+                    etiquetaPres(x.p) + ' → reserva <code>' + x.r.id + '</code> → dice venir de <code>' + x.r.presupuestoId + '</code>',
+                    botonEliminarPres(x.p.id) + botonVolverPendiente(x.p.id)
+                );
+            }));
+
+        //    Chequeo 4: reservas con presupuesto de origen inexistente        
+        var c4 = reservas.filter(function(r) {
+            return r.presupuestoId && !presupuestoPorId(r.presupuestoId);
+        });
+        html += tarjeta('Reservas cuyo presupuesto de origen ya no existe', c4.length,
+            'No es grave (el presupuesto se eliminó) — solo informativo: el panel de la reserva no va a poder mostrar el origen.',
+            c4.map(function(r) {
+                return item(etiquetaRes(r) + ' → presupuestoId: <code>' + r.presupuestoId + '</code>', '');
+            }), true);
+
+        //    Chequeo 5: saldos — pagadoBRL vs suma real de pagos              
+        var c5 = [];
+        reservas.forEach(function(r) {
+            if (['anulada', 'airbnb_cancelada'].indexOf(r.estado) !== -1) return;
+            var pgs = pagosDeReserva(r.id);
+            if (!pgs.length && !r.pagadoBRL) return;
+            var suma = pgs.reduce(function(s, p) { return s + aporteBRL(p); }, 0);
+            suma = Math.round(suma * 100) / 100;
+            var campo = Math.round((r.pagadoBRL || 0) * 100) / 100;
+            if (Math.abs(suma - campo) >= 0.01) {
+                c5.push({ r: r, campo: campo, suma: suma, pgs: pgs });
+                saldosConDiferencia.push({ r: r, suma: suma });
+            }
+        });
+        html += tarjeta('Saldos cruzados: el campo "pagadoBRL" NO coincide con los pagos reales', c5.length,
+            'La reserva guarda un "pagado" distinto de lo que suman sus pagos (en equivalente R$). Causas típicas: pagos borrados sin descontar, señas en USD/UYU contadas mal, o cargas dobles. La reparación pone el campo = suma real de los pagos.',
+            c5.map(function(x) {
+                var detallePagos = x.pgs.map(function(p) {
+                    return fmtMon(p.monto, p.moneda)
+                        + (p.moneda !== 'BRL'
+                            ? (typeof p.montoBRL === 'number' ? ' (≈' + fmt(p.montoBRL) + ')' : ' <span class="flag-mal">(sin equivalente R$)</span>')
+                            : '');
+                }).join(' + ') || 'sin pagos';
+                return item(
+                    etiquetaRes(x.r) + '<br>campo pagadoBRL: <span class="flag-mal">' + fmt(x.campo) + '</span>'
+                        + ' · pagos reales: <span class="flag-ok">' + fmt(x.suma) + '</span>'
+                        + ' <span style="color:var(--color-text-muted);">[' + detallePagos + ']</span>',
+                    '<button class="btn btn-secondary btn-sm" onclick="repararSaldo(\'' + x.r.id + '\', ' + x.suma + ')">'
+                        + '<span class="material-icons">build</span> Corregir a ' + fmt(x.suma) + '</button>'
+                );
+            }));
+        if (c5.length > 1) document.getElementById('btnRepararTodos').style.display = '';
+
+        //    Chequeo 6: pagos en moneda extranjera sin equivalente            
+        var c6 = pagos.filter(function(p) {
+            return p.moneda && p.moneda !== 'BRL' && (typeof p.montoBRL !== 'number' || isNaN(p.montoBRL));
+        });
+        html += tarjeta('Pagos en USD/UYU SIN equivalente en reales guardado', c6.length,
+            'Estos pagos no pueden sumar al saldo de su reserva (no hay cotización registrada). Son los anteriores a v4.33 o los cargados sin cotización del sistema. Se corrigen cargándoles el equivalente cuando editemos pagos (próxima tanda) — acá quedan identificados.',
+            c6.map(function(p) {
+                var r = p.reservaId ? reservaPorId(p.reservaId) : null;
+                return item(
+                    fechaDe(p.creadoEn) + ' · ' + fmtMon(p.monto, p.moneda)
+                        + ' · ' + escapeHtml(p.clienteNombre || '')
+                        + (r ? ' · reserva <code>' + r.id + '</code>' : ' · <span class="flag-mal">sin reserva</span>'),
+                    ''
+                );
+            }), true);
+
+        //    Chequeo 7: pagos huérfanos                                       
+        var c7 = pagos.filter(function(p) { return p.reservaId && !reservaPorId(p.reservaId); });
+        html += tarjeta('Pagos que apuntan a una reserva inexistente', c7.length,
+            'La reserva de estos pagos fue borrada. El dinero está registrado pero no cuenta en ningún saldo.',
+            c7.map(function(p) {
+                return item(
+                    fechaDe(p.creadoEn) + ' · ' + fmtMon(p.monto, p.moneda) + ' · '
+                        + escapeHtml(p.clienteNombre || '') + ' · reservaId <code>' + p.reservaId + '</code>',
+                    ''
+                );
+            }), true);
+
+        var total = c1.length + c2.length + c3.length + c5.length;
+        var resumen = total === 0
+            ? '<div class="alert alert-success" style="margin-bottom:var(--space-4);"><span class="material-icons">check_circle</span> Sin problemas activos: referencias y saldos consistentes.</div>'
+            : '<div class="alert alert-error" style="margin-bottom:var(--space-4);"><span class="material-icons">report</span> ' + total + ' problema(s) activo(s) encontrados — el detalle está abajo, cada uno con su reparación.</div>';
+
+        document.getElementById('resultado').innerHTML = resumen + html;
+    }
+
+    function tarjeta(titulo, n, desc, items, esInfo) {
+        var clase = n === 0 ? 'ok' : (esInfo ? 'warn' : 'error');
+        return '<div class="diag-card ' + clase + '">'
+            + '<div class="diag-titulo">'
+                + '<span class="material-icons">' + (n === 0 ? 'check_circle' : (esInfo ? 'info' : 'report')) + '</span>'
+                + titulo
+                + '<span class="diag-conteo">' + n + '</span>'
+            + '</div>'
+            + '<div class="diag-desc">' + desc + '</div>'
+            + (n ? items.join('') : '')
+            + '</div>';
+    }
+
+    function item(html, acciones) {
+        return '<div class="diag-item"><div style="flex:1;min-width:220px;">' + html + '</div>'
+            + '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + (acciones || '') + '</div></div>';
+    }
+
+    function etiquetaPres(p) {
+        return '📋 <strong>' + escapeHtml(p.clienteNombre || 'Sin nombre') + '</strong> · C' + p.caba
+            + ' · ' + (p.checkIn || '?') + '→' + (p.checkOut || '?')
+            + ' · ' + fmt(p.totalBRL) + ' · <code>' + p.id + '</code>';
+    }
+    function etiquetaRes(r) {
+        return '🏠 <strong>' + escapeHtml(r.nombre || 'Sin nombre') + '</strong> · C' + r.caba
+            + ' · total ' + fmt(r.totalBRL) + ' · estado ' + (r.estado || '?')
+            + ' · <code>' + r.id + '</code>';
+    }
+    function botonEliminarPres(id) {
+        return '<button class="btn btn-danger btn-sm" onclick="eliminarPres(\'' + id + '\')">'
+            + '<span class="material-icons">delete</span> Eliminar presupuesto</button>';
+    }
+    function botonVolverPendiente(id) {
+        return '<button class="btn btn-secondary btn-sm" onclick="volverPendiente(\'' + id + '\')">'
+            + '<span class="material-icons">undo</span> Volver a pendiente</button>';
+    }
+
+    //    Reparaciones                                            
+    window.eliminarPres = async function(id) {
+        if (!confirm('¿Eliminar definitivamente este presupuesto? La reserva (si existe) NO se toca.')) return;
+        try {
+            await db.collection('presupuestos').doc(id).delete();
+            showToast('Presupuesto eliminado.', 'warning');
+            analizar();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    window.volverPendiente = async function(id) {
+        if (!confirm('¿Volver este presupuesto a PENDIENTE y desvincularlo de la reserva? Útil si el trato sigue vivo y quieren confirmarlo de nuevo correctamente.')) return;
+        try {
+            await db.collection('presupuestos').doc(id).update({
+                estado: 'pendiente',
+                reservaId: firebase.firestore.FieldValue.delete(),
+                actualizadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                historial: firebase.firestore.FieldValue.arrayUnion({
+                    t: firebase.firestore.Timestamp.now(),
+                    uid: user.uid,
+                    nombre: userData.nombre || user.email,
+                    accion: 'Reparación',
+                    detalle: 'Vuelto a pendiente y desvinculado de la reserva (diagnóstico de datos)'
+                })
+            });
+            showToast('Presupuesto vuelto a pendiente.', 'success');
+            analizar();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    window.repararSaldo = async function(reservaId, suma) {
+        if (!confirm('¿Poner pagadoBRL = ' + fmt(suma) + ' (la suma real de los pagos en equivalente R$)?')) return;
+        try {
+            await db.collection('reservas').doc(reservaId).update({ pagadoBRL: suma });
+            showToast('Saldo corregido.', 'success');
+            analizar();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    window.repararTodosSaldos = async function() {
+        if (!saldosConDiferencia.length) return;
+        if (!confirm('¿Corregir el pagadoBRL de las ' + saldosConDiferencia.length + ' reservas con diferencia, poniéndolo igual a la suma real de sus pagos?')) return;
+        var okCount = 0;
+        for (var x of saldosConDiferencia) {
+            try {
+                await db.collection('reservas').doc(x.r.id).update({ pagadoBRL: x.suma });
+                okCount++;
+            } catch(e) { /* sigue con el resto */ }
+        }
+        showToast(okCount + ' saldo(s) corregido(s).', 'success');
+        analizar();
+    };
+
+    //    Datos crudos                                            
+    window.renderCrudos = function() {
+        var filtro = (document.getElementById('buscadorCrudo').value || '').toLowerCase();
+        function pasa(texto) { return !filtro || texto.toLowerCase().indexOf(filtro) !== -1; }
+
+        var lp = presupuestos.filter(function(p) { return pasa((p.clienteNombre || '') + ' ' + p.id); });
+        var lr = reservas.filter(function(r) { return pasa((r.nombre || '') + ' ' + r.id); });
+        var lg = pagos.filter(function(p) { return pasa((p.clienteNombre || '') + ' ' + p.id + ' ' + (p.reservaId || '')); });
+
+        document.getElementById('cntPres').textContent = lp.length;
+        document.getElementById('cntRes').textContent  = lr.length;
+        document.getElementById('cntPag').textContent  = lg.length;
+
+        document.getElementById('tblPres').innerHTML =
+            '<tr><th>Cliente</th><th>Cab</th><th>Fechas</th><th>Estado</th><th>Total</th><th>Calculado</th><th>reservaId</th></tr>'
+            + lp.map(function(p) {
+                return fila(p, [
+                    escapeHtml(p.clienteNombre || '—'), 'C' + p.caba,
+                    (p.checkIn || '?') + '→' + (p.checkOut || '?'),
+                    p.estado || '—', fmt(p.totalBRL),
+                    (typeof p.totalCalculadoBRL === 'number' ? fmt(p.totalCalculadoBRL) : '—'),
+                    p.reservaId ? '<code>' + p.reservaId + '</code>' : '—'
+                ]);
+            }).join('');
+
+        document.getElementById('tblRes').innerHTML =
+            '<tr><th>Huésped</th><th>Cab</th><th>Estado</th><th>Total</th><th>pagadoBRL</th><th>Σ pagos (R$)</th><th>presupuestoId</th></tr>'
+            + lr.map(function(r) {
+                var suma = pagosDeReserva(r.id).reduce(function(s, p) { return s + aporteBRL(p); }, 0);
+                suma = Math.round(suma * 100) / 100;
+                var difiere = Math.abs(suma - (r.pagadoBRL || 0)) >= 0.01;
+                return fila(r, [
+                    escapeHtml(r.nombre || '—'), 'C' + r.caba, r.estado || '—',
+                    fmt(r.totalBRL),
+                    '<span class="' + (difiere ? 'flag-mal' : '') + '">' + fmt(r.pagadoBRL) + '</span>',
+                    '<span class="' + (difiere ? 'flag-ok' : '') + '">' + fmt(suma) + '</span>',
+                    r.presupuestoId ? '<code>' + r.presupuestoId + '</code>' : '—'
+                ]);
+            }).join('');
+
+        document.getElementById('tblPag').innerHTML =
+            '<tr><th>Fecha</th><th>Cliente</th><th>Monto</th><th>Equiv. R$</th><th>Cuenta</th><th>Concepto</th><th>reservaId</th></tr>'
+            + lg.map(function(p) {
+                return fila(p, [
+                    fechaDe(p.creadoEn),
+                    escapeHtml(p.clienteNombre || '—'),
+                    '<span class="chip-moneda chip-' + (p.moneda || 'BRL') + '">' + (p.moneda || 'BRL') + '</span> ' + fmtMon(p.monto, p.moneda),
+                    (p.moneda === 'BRL' || !p.moneda) ? '=' :
+                        (typeof p.montoBRL === 'number' ? fmt(p.montoBRL) : '<span class="flag-mal">falta</span>'),
+                    p.cuentaDestinoNombre ? escapeHtml(p.cuentaDestinoNombre) : (p.sinCuenta ? '<span class="flag-mal">sin asignar</span>' : '—'),
+                    escapeHtml(p.concepto || p.tipo || '—'),
+                    p.reservaId ? '<code>' + p.reservaId + '</code>' : '—'
+                ]);
+            }).join('');
+    };
+
+    function fila(doc, celdas) {
+        var jsonId = 'json-' + doc.id;
+        return '<tr style="cursor:pointer;" onclick="toggleJson(\'' + jsonId + '\')">'
+            + celdas.map(function(c) { return '<td>' + c + '</td>'; }).join('')
+            + '</tr>'
+            + '<tr><td colspan="' + celdas.length + '" style="padding:0;border:none;">'
+            + '<div class="mini-json" id="' + jsonId + '">' + escapeHtml(jsonDe(doc)) + '</div>'
+            + '</td></tr>';
+    }
+
+    function jsonDe(doc) {
+        // Serializa el doc convirtiendo Timestamps a texto legible
+        var copia = {};
+        Object.keys(doc).forEach(function(k) {
+            var v = doc[k];
+            if (v && v.toDate) { copia[k] = v.toDate().toISOString(); }
+            else if (Array.isArray(v)) {
+                copia[k] = v.map(function(x) {
+                    if (x && typeof x === 'object') {
+                        var o = {};
+                        Object.keys(x).forEach(function(kk) {
+                            o[kk] = (x[kk] && x[kk].toDate) ? x[kk].toDate().toISOString() : x[kk];
+                        });
+                        return o;
+                    }
+                    return x;
+                });
+            }
+            else { copia[k] = v; }
+        });
+        return JSON.stringify(copia, null, 2);
+    }
+
+    window.toggleJson = function(id) {
+        var el = document.getElementById(id);
+        el.style.display = el.style.display === 'block' ? 'none' : 'block';
+    };
+
+    analizar();
+})();
+</script>
+</body>
+</html>
