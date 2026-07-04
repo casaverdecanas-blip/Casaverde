@@ -48,6 +48,17 @@
   .dot-rojo { background: #dc2626; }
   .dot-amarillo { background: #d97706; }
   .dot-verde { background: #16a34a; }
+  /* Novedades (sin ver) y Foco (destacadas) — v4.34 */
+  .act-row.nueva { background: #eef5fd; box-shadow: inset 3px 0 0 #1f5fb0; }
+  .act-row.nueva .act-tit { font-weight: 700; }
+  .act-badge.nuevo { background: #1f5fb0; color: #fff; font-weight: 700; }
+  .act-badge.sinver { background: #dcebfd; color: #1f5fb0; font-weight: 600; }
+  .act-star { flex: 0 0 auto; cursor: pointer; color: #c4cec0; font-size: 20px; user-select: none; padding: 2px; line-height: 1; }
+  .act-star.on { color: #e0a800; }
+  .act-star:hover { color: #b8944d; }
+  .banner-nuevas { background: #eaf3fe; border: 1px solid #bcd7f7; color: #1f5fb0; border-radius: 10px; padding: 9px 12px; font-size: 13.5px; margin-bottom: 12px; cursor: pointer; font-weight: 600; }
+  .ruta-mini { font-size: 11.5px; color: #7a8a76; padding: 7px 10px 0 10px; background: #fff; border-top: 1px solid #eef2ec; }
+  .cnt-azul { background: #1f5fb0 !important; color: #fff !important; }
   .dot-gris { background: #9ca3af; }
   .modal-cv { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
   .modal-cv.show { display: flex; }
@@ -96,6 +107,14 @@
     <button class="main-tab" onclick="irTab('calendario',this)" data-tab="calendario">
       <span class="material-icons" style="font-size:15px">event</span>
       Calendario <span class="cnt" id="cntCalendario">0</span>
+    </button>
+    <button class="main-tab" onclick="irTab('foco',this)" data-tab="foco">
+      <span class="material-icons" style="font-size:15px">star</span>
+      Foco <span class="cnt" id="cntFoco">0</span>
+    </button>
+    <button class="main-tab" onclick="irTab('novedades',this)" data-tab="novedades">
+      <span class="material-icons" style="font-size:15px">fiber_new</span>
+      Novedades <span class="cnt" id="cntNuevas">0</span>
     </button>
   </div>
 
@@ -294,6 +313,12 @@ var usuarios  = [];
 var abierto = {};   // id -> true: actividad desplegada (detalle + acciones + subítems). Default: contraído.
 var tabActual = 'mantenimiento';
 var diagCarga = '';   // diagnóstico de permisos cuando alguna consulta del colaborador falla
+// Estado por usuario (doc actividades_usuario/<uid>): qué vio y qué destacó — v4.34
+var vistos = {};          // actId -> millis del actualizadoEn/creadoEn ya visto por este usuario
+var destacados = [];      // actIds marcados con estrella (lista de "Foco")
+var vistosSesion = {};    // ids abiertos DENTRO de Novedades en esta sesión (para que no desaparezcan al abrirlos)
+var _estadoCargado = false;
+var _estadoTimer = null;
 var proveedoresDefault = ['Supermercado', 'Ferreter\u00eda', 'Farmacia', 'Vivero', 'Otros'];
 var proveedores = proveedoresDefault.slice();   // lista de proveedores de compras (editable por admin)
 
@@ -363,10 +388,92 @@ async function cargar() {
     }
     items = docs;
     indexar();
+    if (!_estadoCargado) { await cargarEstadoUsuario(); _estadoCargado = true; }
+    else if (esAdmin) { podarEstado(); }
     render();
   } catch (e) {
     document.getElementById('zonaContenido').innerHTML = '<div class="muted-note">No se pudieron cargar las actividades: ' + esc(e.message) + '</div>';
   }
+}
+
+// ── Estado por usuario: vistos + destacados ────────────────
+function tsAct(it) {
+  var t = it.actualizadoEn || it.creadoEn;
+  return (t && t.toMillis) ? t.toMillis() : 0;
+}
+function esNueva(it) {
+  if (it.hecho) return false;
+  // Los sub-ítems del chequeo de inventario no cuentan: la novedad es el chequeo/limpieza en sí.
+  if (it.tipo === 'item-chequeo' || it.tipo === 'categoria-chequeo') return false;
+  var v = vistos[it.id];
+  if (v == null) {
+    if (it.creadoPor === uid) return false;   // lo creaste vos
+    return tsAct(it) > 0;
+  }
+  return tsAct(it) > (v + 2000);   // margen 2s por diferencia de reloj con serverTimestamp
+}
+function nuevasDesc(id) {
+  var d = descendientes(id), n = 0;
+  for (var i = 0; i < d.length; i++) { var x = byId[d[i]]; if (x && esNueva(x)) n++; }
+  return n;
+}
+function rutaDe(it) {
+  var partes = [], p = it.parentId, guard = 0;
+  while (p && byId[p] && guard < 12) { partes.unshift(byId[p].titulo || ''); p = byId[p].parentId; guard++; }
+  return partes.length ? partes.join(' \u203a ') : '(nivel superior)';
+}
+function marcarVisto(id) {
+  var it = byId[id];
+  var t = it ? tsAct(it) : 0;
+  var val = Math.max(t, Date.now());
+  if ((vistos[id] || 0) >= val) return;
+  vistos[id] = val;
+  if (tabActual === 'novedades') vistosSesion[id] = true;
+  programarGuardadoEstado();
+}
+function programarGuardadoEstado() {
+  if (_estadoTimer) clearTimeout(_estadoTimer);
+  _estadoTimer = setTimeout(function () { flushEstado(); }, 1200);
+}
+async function flushEstado() {
+  if (_estadoTimer) { clearTimeout(_estadoTimer); _estadoTimer = null; }
+  try {
+    await db.collection('actividades_usuario').doc(uid).set({
+      vistos: vistos,
+      destacados: destacados,
+      actualizadoEn: serverTs()
+    });
+  } catch (e) { /* silencioso: es estado auxiliar, no bloquea el trabajo */ }
+}
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'hidden') flushEstado();
+});
+async function cargarEstadoUsuario() {
+  try {
+    var d = await db.collection('actividades_usuario').doc(uid).get();
+    if (d.exists) {
+      var x = d.data() || {};
+      vistos = x.vistos || {};
+      destacados = (x.destacados || []).slice();
+    } else {
+      // Primer uso de la función: todo lo existente arranca como "visto",
+      // para no inundar la pantalla. De acá en más, lo nuevo se resalta solo.
+      vistos = {};
+      for (var i = 0; i < items.length; i++) { var t0 = tsAct(items[i]); vistos[items[i].id] = t0 || Date.now(); }
+      destacados = [];
+      await flushEstado();
+    }
+    if (esAdmin) podarEstado();
+  } catch (e) { vistos = vistos || {}; destacados = destacados || []; }
+}
+// Limpieza de referencias a actividades borradas. Solo el admin (que ve todo el árbol)
+// puede podar con seguridad; para un colaborador, "no lo veo" no implica "no existe".
+function podarEstado() {
+  var cambio = false;
+  for (var k in vistos) { if (!byId[k]) { delete vistos[k]; cambio = true; } }
+  var dep = destacados.filter(function (id) { return !!byId[id]; });
+  if (dep.length !== destacados.length) { destacados = dep; cambio = true; }
+  if (cambio) programarGuardadoEstado();
 }
 
 function indexar() {
@@ -422,13 +529,91 @@ function render() {
   document.getElementById('cntCompras').textContent    = items.filter(function (it) { return it.esCompra && !it.hecho && !esContenedorCompra(it); }).length;
   document.getElementById('cntCalendario').textContent = items.filter(conFecha).length;
 
+  var nuevasTotal = items.filter(esNueva).length;
+  var focoTotal = destacados.filter(function (id) { return byId[id] && !byId[id].hecho; }).length;
+  document.getElementById('cntNuevas').textContent = nuevasTotal;
+  document.getElementById('cntFoco').textContent = focoTotal;
+  var cn = document.getElementById('cntNuevas');
+  if (nuevasTotal) cn.classList.add('cnt-azul'); else cn.classList.remove('cnt-azul');
+
   var z = document.getElementById('zonaContenido');
   var banner = diagCarga ? ('<div class="muted-note" style="border-color:#e0a3a3;color:#a33;background:#fdf3f3">' + esc(diagCarga) + '</div>') : '';
+  if (tabActual !== 'novedades' && nuevasTotal > 0) {
+    banner += '<div class="banner-nuevas" onclick="irTabNovedades()">\u25cf ' + nuevasTotal + ' actividad' + (nuevasTotal === 1 ? '' : 'es') + ' sin revisar \u2014 toc\u00e1 ac\u00e1 para verlas</div>';
+  }
   if (tabActual === 'calendario') { z.innerHTML = banner + renderCalendario(); return; }
   if (tabActual === 'compras') { z.innerHTML = banner + renderCompras(); return; }
   if (tabActual === 'mantenimiento') { z.innerHTML = banner + renderMantenimiento(); return; }
+  if (tabActual === 'foco') { z.innerHTML = banner + renderFoco(); return; }
+  if (tabActual === 'novedades') { z.innerHTML = banner + renderNovedades(); return; }
   z.innerHTML = banner + renderProyectos();
 }
+
+// Foco = lista plana de lo que el usuario destacó con la estrella, ordenada por urgencia.
+function renderFoco() {
+  var lista = [];
+  for (var i = 0; i < destacados.length; i++) { var it = byId[destacados[i]]; if (it) lista.push(it); }
+  lista.sort(function (a, b) {
+    var ha = a.hecho ? 1 : 0, hb = b.hecho ? 1 : 0;
+    if (ha !== hb) return ha - hb;
+    var ra = rankSem(a), rb = rankSem(b);
+    if (ra !== rb) return ra - rb;
+    return byTitulo(a, b);
+  });
+  var html = '<div class="muted-note">Tu lista de foco: las actividades que marcaste con \u2605 en cualquier vista, juntas y ordenadas por urgencia. Toc\u00e1 la estrella de nuevo para sacarla de ac\u00e1.</div>';
+  if (!lista.length) return html + '<div class="muted-note">Todav\u00eda no destacaste nada. En cualquier actividad, toc\u00e1 la estrella \u2606 para traerla a esta lista.</div>';
+  html += '<div class="act-list">';
+  for (var j = 0; j < lista.length; j++) {
+    html += '<div class="ruta-mini">' + esc(rutaDe(lista[j])) + '</div>';
+    html += nodoHTML(lista[j], 0);
+  }
+  html += '</div>';
+  return html;
+}
+
+// Novedades = lista plana de lo nuevo o modificado que este usuario todavía no abrió.
+function renderNovedades() {
+  var lista = items.filter(function (it) { return esNueva(it) || (vistosSesion[it.id] && !it.hecho); });
+  lista.sort(function (a, b) { return tsAct(b) - tsAct(a); });
+  var hayNuevas = items.some(esNueva);
+  var html = '';
+  if (hayNuevas) html += '<div class="act-toolbar"><button class="btn btn-secondary" onclick="marcarTodoVisto()"><span class="material-icons" style="font-size:17px">done_all</span> Marcar todas como vistas</button></div>';
+  html += '<div class="muted-note">Actividades nuevas o modificadas por otros que todav\u00eda no abriste (las m\u00e1s recientes primero). Al abrir una, queda como vista.</div>';
+  if (!lista.length) return html + '<div class="muted-note">Est\u00e1s al d\u00eda \u2014 no hay novedades sin revisar. \u2714</div>';
+  html += '<div class="act-list">';
+  for (var i = 0; i < lista.length; i++) {
+    html += '<div class="ruta-mini">' + esc(rutaDe(lista[i])) + '</div>';
+    html += nodoHTML(lista[i], 0);
+  }
+  html += '</div>';
+  return html;
+}
+
+window.irTabNovedades = function () {
+  var btn = document.querySelector('.main-tab[data-tab="novedades"]');
+  irTab('novedades', btn);
+};
+
+window.marcarTodoVisto = function () {
+  var ahora = Date.now();
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    var t = Math.max(tsAct(it), ahora);
+    if ((vistos[it.id] || 0) < t) vistos[it.id] = t;
+  }
+  vistosSesion = {};
+  flushEstado();
+  toast('Todo marcado como visto.', 'success');
+  render();
+};
+
+window.toggleEstrella = function (id) {
+  var i = destacados.indexOf(id);
+  if (i >= 0) { destacados.splice(i, 1); toast('Sacada de tu Foco.', 'info'); }
+  else { destacados.push(id); toast('Agregada a tu Foco \u2b50', 'success'); }
+  programarGuardadoEstado();
+  render();
+};
 
 // Mantenimiento = todas las actividades recurrentes que el usuario ve, ordenadas por urgencia
 function renderMantenimiento() {
@@ -477,10 +662,12 @@ function nodoHTML(it, nivel) {
   var ab = !!abierto[it.id];   // un solo estado: contraído por defecto
   var sem = (CVC.actSemaforo && !it.hecho) ? CVC.actSemaforo(it) : { color: 'gris', label: '' };
   var esRec = (parseInt(it.recurrencia, 10) || 0) > 0;
+  var nueva = esNueva(it);
+  var esSubChequeo = (it.tipo === 'item-chequeo' || it.tipo === 'categoria-chequeo');
 
   var h = '<div class="act-item">';
   // Fila compacta. Un clic en la fila (menos el check) despliega detalle + acciones + subítems.
-  h += '<div class="act-row act-clic' + (ab ? ' abierto' : '') + '" onclick="toggleAbierto(\'' + it.id + '\')">';
+  h += '<div class="act-row act-clic' + (ab ? ' abierto' : '') + (nueva ? ' nueva' : '') + '" onclick="toggleAbierto(\'' + it.id + '\')">';
   h += '<span class="act-caret' + (tiene ? ' tiene' : '') + '">' + (ab ? '\u25be' : '\u25b8') + '</span>';
   if (it.tipo === 'item-chequeo') {
     h += '<input type="checkbox" class="act-chk" ' + (it.hecho ? 'checked' : '') + ' onclick="event.stopPropagation();validarItemChequeo(\'' + it.id + '\')">';
@@ -489,8 +676,17 @@ function nodoHTML(it, nivel) {
   }
   h += '<span class="dot ' + dotClase(sem.color) + '"></span>';
   h += '<span class="act-tit' + (it.hecho ? ' done' : '') + '">' + esc(it.titulo) + '</span>';
+  if (!esSubChequeo) {
+    var estrellada = destacados.indexOf(it.id) >= 0;
+    h += '<span class="material-icons act-star' + (estrellada ? ' on' : '') + '" title="' + (estrellada ? 'Sacar de tu Foco' : 'Destacar en tu Foco') + '" onclick="event.stopPropagation();toggleEstrella(\'' + it.id + '\')">' + (estrellada ? 'star' : 'star_border') + '</span>';
+  }
 
   h += '<span class="act-badges">';
+  if (nueva) h += '<span class="act-badge nuevo">NUEVO</span>';
+  if (!ab && tiene) {
+    var nd = nuevasDesc(it.id);
+    if (nd) h += '<span class="act-badge sinver">\u25cf ' + nd + ' sin ver</span>';
+  }
   if (it.tipo === 'control' && it.reservaId && !byId['chk-ctrl-' + it.reservaId]) h += '<span class="act-badge">\ud83d\udccb chequeo: se genera al completar el de entrada</span>';
   if (it.tipo === 'chequeo-inventario') h += '<span class="act-badge">\ud83d\udccb ' + (it.tipoChequeo === 'entrada' ? 'check-in' : 'check-out') + '</span>';
   if (it.tipo === 'faltante-inventario') h += '<span class="act-badge rojo">\u26a0 ' + esc(it.origen || 'faltante') + '</span>';
@@ -669,11 +865,13 @@ window.irTab = function (t, btn) {
 
 window.toggleAbierto = function (id) {
   abierto[id] = !abierto[id];
+  if (abierto[id]) marcarVisto(id);
   render();
 };
 
 window.toggleHecho = async function (id) {
   var it = byId[id]; if (!it) return;
+  marcarVisto(id);
   var nuevo = !it.hecho;
   try {
     // Tareas de trabajo (cronometrables): cada realización queda registrada
@@ -882,6 +1080,7 @@ window.guardarItem = async function () {
     var recurrencia = esProyecto ? 0 : (parseInt(document.getElementById('itRecurrencia').value, 10) || 0);
     var tiempoEstimado = esProyecto ? 0 : (parseInt(document.getElementById('itTiempoEst').value, 10) || 0);
 
+    var idGuardado = id;
     if (id) {
       // EDITAR (con posible reasignación de proyecto)
       var it = byId[id] || {};
@@ -944,6 +1143,7 @@ window.guardarItem = async function () {
     } else {
       // CREAR (id pre-generado para fijar raizId en raíces)
       var ref = db.collection('actividades').doc();
+      idGuardado = ref.id;
       var doc = Object.assign({}, base, {
         parentId: parentId || '',
         raizId: esRoot ? ref.id : raizId,
@@ -974,6 +1174,7 @@ window.guardarItem = async function () {
 
     cerrarModal('modalItem');
     await cargar();
+    if (idGuardado) { marcarVisto(idGuardado); render(); }
   } catch (e) {
     toast('No se pudo guardar: ' + e.message, 'error');
   } finally {
@@ -1001,6 +1202,7 @@ window.borrarItem = async function (id) {
 // ── Cronómetro (motor en actividades-core.js) ─────────────
 window.cronoIniciar = async function (id) {
   if (!CVC.actIniciar) { toast('Falta actividades-core.js', 'error'); return; }
+  marcarVisto(id);
   try { await CVC.actIniciar(id, { uid: uid, nombre: miNombre }); await cargar(); }
   catch (e) { toast('No se pudo iniciar: ' + e.message, 'error'); }
 };
