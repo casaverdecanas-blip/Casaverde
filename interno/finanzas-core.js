@@ -160,15 +160,22 @@
     }
 
     // Movimientos del extracto: NO son eventos de flujo — son el verificador.
+    // Las líneas "Saldo Diário" del CSV de BTG son fotos del saldo, no
+    // transacciones: se marcan como fantasma y quedan fuera de todo cálculo.
     function normalizarMovimiento(id, m) {
+        var desc = String(m.descripcion || '');
+        var esSaldo = /saldo\s*di[aá]rio/i.test(desc) || (!m.tipo && /saldo/i.test(desc));
         return {
             id: 'mov-' + id, refId: id,
             fecha: fechaDe(m.fecha), fechaStr: fechaStrDe(m.fecha),
             tipo: m.tipo === 'credito' ? 'ingreso' : 'egreso',
-            monto: Math.abs(Number(m.monto) || 0), moneda: 'BRL',
+            monto: Math.abs(Number(m.monto) || 0), moneda: null,   // la moneda la da su cuenta
             cuentaId: m.cuentaId || null,
-            descripcion: m.descripcion || '', etiqueta: m.etiqueta || '',
-            clasificado: !!m.categoriaId
+            descripcion: desc, etiqueta: m.etiqueta || '',
+            clasificado: !!m.categoriaId,
+            esSaldo: esSaldo,
+            gastoId: m.gastoId || null, pagoId: m.pagoId || null,
+            eventoId: m.eventoId || null, eventoOrigen: m.eventoOrigen || null
         };
     }
 
@@ -319,8 +326,10 @@
     // ═════════════════════════════════════════════════════════════════════════
 
     function verificacionExtracto(cuenta, eventos, movimientos) {
-        var movsCta = movimientos.filter(function(m) { return m.cuentaId === cuenta.id; });
-        if (!movsCta.length) return null;   // cuenta sin extracto (Prex, Midinero…)
+        var monedaCta = cuenta.moneda || 'BRL';
+        var movsCta = movimientos.filter(function(m) { return m.cuentaId === cuenta.id && !m.esSaldo; });
+        var fantasmas = movimientos.filter(function(m) { return m.cuentaId === cuenta.id && m.esSaldo; }).length;
+        if (!movsCta.length) return null;   // cuenta sin extracto (Prex sin importar, Midinero…)
 
         var netoExtracto = 0, sinClasificar = 0;
         movsCta.forEach(function(m) {
@@ -328,20 +337,132 @@
             if (!m.clasificado) sinClasificar++;
         });
 
+        // El flujo de la cuenta, en la MONEDA de la cuenta (misma regla que saldoCuenta)
         var netoFlujo = 0;
         eventos.forEach(function(ev) {
             if (!enFlujo(ev) || ev.cuentaId !== cuenta.id) return;
-            var a = ev.montoBRL;
+            var a = null;
+            if (ev.moneda === monedaCta) a = ev.monto;
+            else if (monedaCta === 'BRL' && ev.montoBRL !== null) a = ev.montoBRL;
             if (a === null) return;
             netoFlujo += ev.tipo === 'ingreso' ? a : -a;
         });
 
         return {
+            moneda: monedaCta,
             movimientos: movsCta.length,
+            fantasmas: fantasmas,
             sinClasificar: sinClasificar,
             netoExtracto: Math.round(netoExtracto * 100) / 100,
             netoFlujo: Math.round(netoFlujo * 100) / 100,
             diferencia: Math.round((netoExtracto - netoFlujo) * 100) / 100
+        };
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  INTEGRIDAD REGISTRO A REGISTRO (v1.1)
+    //  Matching CONSERVADOR movimiento↔evento. Solo empareja pares
+    //  inequívocos: mismo monto al centavo, misma dirección, fecha a ±3 días,
+    //  y que sean únicos entre sí (un solo candidato de cada lado).
+    //  Devuelve el mapa completo de perdidos, fantasmas, colgados y sugerencias.
+    // ═════════════════════════════════════════════════════════════════════════
+
+    function conciliarRegistros(eventos, movimientos, cuentas) {
+        var DIAS_TOLERANCIA = 3;
+        var porId = {};
+        cuentas.forEach(function(c) { porId[c.id] = c; });
+
+        var movsReales = movimientos.filter(function(m) { return !m.esSaldo; });
+        var fantasmas  = movimientos.filter(function(m) { return m.esSaldo; });
+
+        // Eventos candidatos: los del flujo (los honorarios pendientes no cuentan)
+        var evs = eventos.filter(enFlujo);
+
+        // 1) Vínculos ya existentes (gastoId/pagoId en el movimiento, o movimientoId futuro)
+        var vinculados = [];
+        var evPorRef = {};
+        evs.forEach(function(ev) { evPorRef[ev.origen + '-' + ev.refId] = ev; });
+        var movsSueltos = [];
+        movsReales.forEach(function(m) {
+            var ev = (m.gastoId && evPorRef['gasto-' + m.gastoId])
+                  || (m.pagoId  && evPorRef['pago-'  + m.pagoId])
+                  || (m.eventoId && m.eventoOrigen && evPorRef[m.eventoOrigen + '-' + m.eventoId])
+                  || null;
+            if (ev) { vinculados.push({ mov: m, ev: ev }); ev._vinculado = true; }
+            else movsSueltos.push(m);
+        });
+
+        // 2) Matching por monto+fecha+dirección para lo suelto
+        function clave(monto, tipo) { return tipo + '|' + monto.toFixed(2); }
+        function difDias(a, b) {
+            if (!a || !b) return 999;
+            return Math.abs(a.getTime() - b.getTime()) / 86400000;
+        }
+
+        var evsSueltos = evs.filter(function(ev) {
+            if (ev._vinculado) return false;
+            // Solo eventos en BRL o cuya moneda coincide con la de su cuenta:
+            // el matching compara montos al centavo, no convierte.
+            return true;
+        });
+
+        // índice de eventos por clave
+        var idxEv = {};
+        evsSueltos.forEach(function(ev) {
+            var montoCmp = (ev.moneda === 'BRL') ? ev.monto : ev.montoBRL;
+            if (montoCmp === null || !montoCmp) { montoCmp = ev.monto; }
+            var k = clave(montoCmp, ev.tipo);
+            if (!idxEv[k]) idxEv[k] = [];
+            idxEv[k].push(ev);
+        });
+
+        var emparejados = [], ambiguos = 0;
+        var movsSinEvento = [];   // ← posibles REGISTROS PERDIDOS (plata en el banco, no en el sistema)
+
+        movsSueltos.forEach(function(m) {
+            var k = clave(m.monto, m.tipo);
+            var candidatos = (idxEv[k] || []).filter(function(ev) {
+                if (ev._emparejado) return false;
+                if (difDias(ev.fecha, m.fecha) > DIAS_TOLERANCIA) return false;
+                // Si el evento YA tiene cuenta, debe ser la del movimiento
+                if (ev.cuentaId && ev.cuentaId !== m.cuentaId) return false;
+                return true;
+            });
+            if (candidatos.length === 1) {
+                candidatos[0]._emparejado = true;
+                emparejados.push({ mov: m, ev: candidatos[0] });
+            } else if (candidatos.length > 1) {
+                ambiguos++;
+                movsSinEvento.push(m);   // ambiguo: queda para revisión manual
+            } else {
+                movsSinEvento.push(m);
+            }
+        });
+
+        // 3) Eventos colgados: con cuenta BTG (con extracto) pero sin movimiento que los respalde
+        var cuentasConExtracto = {};
+        movsReales.forEach(function(m) { if (m.cuentaId) cuentasConExtracto[m.cuentaId] = true; });
+        var eventosSinRespaldo = evsSueltos.filter(function(ev) {
+            return !ev._emparejado && ev.cuentaId && cuentasConExtracto[ev.cuentaId];
+        });
+
+        // 4) Sugerencias de recableado: pares emparejados donde al evento le falta
+        //    la cuenta o el vínculo — listos para escribir con un toque.
+        var sugerencias = emparejados.filter(function(par) {
+            return !par.ev.cuentaId || !par.mov.gastoId && !par.mov.pagoId;
+        });
+
+        // limpiar marcas temporales
+        evs.forEach(function(ev) { delete ev._vinculado; delete ev._emparejado; });
+
+        return {
+            vinculados: vinculados,           // ya enlazados por id
+            emparejados: emparejados,         // matcheados por monto+fecha (inequívocos)
+            sugerencias: sugerencias,         // emparejados a los que les falta cablear cuenta/vínculo
+            movsSinEvento: movsSinEvento,     // ⚠️ posibles registros PERDIDOS (o ambiguos)
+            eventosSinRespaldo: eventosSinRespaldo, // ⚠️ eventos en cuenta con extracto, sin respaldo
+            fantasmas: fantasmas,             // líneas "Saldo Diário" y similares
+            ambiguos: ambiguos
         };
     }
 
@@ -364,6 +485,7 @@
             if (ev.origen === 'gasto' && ev.flags.sinDestino) p.gastosSinClasificar.push(ev);
         });
         movimientos.forEach(function(m) {
+            if (m.esSaldo) return;                    // fantasmas: se informan aparte
             if (!m.clasificado) p.movsSinClasificar.push(m);
         });
         p.total = p.sinCuenta.length + p.sinCotizacion.length
@@ -374,7 +496,7 @@
 
     // ═════════════════════════════════════════════════════════════════════════
     window.FIN = {
-        version: '1.0',
+        version: '1.1',
         SIMBOLO: SIMBOLO,
         fmtMon: fmtMon,
         fmtBRL: fmtBRL,
@@ -387,6 +509,7 @@
         saldoCuenta: saldoCuenta,
         saldosTodos: saldosTodos,
         verificacionExtracto: verificacionExtracto,
+        conciliarRegistros: conciliarRegistros,
         detectarPendientes: detectarPendientes,
         enFlujo: enFlujo
     };

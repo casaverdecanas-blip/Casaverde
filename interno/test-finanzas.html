@@ -42,8 +42,10 @@
 
     <div class="alert alert-info" style="margin-bottom:var(--space-4);">
         <span class="material-icons">science</span>
-        Página de verificación del cimiento <code>finanzas-core.js</code>. Solo lee — no toca nada.
-        Si estos números te cierran contra la realidad, la Fase 2 (la página Dinero) se construye sobre esto.
+        Verificación del cimiento <code>finanzas-core.js</code> v1.1. La lectura no toca nada;
+        las únicas acciones que escriben son <strong>Recablear</strong> (vincula evento↔movimiento y le
+        asigna su cuenta) y <strong>Eliminar fantasmas</strong> (borra las líneas "Saldo Diário" del extracto,
+        que no son transacciones). Ambas piden confirmación.
     </div>
 
     <div id="contenido">
@@ -62,10 +64,38 @@
     var { user, userData } = await CVC.verificarAuth(['admin']);
     document.getElementById('userName').textContent = userData.nombre || user.email;
 
+    var db = CVC.db;
     var escapeHtml = CVC.escapeHtml;
+    var showToast  = CVC.showToast;
 
-    try {
-        var libro = await FIN.cargarTodo();
+    var libro = null, integridad = null;
+    var CAMPO_CUENTA = {   // dónde guarda cada colección su cuenta
+        gasto:      { col: 'gastos',      id: 'cuentaOrigenId',  nom: 'cuentaOrigenNom' },
+        pago:       { col: 'pagos',       id: 'cuentaDestinoId', nom: 'cuentaDestinoNombre' },
+        honorario:  { col: 'honorarios',  id: 'cuentaOrigenId',  nom: 'cuentaOrigenNom' },
+        retiro:     { col: 'retiros',     id: 'cuentaOrigenId',  nom: 'cuentaOrigenNom' }
+    };
+
+    window.analizar = async function() {
+        document.getElementById('contenido').innerHTML =
+            '<div class="loading-state"><div class="spinner"></div> Unificando el flujo…</div>';
+        try {
+            libro = await FIN.cargarTodo();
+            integridad = FIN.conciliarRegistros(libro.eventos, libro.movimientos, libro.cuentas);
+            render();
+        } catch(e) {
+            document.getElementById('contenido').innerHTML =
+                '<div class="alert alert-error"><span class="material-icons">error_outline</span> Error: '
+                + escapeHtml(e.message) + '</div>';
+        }
+    };
+
+    function nombreCuenta(id) {
+        var c = libro.cuentas.find(function(x) { return x.id === id; });
+        return c ? (c.nombre || id) : id;
+    }
+
+    function render() {
         var eventosFlujo = libro.eventos.filter(FIN.enFlujo);
         var tot = FIN.totales(libro.eventos);
         var saldos = FIN.saldosTodos(libro.cuentas, libro.eventos);
@@ -109,7 +139,7 @@
                     + '<td>' + (v ? v.movimientos + ' movs' + (v.sinClasificar ? ' <span class="pend">' + v.sinClasificar + ' sin clasificar</span>' : ' <span class="ok-chip">todo clasificado</span>') : '<span style="color:var(--color-text-muted);">sin extracto</span>') + '</td>'
                     + '<td>' + (v ? (Math.abs(v.diferencia) < 0.01
                         ? '<span class="ok-chip">✓ cuadra</span>'
-                        : '<span class="menos">' + FIN.fmtBRL(v.diferencia) + '</span>') : '—') + '</td>'
+                        : '<span class="menos">' + FIN.fmtMon(v.diferencia, v.moneda) + '</span>') : '—') + '</td>'
                     + '</tr>';
               }).join('')
             + '</table></div>'
@@ -145,6 +175,72 @@
             + bloquePend('⏳ A pagar (honorarios y reembolsos pendientes)', pend.aPagar, evLinea)
             + '</div>';
 
+        // ── Integridad registro a registro (v1.1) ───────────
+        var I = integridad;
+        var linkeados = I.vinculados.length;
+        html += '<div class="card" style="margin-bottom:var(--space-4);">'
+            + '<div class="card__header"><h2 class="card__title"><span class="material-icons">fact_check</span> Integridad registro a registro</h2></div>'
+            + '<div class="kpi-grid">'
+            + '<div class="kpi"><div class="v">' + linkeados + '</div><div class="l">Vinculados por id</div></div>'
+            + '<div class="kpi"><div class="v">' + I.emparejados.length + '</div><div class="l">Emparejados por monto+fecha</div></div>'
+            + '<div class="kpi ' + (I.sugerencias.length ? 'egr' : '') + '"><div class="v">' + I.sugerencias.length + '</div><div class="l">Para recablear</div></div>'
+            + '<div class="kpi ' + (I.movsSinEvento.length ? 'egr' : '') + '"><div class="v">' + I.movsSinEvento.length + '</div><div class="l">Movs. sin evento (¿perdidos?)</div></div>'
+            + '<div class="kpi ' + (I.eventosSinRespaldo.length ? 'egr' : '') + '"><div class="v">' + I.eventosSinRespaldo.length + '</div><div class="l">Eventos sin respaldo</div></div>'
+            + '<div class="kpi ' + (I.fantasmas.length ? 'egr' : '') + '"><div class="v">' + I.fantasmas.length + '</div><div class="l">Fantasmas (Saldo Diário)</div></div>'
+            + '</div>';
+
+        if (I.sugerencias.length) {
+            html += '<div style="margin-bottom:var(--space-3);">'
+                + '<button class="btn btn-primary" onclick="recablearTodos()">'
+                + '<span class="material-icons">cable</span> Recablear los ' + I.sugerencias.length + ' pares inequívocos</button>'
+                + '<div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-top:4px;">'
+                + 'Escribe en cada evento su cuenta y el vínculo a su movimiento, y en el movimiento el vínculo al evento. '
+                + 'Solo pares únicos: mismo monto al centavo, misma dirección, fecha a ±3 días.</div>'
+                + '<div style="font-size:var(--text-xs);color:var(--color-text-secondary);margin-top:6px;">'
+                + I.sugerencias.slice(0, 10).map(function(par) {
+                    return par.ev.fechaStr + ' · ' + (par.ev.tipo === 'ingreso' ? '+' : '−') + FIN.fmtMon(par.ev.monto, par.ev.moneda)
+                        + ' · ' + escapeHtml(par.ev.contraparte || par.ev.concepto)
+                        + ' ↔ extracto ' + escapeHtml(nombreCuenta(par.mov.cuentaId));
+                  }).join('<br>')
+                + (I.sugerencias.length > 10 ? '<br>… y ' + (I.sugerencias.length - 10) + ' más' : '')
+                + '</div></div>';
+        }
+
+        if (I.movsSinEvento.length) {
+            html += '<div style="margin-bottom:var(--space-3);"><strong>⚠️ Movimientos del extracto sin evento en el sistema ('
+                + I.movsSinEvento.length + (I.ambiguos ? ', ' + I.ambiguos + ' ambiguos' : '') + ')</strong>'
+                + '<div style="font-size:var(--text-xs);color:var(--color-text-secondary);margin-top:4px;">'
+                + 'Plata que pasó por el banco y no tiene registro propio en el flujo (o tiene más de un candidato). '
+                + 'Los sin clasificar se resuelven clasificándolos; los clasificados que sigan acá son los verdaderos faltantes.<br>'
+                + I.movsSinEvento.slice(0, 10).map(function(m) {
+                    return m.fechaStr + ' · ' + (m.tipo === 'ingreso' ? '+' : '−') + FIN.fmtBRL(m.monto)
+                        + ' · ' + escapeHtml(m.descripcion.slice(0, 55))
+                        + (m.clasificado ? ' <span class="pend">clasificado sin evento</span>' : '');
+                  }).join('<br>')
+                + (I.movsSinEvento.length > 10 ? '<br>… y ' + (I.movsSinEvento.length - 10) + ' más' : '')
+                + '</div></div>';
+        }
+
+        if (I.eventosSinRespaldo.length) {
+            html += '<div style="margin-bottom:var(--space-3);"><strong>⚠️ Eventos en cuentas con extracto, sin respaldo en el extracto ('
+                + I.eventosSinRespaldo.length + ')</strong>'
+                + '<div style="font-size:var(--text-xs);color:var(--color-text-secondary);margin-top:4px;">'
+                + 'Posibles cargas dobles o registros manuales que el banco no muestra — para revisar caso a caso.<br>'
+                + I.eventosSinRespaldo.slice(0, 10).map(function(ev) {
+                    return ev.fechaStr + ' · ' + (ev.tipo === 'ingreso' ? '+' : '−') + FIN.fmtMon(ev.monto, ev.moneda)
+                        + ' · ' + escapeHtml(ev.contraparte || ev.concepto) + ' · ' + escapeHtml(nombreCuenta(ev.cuentaId));
+                  }).join('<br>')
+                + (I.eventosSinRespaldo.length > 10 ? '<br>… y ' + (I.eventosSinRespaldo.length - 10) + ' más' : '')
+                + '</div></div>';
+        }
+
+        if (I.fantasmas.length) {
+            html += '<div><button class="btn btn-danger btn-sm" onclick="eliminarFantasmas()">'
+                + '<span class="material-icons">delete_sweep</span> Eliminar los ' + I.fantasmas.length + ' fantasmas "Saldo Diário"</button>'
+                + '<span style="font-size:var(--text-xs);color:var(--color-text-muted);margin-left:8px;">Son fotos del saldo del CSV de BTG, no transacciones — ya no suman ni aparecen como pendientes, pero conviene borrarlas.</span></div>';
+        }
+        html += '</div>';
+
         // ── Flujo unificado (últimos 60) ─────────────────────
         html += '<div class="card">'
             + '<div class="card__header"><h2 class="card__title"><span class="material-icons">timeline</span> Flujo unificado — últimos 60 eventos</h2></div>'
@@ -164,12 +260,51 @@
             + '</table></div></div>';
 
         document.getElementById('contenido').innerHTML = html;
-
-    } catch(e) {
-        document.getElementById('contenido').innerHTML =
-            '<div class="alert alert-error"><span class="material-icons">error_outline</span> Error: '
-            + escapeHtml(e.message) + '</div>';
     }
+
+    // ── ACCIONES DE ESCRITURA ────────────────────────────────
+    window.recablearTodos = async function() {
+        var sugs = integridad.sugerencias;
+        if (!sugs.length) return;
+        if (!confirm('¿Recablear ' + sugs.length + ' pares? En cada evento se escribe su cuenta y el vínculo al movimiento; en cada movimiento, el vínculo al evento. Solo pares inequívocos. No modifica montos ni fechas.')) return;
+
+        var ok = 0, err = 0;
+        for (var par of sugs) {
+            try {
+                var mapa = CAMPO_CUENTA[par.ev.origen];
+                if (!mapa) { err++; continue; }
+                var updEv = { movimientoId: par.mov.refId };
+                if (!par.ev.cuentaId && par.mov.cuentaId) {
+                    updEv[mapa.id]  = par.mov.cuentaId;
+                    updEv[mapa.nom] = nombreCuenta(par.mov.cuentaId);
+                    updEv.sinCuenta = false;
+                }
+                await db.collection(mapa.col).doc(par.ev.refId).update(updEv);
+
+                var updMov = { eventoOrigen: par.ev.origen, eventoId: par.ev.refId };
+                if (par.ev.origen === 'gasto') updMov.gastoId = par.ev.refId;
+                if (par.ev.origen === 'pago')  updMov.pagoId  = par.ev.refId;
+                await db.collection('movimientos').doc(par.mov.refId).update(updMov);
+                ok++;
+            } catch(e) { err++; }
+        }
+        showToast('Recableados ' + ok + ' pares' + (err ? ' · ' + err + ' con error' : '') + '.', err ? 'warning' : 'success');
+        analizar();
+    };
+
+    window.eliminarFantasmas = async function() {
+        var fs = integridad.fantasmas;
+        if (!fs.length) return;
+        if (!confirm('¿Eliminar ' + fs.length + ' líneas "Saldo Diário" de la colección movimientos? No son transacciones — solo fotos del saldo del CSV. No se puede deshacer.')) return;
+        var ok = 0;
+        for (var m of fs) {
+            try { await db.collection('movimientos').doc(m.refId).delete(); ok++; } catch(e) {}
+        }
+        showToast(ok + ' fantasmas eliminados.', 'success');
+        analizar();
+    };
+
+    analizar();
 })();
 </script>
 </body>
