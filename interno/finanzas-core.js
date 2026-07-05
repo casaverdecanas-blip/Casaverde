@@ -65,10 +65,12 @@
 
     function normalizarPago(id, p) {
         var moneda = p.moneda || 'BRL';
+        var interno = p.interno === true || p.concepto === 'Movimiento interno' || p.tipo === 'interno';
         return {
             id: 'pago-' + id, origen: 'pago', refId: id,
             fecha: fechaDe(p.fecha || p.creadoEn), fechaStr: fechaStrDe(p.fecha || p.creadoEn),
             tipo: 'ingreso',
+            interno: interno,
             monto: Number(p.monto) || 0, moneda: moneda,
             montoBRL: aporteBRL(p.monto, moneda, p.montoBRL),
             cuentaId: p.cuentaDestinoId || null,
@@ -87,12 +89,14 @@
 
     function normalizarGasto(id, g) {
         var moneda = g.moneda || 'BRL';
+        var interno = g.interno === true || g.categoria === 'Movimiento interno';
         // Regla de clasificación completa (misma que clasificación masiva):
-        var sinClasif = !g.categoria || !g.destino || !g.circuito;
+        var sinClasif = !interno && (!g.categoria || !g.destino || !g.circuito);
         return {
             id: 'gasto-' + id, origen: 'gasto', refId: id,
             fecha: fechaDe(g.fecha || g.creadoEn), fechaStr: fechaStrDe(g.fecha || g.creadoEn),
             tipo: 'egreso',
+            interno: interno,
             monto: Number(g.monto) || 0, moneda: moneda,
             montoBRL: aporteBRL(g.monto, moneda, g.montoBRL),
             cuentaId: g.cuentaOrigenId || null,
@@ -260,9 +264,10 @@
 
     function totales(eventos) {
         var t = { ingresosBRL: 0, egresosBRL: 0, balanceBRL: 0,
-                  sinEquivalente: 0, porMoneda: {} };
+                  sinEquivalente: 0, internos: 0, porMoneda: {} };
         eventos.forEach(function(ev) {
             if (!enFlujo(ev)) return;
+            if (ev.interno) { t.internos++; return; }   // mueven saldo, no entró/salió
             var m = ev.moneda || 'BRL';
             if (!t.porMoneda[m]) t.porMoneda[m] = { ingresos: 0, egresos: 0 };
             t.porMoneda[m][ev.tipo === 'ingreso' ? 'ingresos' : 'egresos'] += ev.monto;
@@ -524,7 +529,9 @@
     }
 
     // m: movimiento normalizado · cuenta: doc de la cuenta · categoriaNombre: string|null
-    async function materializarMovimiento(db, m, cuenta, categoriaNombre, uid) {
+    // opts.interno: true para conversiones/cargas entre cuentas propias
+    async function materializarMovimiento(db, m, cuenta, categoriaNombre, uid, opts) {
+        opts = opts || {};
         cuenta = cuenta || {};
         var monedaCta   = cuenta.moneda || 'BRL';
         var contraparte = extraerContraparte(m.descripcion);
@@ -543,8 +550,9 @@
                 cuentaDestinoNombre: cuenta.nombre || null,
                 sinCuenta: false,
                 metodo: 'extracto',
-                tipo: 'ingreso_externo',
-                concepto: categoriaNombre || 'Ingreso de extracto',
+                tipo: opts.interno ? 'interno' : 'ingreso_externo',
+                interno: opts.interno === true,
+                concepto: categoriaNombre || (opts.interno ? 'Movimiento interno' : 'Ingreso de extracto'),
                 fecha: m.fechaStr,
                 observaciones: String(m.descripcion || '').slice(0, 140),
                 movimientoId: m.refId,
@@ -555,7 +563,8 @@
         } else {
             origenEv = 'gasto';
             ref = await db.collection('gastos').add({
-                concepto: categoriaNombre || 'Gasto de extracto',
+                concepto: categoriaNombre || (opts.interno ? 'Movimiento interno' : 'Gasto de extracto'),
+                interno: opts.interno === true,
                 proveedor: contraparte,
                 monto: m.monto, moneda: monedaCta,
                 montoBRL: monedaCta === 'BRL' ? m.monto : null,
@@ -587,7 +596,7 @@
 
     // ═════════════════════════════════════════════════════════════════════════
     window.FIN = {
-        version: '1.3',
+        version: '1.4',
         SIMBOLO: SIMBOLO,
         fmtMon: fmtMon,
         fmtBRL: fmtBRL,

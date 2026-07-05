@@ -172,8 +172,20 @@
                     + escapeHtml(c.nombre || c.id) + ' (' + (c.moneda || 'BRL') + ')</option>';
             }).join('');
 
+        function opcMoneda(moneda, selId) {
+            var lista = libro.cuentas.filter(function(c) { return c.activa !== false && (c.moneda || 'BRL') === moneda; });
+            return lista.map(function(c, ix) {
+                return '<option value="' + c.id + '"' + (ix === 0 ? ' selected' : '') + '>' + escapeHtml(c.nombre || c.id) + '</option>';
+            }).join('') || '<option value="">— No hay cuenta en ' + moneda + ' —</option>';
+        }
+
         panel.innerHTML =
-            '<div id="impPaso1">'
+            '<div class="tabs" style="margin-bottom:var(--space-3);">'
+                + '<button class="tab active" id="modoTexto" onclick="impModo(\'texto\')"><span class="material-icons" style="font-size:16px;">content_paste</span> Pegar texto</button>'
+                + '<button class="tab" id="modoCapturas" onclick="impModo(\'capturas\')"><span class="material-icons" style="font-size:16px;">photo_camera</span> Capturas (IA)</button>'
+            + '</div>'
+
+            + '<div id="impPaso1">'
             + '<div class="filtros">'
                 + '<select class="form-control" id="impCuenta"><option value="">— Elegí la cuenta —</option>' + opcCuentas + '</select>'
                 + '<select class="form-control" id="impFormato">'
@@ -188,8 +200,33 @@
             + '<button class="btn btn-primary" onclick="impParsear()"><span class="material-icons">search</span> Analizar extracto</button>'
             + '<div class="alert alert-error" id="impError" style="display:none;margin-top:var(--space-3);"><span class="material-icons">error_outline</span><span id="impErrorText"></span></div>'
             + '</div>'
+
+            + '<div id="impPasoCap" style="display:none;">'
+            + '<div class="mov-sub" style="margin-bottom:var(--space-3);">Para billeteras que mezclan dos monedas en la misma pantalla (Prex, Midinero): '
+                + 'sacá capturas de los movimientos y la IA los lee, <strong>separa cada movimiento a su cuenta según el símbolo</strong> '
+                + '($ → pesos, U$S → dólares) y desarma las conversiones ⇄ en sus dos patas como movimientos internos.</div>'
+            + '<div class="filtros">'
+                + '<label class="form-label" style="align-self:center;margin:0;">$ →</label>'
+                + '<select class="form-control" id="capCuentaUYU">' + opcMoneda('UYU') + '</select>'
+                + '<label class="form-label" style="align-self:center;margin:0;">U$S →</label>'
+                + '<select class="form-control" id="capCuentaUSD">' + opcMoneda('USD') + '</select>'
+            + '</div>'
+            + '<input type="file" id="capArchivos" accept="image/*" multiple class="form-control" style="margin-bottom:var(--space-2);">'
+            + '<button class="btn btn-primary" onclick="capLeer()"><span class="material-icons">auto_awesome</span> <span id="capBtnText">Leer capturas con IA</span></button>'
+            + '<div id="capLog" class="mov-sub" style="margin-top:var(--space-2);"></div>'
+            + '<div class="alert alert-error" id="capError" style="display:none;margin-top:var(--space-3);"><span class="material-icons">error_outline</span><span id="capErrorText"></span></div>'
+            + '</div>'
+
             + '<div id="impPaso2" style="display:none;"></div>';
     }
+
+    window.impModo = function(m) {
+        document.getElementById('modoTexto').classList.toggle('active', m === 'texto');
+        document.getElementById('modoCapturas').classList.toggle('active', m === 'capturas');
+        document.getElementById('impPaso1').style.display   = m === 'texto' ? 'block' : 'none';
+        document.getElementById('impPasoCap').style.display = m === 'capturas' ? 'block' : 'none';
+        document.getElementById('impPaso2').style.display   = 'none';
+    };
 
     // Parseo heredado de herramientas-btg (formatos BR y americano) + filtro de fantasmas
     function impParsearTexto(texto, formatoFecha) {
@@ -354,6 +391,253 @@
         document.getElementById('impError').style.display = 'flex';
     }
 
+    // ── CAPTURAS (IA): billeteras bimoneda tipo Prex ──────────
+    var cap = { filas: [] };
+    var PROXY_IA = 'https://serene-scone-76bd4e.netlify.app/.netlify/functions/claude-proxy';
+
+    function redimensionarImagen(file, maxLado, calidad) {
+        return new Promise(function(resolve, reject) {
+            var img = new Image();
+            img.onload = function() {
+                var w = img.width, h = img.height;
+                if (w > h && w > maxLado) { h = Math.round(h * maxLado / w); w = maxLado; }
+                else if (h >= w && h > maxLado) { w = Math.round(w * maxLado / h); h = maxLado; }
+                var canvas = document.createElement('canvas');
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                canvas.toBlob(function(blob) { resolve(blob || file); }, 'image/jpeg', calidad);
+            };
+            img.onerror = function() { reject(new Error('No se pudo leer la imagen')); };
+            img.src = URL.createObjectURL(file);
+        });
+    }
+
+    function capLog(msg) {
+        var box = document.getElementById('capLog');
+        box.innerHTML += escapeHtml(msg) + '<br>';
+    }
+
+    var PROMPT_CAPTURA =
+        'Sos un extractor de movimientos de billeteras digitales uruguayas (Prex, Midinero).'
+        + ' La captura muestra tarjetas de movimientos agrupadas bajo encabezados de fecha dd/mm/aaaa;'
+        + ' cada tarjeta hereda la fecha del encabezado que tiene arriba.'
+        + ' Simbolos de moneda: "$" = UYU (pesos uruguayos), "U$S" = USD (dolares).'
+        + ' Numeros formato $ 1.234,56 -> 1234.56 (punto de miles, coma decimal).'
+        + ' Algunas tarjetas tienen TRES importes: uno verde positivo, uno oscuro negativo, y uno gris con el simbolo de conversion (dos flechas)'
+        + ' precedido a veces por un icono; eso es UNA compra pagada convirtiendo desde la otra moneda:'
+        + ' monto = el negativo (la compra), moneda = la del negativo, conv_credito = el verde (mismo signo de moneda que la compra),'
+        + ' conv_moneda = la OTRA moneda, conv_monto = el importe gris de conversion.'
+        + ' Tarjetas con un solo importe: verde = credito, oscuro con menos = debito; conv_* en null.'
+        + ' interno_sugerido = true SOLO para: "CARGA TRANSFERENCIA BANCARIA", "Carga Prex Brasil", "Prex a Prex a Cuenta", "CARGA ABITAB".'
+        + ' Ignora tarjetas cortadas por el borde, encabezados, saldos "Disponibles" y filtros.'
+        + ' Responde UNICAMENTE JSON valido sin markdown:'
+        + ' {"movimientos":[{"fecha":"YYYY-MM-DD","descripcion":"","moneda":"UYU","tipo":"credito","monto":0,'
+        + '"conv_credito":null,"conv_moneda":null,"conv_monto":null,"interno_sugerido":false}]}';
+
+    window.capLeer = async function() {
+        var input = document.getElementById('capArchivos');
+        var files = input.files;
+        document.getElementById('capError').style.display = 'none';
+        document.getElementById('capLog').innerHTML = '';
+        if (!files || !files.length) { capError('Elegí al menos una captura.'); return; }
+        var ctaUYU = document.getElementById('capCuentaUYU').value;
+        var ctaUSD = document.getElementById('capCuentaUSD').value;
+        if (!ctaUYU && !ctaUSD) { capError('No hay cuentas en $ ni en U$S — creá las cuentas primero.'); return; }
+
+        var btn = document.getElementById('capBtnText');
+        cap.filas = [];
+        var crudos = [];
+
+        for (var i = 0; i < files.length; i++) {
+            btn.textContent = 'Leyendo captura ' + (i + 1) + ' de ' + files.length + '…';
+            try {
+                var blob = await redimensionarImagen(files[i], 1600, 0.85);
+                var b64 = await new Promise(function(res, rej) {
+                    var r = new FileReader();
+                    r.onload  = function() { res(r.result.split(',')[1]); };
+                    r.onerror = function() { rej(new Error('Error leyendo archivo')); };
+                    r.readAsDataURL(blob);
+                });
+                var resp = await fetch(PROXY_IA, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: 'gemini-2.5-flash',
+                        max_tokens: 8000,
+                        messages: [{ role: 'user', content: [
+                            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
+                            { type: 'text', text: PROMPT_CAPTURA }
+                        ]}]
+                    })
+                });
+                var data = await resp.json();
+                if (!resp.ok) { capLog('Captura ' + (i + 1) + ': error del proxy (' + resp.status + ')'); continue; }
+                var raw = (data.content && data.content[0]) ? data.content[0].text : '';
+                var TICK = String.fromCharCode(96);   // el acento grave, sin escribirlo en el código
+                var limpio = raw.split(TICK).join('').replace(/^\s*json/i, '').trim();
+                var obj = JSON.parse(limpio);
+                var movs = (obj && obj.movimientos) || [];
+                crudos = crudos.concat(movs);
+                capLog('Captura ' + (i + 1) + ': ' + movs.length + ' movimientos leídos.');
+            } catch(e) {
+                capLog('Captura ' + (i + 1) + ': no se pudo interpretar (' + e.message + ').');
+            }
+        }
+        btn.textContent = 'Leer capturas con IA';
+        if (!crudos.length) { capError('No se pudo extraer ningún movimiento de las capturas.'); return; }
+
+        // Expandir conversiones ⇄ en sus patas y enrutar por moneda
+        crudos.forEach(function(m) {
+            if (!m || !m.fecha || !m.moneda || !m.monto) return;
+            var ctaPrincipal = m.moneda === 'USD' ? ctaUSD : ctaUYU;
+            if (!ctaPrincipal) return;
+
+            // Pata principal (la compra o el movimiento simple)
+            cap.filas.push({
+                fecha: m.fecha,
+                descripcion: (m.interno_sugerido ? '↔ ' : '') + String(m.descripcion || '').slice(0, 80),
+                monto: m.tipo === 'credito' ? Math.abs(m.monto) : -Math.abs(m.monto),
+                tipo: m.tipo === 'credito' ? 'credito' : 'debito',
+                cuentaId: ctaPrincipal,
+                moneda: m.moneda,
+                interno: m.interno_sugerido === true,
+                seleccionado: true
+            });
+
+            // Conversión ⇄: el crédito de conversión en la misma billetera…
+            if (m.conv_credito) {
+                cap.filas.push({
+                    fecha: m.fecha,
+                    descripcion: '↔ Conversión (' + String(m.descripcion || '').slice(0, 50) + ')',
+                    monto: Math.abs(m.conv_credito),
+                    tipo: 'credito',
+                    cuentaId: ctaPrincipal,
+                    moneda: m.moneda,
+                    interno: true,
+                    seleccionado: true
+                });
+            }
+            // …y el débito en la OTRA billetera
+            if (m.conv_monto && m.conv_moneda) {
+                var ctaOtra = m.conv_moneda === 'USD' ? ctaUSD : ctaUYU;
+                if (ctaOtra) {
+                    cap.filas.push({
+                        fecha: m.fecha,
+                        descripcion: '↔ Conversión → ' + (m.moneda === 'USD' ? 'U$S' : '$') + ' (' + String(m.descripcion || '').slice(0, 45) + ')',
+                        monto: -Math.abs(m.conv_monto),
+                        tipo: 'debito',
+                        cuentaId: ctaOtra,
+                        moneda: m.conv_moneda,
+                        interno: true,
+                        seleccionado: true
+                    });
+                }
+            }
+        });
+
+        // Deduplicación por cuenta (misma huella que el importador de texto)
+        var porCuenta = {};
+        cap.filas.forEach(function(f) {
+            if (!porCuenta[f.cuentaId]) porCuenta[f.cuentaId] = [];
+            porCuenta[f.cuentaId].push(f);
+        });
+        for (var ctaId in porCuenta) {
+            try {
+                var conc = await CVC.conciliarMovimientos(porCuenta[ctaId], ctaId);
+                conc.forEach(function(c, ix) {
+                    porCuenta[ctaId][ix].estado = c.estado;
+                    porCuenta[ctaId][ix].fingerprint = c.fingerprint;
+                    if (c.estado === 'duplicado') porCuenta[ctaId][ix].seleccionado = false;
+                });
+            } catch(e) { /* sin verificación: quedan todos como nuevos */ }
+        }
+        // Duplicados ENTRE capturas solapadas
+        var vistos = {};
+        cap.filas.forEach(function(f) {
+            var k = f.cuentaId + '|' + (f.fingerprint || CVC.fingerprintMovimiento(f.fecha, f.monto, f.descripcion));
+            if (vistos[k]) { f.estado = 'duplicado'; f.seleccionado = false; }
+            vistos[k] = true;
+        });
+
+        renderCapPreview();
+    };
+
+    function renderCapPreview() {
+        var nuevos = cap.filas.filter(function(f) { return f.estado !== 'duplicado'; }).length;
+        var dups   = cap.filas.length - nuevos;
+        document.getElementById('impPasoCap').style.display = 'none';
+        var p2 = document.getElementById('impPaso2');
+        p2.style.display = 'block';
+        p2.innerHTML =
+            '<div style="margin-bottom:var(--space-3);font-size:var(--text-sm);">'
+                + '<span class="mas">' + nuevos + ' nuevos</span>'
+                + (dups ? ' · <span class="pend">' + dups + ' duplicados (desmarcados)</span>' : '')
+                + ' · ↔ = movimiento interno (conversión o carga entre cuentas propias: mueve saldo, no cuenta como gasto ni ingreso)'
+            + '</div>'
+            + cap.filas.map(function(f, i) {
+                return '<div class="mov-row" style="' + (f.estado === 'duplicado' ? 'opacity:0.55;' : '') + '">'
+                    + '<input type="checkbox" ' + (f.seleccionado ? 'checked' : '') + ' onchange="capToggle(' + i + ', this.checked)">'
+                    + '<div class="mov-monto ' + (f.tipo === 'credito' ? 'mas' : 'menos') + '">'
+                        + (f.tipo === 'credito' ? '+' : '−') + FIN.fmtMon(Math.abs(f.monto), f.moneda) + '</div>'
+                    + '<div class="mov-det">' + escapeHtml(f.descripcion)
+                        + '<div class="mov-sub">' + f.fecha + ' · → ' + escapeHtml(nombreCuenta(f.cuentaId))
+                        + (f.estado === 'duplicado' ? ' · <span class="pend">ya importado</span>' : '')
+                        + (f.interno ? ' · <span class="chip" style="background:var(--color-primary-light);">interno</span>' : '') + '</div>'
+                    + '</div>'
+                + '</div>';
+              }).join('')
+            + '<div style="display:flex;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-3);">'
+                + '<button class="btn btn-ghost" onclick="capVolver()"><span class="material-icons">arrow_back</span> Volver</button>'
+                + '<button class="btn btn-primary" id="capBtnConfirmar" onclick="capConfirmar()">'
+                    + '<span class="material-icons">upload_file</span> Importar a las dos cuentas</button>'
+            + '</div>';
+    }
+
+    window.capToggle = function(i, checked) {
+        if (cap.filas[i]) cap.filas[i].seleccionado = checked;
+    };
+    window.capVolver = function() {
+        document.getElementById('impPasoCap').style.display = 'block';
+        document.getElementById('impPaso2').style.display = 'none';
+    };
+
+    window.capConfirmar = async function() {
+        var sel = cap.filas.filter(function(f) { return f.seleccionado; });
+        if (!sel.length) { showToast('Seleccioná al menos un movimiento.', 'error'); return; }
+        var btn = document.getElementById('capBtnConfirmar');
+        btn.disabled = true;
+        try {
+            // Importación por cuenta (cada movimiento nace con su cuenta sellada)
+            var porCuenta = {};
+            sel.forEach(function(f) {
+                if (!porCuenta[f.cuentaId]) porCuenta[f.cuentaId] = [];
+                porCuenta[f.cuentaId].push(f);
+            });
+            var total = 0;
+            for (var ctaId in porCuenta) {
+                var cuenta = cuentaDe(ctaId) || {};
+                var r = await CVC.importarMovimientosConfirmados(porCuenta[ctaId], {
+                    cuentaId: ctaId,
+                    moneda: cuenta.moneda || 'UYU',
+                    importadoPor: user.uid
+                });
+                total += r.importados || 0;
+            }
+            showToast(total + ' movimientos importados, separados por moneda a sus cuentas.', 'success');
+            cap.filas = [];
+            await cargar();
+            irTab('clasificar');
+        } catch(e) {
+            showToast('Error al importar: ' + e.message, 'error');
+            btn.disabled = false;
+        }
+    };
+
+    function capError(msg) {
+        document.getElementById('capErrorText').textContent = msg;
+        document.getElementById('capError').style.display = 'flex';
+    }
+
     // ── CLASIFICAR (etiqueta + materializa en un gesto) ───────
     function renderClasificar(panel) {
         var lista = sinClasificarLista().filter(function(m) {
@@ -400,6 +684,9 @@
                                 + '<span class="material-icons" style="font-size:16px;">bolt</span> Clasificar y materializar</button>'
                             + '<button class="btn btn-ghost btn-sm" onclick="soloClasificar(\'' + m.refId + '\')" title="Solo etiqueta — materializás después en masa">'
                                 + '<span class="material-icons" style="font-size:16px;">label</span></button>'
+                            + '<button class="btn btn-ghost btn-sm" onclick="marcarInterno(\'' + m.refId + '\')" title="Movimiento interno: conversión o carga entre cuentas propias — mueve saldo, no cuenta como gasto ni ingreso"'
+                                + (m.descripcion.indexOf('↔') === 0 ? ' style="background:var(--color-primary-light);"' : '') + '>'
+                                + '↔</button>'
                         + '</div>'
                     + '</div>';
                   }).join('')
@@ -422,6 +709,29 @@
         try {
             await db.collection('movimientos').doc(refId).update({ categoriaId: catId });
             showToast('Clasificado — quedó listo para materializar.', 'success');
+            await cargar();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    window.marcarInterno = async function(refId) {
+        var m = movPorRef(refId);
+        if (!m) return;
+        if (!m.cuentaId) { showToast('Este movimiento no tiene cuenta — no se puede materializar.', 'error'); return; }
+        try {
+            // Categoría "Movimiento interno": la busca, y si no existe la crea una sola vez
+            var catInterna = libro.categorias.find(function(c) { return c.nombre === 'Movimiento interno'; });
+            if (!catInterna) {
+                var ref = await db.collection('categorias').add({
+                    nombre: 'Movimiento interno', activa: true, orden: 98,
+                    creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                catInterna = { id: ref.id, nombre: 'Movimiento interno', activa: true };
+                libro.categorias.push(catInterna);
+            }
+            await db.collection('movimientos').doc(refId).update({ categoriaId: catInterna.id });
+            m.categoriaId = catInterna.id;
+            await FIN.materializarMovimiento(db, m, cuentaDe(m.cuentaId), 'Movimiento interno', user.uid, { interno: true });
+            showToast('↔ Marcado interno: mueve el saldo, no cuenta como gasto ni ingreso.', 'success');
             await cargar();
         } catch(e) { showToast('Error: ' + e.message, 'error'); }
     };
