@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conciliación · Casa Verde Canas</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .tabs { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-4); }
+        .tab { border: 1px solid var(--color-border); background: var(--color-surface); border-radius: 20px; padding: 6px 16px; font-size: var(--text-sm); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+        .tab.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+        .tab .badge-n { background: var(--color-danger); color: #fff; border-radius: 10px; font-size: 10px; padding: 0 6px; font-weight: 800; }
+        .tab.active .badge-n { background: #fff; color: var(--color-danger); }
+
+        .tabla { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
+        .tabla th, .tabla td { border-bottom: 1px solid var(--color-border-light); padding: 6px 8px; text-align: left; vertical-align: middle; }
+        .tabla th { background: var(--color-bg); }
+        .ok-chip { background: #e6f4ea; color: #137333; border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 700; }
+        .pend { background: #fef3e2; color: #b45309; border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 700; }
+        .menos { color: var(--color-danger); font-weight: 700; }
+        .mas { color: var(--color-success); font-weight: 700; }
+        .scroll-x { overflow-x: auto; }
+
+        .mov-row { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border-light); font-size: var(--text-sm); }
+        .mov-monto { min-width: 100px; text-align: right; font-weight: 800; font-family: var(--font-mono); }
+        .mov-det { flex: 1; min-width: 220px; line-height: 1.4; }
+        .mov-sub { font-size: var(--text-xs); color: var(--color-text-muted); }
+        .mov-acciones { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+        .mov-acciones select { max-width: 200px; font-size: var(--text-xs); padding: 4px 8px; }
+        .filtros { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-3); }
+        .filtros .form-control { max-width: 190px; font-size: var(--text-sm); }
+    </style>
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">rule</span>
+        Conciliación — extracto → flujo
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span><span id="userName">—</span></div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons">logout</span> Salir
+        </button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+
+    <div class="alert alert-info" style="margin-bottom:var(--space-4);">
+        <span class="material-icons">info</span>
+        El circuito completo en una página: <strong>Cuadre</strong> te dice cómo está cada cuenta,
+        <strong>Clasificar</strong> etiqueta y materializa cada movimiento en un solo gesto, y
+        <strong>Materializar</strong> convierte en masa lo ya etiquetado.
+        Importar extractos nuevos sigue en BTG/Conciliación; la clasificación con IA, en Clasificación automática.
+    </div>
+
+    <div class="tabs">
+        <button class="tab active" data-t="cuadre" onclick="irTab('cuadre')"><span class="material-icons" style="font-size:16px;">balance</span> Cuadre</button>
+        <button class="tab" data-t="clasificar" onclick="irTab('clasificar')"><span class="material-icons" style="font-size:16px;">label</span> Clasificar <span class="badge-n" id="badgeClasif">0</span></button>
+        <button class="tab" data-t="materializar" onclick="irTab('materializar')"><span class="material-icons" style="font-size:16px;">factory</span> Materializar <span class="badge-n" id="badgeMat">0</span></button>
+    </div>
+
+    <div class="card" id="panelTab">
+        <div class="loading-state"><div class="spinner"></div> Cargando…</div>
+    </div>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script src="finanzas-core.js"></script>
+<script>
+(async function() {
+    var { user, userData } = await CVC.verificarAuth(['admin']);
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+    CVC.renderNav('conciliacion.html', userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('conciliacion.html');
+
+    var db = CVC.db;
+    var escapeHtml = CVC.escapeHtml;
+    var showToast  = CVC.showToast;
+
+    var libro = null, integridad = null;
+    var tabActual = 'cuadre';
+    var fClasif = { cuentaId: '', texto: '' };
+
+    async function cargar() {
+        libro = await FIN.cargarTodo();
+        integridad = FIN.conciliarRegistros(libro.eventos, libro.movimientos, libro.cuentas);
+        actualizarBadges();
+        renderTab();
+    }
+
+    function cuentaDe(id) { return libro.cuentas.find(function(c) { return c.id === id; }); }
+    function nombreCuenta(id) { var c = cuentaDe(id); return c ? (c.nombre || id) : (id || '—'); }
+    function nombreCategoria(catId) {
+        var c = libro.categorias.find(function(x) { return x.id === catId; });
+        return c ? (c.nombre || null) : null;
+    }
+    function sinClasificarLista() {
+        return libro.movimientos.filter(function(m) { return !m.esSaldo && !m.clasificado; });
+    }
+    function materializablesLista() {
+        return integridad.movsSinEvento.filter(function(m) { return m.clasificado && m.cuentaId; });
+    }
+    function actualizarBadges() {
+        document.getElementById('badgeClasif').textContent = sinClasificarLista().length;
+        document.getElementById('badgeMat').textContent    = materializablesLista().length;
+    }
+
+    window.irTab = function(t) {
+        tabActual = t;
+        document.querySelectorAll('.tab').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.t === t);
+        });
+        renderTab();
+    };
+
+    function renderTab() {
+        var panel = document.getElementById('panelTab');
+        if (tabActual === 'cuadre')       return renderCuadre(panel);
+        if (tabActual === 'clasificar')   return renderClasificar(panel);
+        if (tabActual === 'materializar') return renderMaterializar(panel);
+    }
+
+    // ── CUADRE ────────────────────────────────────────────────
+    function renderCuadre(panel) {
+        var saldos = FIN.saldosTodos(libro.cuentas, libro.eventos);
+        panel.innerHTML =
+            '<div class="scroll-x"><table class="tabla">'
+            + '<tr><th>Cuenta</th><th>Saldo por flujo</th><th>Extracto</th><th>Sin clasificar</th><th>Sin materializar</th><th>Diferencia flujo↔extracto</th></tr>'
+            + libro.cuentas.filter(function(c) { return c.activa !== false; }).map(function(c) {
+                var s = saldos[c.id];
+                var v = FIN.verificacionExtracto(c, libro.eventos, libro.movimientos);
+                var sinClas = sinClasificarLista().filter(function(m) { return m.cuentaId === c.id; }).length;
+                var sinMat  = materializablesLista().filter(function(m) { return m.cuentaId === c.id; }).length;
+                return '<tr>'
+                    + '<td><strong>' + escapeHtml(c.nombre || c.id) + '</strong> (' + (c.moneda || 'BRL') + ')</td>'
+                    + '<td>' + FIN.fmtMon(s.saldo, s.moneda) + '</td>'
+                    + '<td>' + (v ? v.movimientos + ' movs' : '<span style="color:var(--color-text-muted);">sin extracto</span>') + '</td>'
+                    + '<td>' + (sinClas ? '<span class="pend">' + sinClas + '</span>' : '<span class="ok-chip">0</span>') + '</td>'
+                    + '<td>' + (sinMat ? '<span class="pend">' + sinMat + '</span>' : '<span class="ok-chip">0</span>') + '</td>'
+                    + '<td>' + (v ? (Math.abs(v.diferencia) < 0.01
+                        ? '<span class="ok-chip">✓ cuadra</span>'
+                        : '<span class="menos">' + FIN.fmtMon(v.diferencia, v.moneda) + '</span>') : '—') + '</td>'
+                    + '</tr>';
+              }).join('')
+            + '</table></div>'
+            + '<div class="mov-sub" style="margin-top:var(--space-2);">'
+            + 'El camino al ✓: clasificar lo pendiente (pestaña Clasificar) → materializar lo etiquetado (pestaña Materializar). '
+            + 'Lo que quede desbalanceado después de eso es diferencia real para investigar.'
+            + '</div>';
+    }
+
+    // ── CLASIFICAR (etiqueta + materializa en un gesto) ───────
+    function renderClasificar(panel) {
+        var lista = sinClasificarLista().filter(function(m) {
+            if (fClasif.cuentaId && m.cuentaId !== fClasif.cuentaId) return false;
+            if (fClasif.texto) {
+                var t = fClasif.texto.toLowerCase();
+                if ((m.descripcion + ' ' + m.etiqueta).toLowerCase().indexOf(t) === -1) return false;
+            }
+            return true;
+        });
+
+        var opcionesCat = libro.categorias
+            .filter(function(c) { return c.activa !== false; })
+            .sort(function(a, b) { return (a.orden || 99) - (b.orden || 99); })
+            .map(function(c) { return '<option value="' + c.id + '">' + escapeHtml(c.nombre) + '</option>'; })
+            .join('');
+
+        panel.innerHTML =
+            '<div class="filtros">'
+            + '<select class="form-control" id="fcCuenta" onchange="setFiltroClasif()">'
+                + '<option value="">Todas las cuentas</option>'
+                + libro.cuentas.map(function(c) {
+                    return '<option value="' + c.id + '"' + (fClasif.cuentaId === c.id ? ' selected' : '') + '>' + escapeHtml(c.nombre || c.id) + '</option>';
+                  }).join('')
+            + '</select>'
+            + '<input type="text" class="form-control" id="fcTexto" placeholder="Buscar…" value="' + escapeHtml(fClasif.texto) + '" oninput="setFiltroClasif()">'
+            + '<span class="mov-sub" style="align-self:center;">Para clasificar en masa con IA: <a href="clasificacion-auto.html">Clasificación automática</a> · pegando planilla: <a href="clasificacion-masiva.html">masiva</a></span>'
+            + '</div>'
+            + (lista.length
+                ? lista.slice(0, 60).map(function(m) {
+                    return '<div class="mov-row">'
+                        + '<div class="mov-monto ' + (m.tipo === 'ingreso' ? 'mas' : 'menos') + '">'
+                            + (m.tipo === 'ingreso' ? '+' : '−') + FIN.fmtMon(m.monto, (cuentaDe(m.cuentaId) || {}).moneda || 'BRL') + '</div>'
+                        + '<div class="mov-det">'
+                            + escapeHtml(FIN.extraerContraparte(m.descripcion))
+                            + '<div class="mov-sub">' + m.fechaStr + ' · ' + escapeHtml(nombreCuenta(m.cuentaId))
+                            + ' · ' + escapeHtml(m.descripcion.slice(0, 60)) + '</div>'
+                        + '</div>'
+                        + '<div class="mov-acciones">'
+                            + '<select class="form-control" id="cat-' + m.refId + '">'
+                                + '<option value="">Categoría…</option>' + opcionesCat
+                            + '</select>'
+                            + '<button class="btn btn-primary btn-sm" onclick="clasificarYMaterializar(\'' + m.refId + '\')" title="Etiqueta el movimiento y crea su gasto/ingreso real, todo junto">'
+                                + '<span class="material-icons" style="font-size:16px;">bolt</span> Clasificar y materializar</button>'
+                            + '<button class="btn btn-ghost btn-sm" onclick="soloClasificar(\'' + m.refId + '\')" title="Solo etiqueta — materializás después en masa">'
+                                + '<span class="material-icons" style="font-size:16px;">label</span></button>'
+                        + '</div>'
+                    + '</div>';
+                  }).join('')
+                    + (lista.length > 60 ? '<div class="mov-sub" style="padding:var(--space-2);">Mostrando 60 de ' + lista.length + ' — afiná los filtros.</div>' : '')
+                : '<div class="mov-sub" style="padding:var(--space-3);">🎉 Nada sin clasificar' + (fClasif.cuentaId || fClasif.texto ? ' con estos filtros' : '') + '.</div>');
+    }
+    window.setFiltroClasif = function() {
+        fClasif.cuentaId = document.getElementById('fcCuenta').value;
+        fClasif.texto    = document.getElementById('fcTexto').value.trim();
+        renderTab();
+    };
+
+    function movPorRef(refId) {
+        return libro.movimientos.find(function(m) { return m.refId === refId; });
+    }
+
+    window.soloClasificar = async function(refId) {
+        var catId = document.getElementById('cat-' + refId).value;
+        if (!catId) { showToast('Elegí la categoría primero.', 'error'); return; }
+        try {
+            await db.collection('movimientos').doc(refId).update({ categoriaId: catId });
+            showToast('Clasificado — quedó listo para materializar.', 'success');
+            await cargar();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    window.clasificarYMaterializar = async function(refId) {
+        var catId = document.getElementById('cat-' + refId).value;
+        if (!catId) { showToast('Elegí la categoría primero.', 'error'); return; }
+        var m = movPorRef(refId);
+        if (!m) return;
+        if (!m.cuentaId) { showToast('Este movimiento no tiene cuenta — no se puede materializar.', 'error'); return; }
+        try {
+            await db.collection('movimientos').doc(refId).update({ categoriaId: catId });
+            m.categoriaId = catId;
+            var r = await FIN.materializarMovimiento(db, m, cuentaDe(m.cuentaId), nombreCategoria(catId), user.uid);
+            showToast('Listo: clasificado y convertido en ' + (r.origen === 'gasto' ? 'gasto' : 'ingreso') + ' real.', 'success');
+            await cargar();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    // ── MATERIALIZAR (en masa) ────────────────────────────────
+    function renderMaterializar(panel) {
+        var lista = materializablesLista();
+        panel.innerHTML =
+            (lista.length
+                ? '<div style="margin-bottom:var(--space-3);">'
+                    + '<button class="btn btn-primary" id="btnMatTodos" onclick="materializarTodos()">'
+                    + '<span class="material-icons">factory</span> Materializar los ' + lista.length + ' movimientos etiquetados</button>'
+                    + '<div class="mov-sub" style="margin-top:4px;">Cada uno se convierte en su gasto o ingreso real con cuenta, categoría, contraparte, fecha original y vínculo. Los de cuentas USD/UYU quedan "sin cotización" para fijarla desde Dinero → Pendientes.</div>'
+                  + '</div>'
+                  + lista.slice(0, 40).map(function(m) {
+                        return '<div class="mov-row">'
+                            + '<div class="mov-monto ' + (m.tipo === 'ingreso' ? 'mas' : 'menos') + '">'
+                                + (m.tipo === 'ingreso' ? '+' : '−') + FIN.fmtMon(m.monto, (cuentaDe(m.cuentaId) || {}).moneda || 'BRL') + '</div>'
+                            + '<div class="mov-det">'
+                                + escapeHtml(FIN.extraerContraparte(m.descripcion))
+                                + '<div class="mov-sub">' + m.fechaStr + ' · ' + escapeHtml(nombreCuenta(m.cuentaId))
+                                + ' · ' + escapeHtml(nombreCategoria(m.categoriaId) || 'sin nombre de categoría') + '</div>'
+                            + '</div>'
+                            + '<button class="btn btn-secondary btn-sm" onclick="materializarUno(\'' + m.refId + '\')">'
+                                + '<span class="material-icons" style="font-size:16px;">factory</span></button>'
+                        + '</div>';
+                    }).join('')
+                  + (lista.length > 40 ? '<div class="mov-sub" style="padding:var(--space-2);">… y ' + (lista.length - 40) + ' más (el botón de arriba los procesa a todos).</div>' : '')
+                : '<div class="mov-sub" style="padding:var(--space-3);">🎉 No hay movimientos etiquetados sin materializar. El circuito está al día.</div>');
+    }
+
+    window.materializarUno = async function(refId) {
+        var m = movPorRef(refId);
+        if (!m || !m.cuentaId) return;
+        try {
+            var r = await FIN.materializarMovimiento(db, m, cuentaDe(m.cuentaId), nombreCategoria(m.categoriaId), user.uid);
+            showToast('Convertido en ' + (r.origen === 'gasto' ? 'gasto' : 'ingreso') + ' real.', 'success');
+            await cargar();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    window.materializarTodos = async function() {
+        var lista = materializablesLista();
+        if (!lista.length) return;
+        if (!confirm('¿Materializar ' + lista.length + ' movimientos etiquetados? Se crean sus gastos/ingresos reales con vínculo sellado. Los movimientos del extracto no se modifican (solo reciben el vínculo).')) return;
+        var btn = document.getElementById('btnMatTodos');
+        btn.disabled = true;
+        var ok = 0, err = 0;
+        for (var i = 0; i < lista.length; i++) {
+            var m = lista[i];
+            try {
+                await FIN.materializarMovimiento(db, m, cuentaDe(m.cuentaId), nombreCategoria(m.categoriaId), user.uid);
+                ok++;
+            } catch(e) { err++; }
+            if (i % 10 === 0) btn.textContent = 'Materializando… ' + (i + 1) + '/' + lista.length;
+        }
+        showToast('Materializados ' + ok + (err ? ' · ' + err + ' con error' : '') + '.', err ? 'warning' : 'success');
+        await cargar();
+    };
+
+    await cargar();
+})();
+</script>
+</body>
+</html>

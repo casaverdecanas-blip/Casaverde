@@ -496,8 +496,98 @@
     }
 
     // ═════════════════════════════════════════════════════════════════════════
+    //  MATERIALIZACIÓN (v1.3) — única función del core que ESCRIBE.
+    //  Convierte un movimiento clasificado del extracto en su evento real
+    //  (gasto si es débito, ingreso si es crédito), con cuenta, categoría,
+    //  contraparte, fecha original y vínculo sellado en ambas direcciones.
+    // ═════════════════════════════════════════════════════════════════════════
+
+    // Contraparte desde la descripción cruda del CSV bancario:
+    // ", 10:21,Transferência,Pix enviado,,,Alexandre Teixeira,,," → "Alexandre Teixeira"
+    function extraerContraparte(desc) {
+        var RUIDO = ['pix enviado', 'pix recebido', 'canc. transferência pix enviada',
+                     'transferência', 'transferencia', 'compras', 'contas', 'supermercado',
+                     'transporte', 'outra categoria', 'lazer e entretenimento', 'restaurante',
+                     'saúde', 'saude', 'educação', 'educacao', 'serviços', 'servicos', 'salário', 'salario'];
+        var tokens = String(desc || '').split(',')
+            .map(function(t) { return t.trim(); })
+            .filter(function(t) {
+                if (!t) return false;
+                if (/^\d{1,2}:\d{2}$/.test(t)) return false;
+                if (RUIDO.indexOf(t.toLowerCase()) !== -1) return false;
+                return true;
+            });
+        for (var i = tokens.length - 1; i >= 0; i--) {
+            if (/[a-záéíóúãõçA-Z]/.test(tokens[i])) return tokens[i];
+        }
+        return String(desc || '').slice(0, 60) || 'Extracto';
+    }
+
+    // m: movimiento normalizado · cuenta: doc de la cuenta · categoriaNombre: string|null
+    async function materializarMovimiento(db, m, cuenta, categoriaNombre, uid) {
+        cuenta = cuenta || {};
+        var monedaCta   = cuenta.moneda || 'BRL';
+        var contraparte = extraerContraparte(m.descripcion);
+        var ref, origenEv;
+
+        if (m.tipo === 'ingreso') {
+            origenEv = 'pago';
+            ref = await db.collection('pagos').add({
+                reservaId: null,
+                clienteNombre: contraparte,
+                monto: m.monto, moneda: monedaCta,
+                montoBRL: monedaCta === 'BRL' ? m.monto : null,
+                cotizacionUsada: null,
+                sinCotizacion: monedaCta !== 'BRL',
+                cuentaDestinoId: m.cuentaId,
+                cuentaDestinoNombre: cuenta.nombre || null,
+                sinCuenta: false,
+                metodo: 'extracto',
+                tipo: 'ingreso_externo',
+                concepto: categoriaNombre || 'Ingreso de extracto',
+                fecha: m.fechaStr,
+                observaciones: String(m.descripcion || '').slice(0, 140),
+                movimientoId: m.refId,
+                origen: 'extracto_materializado',
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                creadoPor: uid
+            });
+        } else {
+            origenEv = 'gasto';
+            ref = await db.collection('gastos').add({
+                concepto: categoriaNombre || 'Gasto de extracto',
+                proveedor: contraparte,
+                monto: m.monto, moneda: monedaCta,
+                montoBRL: monedaCta === 'BRL' ? m.monto : null,
+                sinCotizacion: monedaCta !== 'BRL',
+                fecha: m.fechaStr,
+                metodo: 'cuenta',
+                categoria: categoriaNombre,
+                destino: null, circuito: null, deducible: false,
+                cuentaOrigenId: m.cuentaId,
+                cuentaOrigenNom: cuenta.nombre || null,
+                pais: cuenta.pais || 'BR',
+                sinCuenta: false,
+                notas: String(m.descripcion || '').slice(0, 140),
+                comprobanteUrl: null,
+                origen: 'extracto_materializado',
+                movimientoId: m.refId,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                creadoPor: uid
+            });
+        }
+
+        var updMov = { eventoOrigen: origenEv, eventoId: ref.id };
+        if (origenEv === 'gasto') updMov.gastoId = ref.id;
+        if (origenEv === 'pago')  updMov.pagoId  = ref.id;
+        await db.collection('movimientos').doc(m.refId).update(updMov);
+
+        return { origen: origenEv, id: ref.id };
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
     window.FIN = {
-        version: '1.2',
+        version: '1.3',
         SIMBOLO: SIMBOLO,
         fmtMon: fmtMon,
         fmtBRL: fmtBRL,
@@ -512,6 +602,8 @@
         verificacionExtracto: verificacionExtracto,
         conciliarRegistros: conciliarRegistros,
         detectarPendientes: detectarPendientes,
+        extraerContraparte: extraerContraparte,
+        materializarMovimiento: materializarMovimiento,
         enFlujo: enFlujo
     };
 })();

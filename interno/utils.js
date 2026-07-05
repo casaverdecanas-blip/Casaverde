@@ -165,6 +165,7 @@ const NAV_ADMIN_ITEMS = [
         icon:  'payments',
         items: [
             { href: 'dinero.html',           icon: 'paid',            label: 'Dinero'             },
+            { href: 'conciliacion.html',     icon: 'rule',            label: 'Conciliación'       },
             { sep: true },
             { href: 'pagos.html',            icon: 'trending_up',     label: 'Ingresos reservas'  },
             { href: 'gastos.html',           icon: 'trending_down',   label: 'Gastos y retiros'   },
