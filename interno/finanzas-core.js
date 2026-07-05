@@ -67,7 +67,7 @@
         var moneda = p.moneda || 'BRL';
         return {
             id: 'pago-' + id, origen: 'pago', refId: id,
-            fecha: fechaDe(p.creadoEn), fechaStr: fechaStrDe(p.creadoEn),
+            fecha: fechaDe(p.fecha || p.creadoEn), fechaStr: fechaStrDe(p.fecha || p.creadoEn),
             tipo: 'ingreso',
             monto: Number(p.monto) || 0, moneda: moneda,
             montoBRL: aporteBRL(p.monto, moneda, p.montoBRL),
@@ -173,6 +173,7 @@
             cuentaId: m.cuentaId || null,
             descripcion: desc, etiqueta: m.etiqueta || '',
             clasificado: !!m.categoriaId,
+            categoriaId: m.categoriaId || null,
             esSaldo: esSaldo,
             gastoId: m.gastoId || null, pagoId: m.pagoId || null,
             eventoId: m.eventoId || null, eventoOrigen: m.eventoOrigen || null
@@ -496,7 +497,7 @@
 
     // ═════════════════════════════════════════════════════════════════════════
     window.FIN = {
-        version: '1.1',
+        version: '1.2',
         SIMBOLO: SIMBOLO,
         fmtMon: fmtMon,
         fmtBRL: fmtBRL,

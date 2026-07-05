@@ -207,11 +207,21 @@
         }
 
         if (I.movsSinEvento.length) {
+            var materializables = I.movsSinEvento.filter(function(m) { return m.clasificado && m.cuentaId; });
             html += '<div style="margin-bottom:var(--space-3);"><strong>⚠️ Movimientos del extracto sin evento en el sistema ('
                 + I.movsSinEvento.length + (I.ambiguos ? ', ' + I.ambiguos + ' ambiguos' : '') + ')</strong>'
+                + (materializables.length
+                    ? '<div style="margin:var(--space-2) 0;">'
+                        + '<button class="btn btn-primary" onclick="materializarExtracto()">'
+                        + '<span class="material-icons">factory</span> Materializar los ' + materializables.length + ' clasificados sin evento</button>'
+                        + '<div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-top:4px;">'
+                        + 'Convierte cada movimiento clasificado en su gasto (débito) o ingreso (crédito) real: con la cuenta, '
+                        + 'la categoría, la contraparte extraída de la descripción del banco, la fecha original y el vínculo sellado. '
+                        + 'Los de cuentas en USD/UYU quedan marcados "sin cotización" para fijarla después desde Dinero → Pendientes.</div>'
+                      + '</div>'
+                    : '')
                 + '<div style="font-size:var(--text-xs);color:var(--color-text-secondary);margin-top:4px;">'
-                + 'Plata que pasó por el banco y no tiene registro propio en el flujo (o tiene más de un candidato). '
-                + 'Los sin clasificar se resuelven clasificándolos; los clasificados que sigan acá son los verdaderos faltantes.<br>'
+                + 'Los sin clasificar se resuelven clasificándolos; los clasificados que sigan acá tras materializar son los verdaderos faltantes.<br>'
                 + I.movsSinEvento.slice(0, 10).map(function(m) {
                     return m.fechaStr + ' · ' + (m.tipo === 'ingreso' ? '+' : '−') + FIN.fmtBRL(m.monto)
                         + ' · ' + escapeHtml(m.descripcion.slice(0, 55))
@@ -263,6 +273,111 @@
     }
 
     // ── ACCIONES DE ESCRITURA ────────────────────────────────
+    // ── Materializar el extracto ─────────────────────────────
+    // El sistema viejo etiquetaba movimientos sin convertirlos en eventos.
+    // Esto crea el gasto/ingreso real de cada movimiento clasificado.
+
+    // Contraparte desde la descripción cruda del CSV de BTG:
+    // ", 10:21,Transferência,Pix enviado,,,Alexandre Teixeira Marqu,,,," → "Alexandre Teixeira Marqu"
+    function extraerContraparte(desc) {
+        var RUIDO = ['pix enviado', 'pix recebido', 'canc. transferência pix enviada',
+                     'transferência', 'transferencia', 'compras', 'contas', 'supermercado',
+                     'transporte', 'outra categoria', 'lazer e entretenimento', 'restaurante',
+                     'saúde', 'saude', 'educação', 'educacao', 'serviços', 'servicos', 'salário', 'salario'];
+        var tokens = String(desc || '').split(',')
+            .map(function(t) { return t.trim(); })
+            .filter(function(t) {
+                if (!t) return false;
+                if (/^\d{1,2}:\d{2}$/.test(t)) return false;              // hora
+                if (RUIDO.indexOf(t.toLowerCase()) !== -1) return false;  // categorías del banco
+                return true;
+            });
+        // El nombre suele ser el último token con letras; si no hay, la descripción entera
+        for (var i = tokens.length - 1; i >= 0; i--) {
+            if (/[a-záéíóúãõçA-Z]/.test(tokens[i])) return tokens[i];
+        }
+        return String(desc || '').slice(0, 60) || 'Extracto';
+    }
+
+    function nombreCategoria(catId) {
+        var c = libro.categorias.find(function(x) { return x.id === catId; });
+        return c ? (c.nombre || null) : null;
+    }
+
+    window.materializarExtracto = async function() {
+        var lista = integridad.movsSinEvento.filter(function(m) { return m.clasificado && m.cuentaId; });
+        if (!lista.length) return;
+        if (!confirm('¿Materializar ' + lista.length + ' movimientos clasificados? Cada uno se convierte en su gasto o ingreso real, con cuenta, categoría, fecha original y vínculo. Los movimientos del extracto NO se tocan (solo reciben el vínculo). Después de esto, la diferencia flujo↔extracto debería bajar prácticamente a cero.')) return;
+
+        var btnTxt = 'Materializando… ';
+        var ok = 0, err = 0;
+        for (var i = 0; i < lista.length; i++) {
+            var m = lista[i];
+            try {
+                var cuenta = libro.cuentas.find(function(c) { return c.id === m.cuentaId; }) || {};
+                var monedaCta = cuenta.moneda || 'BRL';
+                var contraparte = extraerContraparte(m.descripcion);
+                var cat = nombreCategoria(m.categoriaId);
+                var ref, origenEv;
+
+                if (m.tipo === 'ingreso') {
+                    origenEv = 'pago';
+                    ref = await db.collection('pagos').add({
+                        reservaId: null,
+                        clienteNombre: contraparte,
+                        monto: m.monto, moneda: monedaCta,
+                        montoBRL: monedaCta === 'BRL' ? m.monto : null,
+                        cotizacionUsada: null,
+                        sinCotizacion: monedaCta !== 'BRL',
+                        cuentaDestinoId: m.cuentaId,
+                        cuentaDestinoNombre: cuenta.nombre || null,
+                        sinCuenta: false,
+                        metodo: 'extracto',
+                        tipo: 'ingreso_externo',
+                        concepto: cat || 'Ingreso de extracto',
+                        fecha: m.fechaStr,
+                        observaciones: String(m.descripcion || '').slice(0, 140),
+                        movimientoId: m.refId,
+                        origen: 'extracto_materializado',
+                        creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                        creadoPor: user.uid
+                    });
+                } else {
+                    origenEv = 'gasto';
+                    ref = await db.collection('gastos').add({
+                        concepto: cat || 'Gasto de extracto',
+                        proveedor: contraparte,
+                        monto: m.monto, moneda: monedaCta,
+                        montoBRL: monedaCta === 'BRL' ? m.monto : null,
+                        sinCotizacion: monedaCta !== 'BRL',
+                        fecha: m.fechaStr,
+                        metodo: 'cuenta',
+                        categoria: cat,
+                        destino: null, circuito: null, deducible: false,
+                        cuentaOrigenId: m.cuentaId,
+                        cuentaOrigenNom: cuenta.nombre || null,
+                        pais: cuenta.pais || 'BR',
+                        sinCuenta: false,
+                        notas: String(m.descripcion || '').slice(0, 140),
+                        comprobanteUrl: null,
+                        origen: 'extracto_materializado',
+                        movimientoId: m.refId,
+                        creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                        creadoPor: user.uid
+                    });
+                }
+
+                var updMov = { eventoOrigen: origenEv, eventoId: ref.id };
+                if (origenEv === 'gasto') updMov.gastoId = ref.id;
+                if (origenEv === 'pago')  updMov.pagoId  = ref.id;
+                await db.collection('movimientos').doc(m.refId).update(updMov);
+                ok++;
+            } catch(e) { err++; }
+        }
+        showToast('Materializados ' + ok + ' movimientos' + (err ? ' · ' + err + ' con error' : '') + '.', err ? 'warning' : 'success');
+        analizar();
+    };
+
     window.recablearTodos = async function() {
         var sugs = integridad.sugerencias;
         if (!sugs.length) return;
