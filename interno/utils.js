@@ -2365,20 +2365,63 @@ function validarCambioTransferencia(t, ratesFecha) {
 //  Aplica en lote actualizaciones de clasificación a gastos y movimientos.
 //  cambios = [{ col:'gastos'|'movimientos', id, data:{...campos...} }]
 //  Divide en tandas de 400 (límite de batch 500) y las confirma en orden.
-function aplicarClasificacionMasiva(cambios) {
-    var tandas = [];
-    for (var i = 0; i < cambios.length; i += 400) tandas.push(cambios.slice(i, i + 400));
-    var idx = 0;
-    function siguiente() {
-        if (idx >= tandas.length) return Promise.resolve(cambios.length);
+async function aplicarClasificacionMasiva(cambios) {
+    // Aplica los cambios en tandas de 400 (límite de batch de Firestore)
+    for (var i = 0; i < cambios.length; i += 400) {
         var batch = db.batch();
-        tandas[idx].forEach(function(c) {
+        cambios.slice(i, i + 400).forEach(function(c) {
             batch.update(db.collection(c.col).doc(c.id), c.data);
         });
-        idx++;
-        return batch.commit().then(siguiente);
+        await batch.commit();
     }
-    return siguiente();
+
+    // ── Fase 1.2 (v4.35): materializar en el acto ─────────────────────────
+    // Si la página cargó finanzas-core.js, cada movimiento recién clasificado
+    // se convierte YA en su gasto/ingreso real — nunca más etiquetas huérfanas.
+    // Si FIN no está presente, se comporta exactamente como antes.
+    try {
+        if (window.FIN && FIN.materializarMovimiento) {
+            var movCambios = cambios.filter(function(c) {
+                return c.col === 'movimientos' && c.data && c.data.categoriaId;
+            });
+            if (movCambios.length) {
+                var res = await Promise.all([
+                    db.collection('cuentas').get(),
+                    db.collection('categorias').get()
+                ]);
+                var ctas = {}, cats = {};
+                res[0].docs.forEach(function(d) { ctas[d.id] = Object.assign({ id: d.id }, d.data()); });
+                res[1].docs.forEach(function(d) { cats[d.id] = d.data().nombre || null; });
+                var uid = (firebase.auth().currentUser || {}).uid || 'sistema';
+                var mat = 0;
+
+                for (var c of movCambios) {
+                    try {
+                        var doc = await db.collection('movimientos').doc(c.id).get();
+                        if (!doc.exists) continue;
+                        var d = doc.data();
+                        if (d.eventoId || d.gastoId || d.pagoId) continue;          // ya materializado
+                        if (!d.cuentaId) continue;                                   // sin cuenta no se puede
+                        if (/saldo\s*di[aá]rio/i.test(String(d.descripcion || ''))) continue;  // fantasma
+                        await FIN.materializarMovimiento(db, {
+                            refId: c.id,
+                            tipo: d.tipo === 'credito' ? 'ingreso' : 'egreso',
+                            monto: Math.abs(Number(d.monto) || 0),
+                            fechaStr: String(d.fecha || '').slice(0, 10),
+                            descripcion: d.descripcion || '',
+                            cuentaId: d.cuentaId
+                        }, ctas[d.cuentaId] || {}, cats[c.data.categoriaId] || null, uid);
+                        mat++;
+                    } catch(e2) { /* sigue con el resto */ }
+                }
+                if (mat) showToast('⚡ ' + mat + ' movimiento(s) materializados al flujo.', 'success');
+            }
+        }
+    } catch(e) {
+        console.warn('Materialización post-clasificación:', e.message);
+    }
+
+    return cambios.length;
 }
 
 function crearTransferencia(t) {

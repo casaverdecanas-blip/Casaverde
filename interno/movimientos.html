@@ -245,6 +245,7 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="utils.js"></script>
+<script src="finanzas-core.js"></script>
 <script>
 (async () => {
     const { user, userData } = await CVC.verificarAuth(['admin', 'user']);
@@ -502,6 +503,28 @@
             const fila = selectEl.closest('tr');
             if (fila) fila.classList.toggle('sin-categorizar', !categoriaId);
             renderResumen(getFiltrados(), cuenta.moneda || 'BRL');
+
+            // v4.35 — Fase 1.2: clasificar también materializa (nunca más etiquetas huérfanas)
+            if (categoriaId && m && window.FIN && FIN.materializarMovimiento
+                && !(m.eventoId || m.gastoId || m.pagoId)
+                && !(/saldo\s*di[aá]rio/i.test(String(m.descripcion || '')))) {
+                try {
+                    var catDoc = categoriasCache.find(function(c) { return c.id === categoriaId; });
+                    var r = await FIN.materializarMovimiento(db, {
+                        refId: movId,
+                        tipo: m.tipo === 'credito' ? 'ingreso' : 'egreso',
+                        monto: Math.abs(Number(m.monto) || 0),
+                        fechaStr: String(m.fecha || '').slice(0, 10),
+                        descripcion: m.descripcion || '',
+                        cuentaId: m.cuentaId || cuenta.id
+                    }, cuenta, catDoc ? (catDoc.nombre || null) : null, user.uid);
+                    m.eventoId = r.id;
+                    if (r.origen === 'gasto') m.gastoId = r.id; else m.pagoId = r.id;
+                    showToast('⚡ Clasificado y materializado al flujo.', 'success');
+                } catch(eMat) {
+                    showToast('Clasificado — pero no se pudo materializar: ' + eMat.message, 'warning');
+                }
+            }
         } catch(e) {
             selectEl.classList.remove('guardando');
             showToast('Error al guardar categoría: ' + e.message, 'error');
