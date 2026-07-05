@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dinero · Casa Verde Canas</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        input[type="number"].form-control { appearance: auto; -webkit-appearance: auto; }
+
+        /* KPIs y saldos */
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-3); }
+        .kpi { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); text-align: center; }
+        .kpi .v { font-size: var(--text-lg); font-weight: 800; }
+        .kpi .l { font-size: var(--text-xs); color: var(--color-text-muted); }
+        .kpi.ing .v { color: var(--color-success); }
+        .kpi.egr .v { color: var(--color-danger); }
+        .saldos-chips { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-4); }
+        .saldo-chip { background: var(--color-primary-light); border-radius: 16px; padding: 4px 12px; font-size: var(--text-xs); font-weight: 700; }
+
+        /* Pestañas */
+        .tabs { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-4); }
+        .tab { border: 1px solid var(--color-border); background: var(--color-surface); border-radius: 20px; padding: 6px 16px; font-size: var(--text-sm); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+        .tab.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+        .tab .badge-n { background: var(--color-danger); color: #fff; border-radius: 10px; font-size: 10px; padding: 0 6px; font-weight: 800; }
+        .tab.active .badge-n { background: #fff; color: var(--color-danger); }
+
+        /* Filtros */
+        .filtros { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-3); }
+        .filtros .form-control { max-width: 170px; font-size: var(--text-sm); }
+
+        /* Filas de eventos */
+        .ev-row { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border-light); font-size: var(--text-sm); }
+        .ev-monto { min-width: 120px; text-align: right; font-weight: 800; font-family: var(--font-mono); }
+        .ev-monto.mas { color: var(--color-success); }
+        .ev-monto.menos { color: var(--color-danger); }
+        .ev-det { flex: 1; line-height: 1.45; }
+        .ev-sub { font-size: var(--text-xs); color: var(--color-text-muted); }
+        .chip { border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 700; background: var(--color-bg); }
+        .chip.pend { background: #fef3e2; color: #b45309; }
+        .chip.cta { background: var(--color-primary-light); color: var(--color-primary); }
+
+        /* Pendientes */
+        .pend-bloque { border: 1px solid var(--color-border); border-left: 5px solid var(--color-warning); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-3); background: var(--color-surface); }
+        .pend-bloque.ok { border-left-color: var(--color-success); }
+        .pend-item { display: flex; gap: var(--space-2); align-items: center; justify-content: space-between; flex-wrap: wrap; padding: var(--space-2) 0; border-top: 1px dashed var(--color-border); font-size: var(--text-sm); }
+    </style>
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">paid</span>
+        Dinero
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span><span id="userName">—</span></div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons">logout</span> Salir
+        </button>
+    </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+
+    <!-- Mes + KPIs + saldos -->
+    <div class="card" style="margin-bottom:var(--space-4);">
+        <div style="display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;margin-bottom:var(--space-3);">
+            <label class="form-label" style="margin:0;">Mes</label>
+            <input type="month" id="mesFiltro" class="form-control" style="max-width:170px;" onchange="renderTodo()">
+            <span style="font-size:var(--text-xs);color:var(--color-text-muted);">Los totales y las listas son del mes elegido. Los saldos por cuenta son de todo el historial.</span>
+        </div>
+        <div class="kpi-grid" id="kpis"></div>
+        <div class="saldos-chips" id="saldosChips"></div>
+    </div>
+
+    <!-- Pestañas -->
+    <div class="tabs">
+        <button class="tab active" data-t="flujo" onclick="irTab('flujo')"><span class="material-icons" style="font-size:16px;">timeline</span> Flujo</button>
+        <button class="tab" data-t="ingresos" onclick="irTab('ingresos')"><span class="material-icons" style="font-size:16px;">trending_up</span> Ingresos</button>
+        <button class="tab" data-t="gastos" onclick="irTab('gastos')"><span class="material-icons" style="font-size:16px;">trending_down</span> Gastos</button>
+        <button class="tab" data-t="pendientes" onclick="irTab('pendientes')"><span class="material-icons" style="font-size:16px;">inbox</span> Pendientes <span class="badge-n" id="badgePend">0</span></button>
+    </div>
+
+    <div class="card" id="panelTab">
+        <div class="loading-state"><div class="spinner"></div> Cargando el libro de dinero…</div>
+    </div>
+
+</main>
+
+<!-- ── MODAL: Registrar ingreso ────────────────────────────── -->
+<div class="modal-overlay" id="modalIngreso" style="display:none;" onclick="cerrarModal(event,'modalIngreso')">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <h3 class="modal__title">Registrar ingreso</h3>
+            <button class="modal__close" onclick="cerrarModal(null,'modalIngreso')"><span class="material-icons">close</span></button>
+        </div>
+        <div class="modal__body">
+            <div class="form-group">
+                <label class="form-label">Reserva</label>
+                <select id="inReserva" class="form-control" onchange="onReservaIngreso()"></select>
+                <p class="form-hint">Sin reserva = ingreso externo (venta, alquiler anual, etc.)</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">De quién viene</label>
+                <input type="text" id="inContraparte" class="form-control" placeholder="Cliente, plataforma, empresa…">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Monto <span class="required">*</span></label>
+                    <input type="number" id="inMonto" class="form-control" step="0.01" min="0.01" oninput="equivIngreso()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Moneda</label>
+                    <select id="inMoneda" class="form-control" onchange="onMonedaIngreso()">
+                        <option value="BRL">BRL (R$)</option>
+                        <option value="USD">USD (US$)</option>
+                        <option value="UYU">UYU ($U)</option>
+                        <option value="ARS">ARS ($)</option>
+                    </select>
+                </div>
+            </div>
+            <div id="inEquiv" style="font-size:var(--text-sm);color:var(--color-text-muted);margin:-6px 0 var(--space-3) 0;"></div>
+            <div class="form-group">
+                <label class="form-label">Cuenta de destino</label>
+                <select id="inCuenta" class="form-control" onchange="onCuentaSel('inCuenta','inCuentaAviso')"></select>
+                <div id="inCuentaAviso" style="display:none;background:#fef3e2;color:#b45309;border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);font-size:var(--text-xs);margin-top:6px;">
+                    ⚠️ Quedará sin cuenta asociada —
+                    <a href="#" onclick="abrirCuentaNueva('inCuenta'); return false;" style="color:#b45309;font-weight:700;text-decoration:underline;">registrá la cuenta ahora</a>.
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Concepto</label>
+                    <select id="inTipo" class="form-control">
+                        <option value="senia">Seña</option>
+                        <option value="parcial">Pago parcial</option>
+                        <option value="total">Pago total</option>
+                        <option value="ingreso_externo">Ingreso externo</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Método</label>
+                    <select id="inMetodo" class="form-control">
+                        <option value="pix">PIX</option>
+                        <option value="transferencia">Transferencia</option>
+                        <option value="efectivo">Efectivo</option>
+                        <option value="tarjeta">Tarjeta</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Observaciones</label>
+                <input type="text" id="inObs" class="form-control">
+            </div>
+            <div class="alert alert-error" id="inError" style="display:none;">
+                <span class="material-icons">error_outline</span><span id="inErrorText"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModal(null,'modalIngreso')">Cancelar</button>
+            <button class="btn btn-primary" id="inBtn" onclick="guardarIngreso()">
+                <span class="material-icons">save</span> Guardar ingreso
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ── MODAL: Registrar gasto ──────────────────────────────── -->
+<div class="modal-overlay" id="modalGasto" style="display:none;" onclick="cerrarModal(event,'modalGasto')">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <h3 class="modal__title">Registrar gasto</h3>
+            <button class="modal__close" onclick="cerrarModal(null,'modalGasto')"><span class="material-icons">close</span></button>
+        </div>
+        <div class="modal__body">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Concepto <span class="required">*</span></label>
+                    <input type="text" id="gaConcepto" class="form-control" placeholder="Qué se compró / pagó">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Proveedor</label>
+                    <input type="text" id="gaProveedor" class="form-control">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Monto (R$) <span class="required">*</span></label>
+                    <input type="number" id="gaMonto" class="form-control" step="0.01" min="0.01">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Fecha</label>
+                    <input type="date" id="gaFecha" class="form-control">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Categoría</label>
+                    <select id="gaCategoria" class="form-control"></select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Destino</label>
+                    <select id="gaDestino" class="form-control"></select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Circuito</label>
+                    <select id="gaCircuito" class="form-control">
+                        <option value="">— Sin clasificar —</option>
+                        <option value="fiscal">Fiscal (deducible)</option>
+                        <option value="personal">Personal</option>
+                        <option value="mixto">Mixto (deducible)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Cuenta de origen</label>
+                    <select id="gaCuenta" class="form-control" onchange="onCuentaGasto()"></select>
+                </div>
+            </div>
+            <div id="gaCuentaAviso" style="display:none;background:#fef3e2;color:#b45309;border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);font-size:var(--text-xs);margin-bottom:var(--space-3);">
+                ⚠️ Sin cuenta asociada — <a href="#" onclick="abrirCuentaNueva('gaCuenta'); return false;" style="color:#b45309;font-weight:700;text-decoration:underline;">registrala ahora</a>.
+                Si pagaste con fondos propios, elegí esa opción y se genera el reembolso a percibir.
+            </div>
+            <div class="form-group">
+                <label class="form-label">Observaciones</label>
+                <input type="text" id="gaObs" class="form-control">
+            </div>
+            <div class="alert alert-error" id="gaError" style="display:none;">
+                <span class="material-icons">error_outline</span><span id="gaErrorText"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModal(null,'modalGasto')">Cancelar</button>
+            <button class="btn btn-primary" id="gaBtn" onclick="guardarGasto()">
+                <span class="material-icons">save</span> Guardar gasto
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ── MODAL: Resolver pendiente (cuenta / cotización / clasificar / pagar) ─ -->
+<div class="modal-overlay" id="modalResolver" style="display:none;" onclick="cerrarModal(event,'modalResolver')">
+    <div class="modal" style="max-width:460px;" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <h3 class="modal__title" id="reTitulo">Resolver</h3>
+            <button class="modal__close" onclick="cerrarModal(null,'modalResolver')"><span class="material-icons">close</span></button>
+        </div>
+        <div class="modal__body">
+            <div id="reResumen" style="font-size:var(--text-sm);background:var(--color-primary-light);border-radius:var(--radius-md);padding:var(--space-3);margin-bottom:var(--space-4);line-height:1.6;"></div>
+
+            <div class="form-group" id="reBloqueCuenta" style="display:none;">
+                <label class="form-label">Cuenta</label>
+                <select id="reCuenta" class="form-control" onchange="onCuentaSel('reCuenta','reCuentaAviso')"></select>
+                <div id="reCuentaAviso" style="display:none;font-size:var(--text-xs);color:#b45309;margin-top:6px;">
+                    <a href="#" onclick="abrirCuentaNueva('reCuenta'); return false;" style="color:#b45309;font-weight:700;text-decoration:underline;">➕ Registrar cuenta nueva</a>
+                </div>
+            </div>
+
+            <div class="form-group" id="reBloqueRate" style="display:none;">
+                <label class="form-label">Cotización (R$ por 1 unidad)</label>
+                <input type="number" id="reRate" class="form-control" step="0.0001" min="0" oninput="reEquiv()">
+                <div id="reRateEquiv" style="font-size:var(--text-sm);color:var(--color-text-muted);margin-top:4px;"></div>
+            </div>
+
+            <div id="reBloqueClasif" style="display:none;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Categoría</label>
+                        <select id="reCategoria" class="form-control"></select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Destino</label>
+                        <select id="reDestino" class="form-control"></select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Circuito</label>
+                    <select id="reCircuito" class="form-control">
+                        <option value="fiscal">Fiscal (deducible)</option>
+                        <option value="personal">Personal</option>
+                        <option value="mixto">Mixto (deducible)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="alert alert-error" id="reError" style="display:none;">
+                <span class="material-icons">error_outline</span><span id="reErrorText"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModal(null,'modalResolver')">Cancelar</button>
+            <button class="btn btn-primary" id="reBtn" onclick="guardarResolver()">
+                <span class="material-icons">save</span> Guardar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ── MODAL: Registrar cuenta nueva ───────────────────────── -->
+<div class="modal-overlay" id="modalCuentaNueva" style="display:none;" onclick="cerrarModal(event,'modalCuentaNueva')">
+    <div class="modal" style="max-width:420px;" onclick="event.stopPropagation()">
+        <div class="modal__header">
+            <h3 class="modal__title">Registrar cuenta nueva</h3>
+            <button class="modal__close" onclick="cerrarModal(null,'modalCuentaNueva')"><span class="material-icons">close</span></button>
+        </div>
+        <div class="modal__body">
+            <div class="form-group">
+                <label class="form-label">Nombre <span class="required">*</span></label>
+                <input type="text" id="ncNombre" class="form-control" placeholder="Ej: Midinero Flor">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Moneda</label>
+                    <select id="ncMoneda" class="form-control">
+                        <option value="BRL">BRL (R$)</option>
+                        <option value="USD">USD (US$)</option>
+                        <option value="UYU">UYU ($U)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">País</label>
+                    <select id="ncPais" class="form-control">
+                        <option value="BR">🇧🇷 Brasil</option>
+                        <option value="UY">🇺🇾 Uruguay</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Banco / plataforma</label>
+                <input type="text" id="ncBanco" class="form-control" placeholder="Opcional">
+            </div>
+            <div class="alert alert-error" id="ncError" style="display:none;">
+                <span class="material-icons">error_outline</span><span id="ncErrorText"></span>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModal(null,'modalCuentaNueva')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarCuentaNueva()">
+                <span class="material-icons">save</span> Crear cuenta
+            </button>
+        </div>
+    </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script src="finanzas-core.js"></script>
+<script>
+(async function() {
+    var { user, userData } = await CVC.verificarAuth(['admin']);
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+    CVC.renderNav('dinero.html', userData.rol);
+    if (typeof CVC.initAyuda === 'function') CVC.initAyuda('dinero.html');
+
+    var db = CVC.db;
+    var escapeHtml = CVC.escapeHtml;
+    var showToast  = CVC.showToast;
+
+    var libro = null;
+    var reservasCache = [];
+    var tabActual = 'flujo';
+    var CAMPO_CUENTA = {
+        gasto:     { col: 'gastos',     id: 'cuentaOrigenId',  nom: 'cuentaOrigenNom' },
+        pago:      { col: 'pagos',      id: 'cuentaDestinoId', nom: 'cuentaDestinoNombre' },
+        honorario: { col: 'honorarios', id: 'cuentaOrigenId',  nom: 'cuentaOrigenNom' },
+        retiro:    { col: 'retiros',    id: 'cuentaOrigenId',  nom: 'cuentaOrigenNom' }
+    };
+
+    // Mes por defecto: el actual
+    document.getElementById('mesFiltro').value = new Date().toISOString().slice(0, 7);
+
+    // ── Cotización del sistema ────────────────────────────────
+    var _rates = null;
+    async function rateBRLDe(moneda) {
+        if (moneda === 'BRL') return 1;
+        if (!_rates) {
+            try {
+                var c = await CVC.cargarCotizaciones();
+                if (c && c.rates && c.rates['BRL']) _rates = c.rates;
+            } catch(e) {}
+        }
+        if (_rates && _rates[moneda] && _rates['BRL']) {
+            return Math.round((_rates['BRL'] / _rates[moneda]) * 1000000) / 1000000;
+        }
+        return null;
+    }
+
+    // ── Carga ─────────────────────────────────────────────────
+    async function cargar() {
+        var rs = await Promise.all([
+            FIN.cargarTodo(),
+            db.collection('reservas').get()
+        ]);
+        libro = rs[0];
+        reservasCache = rs[1].docs
+            .map(function(d) { return Object.assign({ id: d.id }, d.data()); })
+            .sort(function(a, b) {
+                var ta = (a.checkIn && a.checkIn.toDate) ? a.checkIn.toDate().getTime() : 0;
+                var tb = (b.checkIn && b.checkIn.toDate) ? b.checkIn.toDate().getTime() : 0;
+                return tb - ta;
+            });
+        renderTodo();
+    }
+
+    function nombreCuenta(id) {
+        var c = libro.cuentas.find(function(x) { return x.id === id; });
+        return c ? (c.nombre || id) : id;
+    }
+
+    // ── Render general ────────────────────────────────────────
+    window.renderTodo = function() {
+        if (!libro) return;
+        var mes = document.getElementById('mesFiltro').value;
+
+        // KPIs del mes
+        var evMes = FIN.filtrar(libro.eventos, { mes: mes });
+        var t = FIN.totales(evMes);
+        document.getElementById('kpis').innerHTML =
+            '<div class="kpi ing"><div class="v">' + FIN.fmtBRL(t.ingresosBRL) + '</div><div class="l">Entró en el mes</div></div>'
+            + '<div class="kpi egr"><div class="v">' + FIN.fmtBRL(t.egresosBRL) + '</div><div class="l">Salió en el mes</div></div>'
+            + '<div class="kpi"><div class="v">' + FIN.fmtBRL(t.balanceBRL) + '</div><div class="l">Balance del mes</div></div>'
+            + '<div class="kpi"><div class="v">' + evMes.length + '</div><div class="l">Eventos</div></div>';
+
+        // Saldos por cuenta (historial completo)
+        var saldos = FIN.saldosTodos(libro.cuentas, libro.eventos);
+        document.getElementById('saldosChips').innerHTML = libro.cuentas
+            .filter(function(c) { return c.activa !== false; })
+            .map(function(c) {
+                var s = saldos[c.id];
+                return '<span class="saldo-chip">' + escapeHtml(c.nombre || c.id) + ': '
+                    + FIN.fmtMon(s.saldo, s.moneda) + '</span>';
+            }).join('');
+
+        document.getElementById('badgePend').textContent = libro.pendientes.total;
+        renderTab();
+    };
+
+    window.irTab = function(t) {
+        tabActual = t;
+        document.querySelectorAll('.tab').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.t === t);
+        });
+        renderTab();
+    };
+
+    function renderTab() {
+        var panel = document.getElementById('panelTab');
+        if (tabActual === 'flujo')      return renderFlujo(panel);
+        if (tabActual === 'ingresos')   return renderIngresos(panel);
+        if (tabActual === 'gastos')     return renderGastos(panel);
+        if (tabActual === 'pendientes') return renderPendientes(panel);
+    }
+
+    // ── Fila de evento (compartida) ───────────────────────────
+    function filaEvento(ev) {
+        return '<div class="ev-row">'
+            + '<div class="ev-monto ' + (ev.tipo === 'ingreso' ? 'mas' : 'menos') + '">'
+                + (ev.tipo === 'ingreso' ? '+' : '−') + FIN.fmtMon(ev.monto, ev.moneda)
+                + (ev.moneda !== 'BRL'
+                    ? '<div class="ev-sub">' + (ev.montoBRL !== null ? '≈ ' + FIN.fmtBRL(ev.montoBRL) : '<span class="chip pend">sin cotiz.</span>') + '</div>'
+                    : '')
+            + '</div>'
+            + '<div class="ev-det">'
+                + '<strong>' + escapeHtml(ev.contraparte || '—') + '</strong> · ' + escapeHtml(ev.concepto || '')
+                + '<div class="ev-sub">' + (ev.fechaStr || '—')
+                    + ' · <span class="chip ' + (ev.cuentaNombre ? 'cta' : 'pend') + '">'
+                        + (ev.cuentaNombre ? escapeHtml(ev.cuentaNombre) : 'sin cuenta') + '</span>'
+                    + ' · <span class="chip">' + ev.origen + '</span>'
+                    + (ev.destino ? ' · <span class="chip">' + escapeHtml(ev.destino) + '</span>' : '')
+                + '</div>'
+            + '</div>'
+        + '</div>';
+    }
+
+    // ── Pestaña FLUJO ─────────────────────────────────────────
+    var fFlujo = { cuentaId: '', tipo: '', origen: '', texto: '' };
+    function renderFlujo(panel) {
+        var mes = document.getElementById('mesFiltro').value;
+        var lista = FIN.filtrar(libro.eventos, {
+            mes: mes, cuentaId: fFlujo.cuentaId || undefined,
+            tipo: fFlujo.tipo || undefined, origen: fFlujo.origen || undefined,
+            texto: fFlujo.texto || undefined
+        });
+
+        panel.innerHTML =
+            '<div class="filtros">'
+            + '<select class="form-control" id="ffCuenta" onchange="setFiltroFlujo()">'
+                + '<option value="">Todas las cuentas</option>'
+                + libro.cuentas.map(function(c) {
+                    return '<option value="' + c.id + '"' + (fFlujo.cuentaId === c.id ? ' selected' : '') + '>' + escapeHtml(c.nombre || c.id) + '</option>';
+                  }).join('')
+                + '<option value="__sin__"' + (fFlujo.cuentaId === '__sin__' ? ' selected' : '') + '>Sin cuenta</option>'
+            + '</select>'
+            + '<select class="form-control" id="ffTipo" onchange="setFiltroFlujo()">'
+                + '<option value="">Entra y sale</option>'
+                + '<option value="ingreso"' + (fFlujo.tipo === 'ingreso' ? ' selected' : '') + '>Solo entra</option>'
+                + '<option value="egreso"' + (fFlujo.tipo === 'egreso' ? ' selected' : '') + '>Solo sale</option>'
+            + '</select>'
+            + '<select class="form-control" id="ffOrigen" onchange="setFiltroFlujo()">'
+                + '<option value="">Todos los orígenes</option>'
+                + ['pago','gasto','honorario','retiro'].map(function(o) {
+                    return '<option value="' + o + '"' + (fFlujo.origen === o ? ' selected' : '') + '>' + o + '</option>';
+                  }).join('')
+            + '</select>'
+            + '<input type="text" class="form-control" id="ffTexto" placeholder="Buscar…" value="' + escapeHtml(fFlujo.texto) + '" oninput="setFiltroFlujo()">'
+            + '</div>'
+            + (lista.length
+                ? lista.slice(0, 200).map(filaEvento).join('')
+                    + (lista.length > 200 ? '<div class="ev-sub" style="padding:var(--space-2);">Mostrando 200 de ' + lista.length + ' — afiná los filtros para ver el resto.</div>' : '')
+                : '<div class="ev-sub" style="padding:var(--space-3);">Sin movimientos de dinero en este mes con estos filtros.</div>');
+    }
+    window.setFiltroFlujo = function() {
+        fFlujo.cuentaId = document.getElementById('ffCuenta').value;
+        fFlujo.tipo     = document.getElementById('ffTipo').value;
+        fFlujo.origen   = document.getElementById('ffOrigen').value;
+        fFlujo.texto    = document.getElementById('ffTexto').value.trim();
+        // filtro especial "sin cuenta"
+        var mes = document.getElementById('mesFiltro').value;
+        if (fFlujo.cuentaId === '__sin__') {
+            var lista = FIN.filtrar(libro.eventos, { mes: mes, tipo: fFlujo.tipo || undefined, origen: fFlujo.origen || undefined, texto: fFlujo.texto || undefined })
+                .filter(function(ev) { return !ev.cuentaId; });
+            var panel = document.getElementById('panelTab');
+            var filtrosHtml = panel.querySelector('.filtros').outerHTML;
+            panel.innerHTML = filtrosHtml
+                + (lista.length ? lista.slice(0, 200).map(filaEvento).join('')
+                    : '<div class="ev-sub" style="padding:var(--space-3);">Nada sin cuenta este mes. 👌</div>');
+            return;
+        }
+        renderTab();
+    };
+
+    // ── Pestaña INGRESOS ──────────────────────────────────────
+    function renderIngresos(panel) {
+        var mes = document.getElementById('mesFiltro').value;
+        var lista = FIN.filtrar(libro.eventos, { mes: mes, origen: 'pago' });
+        panel.innerHTML =
+            '<div style="margin-bottom:var(--space-3);">'
+            + '<button class="btn btn-primary" onclick="abrirIngreso()"><span class="material-icons">add</span> Registrar ingreso</button>'
+            + '<span style="font-size:var(--text-xs);color:var(--color-text-muted);margin-left:10px;">Para editar o reasignar un ingreso: página Pagos → ✏️ (durante la transición).</span>'
+            + '</div>'
+            + (lista.length ? lista.map(filaEvento).join('')
+                : '<div class="ev-sub" style="padding:var(--space-3);">Sin ingresos este mes.</div>');
+    }
+
+    window.abrirIngreso = function() {
+        var sel = document.getElementById('inReserva');
+        sel.innerHTML = '<option value="">— Sin reserva (ingreso externo) —</option>'
+            + reservasCache
+                .filter(function(r) { return ['anulada','airbnb_cancelada','finalizada'].indexOf(r.estado) === -1; })
+                .map(function(r) {
+                    var f = (r.checkIn && r.checkIn.toDate) ? r.checkIn.toDate().toISOString().slice(0, 10) : '';
+                    return '<option value="' + r.id + '">' + escapeHtml(r.nombre || 'Sin nombre') + ' · C' + r.caba + ' · ' + f + '</option>';
+                }).join('');
+        document.getElementById('inContraparte').value = '';
+        document.getElementById('inMonto').value  = '';
+        document.getElementById('inMoneda').value = 'BRL';
+        document.getElementById('inTipo').value   = 'ingreso_externo';
+        document.getElementById('inMetodo').value = 'pix';
+        document.getElementById('inObs').value    = '';
+        document.getElementById('inEquiv').textContent = '';
+        document.getElementById('inError').style.display = 'none';
+        renderCuentaSelect('inCuenta', 'BRL', '');
+        document.getElementById('inCuentaAviso').style.display = 'block';
+        document.getElementById('modalIngreso').style.display = 'flex';
+    };
+    window.onReservaIngreso = function() {
+        var id = document.getElementById('inReserva').value;
+        var r = reservasCache.find(function(x) { return x.id === id; });
+        if (r) {
+            document.getElementById('inContraparte').value = r.nombre || '';
+            document.getElementById('inTipo').value = 'senia';
+        } else {
+            document.getElementById('inTipo').value = 'ingreso_externo';
+        }
+    };
+    window.onMonedaIngreso = function() {
+        renderCuentaSelect('inCuenta', document.getElementById('inMoneda').value, document.getElementById('inCuenta').value);
+        equivIngreso();
+    };
+    window.equivIngreso = async function() {
+        var m = document.getElementById('inMoneda').value;
+        var monto = parseFloat(document.getElementById('inMonto').value);
+        var out = document.getElementById('inEquiv');
+        if (m === 'BRL' || !monto || monto <= 0) { out.textContent = ''; return; }
+        var rate = await rateBRLDe(m);
+        out.textContent = rate
+            ? '≈ ' + FIN.fmtBRL(Math.round(monto * rate * 100) / 100) + ' (cotización ' + rate + ')'
+            : '⚠️ Sin cotización para ' + m + ' — se registra igual y queda en Pendientes.';
+    };
+    window.guardarIngreso = async function() {
+        var reservaId = document.getElementById('inReserva').value;
+        var monto  = parseFloat(document.getElementById('inMonto').value);
+        var moneda = document.getElementById('inMoneda').value;
+        var contraparte = document.getElementById('inContraparte').value.trim();
+        var cuentaSel = document.getElementById('inCuenta');
+        var cuentaId  = cuentaSel.value === '__nueva' ? '' : cuentaSel.value;
+        document.getElementById('inError').style.display = 'none';
+        if (!monto || monto <= 0) { errorEn('inError', 'inErrorText', 'Ingresá un monto válido.'); return; }
+        if (!reservaId && !contraparte) { errorEn('inError', 'inErrorText', 'Sin reserva, indicá de quién viene el ingreso.'); return; }
+
+        var btn = document.getElementById('inBtn');
+        btn.disabled = true;
+        try {
+            var montoBRL = null, cot = null;
+            if (moneda === 'BRL') montoBRL = monto;
+            else {
+                var rate = await rateBRLDe(moneda);
+                if (rate) { montoBRL = Math.round(monto * rate * 100) / 100; cot = { rateBRL: rate, moneda: moneda, fuente: 'sistema' }; }
+            }
+            var r = reservaId ? reservasCache.find(function(x) { return x.id === reservaId; }) : null;
+            await db.collection('pagos').add({
+                reservaId: reservaId || null,
+                clienteNombre: contraparte || (r ? r.nombre : ''),
+                monto: monto, moneda: moneda,
+                montoBRL: montoBRL, cotizacionUsada: cot,
+                sinCotizacion: (moneda !== 'BRL' && montoBRL === null),
+                cuentaDestinoId: cuentaId || null,
+                cuentaDestinoNombre: cuentaId ? nombreCuenta(cuentaId) : null,
+                sinCuenta: !cuentaId,
+                metodo: document.getElementById('inMetodo').value,
+                tipo:   document.getElementById('inTipo').value,
+                observaciones: document.getElementById('inObs').value.trim(),
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                creadoPor: user.uid
+            });
+            if (reservaId && montoBRL !== null) {
+                await db.collection('reservas').doc(reservaId).update({
+                    pagadoBRL: firebase.firestore.FieldValue.increment(montoBRL)
+                });
+            }
+            showToast('Ingreso registrado.', 'success');
+            document.getElementById('modalIngreso').style.display = 'none';
+            await cargar();
+        } catch(e) { errorEn('inError', 'inErrorText', 'Error: ' + e.message); }
+        finally { btn.disabled = false; }
+    };
+
+    // ── Pestaña GASTOS ────────────────────────────────────────
+    function renderGastos(panel) {
+        var mes = document.getElementById('mesFiltro').value;
+        var lista = FIN.filtrar(libro.eventos, { mes: mes }).filter(function(ev) {
+            return ev.origen === 'gasto' || ev.origen === 'honorario' || ev.origen === 'retiro';
+        });
+        panel.innerHTML =
+            '<div style="margin-bottom:var(--space-3);">'
+            + '<button class="btn btn-primary" onclick="abrirGasto()"><span class="material-icons">add</span> Registrar gasto</button>'
+            + '<span style="font-size:var(--text-xs);color:var(--color-text-muted);margin-left:10px;">Con foto de comprobante e IA: página Gastos de mantenimiento (durante la transición).</span>'
+            + '</div>'
+            + (lista.length ? lista.map(filaEvento).join('')
+                : '<div class="ev-sub" style="padding:var(--space-3);">Sin gastos este mes.</div>');
+    }
+
+    window.abrirGasto = function() {
+        document.getElementById('gaConcepto').value  = '';
+        document.getElementById('gaProveedor').value = '';
+        document.getElementById('gaMonto').value     = '';
+        document.getElementById('gaFecha').value     = new Date().toISOString().slice(0, 10);
+        document.getElementById('gaObs').value       = '';
+        document.getElementById('gaError').style.display = 'none';
+        document.getElementById('gaCategoria').innerHTML = '<option value="">— Sin categoría —</option>'
+            + libro.categorias
+                .filter(function(c) { return c.activa !== false; })
+                .sort(function(a, b) { return (a.orden || 99) - (b.orden || 99); })
+                .map(function(c) { return '<option value="' + escapeHtml(c.nombre) + '">' + escapeHtml(c.nombre) + '</option>'; }).join('');
+        document.getElementById('gaDestino').innerHTML = '<option value="">— Sin destino —</option>'
+            + libro.destinos
+                .filter(function(d) { return d.activo !== false && d.activa !== false; })
+                .map(function(d) { return '<option value="' + escapeHtml(d.nombre) + '">' + escapeHtml(d.nombre) + '</option>'; }).join('');
+        document.getElementById('gaCircuito').value = '';
+        renderCuentaSelect('gaCuenta', 'BRL', '', true);
+        document.getElementById('gaCuentaAviso').style.display = 'block';
+        document.getElementById('modalGasto').style.display = 'flex';
+    };
+    window.onCuentaGasto = function() {
+        var sel = document.getElementById('gaCuenta');
+        if (sel.value === '__nueva') { sel.value = ''; abrirCuentaNueva('gaCuenta'); }
+        document.getElementById('gaCuentaAviso').style.display =
+            (sel.value && sel.value !== '__propio') ? 'none' : 'block';
+    };
+    window.guardarGasto = async function() {
+        var concepto = document.getElementById('gaConcepto').value.trim();
+        var monto    = parseFloat(document.getElementById('gaMonto').value);
+        var fecha    = document.getElementById('gaFecha').value;
+        var cuentaSel = document.getElementById('gaCuenta');
+        var cuentaVal = cuentaSel.value === '__nueva' ? '' : cuentaSel.value;
+        var esPropio  = cuentaVal === '__propio';
+        var cuentaId  = esPropio ? '' : cuentaVal;
+        var circuito  = document.getElementById('gaCircuito').value;
+        document.getElementById('gaError').style.display = 'none';
+        if (!concepto) { errorEn('gaError', 'gaErrorText', 'Poné un concepto.'); return; }
+        if (!monto || monto <= 0) { errorEn('gaError', 'gaErrorText', 'Ingresá un monto válido.'); return; }
+        if (!fecha) { errorEn('gaError', 'gaErrorText', 'Elegí la fecha.'); return; }
+
+        var btn = document.getElementById('gaBtn');
+        btn.disabled = true;
+        try {
+            await db.collection('gastos').add({
+                concepto: concepto,
+                monto: monto, moneda: 'BRL',
+                fecha: fecha,
+                metodo: esPropio ? 'fondos_propios' : 'cuenta',
+                proveedor: document.getElementById('gaProveedor').value.trim(),
+                categoria: document.getElementById('gaCategoria').value || null,
+                destino:   document.getElementById('gaDestino').value || null,
+                circuito:  circuito || null,
+                deducible: (circuito === 'fiscal' || circuito === 'mixto'),
+                cuentaOrigenId:  cuentaId || null,
+                cuentaOrigenNom: cuentaId ? nombreCuenta(cuentaId) : null,
+                pais: 'BR',
+                sinCuenta: !cuentaId,
+                notas: document.getElementById('gaObs').value.trim(),
+                comprobanteUrl: null,
+                origen: 'dinero_manual',
+                reembolso: esPropio,
+                reembolsoA: esPropio ? user.uid : null,
+                reembolsoNombre: esPropio ? (userData.nombre || user.email) : null,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                creadoPor: user.uid
+            });
+            if (esPropio) {
+                await db.collection('honorarios').add({
+                    uid: user.uid,
+                    nombre: userData.nombre || user.email,
+                    tipo: 'reembolso',
+                    concepto: 'Reembolso: ' + concepto,
+                    monto: monto, moneda: 'BRL', horas: 0,
+                    estado: 'pendiente',
+                    creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+            showToast('Gasto registrado' + (esPropio ? ' · reembolso a percibir generado' : '') + '.', 'success');
+            document.getElementById('modalGasto').style.display = 'none';
+            await cargar();
+        } catch(e) { errorEn('gaError', 'gaErrorText', 'Error: ' + e.message); }
+        finally { btn.disabled = false; }
+    };
+
+    // ── Pestaña PENDIENTES ────────────────────────────────────
+    function renderPendientes(panel) {
+        var p = libro.pendientes;
+        function bloque(titulo, desc, lista, accion) {
+            return '<div class="pend-bloque' + (lista.length ? '' : ' ok') + '">'
+                + '<strong>' + titulo + ' (' + lista.length + ')</strong>'
+                + '<div class="ev-sub" style="margin:2px 0 4px;">' + desc + '</div>'
+                + (lista.length
+                    ? lista.slice(0, 25).map(accion).join('')
+                        + (lista.length > 25 ? '<div class="ev-sub" style="padding-top:6px;">… y ' + (lista.length - 25) + ' más</div>' : '')
+                    : '')
+                + '</div>';
+        }
+        var evLinea = function(ev) {
+            return '<strong>' + (ev.tipo === 'ingreso' ? '+' : '−') + FIN.fmtMon(ev.monto, ev.moneda) + '</strong> · '
+                + escapeHtml(ev.contraparte || ev.concepto) + ' <span class="ev-sub">(' + ev.fechaStr + ' · ' + ev.origen + ')</span>';
+        };
+
+        panel.innerHTML =
+            bloque('💳 Sin cuenta asignada',
+                'Plata que no está enchufada a ninguna cuenta — los saldos no la ven.',
+                p.sinCuenta,
+                function(ev) {
+                    return '<div class="pend-item"><div>' + evLinea(ev) + '</div>'
+                        + '<button class="btn btn-secondary btn-sm" onclick="resolver(\'cuenta\',\'' + ev.id + '\')">'
+                        + '<span class="material-icons">account_balance</span> Asignar cuenta</button></div>';
+                })
+            + bloque('💱 Sin cotización',
+                'Moneda extranjera sin equivalente en R$ — no suman al flujo hasta fijarla.',
+                p.sinCotizacion,
+                function(ev) {
+                    return '<div class="pend-item"><div>' + evLinea(ev) + '</div>'
+                        + '<button class="btn btn-secondary btn-sm" onclick="resolver(\'cotizacion\',\'' + ev.id + '\')">'
+                        + '<span class="material-icons">currency_exchange</span> Fijar cotización</button></div>';
+                })
+            + bloque('🏷️ Gastos sin clasificar',
+                'Sin categoría, destino o circuito — el análisis de gastos no los puede repartir.',
+                p.gastosSinClasificar,
+                function(ev) {
+                    return '<div class="pend-item"><div>' + evLinea(ev) + '</div>'
+                        + '<button class="btn btn-secondary btn-sm" onclick="resolver(\'clasificar\',\'' + ev.id + '\')">'
+                        + '<span class="material-icons">label</span> Clasificar</button></div>';
+                })
+            + bloque('📄 Extracto sin clasificar',
+                'Movimientos del banco sin traducir a flujo. Se resuelven en Clasificación masiva o automática.',
+                p.movsSinClasificar,
+                function(m) {
+                    return '<div class="pend-item"><div><strong>' + (m.tipo === 'ingreso' ? '+' : '−') + FIN.fmtBRL(m.monto)
+                        + '</strong> · ' + escapeHtml(m.descripcion.slice(0, 55)) + ' <span class="ev-sub">(' + m.fechaStr + ')</span></div></div>';
+                })
+            + bloque('⏳ A pagar (honorarios y reembolsos)',
+                'Deuda interna pendiente — al marcarla pagada entra al flujo como egreso.',
+                p.aPagar,
+                function(ev) {
+                    return '<div class="pend-item"><div>' + evLinea(ev) + '</div>'
+                        + '<button class="btn btn-secondary btn-sm" onclick="resolver(\'pagar\',\'' + ev.id + '\')">'
+                        + '<span class="material-icons">task_alt</span> Marcar pagado</button></div>';
+                });
+    }
+
+    // ── Resolver pendientes ───────────────────────────────────
+    var reCtx = null;   // { modo, ev }
+    window.resolver = function(modo, evId) {
+        var ev = libro.eventos.find(function(x) { return x.id === evId; });
+        if (!ev) return;
+        reCtx = { modo: modo, ev: ev };
+
+        document.getElementById('reError').style.display = 'none';
+        document.getElementById('reResumen').innerHTML =
+            '<strong>' + (ev.tipo === 'ingreso' ? '+' : '−') + FIN.fmtMon(ev.monto, ev.moneda) + '</strong> · '
+            + escapeHtml(ev.contraparte || ev.concepto)
+            + '<br><span class="ev-sub">' + ev.fechaStr + ' · ' + ev.origen + '</span>';
+
+        document.getElementById('reBloqueCuenta').style.display = 'none';
+        document.getElementById('reBloqueRate').style.display   = 'none';
+        document.getElementById('reBloqueClasif').style.display = 'none';
+
+        if (modo === 'cuenta' || modo === 'pagar') {
+            document.getElementById('reTitulo').textContent = modo === 'cuenta' ? 'Asignar cuenta' : 'Marcar pagado';
+            document.getElementById('reBloqueCuenta').style.display = 'block';
+            renderCuentaSelect('reCuenta', ev.moneda || 'BRL', ev.cuentaId || '');
+            document.getElementById('reCuentaAviso').style.display = 'block';
+        }
+        if (modo === 'cotizacion') {
+            document.getElementById('reTitulo').textContent = 'Fijar cotización';
+            document.getElementById('reBloqueRate').style.display = 'block';
+            document.getElementById('reRate').value = '';
+            document.getElementById('reRateEquiv').textContent = '';
+            rateBRLDe(ev.moneda).then(function(r) {
+                if (r && !document.getElementById('reRate').value) {
+                    document.getElementById('reRate').value = r;
+                    reEquiv();
+                }
+            });
+        }
+        if (modo === 'clasificar') {
+            document.getElementById('reTitulo').textContent = 'Clasificar gasto';
+            document.getElementById('reBloqueClasif').style.display = 'block';
+            document.getElementById('reCategoria').innerHTML = '<option value="">— Elegir —</option>'
+                + libro.categorias.filter(function(c) { return c.activa !== false; })
+                    .map(function(c) { return '<option value="' + escapeHtml(c.nombre) + '"' + (ev.categoria === c.nombre ? ' selected' : '') + '>' + escapeHtml(c.nombre) + '</option>'; }).join('');
+            document.getElementById('reDestino').innerHTML = '<option value="">— Elegir —</option>'
+                + libro.destinos.filter(function(d) { return d.activo !== false && d.activa !== false; })
+                    .map(function(d) { return '<option value="' + escapeHtml(d.nombre) + '"' + (ev.destino === d.nombre ? ' selected' : '') + '>' + escapeHtml(d.nombre) + '</option>'; }).join('');
+            document.getElementById('reCircuito').value = ev.circuito || 'fiscal';
+        }
+        document.getElementById('modalResolver').style.display = 'flex';
+    };
+
+    window.reEquiv = function() {
+        if (!reCtx) return;
+        var rate = parseFloat(document.getElementById('reRate').value);
+        document.getElementById('reRateEquiv').textContent =
+            (rate && rate > 0)
+                ? FIN.fmtMon(reCtx.ev.monto, reCtx.ev.moneda) + ' ≈ ' + FIN.fmtBRL(Math.round(reCtx.ev.monto * rate * 100) / 100)
+                : '';
+    };
+
+    window.guardarResolver = async function() {
+        if (!reCtx) return;
+        var ev = reCtx.ev, modo = reCtx.modo;
+        var mapa = CAMPO_CUENTA[ev.origen];
+        var btn = document.getElementById('reBtn');
+        btn.disabled = true;
+        document.getElementById('reError').style.display = 'none';
+        try {
+            if (modo === 'cuenta' || modo === 'pagar') {
+                var sel = document.getElementById('reCuenta');
+                var cuentaId = sel.value === '__nueva' ? '' : sel.value;
+                var upd = {};
+                if (cuentaId) {
+                    upd[mapa.id]  = cuentaId;
+                    upd[mapa.nom] = nombreCuenta(cuentaId);
+                    upd.sinCuenta = false;
+                } else if (modo === 'cuenta') {
+                    errorEn('reError', 'reErrorText', 'Elegí una cuenta (o creá una nueva).');
+                    btn.disabled = false; return;
+                }
+                if (modo === 'pagar') {
+                    upd.estado   = 'pagado';
+                    upd.pagadoEn = firebase.firestore.FieldValue.serverTimestamp();
+                    upd.pagadoPor = user.uid;
+                }
+                await db.collection(mapa.col).doc(ev.refId).update(upd);
+            }
+
+            if (modo === 'cotizacion') {
+                var rate = parseFloat(document.getElementById('reRate').value);
+                if (!rate || rate <= 0) {
+                    errorEn('reError', 'reErrorText', 'Ingresá una cotización válida.');
+                    btn.disabled = false; return;
+                }
+                var montoBRL = Math.round(ev.monto * rate * 100) / 100;
+                await db.collection(mapa.col).doc(ev.refId).update({
+                    montoBRL: montoBRL,
+                    cotizacionUsada: { rateBRL: rate, moneda: ev.moneda, fuente: 'manual' },
+                    sinCotizacion: false
+                });
+                // Si es un pago con reserva: ahora sí suma al saldo pagado
+                if (ev.origen === 'pago' && ev.vinculo && ev.vinculo.tipo === 'reserva') {
+                    var existe = reservasCache.find(function(r) { return r.id === ev.vinculo.id; });
+                    if (existe) {
+                        await db.collection('reservas').doc(ev.vinculo.id).update({
+                            pagadoBRL: firebase.firestore.FieldValue.increment(montoBRL)
+                        });
+                    }
+                }
+            }
+
+            if (modo === 'clasificar') {
+                var circ = document.getElementById('reCircuito').value;
+                await db.collection('gastos').doc(ev.refId).update({
+                    categoria: document.getElementById('reCategoria').value || null,
+                    destino:   document.getElementById('reDestino').value || null,
+                    circuito:  circ || null,
+                    deducible: (circ === 'fiscal' || circ === 'mixto')
+                });
+            }
+
+            showToast('Resuelto.', 'success');
+            document.getElementById('modalResolver').style.display = 'none';
+            await cargar();
+        } catch(e) { errorEn('reError', 'reErrorText', 'Error: ' + e.message); }
+        finally { btn.disabled = false; }
+    };
+
+    // ── Cuentas: selector compartido + cuenta nueva ───────────
+    function renderCuentaSelect(selId, moneda, seleccionId, conPropio) {
+        var sel = document.getElementById(selId);
+        var activas = libro.cuentas.filter(function(c) { return c.activa !== false; });
+        var compat = activas.filter(function(c) { return (c.moneda || 'BRL') === moneda; });
+        var otras  = activas.filter(function(c) { return (c.moneda || 'BRL') !== moneda; });
+        var html = '<option value="">— Asignar después —</option>';
+        if (conPropio) html += '<option value="__propio">💼 Fondos propios (genera reembolso)</option>';
+        compat.forEach(function(c) { html += '<option value="' + c.id + '">' + escapeHtml(c.nombre || c.id) + ' (' + (c.moneda || 'BRL') + ')</option>'; });
+        if (otras.length) {
+            html += '<optgroup label="Otras monedas">';
+            otras.forEach(function(c) { html += '<option value="' + c.id + '">' + escapeHtml(c.nombre || c.id) + ' (' + (c.moneda || 'BRL') + ')</option>'; });
+            html += '</optgroup>';
+        }
+        html += '<option value="__nueva">➕ Registrar cuenta nueva…</option>';
+        sel.innerHTML = html;
+        sel.value = seleccionId || '';
+        if (sel.value !== (seleccionId || '')) sel.value = '';
+    }
+    window.onCuentaSel = function(selId, avisoId) {
+        var sel = document.getElementById(selId);
+        if (sel.value === '__nueva') { sel.value = ''; abrirCuentaNueva(selId); }
+        document.getElementById(avisoId).style.display = sel.value ? 'none' : 'block';
+    };
+
+    var _cuentaDestinoSel = null;
+    window.abrirCuentaNueva = function(selDestino) {
+        _cuentaDestinoSel = selDestino || null;
+        document.getElementById('ncNombre').value = '';
+        document.getElementById('ncBanco').value  = '';
+        document.getElementById('ncError').style.display = 'none';
+        document.getElementById('modalCuentaNueva').style.display = 'flex';
+    };
+    window.guardarCuentaNueva = async function() {
+        var nombre = document.getElementById('ncNombre').value.trim();
+        if (!nombre) { errorEn('ncError', 'ncErrorText', 'Poné un nombre para la cuenta.'); return; }
+        try {
+            var ref = await db.collection('cuentas').add({
+                nombre: nombre,
+                banco: document.getElementById('ncBanco').value.trim(),
+                moneda: document.getElementById('ncMoneda').value,
+                pais:   document.getElementById('ncPais').value,
+                activa: true, saldoInicial: 0, saldoActual: 0, orden: 99,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                creadoPor: user.uid
+            });
+            libro.cuentas.push({ id: ref.id, nombre: nombre,
+                moneda: document.getElementById('ncMoneda').value,
+                pais: document.getElementById('ncPais').value, activa: true, saldoInicial: 0 });
+            document.getElementById('modalCuentaNueva').style.display = 'none';
+            showToast('Cuenta "' + nombre + '" creada.', 'success');
+            if (_cuentaDestinoSel) {
+                renderCuentaSelect(_cuentaDestinoSel, document.getElementById('ncMoneda').value, ref.id,
+                    _cuentaDestinoSel === 'gaCuenta');
+                var avisos = { inCuenta: 'inCuentaAviso', gaCuenta: 'gaCuentaAviso', reCuenta: 'reCuentaAviso' };
+                if (avisos[_cuentaDestinoSel]) document.getElementById(avisos[_cuentaDestinoSel]).style.display = 'none';
+            }
+        } catch(e) { errorEn('ncError', 'ncErrorText', 'Error: ' + e.message); }
+    };
+
+    // ── Helpers ──────────────────────────────────────────────
+    window.cerrarModal = function(e, id) {
+        if (e && e.target !== document.getElementById(id)) return;
+        document.getElementById(id).style.display = 'none';
+    };
+    function errorEn(idBox, idText, msg) {
+        document.getElementById(idText).textContent = msg;
+        document.getElementById(idBox).style.display = 'flex';
+    }
+
+    await cargar();
+})();
+</script>
+</body>
+</html>
