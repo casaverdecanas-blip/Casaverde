@@ -53,14 +53,15 @@
 
     <div class="alert alert-info" style="margin-bottom:var(--space-4);">
         <span class="material-icons">info</span>
-        El circuito completo en una página: <strong>Cuadre</strong> te dice cómo está cada cuenta,
-        <strong>Clasificar</strong> etiqueta y materializa cada movimiento en un solo gesto, y
-        <strong>Materializar</strong> convierte en masa lo ya etiquetado.
-        Importar extractos nuevos sigue en BTG/Conciliación; la clasificación con IA, en Clasificación automática.
+        El circuito completo del extracto, para <strong>todas las cuentas</strong>:
+        <strong>Importar</strong> pega el extracto del banco, <strong>Clasificar</strong> etiqueta y materializa
+        en un gesto, <strong>Materializar</strong> convierte en masa lo etiquetado, y
+        <strong>Cuadre</strong> confirma que todo pegue. La clasificación con IA sigue en Clasificación automática.
     </div>
 
     <div class="tabs">
         <button class="tab active" data-t="cuadre" onclick="irTab('cuadre')"><span class="material-icons" style="font-size:16px;">balance</span> Cuadre</button>
+        <button class="tab" data-t="importar" onclick="irTab('importar')"><span class="material-icons" style="font-size:16px;">upload_file</span> Importar</button>
         <button class="tab" data-t="clasificar" onclick="irTab('clasificar')"><span class="material-icons" style="font-size:16px;">label</span> Clasificar <span class="badge-n" id="badgeClasif">0</span></button>
         <button class="tab" data-t="materializar" onclick="irTab('materializar')"><span class="material-icons" style="font-size:16px;">factory</span> Materializar <span class="badge-n" id="badgeMat">0</span></button>
     </div>
@@ -126,6 +127,7 @@
     function renderTab() {
         var panel = document.getElementById('panelTab');
         if (tabActual === 'cuadre')       return renderCuadre(panel);
+        if (tabActual === 'importar')     return renderImportar(panel);
         if (tabActual === 'clasificar')   return renderClasificar(panel);
         if (tabActual === 'materializar') return renderMaterializar(panel);
     }
@@ -157,6 +159,199 @@
             + 'El camino al ✓: clasificar lo pendiente (pestaña Clasificar) → materializar lo etiquetado (pestaña Materializar). '
             + 'Lo que quede desbalanceado después de eso es diferencia real para investigar.'
             + '</div>';
+    }
+
+    // ── IMPORTAR (Fase 3b — para TODAS las cuentas) ───────────
+    var imp = { parseados: [], conciliados: [], fantasmas: 0, cuentaId: '' };
+
+    function renderImportar(panel) {
+        var opcCuentas = libro.cuentas
+            .filter(function(c) { return c.activa !== false; })
+            .map(function(c) {
+                return '<option value="' + c.id + '"' + (imp.cuentaId === c.id ? ' selected' : '') + '>'
+                    + escapeHtml(c.nombre || c.id) + ' (' + (c.moneda || 'BRL') + ')</option>';
+            }).join('');
+
+        panel.innerHTML =
+            '<div id="impPaso1">'
+            + '<div class="filtros">'
+                + '<select class="form-control" id="impCuenta"><option value="">— Elegí la cuenta —</option>' + opcCuentas + '</select>'
+                + '<select class="form-control" id="impFormato">'
+                    + '<option value="dd/mm/yyyy">Fecha dd/mm/aaaa</option>'
+                    + '<option value="yyyy-mm-dd">Fecha aaaa-mm-dd</option>'
+                    + '<option value="mm/dd/yyyy">Fecha mm/dd/aaaa</option>'
+                + '</select>'
+            + '</div>'
+            + '<textarea id="impTexto" class="form-control" rows="8" style="font-family:var(--font-mono);font-size:11px;" '
+                + 'placeholder="Pegá acá las líneas del extracto (CSV o texto del banco — BTG, Prex, Midinero, el que sea)…"></textarea>'
+            + '<div class="mov-sub" style="margin:4px 0 var(--space-3);">Las líneas "Saldo Diário" (fotos del saldo) se descartan solas: nunca entran al sistema. Los duplicados se detectan contra lo ya importado en esa cuenta.</div>'
+            + '<button class="btn btn-primary" onclick="impParsear()"><span class="material-icons">search</span> Analizar extracto</button>'
+            + '<div class="alert alert-error" id="impError" style="display:none;margin-top:var(--space-3);"><span class="material-icons">error_outline</span><span id="impErrorText"></span></div>'
+            + '</div>'
+            + '<div id="impPaso2" style="display:none;"></div>';
+    }
+
+    // Parseo heredado de herramientas-btg (formatos BR y americano) + filtro de fantasmas
+    function impParsearTexto(texto, formatoFecha) {
+        var lineas = texto.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 3; });
+        var out = [];
+        imp.fantasmas = 0;
+
+        var reMontosBR = /([+-]?\s*[\d.]+,\d{2})/g;
+        var reMontosEN = /([+-]?\s*[\d,]+\.\d{2})/g;
+        var reFechaDMY = /(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/;
+        var reFechaYMD = /(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/;
+
+        function pad(s) { return String(s).length === 1 ? '0' + s : String(s); }
+        function parseFecha(str) {
+            var m;
+            if (formatoFecha === 'dd/mm/yyyy' && (m = str.match(reFechaDMY))) {
+                var y1 = m[3].length === 2 ? '20' + m[3] : m[3];
+                return y1 + '-' + pad(m[2]) + '-' + pad(m[1]);
+            }
+            if (formatoFecha === 'yyyy-mm-dd' && (m = str.match(reFechaYMD))) {
+                return m[1] + '-' + pad(m[2]) + '-' + pad(m[3]);
+            }
+            if (formatoFecha === 'mm/dd/yyyy' && (m = str.match(reFechaDMY))) {
+                var y2 = m[3].length === 2 ? '20' + m[3] : m[3];
+                return y2 + '-' + pad(m[1]) + '-' + pad(m[2]);
+            }
+            return null;
+        }
+        function parseMonto(str) {
+            var esBR = /\d+\.\d{3},\d{2}/.test(str) || /\d+,\d{2}$/.test(str);
+            if (esBR) return parseFloat(str.replace(/\./g, '').replace(',', '.').replace(/\s/g, '')) || null;
+            return parseFloat(str.replace(/,/g, '').replace(/\s/g, '')) || null;
+        }
+
+        for (var i = 0; i < lineas.length; i++) {
+            var linea = lineas[i];
+
+            // Fantasmas fuera desde la puerta: fotos del saldo, no transacciones
+            if (/saldo\s*di[aá]rio/i.test(linea)) { imp.fantasmas++; continue; }
+
+            var fecha = parseFecha(linea);
+            if (!fecha) continue;
+
+            var brM = linea.match(reMontosBR) || [];
+            var enM = linea.match(reMontosEN) || [];
+            var crudos = (brM.length >= enM.length) ? brM : enM;
+            var montos = crudos.map(parseMonto).filter(function(n) { return n !== null; });
+            if (!montos.length) continue;
+
+            var monto     = montos[0];
+            var saldoPost = montos.length >= 2 ? montos[montos.length - 1] : null;
+
+            var desc = linea
+                .replace(reFechaDMY, '').replace(reFechaYMD, '')
+                .replace(reMontosBR, '').replace(reMontosEN, '')
+                .replace(/[+\-]{2,}/g, ' ').trim()
+                .replace(/\s{2,}/g, ' ');
+            if (!desc) desc = '(sin descripción)';
+
+            out.push({ fecha: fecha, descripcion: desc, monto: monto,
+                       tipo: monto >= 0 ? 'credito' : 'debito', saldoPost: saldoPost });
+        }
+        return out;
+    }
+
+    window.impParsear = async function() {
+        var texto  = document.getElementById('impTexto').value.trim();
+        imp.cuentaId = document.getElementById('impCuenta').value;
+        var formato  = document.getElementById('impFormato').value;
+        document.getElementById('impError').style.display = 'none';
+
+        if (!imp.cuentaId) { impError('Elegí la cuenta primero.'); return; }
+        if (!texto)        { impError('Pegá el texto del extracto primero.'); return; }
+
+        imp.parseados = impParsearTexto(texto, formato);
+        if (!imp.parseados.length) { impError('No se detectaron líneas válidas — verificá el formato de fecha.'); return; }
+
+        try {
+            imp.conciliados = await CVC.conciliarMovimientos(imp.parseados, imp.cuentaId);
+        } catch(e) {
+            imp.conciliados = imp.parseados.map(function(m) {
+                return Object.assign({}, m, { estado: 'nuevo',
+                    fingerprint: CVC.fingerprintMovimiento(m.fecha, m.monto, m.descripcion) });
+            });
+            showToast('No se pudo verificar duplicados — todos marcados como nuevos.', 'warning');
+        }
+        imp.conciliados.forEach(function(m) { m.seleccionado = m.estado !== 'duplicado'; });
+        renderImpPreview();
+    };
+
+    function renderImpPreview() {
+        var nuevos = imp.conciliados.filter(function(m) { return m.estado !== 'duplicado'; }).length;
+        var dups   = imp.conciliados.length - nuevos;
+        var monedaCta = (cuentaDe(imp.cuentaId) || {}).moneda || 'BRL';
+
+        document.getElementById('impPaso1').style.display = 'none';
+        var p2 = document.getElementById('impPaso2');
+        p2.style.display = 'block';
+        p2.innerHTML =
+            '<div style="margin-bottom:var(--space-3);font-size:var(--text-sm);">'
+                + '<strong>' + escapeHtml(nombreCuenta(imp.cuentaId)) + '</strong> · '
+                + '<span class="mas">' + nuevos + ' nuevos</span>'
+                + (dups ? ' · <span class="pend">' + dups + ' duplicados (desmarcados)</span>' : '')
+                + (imp.fantasmas ? ' · ' + imp.fantasmas + ' líneas "Saldo Diário" descartadas' : '')
+            + '</div>'
+            + imp.conciliados.slice(0, 120).map(function(m, i) {
+                return '<div class="mov-row" style="' + (m.estado === 'duplicado' ? 'opacity:0.55;' : '') + '">'
+                    + '<input type="checkbox" ' + (m.seleccionado ? 'checked' : '') + ' onchange="impToggle(' + i + ', this.checked)">'
+                    + '<div class="mov-monto ' + (m.tipo === 'credito' ? 'mas' : 'menos') + '">'
+                        + (m.tipo === 'credito' ? '+' : '') + FIN.fmtMon(Math.abs(m.monto), monedaCta) + '</div>'
+                    + '<div class="mov-det">' + escapeHtml(FIN.extraerContraparte(m.descripcion))
+                        + '<div class="mov-sub">' + m.fecha + ' · ' + escapeHtml(m.descripcion.slice(0, 60))
+                        + (m.estado === 'duplicado' ? ' · <span class="pend">ya importado</span>' : '') + '</div>'
+                    + '</div>'
+                + '</div>';
+              }).join('')
+            + (imp.conciliados.length > 120 ? '<div class="mov-sub" style="padding:var(--space-2);">… y ' + (imp.conciliados.length - 120) + ' más (se importan igual si están seleccionados).</div>' : '')
+            + '<div style="display:flex;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-3);">'
+                + '<button class="btn btn-ghost" onclick="impVolver()"><span class="material-icons">arrow_back</span> Volver</button>'
+                + '<button class="btn btn-primary" id="impBtnConfirmar" onclick="impConfirmar()">'
+                    + '<span class="material-icons">upload_file</span> Importar seleccionados</button>'
+            + '</div>';
+    }
+
+    window.impToggle = function(i, checked) {
+        if (imp.conciliados[i]) imp.conciliados[i].seleccionado = checked;
+    };
+
+    window.impVolver = function() {
+        document.getElementById('impPaso1').style.display = 'block';
+        document.getElementById('impPaso2').style.display = 'none';
+    };
+
+    window.impConfirmar = async function() {
+        var seleccionados = imp.conciliados.filter(function(m) { return m.seleccionado; });
+        if (!seleccionados.length) { showToast('Seleccioná al menos un movimiento.', 'error'); return; }
+        var cuenta = cuentaDe(imp.cuentaId) || {};
+        var btn = document.getElementById('impBtnConfirmar');
+        btn.disabled = true;
+        try {
+            var r = await CVC.importarMovimientosConfirmados(seleccionados, {
+                cuentaId: imp.cuentaId,
+                moneda: cuenta.moneda || 'BRL',
+                importadoPor: user.uid
+            });
+            // Criterio v4.35: el flujo define los saldos — el saldo del extracto
+            // NO pisa la cuenta (a diferencia del importador viejo).
+            showToast(r.importados + ' movimientos importados a ' + (cuenta.nombre || '') + '.'
+                + (imp.fantasmas ? ' ' + imp.fantasmas + ' fantasmas descartados.' : ''), 'success');
+            imp.parseados = []; imp.conciliados = [];
+            fClasif.cuentaId = imp.cuentaId;   // la clasificación arranca filtrada en esta cuenta
+            await cargar();
+            irTab('clasificar');
+        } catch(e) {
+            showToast('Error al importar: ' + e.message, 'error');
+            btn.disabled = false;
+        }
+    };
+
+    function impError(msg) {
+        document.getElementById('impErrorText').textContent = msg;
+        document.getElementById('impError').style.display = 'flex';
     }
 
     // ── CLASIFICAR (etiqueta + materializa en un gesto) ───────
