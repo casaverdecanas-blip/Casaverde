@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Revisión total · Casa Verde Canas</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        textarea.mono { font-family: var(--font-mono); font-size: 11px; width: 100%; }
+        .tabs { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-4); }
+        .tab { border: 1px solid var(--color-border); background: var(--color-surface); border-radius: 20px; padding: 6px 16px; font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+        .tab.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+        .num { font-weight: 800; }
+        .prev-bloque { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); margin-bottom: var(--space-3); font-size: var(--text-sm); background: var(--color-surface); }
+        .prev-bloque.peligro { border-left: 5px solid var(--color-danger); }
+        .item-linea { font-size: var(--text-xs); color: var(--color-text-secondary); padding: 2px 0; border-top: 1px dashed var(--color-border-light); }
+        .flag-mal { color: var(--color-danger); font-weight: 700; }
+    </style>
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">plagiarism</span>
+        Revisión total — exportar · revisar · aplicar
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span><span id="userName">—</span></div>
+        <button class="btn-logout" onclick="window.location.href='dashboard.html'">
+            <span class="material-icons">arrow_back</span> Volver
+        </button>
+    </div>
+</header>
+
+<main class="admin-content">
+
+    <div class="alert alert-info" style="margin-bottom:var(--space-4);">
+        <span class="material-icons">info</span>
+        <span style="flex:1;">Página de administración (fuera del menú) para la revisión desde cero.
+        <strong>Exportar</strong> genera el volcado completo — catálogos reales + todos los gastos, movimientos y pagos
+        de todas las cuentas — para pegarle al asistente. <strong>Aplicar</strong> recibe la planilla de vuelta:
+        reclasifica (y materializa solo), corrige campos y <strong>elimina</strong> registros con sus gemelos vinculados.</span>
+    </div>
+
+    <div class="tabs">
+        <button class="tab active" data-t="exportar" onclick="irTab('exportar')">1 · Exportar todo</button>
+        <button class="tab" data-t="aplicar" onclick="irTab('aplicar')">2 · Aplicar planilla</button>
+    </div>
+
+    <!-- ── EXPORTAR ── -->
+    <div class="card" id="panelExportar">
+        <button class="btn btn-primary" id="btnExportar" onclick="exportarTodo()">
+            <span class="material-icons">download</span> <span id="btnExpText">Generar volcado completo</span>
+        </button>
+        <button class="btn btn-secondary" onclick="copiar('exOut')" style="margin-left:var(--space-2);">
+            <span class="material-icons">content_copy</span> Copiar
+        </button>
+        <div id="exResumen" style="font-size:var(--text-sm);margin:var(--space-3) 0;"></div>
+        <textarea id="exOut" class="form-control mono" rows="18" readonly placeholder="Tocá Generar — el volcado incluye los catálogos y todos los registros con su clasificación actual."></textarea>
+    </div>
+
+    <!-- ── APLICAR ── -->
+    <div class="card" id="panelAplicar" style="display:none;">
+        <p class="form-hint" style="margin-bottom:var(--space-2);">
+            Pegá acá la planilla devuelta. Líneas aceptadas (separadas por TAB):
+            <strong>G</strong> id categoria destino circuito ·
+            <strong>M</strong> id categoria etiqueta(opc) ·
+            <strong>F</strong> coleccion id campo valor ·
+            <strong>D</strong> coleccion id (eliminar — arrastra su gemelo vinculado).
+        </p>
+        <textarea id="apIn" class="form-control mono" rows="12" placeholder="Pegá la planilla…"></textarea>
+        <div style="margin-top:var(--space-3);">
+            <button class="btn btn-primary" onclick="previsualizar()">
+                <span class="material-icons">preview</span> Previsualizar
+            </button>
+        </div>
+        <div id="apPreview" style="margin-top:var(--space-4);"></div>
+    </div>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script src="finanzas-core.js"></script>
+<script>
+(async function() {
+    var { user, userData } = await CVC.verificarAuth(['admin']);
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+
+    var db = CVC.db;
+    var escapeHtml = CVC.escapeHtml;
+    var showToast  = CVC.showToast;
+    var TAB = String.fromCharCode(9);
+
+    var base = null;      // { categorias, destinos, cuentas, gastos, movimientos, pagos }
+    var plan = null;      // planilla parseada
+
+    window.irTab = function(t) {
+        document.querySelectorAll('.tab').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.t === t);
+        });
+        document.getElementById('panelExportar').style.display = t === 'exportar' ? 'block' : 'none';
+        document.getElementById('panelAplicar').style.display  = t === 'aplicar'  ? 'block' : 'none';
+    };
+
+    async function cargarBase() {
+        var r = await Promise.all([
+            db.collection('categorias').get(),
+            db.collection('destinos').get(),
+            db.collection('cuentas').get(),
+            db.collection('gastos').get(),
+            db.collection('movimientos').get(),
+            db.collection('pagos').get()
+        ]);
+        function docs(s) { return s.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); }); }
+        base = {
+            categorias: docs(r[0]), destinos: docs(r[1]), cuentas: docs(r[2]),
+            gastos: docs(r[3]), movimientos: docs(r[4]), pagos: docs(r[5])
+        };
+        return base;
+    }
+    function nombreCuenta(id) {
+        var c = base.cuentas.find(function(x) { return x.id === id; });
+        return c ? (c.nombre || id) : (id || '');
+    }
+    function nombreCategoria(id) {
+        var c = base.categorias.find(function(x) { return x.id === id; });
+        return c ? (c.nombre || '') : '';
+    }
+    function limpio(s) {
+        return String(s == null ? '' : s).replace(/[\t\n\r]/g, ' ').trim();
+    }
+    function fechaCorta(v) {
+        if (!v) return '';
+        if (v.toDate) return v.toDate().toISOString().slice(0, 10);
+        return String(v).slice(0, 10);
+    }
+
+    // ═════════ EXPORTAR ═════════
+    window.exportarTodo = async function() {
+        var btn = document.getElementById('btnExpText');
+        btn.textContent = 'Leyendo toda la base…';
+        try {
+            await cargarBase();
+            var L = [];
+            L.push('### CATALOGOS VALIDOS (usar EXACTAMENTE estos valores)');
+            L.push('CATEGORIAS_GASTO: materiales, limpieza, mantenimiento, servicios, administrativo, alimentos, transporte, otro');
+            L.push('CIRCUITOS: fiscal, personal, mixto (vacio = sin clasificar)');
+            L.push('DESTINOS (finalidad de gasto): ' + base.destinos
+                .filter(function(d) { return d.activo !== false && d.activa !== false; })
+                .map(function(d) { return limpio(d.nombre); }).join(', '));
+            L.push('CATEGORIAS_MOVIMIENTO: ' + base.categorias
+                .filter(function(c) { return c.activa !== false; })
+                .map(function(c) { return limpio(c.nombre); }).join(', '));
+            L.push('CUENTAS: ' + base.cuentas
+                .map(function(c) { return limpio(c.nombre) + ' (' + (c.moneda || 'BRL') + ')'; }).join(', '));
+            L.push('');
+            L.push('### FORMATO A DEVOLVER (lineas TAB)');
+            L.push('Reclasificar gasto:      G' + TAB + 'id' + TAB + 'categoria' + TAB + 'destino' + TAB + 'circuito');
+            L.push('Clasificar movimiento:   M' + TAB + 'id' + TAB + 'categoria' + TAB + 'etiqueta(opcional)');
+            L.push('Corregir cualquier campo: F' + TAB + 'coleccion(gastos|movimientos|pagos)' + TAB + 'id' + TAB + 'campo' + TAB + 'valor');
+            L.push('ELIMINAR registro:       D' + TAB + 'coleccion' + TAB + 'id   (arrastra su gemelo vinculado)');
+            L.push('');
+
+            L.push('### GASTOS (' + base.gastos.length + ')  DATA-G' + TAB + 'id' + TAB + 'fecha' + TAB + 'concepto' + TAB + 'proveedor' + TAB + 'monto' + TAB + 'moneda' + TAB + 'cuenta' + TAB + 'categoria' + TAB + 'destino' + TAB + 'circuito' + TAB + 'interno' + TAB + 'movLink');
+            base.gastos
+                .sort(function(a, b) { return fechaCorta(a.fecha || a.creadoEn) < fechaCorta(b.fecha || b.creadoEn) ? -1 : 1; })
+                .forEach(function(g) {
+                    L.push(['DATA-G', g.id, fechaCorta(g.fecha || g.creadoEn), limpio(g.concepto), limpio(g.proveedor),
+                        g.monto || 0, g.moneda || 'BRL', nombreCuenta(g.cuentaOrigenId),
+                        limpio(g.categoria), limpio(g.destino), limpio(g.circuito),
+                        g.interno === true ? 'SI' : '', g.movimientoId ? 'SI' : ''].join(TAB));
+                });
+            L.push('');
+
+            L.push('### MOVIMIENTOS (' + base.movimientos.length + ')  DATA-M' + TAB + 'id' + TAB + 'cuenta' + TAB + 'fecha' + TAB + 'descripcion' + TAB + 'monto' + TAB + 'tipo' + TAB + 'categoria_actual' + TAB + 'materializado');
+            base.movimientos
+                .sort(function(a, b) { return fechaCorta(a.fecha) < fechaCorta(b.fecha) ? -1 : 1; })
+                .forEach(function(mv) {
+                    L.push(['DATA-M', mv.id, nombreCuenta(mv.cuentaId), fechaCorta(mv.fecha),
+                        limpio(mv.descripcion).slice(0, 90), mv.monto || 0, mv.tipo || '',
+                        nombreCategoria(mv.categoriaId),
+                        (mv.eventoId || mv.gastoId || mv.pagoId) ? 'SI' : ''].join(TAB));
+                });
+            L.push('');
+
+            L.push('### PAGOS/INGRESOS (' + base.pagos.length + ')  DATA-P' + TAB + 'id' + TAB + 'fecha' + TAB + 'cliente' + TAB + 'monto' + TAB + 'moneda' + TAB + 'equivBRL' + TAB + 'cuenta' + TAB + 'tipo' + TAB + 'reserva' + TAB + 'interno');
+            base.pagos
+                .sort(function(a, b) { return fechaCorta(a.fecha || a.creadoEn) < fechaCorta(b.fecha || b.creadoEn) ? -1 : 1; })
+                .forEach(function(p) {
+                    L.push(['DATA-P', p.id, fechaCorta(p.fecha || p.creadoEn), limpio(p.clienteNombre),
+                        p.monto || 0, p.moneda || 'BRL',
+                        (typeof p.montoBRL === 'number') ? p.montoBRL : '',
+                        limpio(p.cuentaDestinoNombre) || nombreCuenta(p.cuentaDestinoId),
+                        limpio(p.tipo), p.reservaId ? 'SI' : '',
+                        p.interno === true ? 'SI' : ''].join(TAB));
+                });
+
+            document.getElementById('exOut').value = L.join('\n');
+            document.getElementById('exResumen').innerHTML =
+                'Volcado completo: <span class="num">' + base.gastos.length + '</span> gastos · '
+                + '<span class="num">' + base.movimientos.length + '</span> movimientos · '
+                + '<span class="num">' + base.pagos.length + '</span> pagos · '
+                + base.categorias.length + ' categorías · ' + base.destinos.length + ' destinos · '
+                + base.cuentas.length + ' cuentas. Copialo entero y pegáselo al asistente.';
+            showToast('Volcado generado.', 'success');
+        } catch(e) {
+            showToast('Error: ' + e.message, 'error');
+        } finally {
+            btn.textContent = 'Generar volcado completo';
+        }
+    };
+
+    window.copiar = function(id) {
+        var el = document.getElementById(id);
+        el.select();
+        el.setSelectionRange(0, 999999999);
+        try { document.execCommand('copy'); showToast('Copiado al portapapeles.', 'success'); }
+        catch(e) { showToast('No se pudo copiar automático — seleccioná y copiá a mano.', 'error'); }
+    };
+
+    // ═════════ APLICAR ═════════
+    window.previsualizar = async function() {
+        if (!base) { showToast('Cargando la base primero…', 'info'); await cargarBase(); }
+        var texto = document.getElementById('apIn').value;
+        var lineas = texto.split('\n');
+        plan = { G: [], M: [], F: [], D: [], errores: [] };
+
+        var CIRC = ['fiscal', 'personal', 'mixto', ''];
+        var COLS = ['gastos', 'movimientos', 'pagos'];
+        var catPorNombre = {};
+        base.categorias.forEach(function(c) { catPorNombre[limpio(c.nombre)] = c.id; });
+        var destinosValidos = base.destinos.map(function(d) { return limpio(d.nombre); });
+        var CATG = ['materiales','limpieza','mantenimiento','servicios','administrativo','alimentos','transporte','otro'];
+
+        lineas.forEach(function(ln, ix) {
+            var l = ln.replace(/\r$/, '');
+            if (!l || l.indexOf(TAB) === -1) return;
+            var p = l.split(TAB).map(function(x) { return x.trim(); });
+            var n = ix + 1;
+
+            if (p[0] === 'G') {
+                if (p.length < 5) { plan.errores.push('L' + n + ': G incompleta'); return; }
+                if (!base.gastos.some(function(g) { return g.id === p[1]; })) { plan.errores.push('L' + n + ': gasto ' + p[1] + ' no existe'); return; }
+                if (CATG.indexOf(p[2]) === -1) { plan.errores.push('L' + n + ': categoría de gasto inválida "' + p[2] + '"'); return; }
+                if (p[3] && destinosValidos.indexOf(p[3]) === -1) { plan.errores.push('L' + n + ': destino inválido "' + p[3] + '"'); return; }
+                if (CIRC.indexOf(p[4]) === -1) { plan.errores.push('L' + n + ': circuito inválido "' + p[4] + '"'); return; }
+                plan.G.push({ id: p[1], categoria: p[2], destino: p[3] || null, circuito: p[4] || null });
+
+            } else if (p[0] === 'M') {
+                if (p.length < 3) { plan.errores.push('L' + n + ': M incompleta'); return; }
+                if (!base.movimientos.some(function(mv) { return mv.id === p[1]; })) { plan.errores.push('L' + n + ': movimiento ' + p[1] + ' no existe'); return; }
+                var catId = catPorNombre[p[2]];
+                if (!catId) { plan.errores.push('L' + n + ': categoría de movimiento inválida "' + p[2] + '"'); return; }
+                plan.M.push({ id: p[1], categoriaId: catId, categoriaNombre: p[2], etiqueta: p[3] || null });
+
+            } else if (p[0] === 'F') {
+                if (p.length < 5) { plan.errores.push('L' + n + ': F incompleta'); return; }
+                if (COLS.indexOf(p[1]) === -1) { plan.errores.push('L' + n + ': colección inválida "' + p[1] + '"'); return; }
+                var valor = p.slice(4).join(' ');
+                if (valor === 'true') valor = true;
+                else if (valor === 'false') valor = false;
+                else if (/^-?\d+(\.\d+)?$/.test(valor) && ['monto', 'montoBRL'].indexOf(p[3]) !== -1) valor = parseFloat(valor);
+                plan.F.push({ col: p[1], id: p[2], campo: p[3], valor: valor });
+
+            } else if (p[0] === 'D') {
+                if (p.length < 3) { plan.errores.push('L' + n + ': D incompleta'); return; }
+                if (COLS.indexOf(p[1]) === -1) { plan.errores.push('L' + n + ': colección inválida "' + p[1] + '"'); return; }
+                var doc = base[p[1]].find(function(x) { return x.id === p[2]; });
+                if (!doc) { plan.errores.push('L' + n + ': ' + p[1] + '/' + p[2] + ' no existe'); return; }
+                plan.D.push({ col: p[1], id: p[2], doc: doc });
+            }
+        });
+
+        // Previsualización
+        var html = '';
+        if (plan.errores.length) {
+            html += '<div class="prev-bloque peligro"><strong class="flag-mal">' + plan.errores.length + ' líneas con error (no se aplican)</strong>'
+                + plan.errores.slice(0, 15).map(function(e) { return '<div class="item-linea">' + escapeHtml(e) + '</div>'; }).join('')
+                + (plan.errores.length > 15 ? '<div class="item-linea">… y ' + (plan.errores.length - 15) + ' más</div>' : '')
+                + '</div>';
+        }
+        html += '<div class="prev-bloque"><strong>Reclasificaciones:</strong> '
+            + '<span class="num">' + plan.G.length + '</span> gastos · '
+            + '<span class="num">' + plan.M.length + '</span> movimientos (clasificar acá también materializa) · '
+            + '<span class="num">' + plan.F.length + '</span> correcciones de campo</div>';
+
+        if (plan.D.length) {
+            html += '<div class="prev-bloque peligro"><strong class="flag-mal">⚠️ ELIMINACIONES: ' + plan.D.length + ' registros</strong>'
+                + '<div class="item-linea">Si un movimiento tiene gemelo materializado, se elimina también (si no, la plata quedaría duplicada). Si se elimina un gasto/pago con vínculo, su movimiento queda desvinculado para poder rematerializarse.</div>'
+                + plan.D.slice(0, 20).map(function(d) {
+                    var desc = d.col === 'movimientos'
+                        ? fechaCorta(d.doc.fecha) + ' · ' + (d.doc.monto || 0) + ' · ' + limpio(d.doc.descripcion).slice(0, 50)
+                            + ((d.doc.gastoId || d.doc.pagoId || d.doc.eventoId) ? ' <span class="flag-mal">+ gemelo</span>' : '')
+                        : fechaCorta(d.doc.fecha || d.doc.creadoEn) + ' · ' + (d.doc.monto || 0) + ' · ' + limpio(d.doc.concepto || d.doc.clienteNombre).slice(0, 50);
+                    return '<div class="item-linea">' + d.col + '/' + d.id + ' — ' + desc + '</div>';
+                  }).join('')
+                + (plan.D.length > 20 ? '<div class="item-linea">… y ' + (plan.D.length - 20) + ' más</div>' : '')
+                + '</div>';
+        }
+        html += '<button class="btn btn-primary" onclick="aplicarPlan()"><span class="material-icons">play_arrow</span> Aplicar todo</button>';
+        document.getElementById('apPreview').innerHTML = html;
+    };
+
+    window.aplicarPlan = async function() {
+        if (!plan) return;
+        var total = plan.G.length + plan.M.length + plan.F.length + plan.D.length;
+        if (!total) { showToast('Nada para aplicar.', 'info'); return; }
+        if (!confirm('¿Aplicar ' + plan.G.length + ' gastos + ' + plan.M.length + ' movimientos + '
+            + plan.F.length + ' correcciones' + (plan.D.length ? ' + ELIMINAR ' + plan.D.length + ' registros (con gemelos)' : '')
+            + '? Las eliminaciones no se pueden deshacer.')) return;
+
+        try {
+            // 1) Reclasificaciones por el embudo oficial (Fase 1.2: materializa solo)
+            var cambios = [];
+            plan.G.forEach(function(x) {
+                cambios.push({ col: 'gastos', id: x.id, data: {
+                    categoria: x.categoria, destino: x.destino, circuito: x.circuito,
+                    deducible: (x.circuito === 'fiscal' || x.circuito === 'mixto')
+                }});
+            });
+            plan.M.forEach(function(x) {
+                var data = { categoriaId: x.categoriaId };
+                if (x.etiqueta) data.etiqueta = x.etiqueta;
+                cambios.push({ col: 'movimientos', id: x.id, data: data });
+            });
+            if (cambios.length) await CVC.aplicarClasificacionMasiva(cambios);
+
+            // 2) Correcciones de campo
+            for (var f of plan.F) {
+                var upd = {};
+                upd[f.campo] = f.valor;
+                await db.collection(f.col).doc(f.id).update(upd);
+            }
+
+            // 3) Depuración con gemelos
+            var borrados = 0;
+            for (var d of plan.D) {
+                if (d.col === 'movimientos') {
+                    var gemeloCol = d.doc.gastoId ? 'gastos' : (d.doc.pagoId ? 'pagos' : (d.doc.eventoOrigen === 'pago' ? 'pagos' : (d.doc.eventoOrigen === 'gasto' ? 'gastos' : null)));
+                    var gemeloId  = d.doc.gastoId || d.doc.pagoId || d.doc.eventoId || null;
+                    if (gemeloCol && gemeloId) {
+                        try { await db.collection(gemeloCol).doc(gemeloId).delete(); } catch(e1) {}
+                    }
+                    await db.collection('movimientos').doc(d.id).delete();
+                } else {
+                    if (d.doc.movimientoId) {
+                        try {
+                            await db.collection('movimientos').doc(d.doc.movimientoId).update({
+                                gastoId: firebase.firestore.FieldValue.delete(),
+                                pagoId: firebase.firestore.FieldValue.delete(),
+                                eventoId: firebase.firestore.FieldValue.delete(),
+                                eventoOrigen: firebase.firestore.FieldValue.delete()
+                            });
+                        } catch(e2) {}
+                    }
+                    await db.collection(d.col).doc(d.id).delete();
+                }
+                borrados++;
+            }
+
+            showToast('Aplicado: ' + cambios.length + ' clasificaciones · ' + plan.F.length
+                + ' correcciones · ' + borrados + ' eliminados.', 'success');
+            document.getElementById('apPreview').innerHTML =
+                '<div class="prev-bloque">✅ Listo. Volvé a <strong>Exportar</strong> para regenerar el volcado actualizado, o revisá el Cuadre en Conciliación.</div>';
+            base = null;   // fuerza recarga en el próximo uso
+        } catch(e) {
+            showToast('Error al aplicar: ' + e.message, 'error');
+        }
+    };
+})();
+</script>
+</body>
+</html>
