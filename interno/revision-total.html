@@ -16,6 +16,7 @@
         .prev-bloque.peligro { border-left: 5px solid var(--color-danger); }
         .item-linea { font-size: var(--text-xs); color: var(--color-text-secondary); padding: 2px 0; border-top: 1px dashed var(--color-border-light); }
         .flag-mal { color: var(--color-danger); font-weight: 700; }
+        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
     </style>
 </head>
 <body>
@@ -50,22 +51,17 @@
 
     <!-- ── EXPORTAR ── -->
     <div class="card" id="panelExportar">
-        <button class="btn btn-primary" id="btnExportar" onclick="exportarTodo()">
-            <span class="material-icons">download</span> <span id="btnExpText">Generar volcado completo</span>
-        </button>
-        <button class="btn btn-secondary" onclick="copiar('exOut')" style="margin-left:var(--space-2);">
-            <span class="material-icons">content_copy</span> Copiar
-        </button>
-        <button class="btn btn-secondary" onclick="descargarVolcado()" style="margin-left:var(--space-2);">
-            <span class="material-icons">save_alt</span> Descargar .txt
-        </button>
-        <p class="form-hint" style="margin-top:var(--space-2);">
-            💡 Si el volcado es grande, <strong>descargalo como .txt y adjuntá el archivo</strong> al chat —
-            los pegados muy largos pueden llegar cortados o vacíos.
-        </p>
-        <button class="btn btn-secondary" onclick="descargarVolcado()" style="margin-left:var(--space-2);">
-            <span class="material-icons">save_alt</span> Descargar .txt
-        </button>
+        <div class="btn-group">
+            <button class="btn btn-primary" id="btnExportar" onclick="exportarTodo()">
+                <span class="material-icons">download</span> <span id="btnExpText">Generar volcado completo</span>
+            </button>
+            <button class="btn btn-secondary" onclick="copiar('exOut')">
+                <span class="material-icons">content_copy</span> Copiar
+            </button>
+            <button class="btn btn-secondary" onclick="descargarTxt()" id="btnDescargar" disabled>
+                <span class="material-icons">save_alt</span> Descargar .txt
+            </button>
+        </div>
         <div id="exResumen" style="font-size:var(--text-sm);margin:var(--space-3) 0;"></div>
         <textarea id="exOut" class="form-control mono" rows="18" readonly placeholder="Tocá Generar — el volcado incluye los catálogos y todos los registros con su clasificación actual."></textarea>
     </div>
@@ -107,6 +103,7 @@
 
     var base = null;      // { categorias, destinos, cuentas, gastos, movimientos, pagos }
     var plan = null;      // planilla parseada
+    var volcadoTexto = ''; // guardar para descargar
 
     window.irTab = function(t) {
         document.querySelectorAll('.tab').forEach(function(b) {
@@ -209,32 +206,21 @@
                         p.interno === true ? 'SI' : ''].join(TAB));
                 });
 
-            document.getElementById('exOut').value = L.join('\n');
+            volcadoTexto = L.join('\n');
+            document.getElementById('exOut').value = volcadoTexto;
             document.getElementById('exResumen').innerHTML =
                 'Volcado completo: <span class="num">' + base.gastos.length + '</span> gastos · '
                 + '<span class="num">' + base.movimientos.length + '</span> movimientos · '
                 + '<span class="num">' + base.pagos.length + '</span> pagos · '
                 + base.categorias.length + ' categorías · ' + base.destinos.length + ' destinos · '
-                + base.cuentas.length + ' cuentas. Copialo entero y pegáselo al asistente.';
-            showToast('Volcado generado.', 'success');
+                + base.cuentas.length + ' cuentas. Copialo entero o descargá el archivo .txt.';
+            document.getElementById('btnDescargar').disabled = false;
+            showToast('Volcado generado. Podés descargar el .txt.', 'success');
         } catch(e) {
             showToast('Error: ' + e.message, 'error');
         } finally {
             btn.textContent = 'Generar volcado completo';
         }
-    };
-
-    window.descargarVolcado = function() {
-        var texto = document.getElementById('exOut').value;
-        if (!texto) { showToast('Generá el volcado primero.', 'info'); return; }
-        var blob = new Blob([texto], { type: 'text/plain;charset=utf-8' });
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'volcado-revision-' + new Date().toISOString().slice(0, 10) + '.txt';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        showToast('Volcado descargado — adjuntá el archivo al chat.', 'success');
     };
 
     window.copiar = function(id) {
@@ -243,6 +229,24 @@
         el.setSelectionRange(0, 999999999);
         try { document.execCommand('copy'); showToast('Copiado al portapapeles.', 'success'); }
         catch(e) { showToast('No se pudo copiar automático — seleccioná y copiá a mano.', 'error'); }
+    };
+
+    // ═════════ DESCARGAR .TXT ═════════
+    window.descargarTxt = function() {
+        if (!volcadoTexto) {
+            showToast('Primero generá el volcado con "Generar volcado completo".', 'warning');
+            return;
+        }
+        var blob = new Blob([volcadoTexto], { type: 'text/plain;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'volcado_' + new Date().toISOString().slice(0,10) + '.txt';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Archivo descargado.', 'success');
     };
 
     // ═════════ APLICAR ═════════
@@ -298,7 +302,6 @@
             }
         });
 
-        // Previsualización
         var html = '';
         if (plan.errores.length) {
             html += '<div class="prev-bloque peligro"><strong class="flag-mal">' + plan.errores.length + ' líneas con error (no se aplican)</strong>'
@@ -337,7 +340,6 @@
             + '? Las eliminaciones no se pueden deshacer.')) return;
 
         try {
-            // 1) Reclasificaciones por el embudo oficial (Fase 1.2: materializa solo)
             var cambios = [];
             plan.G.forEach(function(x) {
                 cambios.push({ col: 'gastos', id: x.id, data: {
@@ -352,14 +354,12 @@
             });
             if (cambios.length) await CVC.aplicarClasificacionMasiva(cambios);
 
-            // 2) Correcciones de campo
             for (var f of plan.F) {
                 var upd = {};
                 upd[f.campo] = f.valor;
                 await db.collection(f.col).doc(f.id).update(upd);
             }
 
-            // 3) Depuración con gemelos
             var borrados = 0;
             for (var d of plan.D) {
                 if (d.col === 'movimientos') {
@@ -389,7 +389,7 @@
                 + ' correcciones · ' + borrados + ' eliminados.', 'success');
             document.getElementById('apPreview').innerHTML =
                 '<div class="prev-bloque">✅ Listo. Volvé a <strong>Exportar</strong> para regenerar el volcado actualizado, o revisá el Cuadre en Conciliación.</div>';
-            base = null;   // fuerza recarga en el próximo uso
+            base = null;
         } catch(e) {
             showToast('Error al aplicar: ' + e.message, 'error');
         }
