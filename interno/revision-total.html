@@ -38,10 +38,12 @@
 
     <div class="alert alert-info" style="margin-bottom:var(--space-4);">
         <span class="material-icons">info</span>
-        <span style="flex:1;">Página de administración (fuera del menú) para la revisión desde cero.
-        <strong>Exportar</strong> genera el volcado completo — catálogos reales + todos los gastos, movimientos y pagos
-        de todas las cuentas — para pegarle al asistente. <strong>Aplicar</strong> recibe la planilla de vuelta:
-        reclasifica (y materializa solo), corrige campos y <strong>elimina</strong> registros con sus gemelos vinculados.</span>
+        <span style="flex:1;">Página de administración (fuera del menú) para la revisión y el análisis periódico.
+        <strong>Exportar</strong> genera el volcado completo — <strong>prompt de asesoramiento para la IA</strong> +
+        catálogos reales + todos los gastos, movimientos y pagos de todas las cuentas — listo para pegar entero en
+        cualquier chat de IA. El asistente devuelve un informe de análisis y una planilla de intervención.
+        <strong>Aplicar</strong> recibe la planilla de vuelta: reclasifica (y materializa solo), corrige campos y
+        <strong>elimina</strong> registros con sus gemelos vinculados.</span>
     </div>
 
     <div class="tabs">
@@ -146,13 +148,64 @@
         return String(v).slice(0, 10);
     }
 
+    // ═════════ PROMPT DE ASESORAMIENTO (encabeza el volcado) ═════════
+    function bloquePrompt() {
+        var P = [];
+        P.push("### INSTRUCCIONES PARA EL ASISTENTE DE IA (leer antes de los datos)");
+        P.push("Sos un asistente financiero-contable. Este volcado es la base de datos completa de Casa Verde Canas");
+        P.push("(complejo de cabanas en Florianopolis, Brasil) y de la economia familiar asociada (Brasil y Uruguay).");
+        P.push("Tu trabajo tiene DOS salidas obligatorias, en este orden:");
+        P.push("A) INFORME DE ANALISIS: texto para lectura humana (secciones de 'QUE ANALIZAR').");
+        P.push("B) PLANILLA DE INTERVENCION: un unico bloque de texto plano con lineas TAB (reglas al final).");
+        P.push("");
+        P.push("### SEMANTICA DEL MODELO DE DATOS");
+        P.push("- Cada gasto tiene 3 dimensiones: categoria (que se compro), destino (para que / para quien),");
+        P.push("  circuito (fiscal = negocio deducible, personal = familiar, mixto = compartido).");
+        P.push("- El ambito/pais NO es un campo: se deriva de la cuenta. BTG Mauro, BTG Flor e Inter Esteban = Brasil (BRL).");
+        P.push("  $ Prex Mauro, U$S Prex Mauro y Ahorro Mauro = Uruguay (UYU/USD).");
+        P.push("- Los registros con categoria 'Movimiento interno' o interno=SI mueven plata entre cuentas propias:");
+        P.push("  EXCLUIRLOS de todo total de gasto o ingreso (si no, se duplica la plata).");
+        P.push("- movLink=SI: el gasto ya esta vinculado a su movimiento bancario (materializado).");
+        P.push("- materializado=SI en movimientos: ya genero su evento de flujo. Los movimientos en blanco que no sean");
+        P.push("  internos son clasificacion pendiente: priorizarlos en la planilla.");
+        P.push("- NUNCA sumar montos de monedas distintas. Informar siempre por moneda (BRL / UYU / USD) por separado.");
+        P.push("");
+        P.push("### CONTEXTO ECONOMICO (clave para el analisis)");
+        P.push("- Ingresos Brasil: alquiler de cabanas, actividad principal del negocio (circuito fiscal).");
+        P.push("- Ingresos Uruguay: extraordinarios y no imponibles (venta de terreno, venta de materiales, prestamos");
+        P.push("  familiares). Tratarlos como CAPITAL DISPONIBLE, nunca como ingreso recurrente en proyecciones.");
+        P.push("- Gastos Uruguay: representan costo de vida; su registro y valoracion es el objetivo principal alla.");
+        P.push("- Ruido historico aceptado: antes de tener ingreso estable en BRL se uso la cuenta uruguaya para gastos");
+        P.push("  en Brasil. No corregir hacia atras; a futuro cada ambito usa sus cuentas.");
+        P.push("");
+        P.push("### QUE ANALIZAR (informe A)");
+        P.push("1. DEPURACION: registros sin clasificar; inconsistencias entre categoria, destino y circuito;");
+        P.push("   duplicados probables (misma fecha + monto + proveedor); montos atipicos que convenga verificar.");
+        P.push("2. COSTO DE VIDA: gasto mensual por ambito (Brasil / Uruguay) y por destino, excluyendo internos,");
+        P.push("   separado por moneda. Distinguir lo personal de lo del negocio.");
+        P.push("3. NEGOCIO: total del circuito fiscal (deducible), evolucion mensual, relacion ingresos/gastos de Casa Verde.");
+        P.push("4. PROYECCION: promedio movil de 3 meses del gasto por ambito; estimar cuantos meses cubre el capital");
+        P.push("   uruguayo al ritmo de gasto actual (capital disponible / costo de vida mensual), aclarando supuestos.");
+        P.push("5. SUGERENCIAS ESTRUCTURALES: si falta un destino o categoria para clasificar bien, proponerlo SOLO en el");
+        P.push("   informe. En la planilla unicamente valen los valores exactos de los catalogos de abajo.");
+        P.push("");
+        P.push("### REGLAS DE LA PLANILLA (intervencion B)");
+        P.push("- Solo lineas de los 4 tipos del FORMATO A DEVOLVER, con TAB real como separador, una por registro.");
+        P.push("- Usar los ids EXACTOS del volcado y los valores EXACTOS de los catalogos. No inventar ids ni valores.");
+        P.push("- Incluir solo registros que CAMBIAN; no repetir clasificaciones que ya estan correctas.");
+        P.push("- Eliminaciones (D): solo con evidencia fuerte de duplicado o error, y justificar cada una en el informe.");
+        P.push("- Entregar la planilla completa en un solo bloque de texto plano, sin comentarios intercalados.");
+        P.push("");
+        return P;
+    }
+
     // ═════════ EXPORTAR ═════════
     window.exportarTodo = async function() {
         var btn = document.getElementById('btnExpText');
         btn.textContent = 'Leyendo toda la base…';
         try {
             await cargarBase();
-            var L = [];
+            var L = bloquePrompt();
             L.push('### CATALOGOS VALIDOS (usar EXACTAMENTE estos valores)');
             L.push('CATEGORIAS_GASTO: materiales, limpieza, mantenimiento, servicios, administrativo, alimentos, transporte, otro');
             L.push('CIRCUITOS: fiscal, personal, mixto (vacio = sin clasificar)');
@@ -213,7 +266,8 @@
                 + '<span class="num">' + base.movimientos.length + '</span> movimientos · '
                 + '<span class="num">' + base.pagos.length + '</span> pagos · '
                 + base.categorias.length + ' categorías · ' + base.destinos.length + ' destinos · '
-                + base.cuentas.length + ' cuentas. Copialo entero o descargá el archivo .txt.';
+                + base.cuentas.length + ' cuentas. Incluye el prompt de asesoramiento al inicio: copialo entero '
+                + 'o descargá el .txt y pegáselo tal cual al asistente de IA.';
             document.getElementById('btnDescargar').disabled = false;
             showToast('Volcado generado. Podés descargar el .txt.', 'success');
         } catch(e) {
