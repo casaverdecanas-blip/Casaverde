@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIMPLE · Movimientos · Casa Verde Canas</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        /* ── Toggle de tipo ─────────────────────────────────── */
+        .tipo-toggle { display: flex; gap: 8px; margin-bottom: var(--space-4); flex-wrap: wrap; }
+        .tipo-btn {
+            flex: 1; min-width: 90px; padding: 10px 8px;
+            border: 1.5px solid var(--color-border); border-radius: var(--radius-md);
+            background: var(--color-surface); cursor: pointer;
+            font-family: var(--font-body); font-size: var(--text-sm); font-weight: 700;
+            color: var(--color-text-secondary);
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+        }
+        .tipo-btn .material-icons { font-size: 18px; }
+        .tipo-btn.act-entro  { background: var(--color-success-light); border-color: var(--color-success); color: var(--color-success); }
+        .tipo-btn.act-salio  { background: var(--color-danger-light, #fdecea); border-color: var(--color-danger); color: var(--color-danger); }
+        .tipo-btn.act-trasp  { background: var(--color-info-light, #e8f1fb); border-color: var(--color-info); color: var(--color-info); }
+
+        /* ── Grilla del formulario ──────────────────────────── */
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-3); }
+        .form-grid .full { grid-column: 1 / -1; }
+        .form-label { font-size: var(--text-xs); font-weight: 600; color: var(--color-text-muted); margin-bottom: 4px; display: block; }
+
+        .check-line { display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); padding: 8px 0; }
+        .check-line input[type=checkbox] { width: 18px; height: 18px; }
+
+        /* ── Chips de ámbito y filtros ──────────────────────── */
+        .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+        .chip {
+            padding: 6px 14px; border-radius: var(--radius-full);
+            border: 1.5px solid var(--color-border); background: var(--color-surface);
+            font-size: var(--text-xs); font-weight: 700; cursor: pointer;
+            color: var(--color-text-secondary); font-family: var(--font-body);
+        }
+        .chip.active { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+
+        /* ── Tabla de totales ───────────────────────────────── */
+        .tot-tabla { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+        .tot-tabla th { text-align: left; font-size: var(--text-xs); color: var(--color-text-muted); padding: 6px 8px; border-bottom: 1px solid var(--color-border); }
+        .tot-tabla td { padding: 7px 8px; border-bottom: 1px solid var(--color-border); }
+        .tot-pos { color: var(--color-success); font-weight: 700; }
+        .tot-neg { color: var(--color-danger); font-weight: 700; }
+
+        /* ── Lista de movimientos ───────────────────────────── */
+        .mov-item {
+            background: var(--color-surface-2); border-radius: var(--radius-md);
+            padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2);
+            border-left: 4px solid var(--color-border);
+        }
+        .mov-item.m-entro { border-left-color: var(--color-success); }
+        .mov-item.m-salio { border-left-color: var(--color-danger); }
+        .mov-item.m-trasp { border-left-color: var(--color-info); }
+        .mov-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+        .mov-monto { font-size: var(--text-md); font-weight: 800; white-space: nowrap; }
+        .mov-monto.m-entro { color: var(--color-success); }
+        .mov-monto.m-salio { color: var(--color-danger); }
+        .mov-monto.m-trasp { color: var(--color-info); }
+        .mov-meta { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .mov-detalle { font-size: var(--text-sm); margin-top: 4px; }
+        .mov-acciones { margin-top: 6px; display: flex; gap: 6px; }
+        .mov-acciones button {
+            border: 1px solid var(--color-border); background: var(--color-surface);
+            border-radius: var(--radius-sm); padding: 4px 8px; cursor: pointer;
+            font-size: var(--text-xs); color: var(--color-text-secondary);
+            display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-body);
+        }
+        .mov-acciones .material-icons { font-size: 14px; }
+
+        .badge-ambito-airbnb  { background: #ffe9e0; color: #c2410c; }
+        .badge-ambito-espacio { background: #e6f4ea; color: #1e7e34; }
+        .badge-pend { background: #fff4d6; color: #92400e; }
+
+        /* ── Tenencias ──────────────────────────────────────── */
+        .ten-item { display: flex; justify-content: space-between; padding: 7px 4px; border-bottom: 1px solid var(--color-border); font-size: var(--text-sm); }
+        .ten-item strong { font-weight: 700; }
+
+        /* ── Modal categorías ───────────────────────────────── */
+        .cat-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--color-border); font-size: var(--text-sm); }
+        .cat-row.inactiva { opacity: 0.5; }
+    </style>
+</head>
+<body>
+
+<!-- ── HEADER ──────────────────────────────────────────────── -->
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">cottage</span>
+        Casa Verde Canas
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip">
+            <span class="material-icons">person</span>
+            <span id="userName">—</span>
+        </div>
+        <button class="btn-logout" onclick="CVC.cerrarSesion()">
+            <span class="material-icons">logout</span>
+            Salir
+        </button>
+    </div>
+</header>
+
+<!-- ── NAVEGACIÓN ──────────────────────────────────────────── -->
+<nav class="admin-nav" id="appNav"></nav>
+
+<!-- ── CONTENIDO ───────────────────────────────────────────── -->
+<main class="admin-content">
+
+    <!-- ═══ REGISTRAR MOVIMIENTO ═══ -->
+    <div class="card" style="margin-bottom:var(--space-5);">
+        <div class="card__header">
+            <h2 class="card__title">
+                <span class="material-icons">bolt</span>
+                <span id="tituloForm">Registrar movimiento</span>
+            </h2>
+            <button class="btn btn-ghost btn-sm" onclick="abrirModalCategorias()">
+                <span class="material-icons">sell</span>
+                Categorías
+            </button>
+        </div>
+        <div style="padding:var(--space-4);">
+
+            <div class="tipo-toggle">
+                <button type="button" class="tipo-btn" id="btnTipoEntro" onclick="setTipo('entro')">
+                    <span class="material-icons">south_west</span> Entró
+                </button>
+                <button type="button" class="tipo-btn" id="btnTipoSalio" onclick="setTipo('salio')">
+                    <span class="material-icons">north_east</span> Salió
+                </button>
+                <button type="button" class="tipo-btn" id="btnTipoTrasp" onclick="setTipo('traspaso')">
+                    <span class="material-icons">swap_horiz</span> Traspaso
+                </button>
+            </div>
+
+            <div class="form-grid">
+                <div>
+                    <label class="form-label">Fecha</label>
+                    <input type="date" id="fFecha" class="form-control">
+                </div>
+                <div>
+                    <label class="form-label">Monto</label>
+                    <input type="number" id="fMonto" class="form-control" step="0.01" min="0" placeholder="0,00">
+                </div>
+                <div>
+                    <label class="form-label">Moneda</label>
+                    <select id="fMoneda" class="form-control">
+                        <option value="BRL">R$ (BRL)</option>
+                        <option value="UYU">$U (UYU)</option>
+                        <option value="USD">US$ (USD)</option>
+                    </select>
+                </div>
+                <div id="grpAmbito">
+                    <label class="form-label">Ámbito</label>
+                    <select id="fAmbito" class="form-control">
+                        <option value="espacio">Espacio (particular)</option>
+                        <option value="airbnb">Airbnb (declarable)</option>
+                    </select>
+                </div>
+                <div id="grpCategoria">
+                    <label class="form-label">Categoría</label>
+                    <select id="fCategoria" class="form-control" onchange="onCategoriaChange()"></select>
+                </div>
+                <div id="grpCabana">
+                    <label class="form-label">Cabaña / imputación</label>
+                    <select id="fCabana" class="form-control"><option value="">General</option></select>
+                </div>
+                <div id="grpManos">
+                    <label class="form-label" id="lblManos">¿En manos de quién quedó?</label>
+                    <input type="text" id="fManos" class="form-control" list="listaPersonas" placeholder="Mauro, Esteban...">
+                </div>
+                <div id="grpDe" style="display:none;">
+                    <label class="form-label">Sale de manos de</label>
+                    <input type="text" id="fDe" class="form-control" list="listaPersonas" placeholder="Esteban">
+                </div>
+                <div id="grpA" style="display:none;">
+                    <label class="form-label">Pasa a manos de</label>
+                    <input type="text" id="fA" class="form-control" list="listaPersonas" placeholder="Mauro">
+                </div>
+                <div class="full">
+                    <label class="form-label">Detalle</label>
+                    <input type="text" id="fDetalle" class="form-control" placeholder="Qué fue este movimiento">
+                </div>
+                <div class="full" id="grpPendiente">
+                    <div class="check-line">
+                        <input type="checkbox" id="fPendiente" onchange="onPendienteChange()">
+                        <label for="fPendiente" id="lblPendiente" style="cursor:pointer;">Lo pagó alguien de su bolsillo (queda por reponer)</label>
+                    </div>
+                    <div id="grpPersonaPend" style="display:none; max-width:320px;">
+                        <label class="form-label" id="lblPersonaPend">¿Quién puso la plata?</label>
+                        <input type="text" id="fPersonaPend" class="form-control" list="listaPersonas" placeholder="Nombre">
+                    </div>
+                </div>
+                <div class="full">
+                    <label class="form-label">Comprobante (foto, opcional)</label>
+                    <input type="file" id="fComprobante" class="form-control" accept="image/*">
+                    <div id="compActual" style="display:none; font-size:12px; margin-top:4px;"></div>
+                </div>
+            </div>
+
+            <datalist id="listaPersonas"></datalist>
+
+            <div style="display:flex; gap:8px; margin-top:var(--space-4); flex-wrap:wrap;">
+                <button class="btn btn-primary" id="btnGuardar" onclick="guardarMovimiento()">
+                    <span class="material-icons">save</span>
+                    <span id="btnGuardarText">Guardar movimiento</span>
+                </button>
+                <button class="btn btn-ghost" id="btnCancelarEdicion" onclick="cancelarEdicion()" style="display:none;">
+                    Cancelar edición
+                </button>
+            </div>
+            <div class="alert alert-error" id="formError" style="display:none; margin-top:var(--space-3);">
+                <span class="material-icons">error_outline</span>
+                <span id="formErrorText"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ RESUMEN DEL MES ═══ -->
+    <div class="card" style="margin-bottom:var(--space-5);">
+        <div class="card__header">
+            <h2 class="card__title">
+                <span class="material-icons">calendar_month</span>
+                Resumen del mes
+            </h2>
+            <select id="selMes" class="form-control" style="width:auto; height:38px;" onchange="cambiarMes()"></select>
+        </div>
+        <div style="padding:var(--space-4);">
+            <div class="chips" style="margin-bottom:var(--space-3);">
+                <button class="chip active" id="chipAmbTodos" onclick="setAmbitoFiltro('todos')">Todo</button>
+                <button class="chip" id="chipAmbAirbnb" onclick="setAmbitoFiltro('airbnb')">Airbnb</button>
+                <button class="chip" id="chipAmbEspacio" onclick="setAmbitoFiltro('espacio')">Espacio</button>
+            </div>
+            <div id="totalesContainer"></div>
+        </div>
+    </div>
+
+    <!-- ═══ TENENCIAS Y PENDIENTES (GLOBAL) ═══ -->
+    <div class="card" style="margin-bottom:var(--space-5);">
+        <div class="card__header">
+            <h2 class="card__title">
+                <span class="material-icons">account_balance_wallet</span>
+                En manos de quién está la plata
+            </h2>
+        </div>
+        <div style="padding:var(--space-4);">
+            <div id="tenenciasContainer"></div>
+            <p class="section-title" style="margin-top:var(--space-4);">Pendientes vivos</p>
+            <div id="pendientesContainer"></div>
+        </div>
+    </div>
+
+    <!-- ═══ MOVIMIENTOS ═══ -->
+    <div class="card">
+        <div class="card__header">
+            <h2 class="card__title">
+                <span class="material-icons">receipt_long</span>
+                Movimientos del mes
+            </h2>
+        </div>
+        <div style="padding:var(--space-4);">
+            <div class="toolbar" style="margin-bottom:var(--space-3);">
+                <div class="toolbar__search">
+                    <span class="material-icons">search</span>
+                    <input type="text" id="fBusqueda" placeholder="Buscar en detalle..." oninput="aplicarFiltros()">
+                </div>
+                <select id="fFiltroTipo" class="form-control" style="width:auto; height:38px;" onchange="aplicarFiltros()">
+                    <option value="todos">Todos</option>
+                    <option value="entro">Entró</option>
+                    <option value="salio">Salió</option>
+                    <option value="traspaso">Traspasos</option>
+                </select>
+                <select id="fFiltroCategoria" class="form-control" style="width:auto; height:38px;" onchange="aplicarFiltros()">
+                    <option value="todas">Todas las categorías</option>
+                </select>
+            </div>
+            <div id="movsContainer">
+                <div class="state-loading" style="padding:20px 0;">
+                    <div class="spinner"></div>
+                    <span>Cargando movimientos...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+<!-- ── MODAL CATEGORÍAS ────────────────────────────────────── -->
+<div class="modal-overlay" id="modalCategorias" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.45); z-index:400; align-items:center; justify-content:center; padding:16px;" onclick="cerrarModalCategorias(event)">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:420px;">
+        <div class="modal__header">
+            <h3 class="modal__title">Categorías del libro</h3>
+            <button class="modal__close" onclick="cerrarModalCategorias()">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+            <p style="font-size:12px; color:var(--color-text-muted); margin-top:0;">
+                Las categorías se crean al vuelo desde el formulario. Acá podés desactivar las que no sirvan
+                (no se borran: los movimientos viejos las conservan).
+            </p>
+            <div id="catsContainer"></div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn btn-ghost" onclick="cerrarModalCategorias()">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async function() {
+    var res = await CVC.verificarAuth('admin');
+    var user     = res.user;
+    var userData = res.userData;
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+    CVC.renderNav('simple.html', userData.rol);
+
+    var db         = CVC.db;
+    var escapeHtml = CVC.escapeHtml;
+    var showToast  = CVC.showToast;
+
+    var SIMBOLO = { BRL: 'R$', UYU: '$U', USD: 'US$' };
+    var PERSONAS_SEMILLA = ['Mauro', 'Florencia', 'Esteban', 'Efectivo'];
+
+    var movsCache      = [];
+    var catsCache      = [];
+    var cabanasCache   = [];
+    var tipoActual     = 'entro';
+    var mesActual      = mesDe(hoyStr());
+    var ambitoFiltro   = 'todos';
+    var editandoId     = null;
+    var editandoDoc    = null;
+
+    // ── Helpers de fecha y formato ────────────────────────────
+    function hoyStr() {
+        var d = new Date();
+        var m = ('0' + (d.getMonth() + 1)).slice(-2);
+        var dia = ('0' + d.getDate()).slice(-2);
+        return d.getFullYear() + '-' + m + '-' + dia;
+    }
+    function mesDe(fechaStr) { return (fechaStr || '').slice(0, 7); }
+    function nombreMes(mesStr) {
+        var partes = (mesStr || '').split('-');
+        if (partes.length < 2) return mesStr;
+        var nombres = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+        var idx = parseInt(partes[1], 10) - 1;
+        var nom = (idx >= 0 && idx < 12) ? nombres[idx] : partes[1];
+        return nom + ' ' + partes[0];
+    }
+    function fmtMonto(n) {
+        var v = (typeof n === 'number' && isFinite(n)) ? n : 0;
+        return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function txt(v) { return escapeHtml(v != null ? String(v) : ''); }
+
+    // ── Carga inicial ─────────────────────────────────────────
+    async function cargarTodo() {
+        try {
+            var resultados = await Promise.all([
+                db.collection('mov_negocio').get(),
+                db.collection('categorias_mov').get(),
+                db.collection('cabanas').get()
+            ]);
+            movsCache = resultados[0].docs.map(function(d) {
+                var o = d.data(); o.id = d.id; return o;
+            }).sort(function(a, b) {
+                var fa = a.fecha || ''; var fb = b.fecha || '';
+                if (fa === fb) {
+                    var ca = (a.creadoEn && a.creadoEn.seconds) ? a.creadoEn.seconds : 0;
+                    var cb = (b.creadoEn && b.creadoEn.seconds) ? b.creadoEn.seconds : 0;
+                    return cb - ca;
+                }
+                return fb.localeCompare(fa);
+            });
+            catsCache = resultados[1].docs.map(function(d) {
+                var o = d.data(); o.id = d.id; return o;
+            }).sort(function(a, b) { return (a.nombre || '').localeCompare(b.nombre || ''); });
+            cabanasCache = resultados[2].docs.map(function(d) {
+                var o = d.data(); o.docId = d.id; return o;
+            }).sort(function(a, b) { return (a.orden || 0) - (b.orden || 0); });
+
+            poblarCabanas();
+            poblarCategorias();
+            poblarFiltroCategorias();
+            poblarPersonas();
+            poblarMeses();
+            renderTodo();
+        } catch (e) {
+            CVC.showError('#movsContainer', 'Error al cargar', e.message, cargarTodo);
+        }
+    }
+
+    function renderTodo() {
+        renderTotales();
+        renderTenencias();
+        renderPendientes();
+        aplicarFiltrosInterno();
+    }
+
+    // ── Poblar selects y datalist ─────────────────────────────
+    function poblarCabanas() {
+        var sel = document.getElementById('fCabana');
+        var html = '<option value="">General</option>';
+        for (var i = 0; i < cabanasCache.length; i++) {
+            var c = cabanasCache[i];
+            html += '<option value="' + txt(c.docId) + '">' + txt(c.nombre || c.docId) + '</option>';
+        }
+        sel.innerHTML = html;
+    }
+
+    function categoriasParaTipo(tipo) {
+        return catsCache.filter(function(c) {
+            if (c.activa === false) return false;
+            var t = c.tipo || 'ambas';
+            return t === 'ambas' || t === tipo;
+        });
+    }
+
+    function poblarCategorias() {
+        var sel = document.getElementById('fCategoria');
+        var valorPrevio = sel.value;
+        var lista = categoriasParaTipo(tipoActual);
+        var html = '<option value="">— Sin categoría —</option>';
+        for (var i = 0; i < lista.length; i++) {
+            html += '<option value="' + txt(lista[i].id) + '">' + txt(lista[i].nombre) + '</option>';
+        }
+        html += '<option value="__nueva">➕ Nueva categoría...</option>';
+        sel.innerHTML = html;
+        if (valorPrevio && valorPrevio !== '__nueva') sel.value = valorPrevio;
+    }
+
+    function poblarFiltroCategorias() {
+        var sel = document.getElementById('fFiltroCategoria');
+        var valorPrevio = sel.value;
+        var html = '<option value="todas">Todas las categorías</option>';
+        for (var i = 0; i < catsCache.length; i++) {
+            html += '<option value="' + txt(catsCache[i].id) + '">' + txt(catsCache[i].nombre) + '</option>';
+        }
+        sel.innerHTML = html;
+        if (valorPrevio) sel.value = valorPrevio;
+    }
+
+    function poblarPersonas() {
+        var set = {};
+        for (var i = 0; i < PERSONAS_SEMILLA.length; i++) set[PERSONAS_SEMILLA[i]] = true;
+        for (var j = 0; j < movsCache.length; j++) {
+            var m = movsCache[j];
+            if (m.enManosDe) set[m.enManosDe] = true;
+            if (m.personaPendiente) set[m.personaPendiente] = true;
+            if (m.de) set[m.de] = true;
+            if (m.a) set[m.a] = true;
+        }
+        var html = '';
+        var nombres = Object.keys(set).sort();
+        for (var k = 0; k < nombres.length; k++) {
+            html += '<option value="' + txt(nombres[k]) + '"></option>';
+        }
+        document.getElementById('listaPersonas').innerHTML = html;
+    }
+
+    function poblarMeses() {
+        var set = {};
+        set[mesDe(hoyStr())] = true;
+        for (var i = 0; i < movsCache.length; i++) {
+            var mm = mesDe(movsCache[i].fecha || '');
+            if (mm) set[mm] = true;
+        }
+        var meses = Object.keys(set).sort().reverse();
+        var sel = document.getElementById('selMes');
+        var html = '';
+        for (var j = 0; j < meses.length; j++) {
+            html += '<option value="' + meses[j] + '">' + txt(nombreMes(meses[j])) + '</option>';
+        }
+        sel.innerHTML = html;
+        if (meses.indexOf(mesActual) === -1) mesActual = meses[0];
+        sel.value = mesActual;
+    }
+
+    // ── Tipo de movimiento ────────────────────────────────────
+    window.setTipo = function(tipo) {
+        tipoActual = tipo;
+        document.getElementById('btnTipoEntro').className = 'tipo-btn' + (tipo === 'entro' ? ' act-entro' : '');
+        document.getElementById('btnTipoSalio').className = 'tipo-btn' + (tipo === 'salio' ? ' act-salio' : '');
+        document.getElementById('btnTipoTrasp').className = 'tipo-btn' + (tipo === 'traspaso' ? ' act-trasp' : '');
+
+        var esTraspaso = (tipo === 'traspaso');
+        document.getElementById('grpAmbito').style.display    = esTraspaso ? 'none' : '';
+        document.getElementById('grpCategoria').style.display = esTraspaso ? 'none' : '';
+        document.getElementById('grpCabana').style.display    = esTraspaso ? 'none' : '';
+        document.getElementById('grpManos').style.display     = esTraspaso ? 'none' : '';
+        document.getElementById('grpPendiente').style.display = esTraspaso ? 'none' : '';
+        document.getElementById('grpDe').style.display        = esTraspaso ? '' : 'none';
+        document.getElementById('grpA').style.display         = esTraspaso ? '' : 'none';
+
+        if (tipo === 'entro') {
+            document.getElementById('lblManos').textContent = '¿A manos de quién entró?';
+            document.getElementById('lblPendiente').textContent = 'Todavía no se cobró (queda por cobrar)';
+            document.getElementById('lblPersonaPend').textContent = '¿Quién lo tiene que cobrar?';
+        } else if (tipo === 'salio') {
+            document.getElementById('lblManos').textContent = '¿De manos de quién salió?';
+            document.getElementById('lblPendiente').textContent = 'Lo pagó alguien de su bolsillo (queda por reponer)';
+            document.getElementById('lblPersonaPend').textContent = '¿Quién puso la plata?';
+        }
+        onPendienteChange();
+        poblarCategorias();
+    };
+
+    window.onPendienteChange = function() {
+        var marcado = document.getElementById('fPendiente').checked;
+        document.getElementById('grpPersonaPend').style.display = marcado ? '' : 'none';
+        if (tipoActual !== 'traspaso') {
+            document.getElementById('grpManos').style.display = marcado ? 'none' : '';
+        }
+    };
+
+    // ── Categoría al vuelo ────────────────────────────────────
+    window.onCategoriaChange = async function() {
+        var sel = document.getElementById('fCategoria');
+        if (sel.value !== '__nueva') return;
+        var nombre = window.prompt('Nombre de la nueva categoría:');
+        if (!nombre || !nombre.trim()) { sel.value = ''; return; }
+        nombre = nombre.trim();
+        try {
+            var ref = await db.collection('categorias_mov').add({
+                nombre: nombre,
+                ambito: 'negocio',
+                tipo: tipoActual === 'traspaso' ? 'ambas' : tipoActual,
+                activa: true,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                creadoPor: user.uid
+            });
+            catsCache.push({ id: ref.id, nombre: nombre, ambito: 'negocio', tipo: tipoActual, activa: true });
+            catsCache.sort(function(a, b) { return (a.nombre || '').localeCompare(b.nombre || ''); });
+            poblarCategorias();
+            poblarFiltroCategorias();
+            sel.value = ref.id;
+            showToast('Categoría "' + nombre + '" creada');
+        } catch (e) {
+            sel.value = '';
+            mostrarErrorForm('No se pudo crear la categoría: ' + e.message);
+        }
+    };
+
+    // ── Guardar movimiento ────────────────────────────────────
+    function mostrarErrorForm(msg) {
+        document.getElementById('formErrorText').textContent = msg;
+        document.getElementById('formError').style.display = 'flex';
+    }
+    function ocultarErrorForm() {
+        document.getElementById('formError').style.display = 'none';
+    }
+
+    window.guardarMovimiento = async function() {
+        ocultarErrorForm();
+        var fecha  = document.getElementById('fFecha').value;
+        var monto  = parseFloat(document.getElementById('fMonto').value);
+        var moneda = document.getElementById('fMoneda').value;
+
+        if (!fecha) { mostrarErrorForm('Falta la fecha.'); return; }
+        if (!monto || monto <= 0) { mostrarErrorForm('El monto tiene que ser mayor a cero.'); return; }
+
+        var data = {
+            fecha: fecha,
+            tipo: tipoActual,
+            monto: monto,
+            moneda: moneda,
+            detalle: document.getElementById('fDetalle').value.trim() || null,
+            cierreId: null
+        };
+
+        if (tipoActual === 'traspaso') {
+            var de = document.getElementById('fDe').value.trim();
+            var a  = document.getElementById('fA').value.trim();
+            if (!de || !a) { mostrarErrorForm('En un traspaso hay que indicar de quién sale y a quién pasa.'); return; }
+            if (de === a) { mostrarErrorForm('El traspaso tiene que ser entre dos personas distintas.'); return; }
+            data.de = de;
+            data.a  = a;
+            data.ambito = null;
+            data.categoriaId = null;
+            data.cabanaId = null;
+            data.enManosDe = null;
+            data.pendiente = null;
+            data.personaPendiente = null;
+        } else {
+            var catSel = document.getElementById('fCategoria').value;
+            data.de = null;
+            data.a  = null;
+            data.ambito = document.getElementById('fAmbito').value;
+            data.categoriaId = (catSel && catSel !== '__nueva') ? catSel : null;
+            data.cabanaId = document.getElementById('fCabana').value || null;
+            data.origen = null;
+            var pend = document.getElementById('fPendiente').checked;
+            if (pend) {
+                var persona = document.getElementById('fPersonaPend').value.trim();
+                if (!persona) { mostrarErrorForm('Indicá la persona del pendiente.'); return; }
+                data.pendiente = (tipoActual === 'entro') ? 'cobrar' : 'reponer';
+                data.personaPendiente = persona;
+                data.enManosDe = null;
+            } else {
+                data.pendiente = null;
+                data.personaPendiente = null;
+                data.enManosDe = document.getElementById('fManos').value.trim() || null;
+            }
+        }
+
+        var btn = document.getElementById('btnGuardar');
+        var btnText = document.getElementById('btnGuardarText');
+        btn.disabled = true;
+        btnText.textContent = 'Guardando...';
+
+        try {
+            var docRef;
+            if (editandoId) {
+                docRef = db.collection('mov_negocio').doc(editandoId);
+                data.comprobanteUrl = editandoDoc && editandoDoc.comprobanteUrl ? editandoDoc.comprobanteUrl : null;
+                data.editadoEn = firebase.firestore.FieldValue.serverTimestamp();
+                data.editadoPor = user.uid;
+            } else {
+                docRef = db.collection('mov_negocio').doc();
+                data.comprobanteUrl = null;
+                data.creadoEn = firebase.firestore.FieldValue.serverTimestamp();
+                data.creadoPor = user.uid;
+            }
+
+            var fileInput = document.getElementById('fComprobante');
+            if (fileInput.files && fileInput.files.length > 0) {
+                btnText.textContent = 'Subiendo comprobante...';
+                var url = await CVC.subirComprobante(fileInput.files[0], 'simple', docRef.id);
+                if (url) data.comprobanteUrl = url;
+            }
+
+            btnText.textContent = 'Guardando...';
+            if (editandoId) {
+                await docRef.update(data);
+                showToast('Movimiento actualizado');
+            } else {
+                await docRef.set(data);
+                showToast('Movimiento registrado');
+            }
+            limpiarForm();
+            await cargarTodo();
+        } catch (e) {
+            mostrarErrorForm('No se pudo guardar: ' + e.message);
+        }
+        btn.disabled = false;
+        btnText.textContent = editandoId ? 'Guardar cambios' : 'Guardar movimiento';
+    };
+
+    function limpiarForm() {
+        editandoId  = null;
+        editandoDoc = null;
+        document.getElementById('tituloForm').textContent = 'Registrar movimiento';
+        document.getElementById('btnGuardarText').textContent = 'Guardar movimiento';
+        document.getElementById('btnCancelarEdicion').style.display = 'none';
+        document.getElementById('fFecha').value = hoyStr();
+        document.getElementById('fMonto').value = '';
+        document.getElementById('fDetalle').value = '';
+        document.getElementById('fManos').value = '';
+        document.getElementById('fDe').value = '';
+        document.getElementById('fA').value = '';
+        document.getElementById('fPendiente').checked = false;
+        document.getElementById('fPersonaPend').value = '';
+        document.getElementById('fCategoria').value = '';
+        document.getElementById('fCabana').value = '';
+        document.getElementById('fComprobante').value = '';
+        document.getElementById('compActual').style.display = 'none';
+        onPendienteChange();
+        ocultarErrorForm();
+    }
+
+    window.cancelarEdicion = function() {
+        limpiarForm();
+        setTipo('entro');
+    };
+
+    // ── Editar / borrar ───────────────────────────────────────
+    window.editarMov = function(id) {
+        var m = null;
+        for (var i = 0; i < movsCache.length; i++) {
+            if (movsCache[i].id === id) { m = movsCache[i]; break; }
+        }
+        if (!m) return;
+        if (m.cierreId) { showToast('Este movimiento está sellado por un cierre; no se edita.'); return; }
+
+        editandoId  = id;
+        editandoDoc = m;
+        setTipo(m.tipo || 'entro');
+
+        document.getElementById('tituloForm').textContent = 'Editar movimiento';
+        document.getElementById('btnGuardarText').textContent = 'Guardar cambios';
+        document.getElementById('btnCancelarEdicion').style.display = '';
+
+        document.getElementById('fFecha').value  = m.fecha || hoyStr();
+        document.getElementById('fMonto').value  = m.monto != null ? m.monto : '';
+        document.getElementById('fMoneda').value = m.moneda || 'BRL';
+        document.getElementById('fDetalle').value = m.detalle || '';
+
+        if (m.tipo === 'traspaso') {
+            document.getElementById('fDe').value = m.de || '';
+            document.getElementById('fA').value  = m.a || '';
+        } else {
+            document.getElementById('fAmbito').value = m.ambito || 'espacio';
+            document.getElementById('fCategoria').value = m.categoriaId || '';
+            document.getElementById('fCabana').value = m.cabanaId || '';
+            var esPend = !!m.pendiente;
+            document.getElementById('fPendiente').checked = esPend;
+            document.getElementById('fPersonaPend').value = m.personaPendiente || '';
+            document.getElementById('fManos').value = m.enManosDe || '';
+            onPendienteChange();
+        }
+
+        var comp = document.getElementById('compActual');
+        if (m.comprobanteUrl) {
+            comp.innerHTML = 'Comprobante actual: <a href="#" onclick="verComprobante(\'' + txt(m.comprobanteUrl) + '\'); return false;">ver</a> (si subís otro, lo reemplaza)';
+            comp.style.display = '';
+        } else {
+            comp.style.display = 'none';
+        }
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.borrarMov = async function(id) {
+        var m = null;
+        for (var i = 0; i < movsCache.length; i++) {
+            if (movsCache[i].id === id) { m = movsCache[i]; break; }
+        }
+        if (!m) return;
+        if (m.cierreId) { showToast('Este movimiento está sellado por un cierre; no se borra.'); return; }
+        var simbolo = SIMBOLO[m.moneda] || '';
+        if (!window.confirm('¿Borrar este movimiento de ' + simbolo + ' ' + fmtMonto(m.monto) + '? No se puede deshacer.')) return;
+        try {
+            await db.collection('mov_negocio').doc(id).delete();
+            showToast('Movimiento borrado');
+            if (editandoId === id) limpiarForm();
+            await cargarTodo();
+        } catch (e) {
+            showToast('No se pudo borrar: ' + e.message);
+        }
+    };
+
+    window.verComprobante = function(url) {
+        if (window.abrirComprobante) { window.abrirComprobante(url); }
+        else if (CVC.abrirComprobante) { CVC.abrirComprobante(url); }
+        else { window.open(url, '_blank'); }
+    };
+
+    // ── Filtros y mes ─────────────────────────────────────────
+    window.cambiarMes = function() {
+        mesActual = document.getElementById('selMes').value;
+        renderTotales();
+        aplicarFiltrosInterno();
+    };
+
+    window.setAmbitoFiltro = function(amb) {
+        ambitoFiltro = amb;
+        document.getElementById('chipAmbTodos').className   = 'chip' + (amb === 'todos' ? ' active' : '');
+        document.getElementById('chipAmbAirbnb').className  = 'chip' + (amb === 'airbnb' ? ' active' : '');
+        document.getElementById('chipAmbEspacio').className = 'chip' + (amb === 'espacio' ? ' active' : '');
+        renderTotales();
+        aplicarFiltrosInterno();
+    };
+
+    window.aplicarFiltros = function() { aplicarFiltrosInterno(); };
+
+    function movsDelMesFiltrados() {
+        var texto = document.getElementById('fBusqueda').value.toLowerCase().trim();
+        var fTipo = document.getElementById('fFiltroTipo').value;
+        var fCat  = document.getElementById('fFiltroCategoria').value;
+        return movsCache.filter(function(m) {
+            if (mesDe(m.fecha) !== mesActual) return false;
+            if (ambitoFiltro !== 'todos' && m.tipo !== 'traspaso' && m.ambito !== ambitoFiltro) return false;
+            if (ambitoFiltro !== 'todos' && m.tipo === 'traspaso') return false;
+            if (fTipo !== 'todos' && m.tipo !== fTipo) return false;
+            if (fCat !== 'todas' && m.categoriaId !== fCat) return false;
+            if (texto) {
+                var blob = ((m.detalle || '') + ' ' + (m.enManosDe || '') + ' ' + (m.personaPendiente || '') + ' ' + (m.de || '') + ' ' + (m.a || '')).toLowerCase();
+                if (blob.indexOf(texto) === -1) return false;
+            }
+            return true;
+        });
+    }
+
+    // ── Totales del mes (derivados) ───────────────────────────
+    function renderTotales() {
+        var porMoneda = {};
+        var porCobrar = {};
+        for (var i = 0; i < movsCache.length; i++) {
+            var m = movsCache[i];
+            if (mesDe(m.fecha) !== mesActual) continue;
+            if (m.tipo === 'traspaso') continue;
+            if (ambitoFiltro !== 'todos' && m.ambito !== ambitoFiltro) continue;
+            var mon = m.moneda || 'BRL';
+            if (!porMoneda[mon]) porMoneda[mon] = { entro: 0, salio: 0 };
+            if (m.tipo === 'entro') {
+                if (m.pendiente === 'cobrar' && !m.cierreId) {
+                    if (!porCobrar[mon]) porCobrar[mon] = 0;
+                    porCobrar[mon] += m.monto || 0;
+                } else {
+                    porMoneda[mon].entro += m.monto || 0;
+                }
+            } else if (m.tipo === 'salio') {
+                porMoneda[mon].salio += m.monto || 0;
+            }
+        }
+
+        var monedas = Object.keys(porMoneda).sort();
+        var html = '';
+        if (!monedas.length) {
+            html = '<p style="color:var(--color-text-muted); font-size:13px; margin:0;">Sin movimientos este mes' + (ambitoFiltro !== 'todos' ? ' en este ámbito' : '') + '.</p>';
+        } else {
+            html = '<table class="tot-tabla"><tr><th>Moneda</th><th>Entró</th><th>Salió</th><th>Neto</th></tr>';
+            for (var j = 0; j < monedas.length; j++) {
+                var mon2 = monedas[j];
+                var t = porMoneda[mon2];
+                var neto = t.entro - t.salio;
+                html += '<tr><td><strong>' + txt(SIMBOLO[mon2] || mon2) + '</strong></td>';
+                html += '<td class="tot-pos">' + fmtMonto(t.entro) + '</td>';
+                html += '<td class="tot-neg">' + fmtMonto(t.salio) + '</td>';
+                html += '<td class="' + (neto >= 0 ? 'tot-pos' : 'tot-neg') + '">' + fmtMonto(neto) + '</td></tr>';
+            }
+            html += '</table>';
+        }
+        var monedasCobrar = Object.keys(porCobrar).sort();
+        if (monedasCobrar.length) {
+            var partes = [];
+            for (var k = 0; k < monedasCobrar.length; k++) {
+                partes.push((SIMBOLO[monedasCobrar[k]] || monedasCobrar[k]) + ' ' + fmtMonto(porCobrar[monedasCobrar[k]]));
+            }
+            html += '<p style="font-size:12px; color:#92400e; margin:8px 0 0;">⏳ Por cobrar este mes (no suma como ingreso): ' + txt(partes.join(' · ')) + '</p>';
+        }
+        document.getElementById('totalesContainer').innerHTML = html;
+    }
+
+    // ── Tenencias (derivadas, globales) ───────────────────────
+    function renderTenencias() {
+        var ten = {};
+        function sumar(persona, moneda, monto) {
+            if (!persona) return;
+            var clave = persona + '|' + moneda;
+            if (!ten[clave]) ten[clave] = { persona: persona, moneda: moneda, monto: 0 };
+            ten[clave].monto += monto;
+        }
+        for (var i = 0; i < movsCache.length; i++) {
+            var m = movsCache[i];
+            var mon = m.moneda || 'BRL';
+            var monto = m.monto || 0;
+            if (m.tipo === 'entro' && m.enManosDe && m.pendiente !== 'cobrar') {
+                sumar(m.enManosDe, mon, monto);
+            } else if (m.tipo === 'salio' && m.enManosDe && m.pendiente !== 'reponer') {
+                sumar(m.enManosDe, mon, -monto);
+            } else if (m.tipo === 'traspaso') {
+                sumar(m.de, mon, -monto);
+                sumar(m.a, mon, monto);
+            }
+        }
+        var claves = Object.keys(ten).sort();
+        var html = '';
+        var hayAlgo = false;
+        for (var j = 0; j < claves.length; j++) {
+            var t = ten[claves[j]];
+            if (Math.abs(t.monto) < 0.005) continue;
+            hayAlgo = true;
+            html += '<div class="ten-item"><span><strong>' + txt(t.persona) + '</strong></span>';
+            html += '<span class="' + (t.monto >= 0 ? 'tot-pos' : 'tot-neg') + '">' + txt(SIMBOLO[t.moneda] || t.moneda) + ' ' + fmtMonto(t.monto) + '</span></div>';
+        }
+        if (!hayAlgo) html = '<p style="color:var(--color-text-muted); font-size:13px; margin:0;">Todavía no hay tenencias registradas.</p>';
+        document.getElementById('tenenciasContainer').innerHTML = html;
+    }
+
+    // ── Pendientes vivos (derivados, globales) ────────────────
+    function renderPendientes() {
+        var reponer = {};
+        var cobrar  = {};
+        for (var i = 0; i < movsCache.length; i++) {
+            var m = movsCache[i];
+            if (!m.pendiente || m.cierreId) continue;
+            var mon = m.moneda || 'BRL';
+            var clave = (m.personaPendiente || '—') + '|' + mon;
+            var destino = (m.pendiente === 'reponer') ? reponer : cobrar;
+            if (!destino[clave]) destino[clave] = { persona: m.personaPendiente || '—', moneda: mon, monto: 0, cant: 0 };
+            destino[clave].monto += m.monto || 0;
+            destino[clave].cant += 1;
+        }
+        function bloque(titulo, obj, icono) {
+            var claves = Object.keys(obj).sort();
+            if (!claves.length) return '';
+            var h = '<p style="font-size:12px; font-weight:700; margin:10px 0 4px;">' + icono + ' ' + titulo + '</p>';
+            for (var j = 0; j < claves.length; j++) {
+                var p = obj[claves[j]];
+                h += '<div class="ten-item"><span>' + txt(p.persona) + ' <span style="color:var(--color-text-muted); font-size:11px;">(' + p.cant + ' mov.)</span></span>';
+                h += '<span style="font-weight:700;">' + txt(SIMBOLO[p.moneda] || p.moneda) + ' ' + fmtMonto(p.monto) + '</span></div>';
+            }
+            return h;
+        }
+        var html = bloque('Por reponer (pusieron plata de su bolsillo)', reponer, '🔁');
+        html += bloque('Por cobrar (todavía no entró)', cobrar, '⏳');
+        if (!html) html = '<p style="color:var(--color-text-muted); font-size:13px; margin:0;">No hay pendientes vivos. 🎉</p>';
+        html += '<p style="font-size:11px; color:var(--color-text-muted); margin:10px 0 0;">Los pendientes se saldan con el botón «Hacer balance» (llega en la tanda S3). Hasta entonces, un traspaso registra el movimiento de plata entre manos.</p>';
+        document.getElementById('pendientesContainer').innerHTML = html;
+    }
+
+    // ── Lista de movimientos ──────────────────────────────────
+    function nombreCategoria(catId) {
+        if (!catId) return '';
+        for (var i = 0; i < catsCache.length; i++) {
+            if (catsCache[i].id === catId) return catsCache[i].nombre || '';
+        }
+        return '';
+    }
+    function nombreCabana(cabId) {
+        if (!cabId) return '';
+        for (var i = 0; i < cabanasCache.length; i++) {
+            if (cabanasCache[i].docId === cabId) return cabanasCache[i].nombre || cabId;
+        }
+        return cabId;
+    }
+
+    function aplicarFiltrosInterno() {
+        var lista = movsDelMesFiltrados();
+        var cont = document.getElementById('movsContainer');
+        if (!lista.length) {
+            cont.innerHTML = '<p style="color:var(--color-text-muted); font-size:13px; text-align:center; padding:20px 0;">No hay movimientos con estos filtros.</p>';
+            return;
+        }
+        var html = '';
+        for (var i = 0; i < lista.length; i++) {
+            var m = lista[i];
+            var clase = m.tipo === 'entro' ? 'm-entro' : (m.tipo === 'salio' ? 'm-salio' : 'm-trasp');
+            var signo = m.tipo === 'entro' ? '+' : (m.tipo === 'salio' ? '−' : '⇄');
+            var simbolo = SIMBOLO[m.moneda] || m.moneda || '';
+
+            var badges = '';
+            if (m.tipo !== 'traspaso' && m.ambito) {
+                var cls = m.ambito === 'airbnb' ? 'badge-ambito-airbnb' : 'badge-ambito-espacio';
+                badges += '<span class="badge ' + cls + '">' + (m.ambito === 'airbnb' ? 'Airbnb' : 'Espacio') + '</span> ';
+            }
+            if (m.pendiente && !m.cierreId) {
+                badges += '<span class="badge badge-pend">' + (m.pendiente === 'cobrar' ? '⏳ por cobrar' : '🔁 por reponer a ' + txt(m.personaPendiente || '')) + '</span> ';
+            }
+
+            var meta = [];
+            meta.push(txt(m.fecha || ''));
+            var cat = nombreCategoria(m.categoriaId);
+            if (cat) meta.push('🏷 ' + txt(cat));
+            var cab = nombreCabana(m.cabanaId);
+            if (cab) meta.push('🏠 ' + txt(cab));
+            if (m.tipo === 'traspaso') {
+                meta.push('👤 ' + txt(m.de || '?') + ' → ' + txt(m.a || '?'));
+            } else if (m.enManosDe) {
+                meta.push('👤 ' + txt(m.enManosDe));
+            }
+
+            html += '<div class="mov-item ' + clase + '">';
+            html += '<div class="mov-top"><div>' + badges + '</div>';
+            html += '<div class="mov-monto ' + clase + '">' + signo + ' ' + txt(simbolo) + ' ' + fmtMonto(m.monto) + '</div></div>';
+            if (m.detalle) html += '<div class="mov-detalle">' + txt(m.detalle) + '</div>';
+            html += '<div class="mov-meta">' + meta.join(' · ') + '</div>';
+            html += '<div class="mov-acciones">';
+            if (m.comprobanteUrl) {
+                html += '<button onclick="verComprobante(\'' + txt(m.comprobanteUrl) + '\')"><span class="material-icons">image</span> Comprobante</button>';
+            }
+            html += '<button onclick="editarMov(\'' + txt(m.id) + '\')"><span class="material-icons">edit</span> Editar</button>';
+            html += '<button onclick="borrarMov(\'' + txt(m.id) + '\')"><span class="material-icons">delete</span> Borrar</button>';
+            html += '</div></div>';
+        }
+        cont.innerHTML = html;
+    }
+
+    // ── Modal de categorías ───────────────────────────────────
+    window.abrirModalCategorias = function() {
+        renderCategorias();
+        document.getElementById('modalCategorias').style.display = 'flex';
+    };
+    window.cerrarModalCategorias = function(ev) {
+        if (ev && ev.target && ev.target.id && ev.target.id !== 'modalCategorias') return;
+        document.getElementById('modalCategorias').style.display = 'none';
+    };
+    function renderCategorias() {
+        var cont = document.getElementById('catsContainer');
+        if (!catsCache.length) {
+            cont.innerHTML = '<p style="color:var(--color-text-muted); font-size:13px;">Todavía no hay categorías. Creá la primera desde el formulario («➕ Nueva categoría...»).</p>';
+            return;
+        }
+        var html = '';
+        for (var i = 0; i < catsCache.length; i++) {
+            var c = catsCache[i];
+            var activa = c.activa !== false;
+            var tipoTxt = c.tipo === 'entro' ? 'entradas' : (c.tipo === 'salio' ? 'salidas' : 'ambas');
+            html += '<div class="cat-row' + (activa ? '' : ' inactiva') + '">';
+            html += '<span><strong>' + txt(c.nombre) + '</strong> <span style="color:var(--color-text-muted); font-size:11px;">(' + tipoTxt + ')</span></span>';
+            html += '<button class="btn btn-ghost btn-sm" onclick="toggleCategoria(\'' + txt(c.id) + '\')">' + (activa ? 'Desactivar' : 'Reactivar') + '</button>';
+            html += '</div>';
+        }
+        cont.innerHTML = html;
+    }
+    window.toggleCategoria = async function(id) {
+        var c = null;
+        for (var i = 0; i < catsCache.length; i++) {
+            if (catsCache[i].id === id) { c = catsCache[i]; break; }
+        }
+        if (!c) return;
+        var nueva = c.activa === false;
+        try {
+            await db.collection('categorias_mov').doc(id).update({ activa: nueva });
+            c.activa = nueva;
+            renderCategorias();
+            poblarCategorias();
+            showToast(nueva ? 'Categoría reactivada' : 'Categoría desactivada');
+        } catch (e) {
+            showToast('No se pudo cambiar: ' + e.message);
+        }
+    };
+
+    // ── Init ──────────────────────────────────────────────────
+    document.getElementById('fFecha').value = hoyStr();
+    setTipo('entro');
+    await cargarTodo();
+})();
+</script>
+
+</body>
+</html>
