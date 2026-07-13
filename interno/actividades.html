@@ -34,9 +34,17 @@
   .act-badge.curso { background: #e7f0fd; color: #1f5fb0; }
   .act-detalle { padding: 10px 12px 12px 42px; background: #fafcf9; border-bottom: 1px solid #eef2ec; }
   .act-desc { font-size: 13px; color: #46583f; margin-bottom: 8px; white-space: pre-wrap; line-height: 1.45; }
-  .act-acc { display: flex; gap: 6px; flex-wrap: wrap; }
+  .act-acc { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .act-acc button { border: 1px solid #dfe6dd; background: #fff; cursor: pointer; font-size: 13px; padding: 7px 11px; border-radius: 9px; color: #44513f; line-height: 1; display: inline-flex; align-items: center; gap: 5px; }
   .act-acc button:hover { background: #eef2ee; }
+  /* v4.37: acciones como iconos chicos, a la altura de los indicadores */
+  .act-ico { width: 32px; height: 30px; padding: 0 !important; justify-content: center; border-radius: 8px !important; }
+  .act-ico .material-icons { font-size: 17px; color: #5a6a55; }
+  .btn-play { background: #2d5a27 !important; border-color: #2d5a27 !important; color: #fff !important; font-weight: 600; }
+  .btn-play .material-icons { font-size: 18px; }
+  .crono-live { display: inline-flex; align-items: center; gap: 6px; background: #eaf3fe; border: 1px solid #bcd7f7; color: #1f5fb0; border-radius: 9px; padding: 5px 10px; font-weight: 700; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  .banner-crono { display: flex; align-items: center; gap: 8px; background: #eaf3fe; border: 1px solid #bcd7f7; color: #1f5fb0; border-radius: 10px; padding: 10px 12px; font-size: 13.5px; margin-bottom: 12px; cursor: pointer; font-weight: 600; }
+  .banner-crono .crono-tiempo { font-variant-numeric: tabular-nums; font-weight: 700; }
   .act-children { margin-left: 12px; padding-left: 10px; border-left: 4px solid #aebeaa; border-radius: 0 0 0 8px; background: rgba(45,90,39,0.025); }
   .act-children .act-children { background: rgba(45,90,39,0.045); }
   .act-children > .act-item > .act-row { border-bottom: 1px solid #e4eae1; }
@@ -566,6 +574,57 @@ function setSup(idEl, n) {
   if (n > 0) el.classList.remove('oculto'); else el.classList.add('oculto');
 }
 
+// ── Cronómetro vivo ────────────────────────────────────────
+// Millis de inicio de MI sesión en la actividad (si no tengo, la más vieja de las abiertas).
+function inicioCrono(it) {
+  var ses = it.sesionesActivas || [];
+  var minTs = 0;
+  for (var i = 0; i < ses.length; i++) {
+    var t = (ses[i].inicio && ses[i].inicio.toMillis) ? ses[i].inicio.toMillis() : 0;
+    if (!t) continue;
+    if (ses[i].uid === uid) return t;
+    if (!minTs || t < minTs) minTs = t;
+  }
+  return minTs || Date.now();
+}
+function fmtCrono(ms) {
+  var s = Math.max(0, Math.floor(ms / 1000));
+  var hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60;
+  return hh + ':' + (mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss;
+}
+// Actualiza cada segundo todos los contadores visibles (tarjetas y banner).
+function tickCronos() {
+  var els = document.querySelectorAll('.crono-tiempo');
+  var ahora = Date.now();
+  for (var i = 0; i < els.length; i++) {
+    var ini = parseInt(els[i].getAttribute('data-ini'), 10) || ahora;
+    els[i].textContent = fmtCrono(ahora - ini);
+  }
+}
+setInterval(tickCronos, 1000);
+// Mi actividad con cronómetro corriendo (para el banner al inicio), si hay alguna.
+function miCronoCorriendo() {
+  for (var i = 0; i < items.length; i++) {
+    var ses = items[i].sesionesActivas || [];
+    for (var j = 0; j < ses.length; j++) { if (ses[j].uid === uid) return items[i]; }
+  }
+  return null;
+}
+// Toque en el banner: abre el árbol hasta la actividad y la muestra.
+window.abrirActividad = function (id) {
+  var it = byId[id]; if (!it) return;
+  var cur = it, guard = 0;
+  while (cur && guard < 20) { abierto[cur.id] = true; cur = cur.parentId ? byId[cur.parentId] : null; guard++; }
+  tabActual = 'proyectos';
+  var tabs = document.querySelectorAll('.tab-cv');
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+  var tb = document.querySelector('.tab-cv[data-tab="proyectos"]');
+  if (tb) tb.classList.add('active');
+  render();
+  var el = document.getElementById('nodo-' + id);
+  if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+};
+
 // ── Render ─────────────────────────────────────────────────
 function render() {
   // Superíndices: Proyectos = novedades sin ver · Favoritos = destacadas pendientes ·
@@ -578,9 +637,19 @@ function render() {
 
   var z = document.getElementById('zonaContenido');
   var banner = diagCarga ? ('<div class="muted-note" style="border-color:#e0a3a3;color:#a33;background:#fdf3f3">' + esc(diagCarga) + '</div>') : '';
-  if (tabActual === 'compras') { z.innerHTML = banner + renderCompras(); return; }
-  if (tabActual === 'favoritos') { z.innerHTML = banner + renderFavoritos(); return; }
+  // Contador corriendo de este usuario (aunque haya cerrado la ventana): siempre visible al inicio.
+  var enCurso = miCronoCorriendo();
+  if (enCurso) {
+    banner += '<div class="banner-crono" onclick="abrirActividad(\'' + enCurso.id + '\')">'
+      + '<span class="material-icons" style="font-size:19px">timer</span>'
+      + '<span>Ten\u00e9s un contador corriendo: \u00ab' + esc(enCurso.titulo) + '\u00bb</span>'
+      + '<span class="crono-tiempo" data-ini="' + inicioCrono(enCurso) + '" style="margin-left:auto">0:00:00</span>'
+      + '</div>';
+  }
+  if (tabActual === 'compras') { z.innerHTML = banner + renderCompras(); tickCronos(); return; }
+  if (tabActual === 'favoritos') { z.innerHTML = banner + renderFavoritos(); tickCronos(); return; }
   z.innerHTML = banner + renderProyectos();
+  tickCronos();
 }
 
 // Favoritos = lista plana de lo que el usuario destacó con la estrella, ordenada por urgencia.
@@ -661,7 +730,7 @@ function nodoHTML(it, nivel) {
   var nueva = esNueva(it);
   var esSubChequeo = (it.tipo === 'item-chequeo' || it.tipo === 'categoria-chequeo');
 
-  var h = '<div class="act-item">';
+  var h = '<div class="act-item" id="nodo-' + it.id + '">';
   // Fila compacta. Un clic en la fila (menos el check) despliega detalle + acciones + subítems.
   h += '<div class="act-row act-clic' + (ab ? ' abierto' : '') + (nueva ? ' nueva' : '') + '" onclick="toggleAbierto(\'' + it.id + '\')">';
   h += '<span class="act-caret' + (tiene ? ' tiene' : '') + '">' + (ab ? '\u25be' : '\u25b8') + '</span>';
@@ -724,20 +793,23 @@ function nodoHTML(it, nivel) {
     h += '<div class="act-detalle">';
     if (it.detalle) h += '<div class="act-desc">' + esc(it.detalle) + '</div>';
     h += '<div class="act-acc">';
+    // Cronómetro: el play es el único botón con texto; corriendo, ese espacio muestra el tiempo vivo.
     if (puedeCronometrar(it) && !it.hecho) {
       if (it.estado === 'en_curso') {
-        h += '<button onclick="cronoPausar(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#b8860b">pause</span> Pausar</button>';
-        h += '<button onclick="cronoFinalizar(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#1f7a32">stop</span> Finalizar</button>';
+        h += '<span class="crono-live"><span class="material-icons" style="font-size:17px">timer</span><span class="crono-tiempo" data-ini="' + inicioCrono(it) + '">0:00:00</span></span>';
+        h += '<button class="act-ico" title="Pausar" onclick="cronoPausar(\'' + it.id + '\')"><span class="material-icons" style="color:#b8860b">pause</span></button>';
+        h += '<button class="act-ico" title="Finalizar y registrar" onclick="cronoFinalizar(\'' + it.id + '\')"><span class="material-icons" style="color:#1f7a32">stop</span></button>';
       } else {
-        h += '<button onclick="cronoIniciar(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#1f5fb0">play_arrow</span> Iniciar</button>';
+        h += '<button class="btn-play" onclick="cronoIniciar(\'' + it.id + '\')"><span class="material-icons">play_arrow</span> Iniciar</button>';
       }
     }
-    h += '<button onclick="nuevoHijo(\'' + it.id + '\')">\uff0b Sub-\u00edtem</button>';
-    h += '<button onclick="abrirReporte(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#b8860b">campaign</span> Reportar</button>';
+    // Acciones como iconos chicos, a la altura de los indicadores.
+    h += '<button class="act-ico" title="Agregar sub-\u00edtem" onclick="nuevoHijo(\'' + it.id + '\')"><span class="material-icons">add</span></button>';
+    h += '<button class="act-ico" title="Reportar" onclick="abrirReporte(\'' + it.id + '\')"><span class="material-icons" style="color:#b8860b">campaign</span></button>';
     var puedeGestionar = (esAdmin || it.creadoPor === uid);
-    if (puedeGestionar && puedeCronometrar(it)) h += '<button onclick="verHistorial(\'' + it.id + '\')"><span class="material-icons" style="font-size:18px;color:#5a6a55">history</span> Historial</button>';
-    if (puedeGestionar) h += '<button onclick="editarItem(\'' + it.id + '\')">\u270e Editar</button>';
-    if (puedeGestionar) h += '<button onclick="borrarItem(\'' + it.id + '\')">\ud83d\uddd1 Borrar</button>';
+    if (puedeGestionar && puedeCronometrar(it)) h += '<button class="act-ico" title="Historial" onclick="verHistorial(\'' + it.id + '\')"><span class="material-icons">history</span></button>';
+    if (puedeGestionar) h += '<button class="act-ico" title="Editar" onclick="editarItem(\'' + it.id + '\')"><span class="material-icons">edit</span></button>';
+    if (puedeGestionar) h += '<button class="act-ico" title="Borrar" onclick="borrarItem(\'' + it.id + '\')"><span class="material-icons" style="color:#a33">delete_outline</span></button>';
     h += '</div>';
     h += '</div>';
     // Subítems (en la misma acción). La barra vertical lleva el color del proyecto raíz.
