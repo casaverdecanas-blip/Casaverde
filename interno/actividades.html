@@ -59,11 +59,9 @@
   .ruta-mini { font-size: 11.5px; color: #7a8a76; padding: 7px 10px 0 10px; background: #fff; border-top: 1px solid #eef2ec; }
   /* Pestañas v4.37: Mantenimiento grande + fila de 3, con superíndices */
   .tabs-cv { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
-  .tab-cv { position: relative; border: 1.5px solid #cdd8c8; background: #fff; color: #3c4a37; border-radius: 12px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 12px 8px; font-size: 14px; line-height: 1.15; }
-  .tab-cv .material-icons { font-size: 19px; }
+  .tab-cv { position: relative; border: 1.5px solid #cdd8c8; background: #fff; color: #3c4a37; border-radius: 12px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 14px 8px; font-size: 14.5px; line-height: 1.15; }
+  .tab-cv .material-icons { font-size: 20px; }
   .tab-cv.active { background: #2d5a27; border-color: #2d5a27; color: #fff; }
-  .tab-grande { font-size: 17px; padding: 15px 10px; width: 100%; }
-  .tab-grande .material-icons { font-size: 23px; }
   .tabs-fila { display: flex; gap: 8px; }
   .tabs-fila .tab-cv { flex: 1 1 0; min-width: 0; }
   .sup { position: relative; top: -7px; font-size: 11px; font-weight: 700; background: #5a6a55; color: #fff; border-radius: 999px; padding: 1px 6px; margin-left: 1px; line-height: 1.4; }
@@ -104,10 +102,6 @@
 <main class="admin-content">
 
   <div class="tabs-cv">
-    <button class="tab-cv tab-grande" onclick="irTab('mantenimiento',this)" data-tab="mantenimiento">
-      <span class="material-icons">build</span>
-      Mantenimiento CasaVerde <sup class="sup rojo oculto" id="supMant">0</sup>
-    </button>
     <div class="tabs-fila">
       <button class="tab-cv" onclick="irTab('proyectos',this)" data-tab="proyectos">
         <span class="material-icons">folder</span>
@@ -310,7 +304,7 @@ var byId      = {};
 var childrenOf = {};
 var usuarios  = [];
 var abierto = {};   // id -> true: actividad desplegada (detalle + acciones + subítems). Default: contraído.
-var tabActual = 'mantenimiento';
+var tabActual = 'proyectos';
 var diagCarga = '';   // diagnóstico de permisos cuando alguna consulta del colaborador falla
 // Estado por usuario (doc actividades_usuario/<uid>): qué vio y qué destacó — v4.34
 var vistos = {};          // actId -> millis del actualizadoEn/creadoEn ya visto por este usuario
@@ -574,17 +568,10 @@ function setSup(idEl, n) {
 
 // ── Render ─────────────────────────────────────────────────
 function render() {
-  // Superíndices: Mantenimiento = recurrentes que urgen (rojas/amarillas) ·
-  // Proyectos = novedades sin ver · Favoritos = destacadas pendientes ·
+  // Superíndices: Proyectos = novedades sin ver · Favoritos = destacadas pendientes ·
   // Compras = listas nuevas desde la última visita a la pestaña.
-  var urgentes = items.filter(function (it) {
-    if (!esRecurrente(it) || it.hecho) return false;
-    var s = CVC.actSemaforo ? CVC.actSemaforo(it) : null;
-    return !!(s && (s.color === 'rojo' || s.color === 'amarillo'));
-  }).length;
   var nuevasTotal = items.filter(esNueva).length;
   var favTotal = destacados.filter(function (id) { return byId[id] && !byId[id].hecho; }).length;
-  setSup('supMant', urgentes);
   setSup('supProy', nuevasTotal);
   setSup('supFav', favTotal);
   setSup('supCompras', tabActual === 'compras' ? 0 : comprasNuevas(ultimaVistaCompras));
@@ -592,7 +579,6 @@ function render() {
   var z = document.getElementById('zonaContenido');
   var banner = diagCarga ? ('<div class="muted-note" style="border-color:#e0a3a3;color:#a33;background:#fdf3f3">' + esc(diagCarga) + '</div>') : '';
   if (tabActual === 'compras') { z.innerHTML = banner + renderCompras(); return; }
-  if (tabActual === 'mantenimiento') { z.innerHTML = banner + renderMantenimiento(); return; }
   if (tabActual === 'favoritos') { z.innerHTML = banner + renderFavoritos(); return; }
   z.innerHTML = banner + renderProyectos();
 }
@@ -639,23 +625,6 @@ window.toggleEstrella = function (id) {
   render();
 };
 
-// Mantenimiento = todas las actividades recurrentes que el usuario ve, ordenadas por urgencia
-function renderMantenimiento() {
-  var recs = items.filter(esRecurrente);
-  recs.sort(function (a, b) {
-    var ra = rankSem(a), rb = rankSem(b);
-    if (ra !== rb) return ra - rb;
-    return String(a.fechaInicio || '').localeCompare(String(b.fechaInicio || ''));
-  });
-  var html = '<div class="act-toolbar"><button class="btn btn-primary" onclick="nuevoRoot(\'recurrente\')"><span class="material-icons">add</span> Nueva tarea recurrente</button></div>';
-  html += '<div class="muted-note">Tus tareas que se repiten, ordenadas por urgencia (rojas primero). Al completarlas (con reloj o tildando) se reprograman solas al próximo ciclo.</div>';
-  if (!recs.length) return html + '<div class="muted-note">No hay actividades recurrentes por ahora.</div>';
-  html += '<div class="act-list">';
-  for (var i = 0; i < recs.length; i++) html += nodoHTML(recs[i], 0);
-  html += '</div>';
-  return html;
-}
-
 // Proyectos = árbol completo. Todo cuelga de un proyecto; ya no hay "sueltos".
 // (Si por algún motivo quedara una actividad sin proyecto, se muestra aparte para reasignarla.)
 function renderProyectos() {
@@ -663,6 +632,7 @@ function renderProyectos() {
   var huerfanas = items.filter(function (it) { return !it.parentId && !esProy(it); }).sort(byTitulo);
   var html = '<div class="act-toolbar">';
   html += '<button class="btn btn-primary" onclick="nuevoRoot(\'proyecto\')"><span class="material-icons">add</span> Nuevo proyecto</button>';
+  html += '<button class="btn btn-secondary" onclick="nuevoRoot(\'recurrente\')"><span class="material-icons" style="font-size:17px">build</span> Nueva tarea recurrente</button>';
   if (items.some(esNueva)) html += '<button class="btn btn-secondary" onclick="marcarTodoVisto()"><span class="material-icons" style="font-size:17px">done_all</span> Marcar todas como vistas</button>';
   html += '</div>';
   if (items.some(esNueva)) html += '<div class="muted-note">Lo nuevo o modificado por otros se resalta en azul; en los padres cerrados ves \u201c\u25cf N sin ver\u201d. Al abrir una actividad, queda como vista.</div>';
@@ -1374,7 +1344,7 @@ window.verHistorial = async function (id) {
 };
 
 // ── Init ───────────────────────────────────────────────────
-tabActual = esAdmin ? 'proyectos' : 'mantenimiento';
+tabActual = 'proyectos';
 (function () {
   var tb = document.querySelector('.tab-cv[data-tab="' + tabActual + '"]');
   if (tb) tb.classList.add('active');
