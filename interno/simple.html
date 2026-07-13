@@ -239,10 +239,19 @@
                 </button>
             </div>
 
-            <div class="foto-box" id="fotoBox" style="display:none;">
-                <label class="form-label" style="margin-bottom:6px;">📷 Foto de la factura (opcional — la IA llena los campos y la foto queda como comprobante)</label>
+            <div class="foto-box" id="fotoBox">
+                <label class="form-label" style="margin-bottom:6px;" id="lblFoto">📷 Comprobante (la IA puede llenar los campos desde la foto)</label>
                 <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                    <input type="file" id="fComprobante" accept="image/*" style="flex:1; min-width:180px; font-size:13px;">
+                    <input type="file" id="fFotoCamara" accept="image/*" capture="environment" style="display:none;" onchange="fotoElegida(this)">
+                    <input type="file" id="fFotoGaleria" accept="image/*" style="display:none;" onchange="fotoElegida(this)">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('fFotoCamara').click()">
+                        <span class="material-icons">photo_camera</span>
+                        Cámara
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('fFotoGaleria').click()">
+                        <span class="material-icons">photo_library</span>
+                        Galería
+                    </button>
                     <button type="button" class="btn btn-secondary btn-sm" id="btnLeerFactura" onclick="leerFactura()">
                         <span class="material-icons">auto_awesome</span>
                         Leer factura
@@ -309,10 +318,6 @@
                         <label class="form-label" id="lblPersonaPend">¿Quién puso la plata?</label>
                         <input type="text" id="fPersonaPend" class="form-control" list="listaPersonas" placeholder="Nombre">
                     </div>
-                </div>
-                <div class="full" id="grpCompEntro" style="display:none;">
-                    <label class="form-label">Comprobante (foto, opcional)</label>
-                    <input type="file" id="fComprobante2" accept="image/*" style="font-size:13px;">
                 </div>
             </div>
 
@@ -448,6 +453,14 @@
     var editandoId   = null;
     var editandoDoc  = null;
     var gastoFijoIdForm = null;
+    var archivoFoto  = null;
+
+    window.fotoElegida = function(input) {
+        if (input.files && input.files.length) {
+            archivoFoto = input.files[0];
+            fotoStatus('Foto elegida: ' + (archivoFoto.name || 'imagen') + ' ✓');
+        }
+    };
 
     // ── Helpers ───────────────────────────────────────────────
     function hoyStr() {
@@ -526,12 +539,20 @@
     }
 
     // ── Poblar selects y datalist ─────────────────────────────
+    function nombreDeCabana(c) {
+        if (!c) return '';
+        if (c.nombre && typeof c.nombre === 'object' && c.nombre.es) return c.nombre.es;
+        if (typeof c.nombre === 'string' && c.nombre) return c.nombre;
+        if (c.id != null) return 'Cabaña ' + c.id;
+        return c.docId || '';
+    }
+
     function poblarCabanas() {
         var sel = document.getElementById('fCabana');
         var html = '<option value="">General</option>';
         for (var i = 0; i < cabanasCache.length; i++) {
             var c = cabanasCache[i];
-            html += '<option value="' + txt(c.docId) + '">' + txt(c.nombre || c.docId) + '</option>';
+            html += '<option value="' + txt(c.docId) + '">' + txt(nombreDeCabana(c)) + '</option>';
         }
         sel.innerHTML = html;
     }
@@ -619,8 +640,11 @@
         document.getElementById('grpPendiente').style.display = esTraspaso ? 'none' : '';
         document.getElementById('grpDe').style.display        = esTraspaso ? '' : 'none';
         document.getElementById('grpA').style.display         = esTraspaso ? '' : 'none';
-        document.getElementById('fotoBox').style.display      = (tipo === 'salio') ? '' : 'none';
-        document.getElementById('grpCompEntro').style.display = (tipo === 'entro') ? '' : 'none';
+        document.getElementById('fotoBox').style.display      = esTraspaso ? 'none' : '';
+        document.getElementById('btnLeerFactura').style.display = (tipo === 'salio') ? '' : 'none';
+        document.getElementById('lblFoto').textContent = (tipo === 'salio')
+            ? '📷 Foto de la factura (la IA llena los campos y la foto queda como comprobante)'
+            : '📷 Comprobante (opcional)';
 
         if (tipo === 'entro') {
             document.getElementById('lblManos').textContent = '¿A manos de quién entró?';
@@ -706,16 +730,15 @@
     }
 
     window.leerFactura = async function() {
-        var input = document.getElementById('fComprobante');
-        if (!input.files || !input.files.length) {
-            fotoStatus('Primero elegí la foto de la factura.', true);
+        if (!archivoFoto) {
+            fotoStatus('Primero sacá o elegí la foto de la factura.', true);
             return;
         }
         var btn = document.getElementById('btnLeerFactura');
         btn.disabled = true;
         fotoStatus('Comprimiendo imagen...');
         try {
-            var b64 = await comprimirImagen(input.files[0]);
+            var b64 = await comprimirImagen(archivoFoto);
             fotoStatus('Leyendo la factura con IA...');
             var PROMPT = 'Analizá esta foto de una factura o comprobante de Brasil o Uruguay y extraé los datos. ' +
                 'Las fechas están en formato dd/mm/aaaa: NO inviertas día y mes. El año es reciente, no inventes años viejos. ' +
@@ -854,12 +877,9 @@
                 data.creadoPor = user.uid;
             }
 
-            var fileInput = (tipoActual === 'entro')
-                ? document.getElementById('fComprobante2')
-                : document.getElementById('fComprobante');
-            if (tipoActual !== 'traspaso' && fileInput.files && fileInput.files.length > 0) {
+            if (tipoActual !== 'traspaso' && archivoFoto) {
                 btnText.textContent = 'Subiendo comprobante...';
-                var url = await CVC.subirComprobante(fileInput.files[0], 'simple', docRef.id);
+                var url = await CVC.subirComprobante(archivoFoto, 'simple', docRef.id);
                 if (url) data.comprobanteUrl = url;
             }
 
@@ -897,8 +917,9 @@
         document.getElementById('fPersonaPend').value = '';
         document.getElementById('fCategoria').value = '';
         document.getElementById('fCabana').value = '';
-        document.getElementById('fComprobante').value = '';
-        document.getElementById('fComprobante2').value = '';
+        document.getElementById('fFotoCamara').value = '';
+        document.getElementById('fFotoGaleria').value = '';
+        archivoFoto = null;
         document.getElementById('compActual').style.display = 'none';
         fotoStatus('');
         onPendienteChange();
@@ -1039,7 +1060,7 @@
     function nombreCabana(cabId) {
         if (!cabId) return '';
         for (var i = 0; i < cabanasCache.length; i++) {
-            if (cabanasCache[i].docId === cabId) return cabanasCache[i].nombre || cabId;
+            if (cabanasCache[i].docId === cabId) return nombreDeCabana(cabanasCache[i]);
         }
         return cabId;
     }
