@@ -1,6 +1,15 @@
 // ============================================================
-//  utils.js — Casa Verde Canas  v4.38
+//  utils.js — Casa Verde Canas  v4.41
 //  Funciones compartidas · /interno/
+//
+//  CAMBIOS v4.41 (Listón ADMIN):
+//  - [NUEVO] Listón visual "barrera de tren" (rayas amarillas y negras)
+//    fijo en el borde superior de TODAS las páginas cuando la sesión
+//    activa es de un admin, con rótulo "ADMIN" colgante a la derecha.
+//    Se inyecta desde verificarAuth() (función _mostrarListonAdmin),
+//    así que no requiere tocar ningún HTML. El colaborador no lo ve.
+//    Objetivo: distinguir a simple vista con qué usuario se está
+//    trabajando (p. ej. al marcar horas).
 //
 //  CAMBIOS v4.38 (Reestructura de presentación — sin dashboard):
 //  - [RETIRADO] dashboard.html sale del sistema. La página de inicio
@@ -219,7 +228,7 @@ const NAV_ADMIN_ITEMS = [
         icon:  'checklist',
         items: [
             { href: 'temporada.html',      icon: 'wb_sunny',             label: 'Temporada'          },
-            { href: 'limpieza-stats.html', icon: 'cleaning_services',    label: 'Análisis limpiezas' }
+            { href: 'horas-stats.html',    icon: 'schedule',             label: 'Análisis de horas'  }
         ]
     },
 
@@ -278,7 +287,7 @@ var CATALOGO_PERMISOS = [
     { grupo: 'Operación', icon: 'checklist', items: [
         { href: 'calendario.html',     icon: 'calendar_month',       label: 'Calendario' },
         { href: 'temporada.html',      icon: 'wb_sunny',             label: 'Temporada' },
-        { href: 'limpieza-stats.html', icon: 'cleaning_services',    label: 'Análisis de limpiezas' },
+        { href: 'horas-stats.html',    icon: 'schedule',             label: 'Análisis de horas' },
         { href: 'comunicacion.html',   icon: 'forum',                label: 'Comunicación' }
     ]},
     { grupo: 'Reservas y clientes', icon: 'event', items: [
@@ -366,6 +375,48 @@ function badgePrioridad(prioridad) {
 }
 
 
+// ── LISTÓN ADMIN (v4.41) ─────────────────────────────────────────────────────
+// Listón fijo estilo "barrera de tren" (rayas amarillas y negras en diagonal)
+// pegado al borde superior de la pantalla, visible SOLO cuando la sesión
+// activa es de un admin. Incluye un rótulo "ADMIN" colgante a la derecha.
+// Lo llama verificarAuth() automáticamente: ninguna página necesita cambios.
+function _mostrarListonAdmin() {
+    if (document.getElementById('cvcListonAdmin')) return;
+
+    var liston = document.createElement('div');
+    liston.id = 'cvcListonAdmin';
+    liston.setAttribute('aria-hidden', 'true');
+    liston.style.cssText =
+        'position:fixed;top:0;left:0;right:0;height:10px;z-index:99999;' +
+        'pointer-events:none;' +
+        'background:repeating-linear-gradient(-45deg,' +
+            '#f2c210 0px,#f2c210 14px,' +
+            '#1a1a1a 14px,#1a1a1a 28px);' +
+        'box-shadow:0 1px 4px rgba(0,0,0,0.3);';
+
+    var rotulo = document.createElement('div');
+    rotulo.textContent = 'ADMIN';
+    rotulo.style.cssText =
+        'position:absolute;top:10px;right:14px;' +
+        'background:#1a1a1a;color:#f2c210;' +
+        'font-family:inherit;font-weight:700;font-size:9px;line-height:1;' +
+        'letter-spacing:2px;padding:3px 9px 4px;' +
+        'border-radius:0 0 6px 6px;';
+    liston.appendChild(rotulo);
+
+    function _pegar() {
+        if (document.body && !document.getElementById('cvcListonAdmin')) {
+            document.body.appendChild(liston);
+        }
+    }
+    if (document.body) {
+        _pegar();
+    } else {
+        document.addEventListener('DOMContentLoaded', _pegar);
+    }
+}
+
+
 // ── SEGURIDAD Y AUTENTICACIÓN ────────────────────────────────────────────────
 // CORREGIDO v4.3: retorna Promise<{user, userData}> — patrón moderno.
 // Uso en las páginas:
@@ -428,6 +479,12 @@ function verificarAuth(rolesPermitidos) {
                             (_ps.indexOf(_pag) !== -1) ||
                             (roles.indexOf(userData.rol) !== -1);
                         if (!_permitido) { window.location.href = 'actividades.html'; return; }
+                    }
+
+                    // Listón visual de admin (v4.41): rayas amarillas/negras
+                    // arriba de todo, para distinguir la sesión a simple vista.
+                    if (userData.rol === 'admin') {
+                        _mostrarListonAdmin();
                     }
 
                     resolve({ user: user, userData: userData });

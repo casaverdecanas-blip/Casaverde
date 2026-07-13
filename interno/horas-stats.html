@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Análisis de horas — Casa Verde Canas</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<link rel="stylesheet" href="design-system.css">
+<style>
+/* ============================================================
+   horas-stats.html — Análisis general de horas (v4.40)
+   Reemplaza a limpieza-stats.html. Todo derivado, nada guardado.
+   Sin backticks · sin ?. · sin ?? · filtrado 100% client-side.
+   ============================================================ */
+.hs-main { max-width: 1100px; margin: 0 auto; padding: 16px 14px 90px; }
+.hs-title { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; }
+.hs-title h1 { font-size: 1.35rem; margin: 0; }
+.hs-title .material-icons { color: #2a9d8f; }
+.hs-sub { color: #6c757d; font-size: .85rem; margin: 0 0 14px; }
+
+.hs-card { background: #fff; border: 1px solid #e6e8eb; border-radius: 12px;
+           padding: 14px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.hs-card h2 { font-size: .95rem; margin: 0 0 10px; display: flex; align-items: center; gap: 6px; }
+.hs-card h2 .material-icons { font-size: 18px; color: #2a9d8f; }
+
+/* Filtros */
+.hs-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.hs-preset { border: 1px solid #ced4da; background: #f8f9fa; color: #343a40;
+             border-radius: 20px; padding: 5px 12px; font-size: .8rem; cursor: pointer; }
+.hs-preset.on { background: #2a9d8f; border-color: #2a9d8f; color: #fff; }
+.hs-fechas { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 8px; }
+.hs-fechas label { font-size: .78rem; color: #495057; display: flex; align-items: center; gap: 5px; }
+.hs-fechas input[type=date] { border: 1px solid #ced4da; border-radius: 8px; padding: 5px 7px;
+                              font-size: .82rem; background: #fff; }
+.hs-fechas select { border: 1px solid #ced4da; border-radius: 8px; padding: 5px 7px;
+                    font-size: .82rem; background: #fff; }
+.hs-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.hs-chip { border: 1px solid #ced4da; background: #fff; color: #495057; border-radius: 20px;
+           padding: 4px 11px; font-size: .78rem; cursor: pointer; display: inline-flex;
+           align-items: center; gap: 5px; user-select: none; -webkit-user-select: none; }
+.hs-chip .material-icons { font-size: 15px; }
+.hs-chip.on { background: #e7f5f3; border-color: #2a9d8f; color: #1d6f65; }
+.hs-lbl-min { font-size: .72rem; color: #868e96; text-transform: uppercase;
+              letter-spacing: .04em; margin: 8px 0 2px; }
+
+/* KPIs */
+.hs-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.hs-kpi { background: #f8f9fa; border-radius: 10px; padding: 10px 12px; }
+.hs-kpi .v { font-size: 1.15rem; font-weight: 700; color: #212529; }
+.hs-kpi .l { font-size: .72rem; color: #6c757d; margin-top: 2px; }
+
+/* Torta */
+.hs-torta { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+.hs-torta svg { flex: 0 0 auto; }
+.hs-leyenda { flex: 1 1 240px; min-width: 220px; }
+.hs-leyenda .fila { display: flex; align-items: center; gap: 8px; padding: 4px 0;
+                    font-size: .82rem; border-bottom: 1px dashed #eef0f2; }
+.hs-leyenda .dot { width: 11px; height: 11px; border-radius: 3px; flex: 0 0 auto; }
+.hs-leyenda .nom { flex: 1; color: #343a40; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hs-leyenda .hrs { color: #212529; font-weight: 600; white-space: nowrap; }
+.hs-leyenda .pct { color: #868e96; width: 44px; text-align: right; }
+
+/* Tablas */
+.hs-tabla { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.hs-tabla th { text-align: left; color: #6c757d; font-weight: 600; font-size: .72rem;
+               text-transform: uppercase; letter-spacing: .03em; padding: 6px 8px;
+               border-bottom: 2px solid #e9ecef; white-space: nowrap; }
+.hs-tabla td { padding: 7px 8px; border-bottom: 1px solid #f1f3f5; color: #343a40; }
+.hs-tabla td.num, .hs-tabla th.num { text-align: right; white-space: nowrap; }
+.hs-tabla tr.alerta td { background: #fff8e1; }
+.hs-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Árbol desagregado */
+.hs-node { border-bottom: 1px solid #f1f3f5; }
+.hs-node-head { display: flex; align-items: center; gap: 8px; padding: 8px 4px; cursor: pointer; }
+.hs-node-head .material-icons { font-size: 18px; color: #adb5bd; flex: 0 0 auto; }
+.hs-node-head .nom { flex: 1 1 auto; min-width: 0; font-size: .85rem; color: #212529;
+                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hs-node-head .hrs { font-weight: 700; font-size: .82rem; color: #212529; white-space: nowrap; }
+.hs-node-head .cost { font-size: .75rem; color: #1d6f65; white-space: nowrap; }
+.hs-bar-wrap { height: 5px; background: #f1f3f5; border-radius: 3px; margin: 0 4px 6px 30px; overflow: hidden; }
+.hs-bar { height: 100%; border-radius: 3px; }
+.hs-hijos { margin-left: 18px; border-left: 3px solid #eef0f2; padding-left: 4px; }
+.hs-lineas { margin: 2px 4px 10px 30px; font-size: .76rem; color: #495057; }
+.hs-linea { display: flex; gap: 8px; padding: 3px 0; border-bottom: 1px dashed #f1f3f5; flex-wrap: wrap; }
+.hs-linea .f { color: #868e96; white-space: nowrap; }
+.hs-linea .p { font-weight: 600; }
+.hs-linea .a { color: #6c757d; flex: 1 1 auto; min-width: 0; overflow: hidden;
+               text-overflow: ellipsis; white-space: nowrap; }
+.hs-linea .h { font-weight: 600; white-space: nowrap; }
+
+/* Simulación */
+.hs-sim { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; margin-bottom: 10px; }
+.hs-sim label { font-size: .78rem; color: #495057; display: flex; flex-direction: column; gap: 4px; }
+.hs-sim input { border: 1px solid #ced4da; border-radius: 8px; padding: 6px 8px;
+                font-size: .85rem; width: 120px; }
+.hs-sim-res { background: #e7f5f3; border-radius: 10px; padding: 10px 12px;
+              font-size: .82rem; color: #1d6f65; }
+.hs-sim-res b { font-size: 1rem; }
+
+.hs-nota { font-size: .74rem; color: #868e96; margin-top: 10px; }
+.hs-link { color: #2a9d8f; font-size: .8rem; text-decoration: none; display: inline-flex;
+           align-items: center; gap: 4px; margin-top: 8px; }
+.hs-empty { text-align: center; color: #868e96; font-size: .85rem; padding: 24px 0; }
+@media (max-width: 560px) {
+  .hs-main { padding: 12px 8px 90px; }
+  .hs-torta { justify-content: center; }
+}
+</style>
+</head>
+<body>
+
+<nav id="appNav" class="admin-nav"></nav>
+
+<main class="hs-main">
+    <div class="hs-title">
+        <span class="material-icons">schedule</span>
+        <h1>Análisis de horas</h1>
+    </div>
+    <p class="hs-sub">Distribución del tiempo trabajado por proyecto, sub-ítem y persona · simulación de costos</p>
+
+    <!-- FILTROS -->
+    <div class="hs-card">
+        <div class="hs-presets" id="hsPresets"></div>
+        <div class="hs-fechas">
+            <label>Desde <input type="date" id="hsDesde" onchange="filtroFechaManual()"></label>
+            <label>Hasta <input type="date" id="hsHasta" onchange="filtroFechaManual()"></label>
+            <label>Moneda
+                <select id="hsMoneda" onchange="cambioMoneda()">
+                    <option value="BRL">R$ (reales)</option>
+                    <option value="USD">US$ (dólares)</option>
+                    <option value="ARS">$ (pesos arg.)</option>
+                </select>
+            </label>
+        </div>
+        <div id="hsUsuariosWrap" style="display:none;">
+            <div class="hs-lbl-min">Usuarios (tocá para incluir / excluir)</div>
+            <div class="hs-chips" id="hsUsuarios"></div>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="hs-card">
+        <div class="hs-kpis" id="hsKpis"></div>
+    </div>
+
+    <!-- TORTA GLOBAL -->
+    <div class="hs-card">
+        <h2><span class="material-icons">pie_chart</span> Tiempo por proyecto</h2>
+        <div class="hs-torta" id="hsTorta"></div>
+    </div>
+
+    <!-- SIMULACIÓN -->
+    <div class="hs-card">
+        <h2><span class="material-icons">calculate</span> Simulación de costos</h2>
+        <div class="hs-sim">
+            <label>Costo por hora (<span class="hsSym">R$</span>)
+                <input type="number" id="hsCostoHora" min="0" step="0.5" placeholder="0" oninput="render()">
+            </label>
+            <label>Margen % (limpiezas)
+                <input type="number" id="hsMargen" min="0" step="5" value="30" oninput="render()">
+            </label>
+        </div>
+        <div class="hs-sim-res" id="hsSimRes"></div>
+        <div class="hs-nota">El costo por hora se ingresa en la moneda elegida arriba y monetiza todo el tiempo del período en la torta, el desagregado y las limpiezas. Los honorarios reales (registrados al finalizar tareas) se muestran aparte como comparación.</div>
+    </div>
+
+    <!-- POR PERSONA -->
+    <div class="hs-card">
+        <h2><span class="material-icons">group</span> Por persona</h2>
+        <div class="hs-scroll" id="hsPersonas"></div>
+    </div>
+
+    <!-- DESAGREGADO -->
+    <div class="hs-card">
+        <h2><span class="material-icons">account_tree</span> Desagregado por proyecto</h2>
+        <div id="hsArbol"></div>
+    </div>
+
+    <!-- LIMPIEZAS -->
+    <div class="hs-card" id="hsLimpCard" style="display:none;">
+        <h2><span class="material-icons">cleaning_services</span> Limpiezas por cabaña · precio sugerido</h2>
+        <div class="hs-scroll" id="hsLimp"></div>
+        <a class="hs-link" href="contenido-sitio.html"><span class="material-icons" style="font-size:16px;">open_in_new</span> Actualizar precio de limpieza en Contenido del sitio</a>
+    </div>
+
+    <p class="hs-nota">Las estadísticas incluyen el trabajo <b>finalizado</b> y los <b>ciclos en pausa</b> (marcados "en pausa" en el detalle, en azul). El segmento que está <b>corriendo en este momento</b> se suma al pausarlo o finalizarlo. Todos los valores se calculan en el momento — nada se guarda.</p>
+</main>
+
+<!-- Firebase 8.10.1 -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+
+<script>
+// ============================================================
+//  ESTADO GLOBAL
+// ============================================================
+var HS = {
+    esAdmin: false,
+    miUid: null,
+    miNombre: '',
+    lineas: [],        // una línea por colaborador por registro de historial
+    docsLimp: [],      // registros de limpieza (a nivel documento)
+    actIdx: {},        // id actividad -> { nombre, parentId, tipo, cabana }
+    cabanas: [],       // docs de cabanas (para precio configurado y nombres)
+    usuarios: [],      // [{uid, nombre}] derivados del historial
+    uidsSel: {},       // uid -> true (selección admin)
+    desde: null,       // Date
+    hasta: null,       // Date
+    preset: 'mes',
+    mon: 'BRL',
+    expand: {}         // clave de nodo -> true
+};
+
+var HS_COLORES = ['#2a9d8f', '#e76f51', '#4361ee', '#ff9f1c', '#7209b7',
+                  '#2ec4b6', '#e71d36', '#588157', '#b5838d', '#6c757d'];
+var HS_SYM = { BRL: 'R$', USD: 'US$', ARS: '$' };
+var HS_TIPOS_LIMPIEZA = { limpieza: true, control_salida: true, control: true };
+
+// ============================================================
+//  HELPERS
+// ============================================================
+function esc(s) { return CVC.escapeHtml(s); }
+
+function aDate(x) {
+    if (!x) return null;
+    if (x.toDate) { try { return x.toDate(); } catch (e) { return null; } }
+    var d = new Date(x);
+    return isNaN(d.getTime()) ? null : d;
+}
+
+function isoDe(d) {
+    var m = d.getMonth() + 1, dia = d.getDate();
+    return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (dia < 10 ? '0' : '') + dia;
+}
+
+function fmtH(horas) { return CVC.formatHoras(horas); }
+
+// Convierte un monto BRL a la moneda elegida y lo formatea con símbolo.
+function fmtMonBRL(montoBRL) {
+    var v = CVC.convertir(montoBRL || 0, 'BRL', HS.mon);
+    return fmtMonVal(v);
+}
+function fmtMonVal(v) {
+    var n = Math.round((v || 0) * 100) / 100;
+    return HS_SYM[HS.mon] + ' ' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+// Convierte un valor ingresado en la moneda elegida a BRL.
+function aBRL(v) { return CVC.convertir(v || 0, HS.mon, 'BRL'); }
+
+function costoHora() {
+    var v = parseFloat(document.getElementById('hsCostoHora').value);
+    return (isNaN(v) || v < 0) ? 0 : v;
+}
+function margenPct() {
+    var v = parseFloat(document.getElementById('hsMargen').value);
+    return (isNaN(v) || v < 0) ? 0 : v;
+}
+
+function nombreCabanaDoc(c) {
+    if (!c) return '';
+    var n = c.nombre;
+    if (n && typeof n === 'object') return n.es || n.pt || n.en || '';
+    return n || '';
+}
+function cabanaPorNumero(num) {
+    for (var i = 0; i < HS.cabanas.length; i++) {
+        var c = HS.cabanas[i];
+        if (String(c.numero) === String(num) || String(c.id) === String(num)) return c;
+    }
+    return null;
+}
+function etiquetaCabana(num) {
+    var c = cabanaPorNumero(num);
+    var nom = c ? nombreCabanaDoc(c) : '';
+    return nom ? ('C' + num + ' · ' + nom) : ('Cabaña ' + num);
+}
+
+// Nombre visible de un nodo del árbol (real o sintético)
+function nombreNodo(id) {
+    if (HS.actIdx[id]) return HS.actIdx[id].nombre || '(sin nombre)';
+    if (id === '__limp') return 'Limpiezas';
+    if (id === '__otros') return 'Otras actividades (eliminadas del árbol)';
+    if (id.indexOf('limpiezas-cab-') === 0) return etiquetaCabana(id.replace('limpiezas-cab-', ''));
+    if (id.indexOf('__cab-') === 0) return etiquetaCabana(id.replace('__cab-', ''));
+    return '(actividad eliminada)';
+}
+
+// ============================================================
+//  CAMINOS EN EL ÁRBOL DE ACTIVIDADES
+// ============================================================
+var _pathCache = {};
+function pathDe(actId) {
+    if (_pathCache[actId]) return _pathCache[actId];
+    var path = [], id = actId, guard = 0, vistos = {};
+    while (id && HS.actIdx[id] && guard < 25 && !vistos[id]) {
+        vistos[id] = true;
+        path.unshift(id);
+        id = HS.actIdx[id].parentId || null;
+        guard++;
+    }
+    _pathCache[actId] = path;
+    return path;
+}
+
+// Camino de un registro de historial: real si la actividad existe,
+// sintético si fue borrada (limpiezas viejas → Limpiezas/cabaña).
+function pathDeRegistro(h) {
+    if (h.tareaId && HS.actIdx[h.tareaId]) {
+        var p = pathDe(h.tareaId);
+        if (p.length) return p;
+    }
+    if (HS_TIPOS_LIMPIEZA[h.tipo]) {
+        var raiz = HS.actIdx['proj-limpiezas'] ? 'proj-limpiezas' : '__limp';
+        var cab = (h.cabana !== undefined && h.cabana !== null) ? h.cabana : '?';
+        var hijo = HS.actIdx['limpiezas-cab-' + cab] ? ('limpiezas-cab-' + cab) : ('__cab-' + cab);
+        return [raiz, hijo];
+    }
+    return ['__otros'];
+}
+
+// ============================================================
+//  CARGA INICIAL
+// ============================================================
+async function cargar() {
+    try {
+        var r = await CVC.verificarAuth(['admin', 'user']);
+        var userData = r.userData;
+        HS.esAdmin = userData.rol === 'admin';
+        HS.miUid = r.user.uid;
+        HS.miNombre = userData.nombre || '';
+
+        CVC.renderNav('horas-stats.html', userData.rol);
+        CVC.initAyuda('horas-stats.html');
+
+        var res = await Promise.all([
+            db.collection('historial_tareas').get(),
+            db.collection('actividades').get(),
+            db.collection('cabanas').get(),
+            CVC.cargarCotizaciones()
+        ]);
+
+        // Índice de actividades
+        res[1].forEach(function(d) {
+            var a = d.data();
+            HS.actIdx[d.id] = {
+                nombre: a.nombre || '',
+                parentId: a.parentId || null,
+                tipo: a.tipo || '',
+                cabana: (a.cabana !== undefined && a.cabana !== null) ? a.cabana : null
+            };
+        });
+
+        // Cabañas
+        res[2].forEach(function(d) {
+            var c = d.data(); c.id = d.id;
+            HS.cabanas.push(c);
+        });
+
+        // Historial → líneas por colaborador + docs de limpieza
+        var usuariosMap = {};
+        res[0].forEach(function(d) {
+            var h = d.data();
+            var fecha = aDate(h.finalizadoEn);
+            if (!fecha) return;
+            var path = pathDeRegistro(h);
+            var cols = h.colaboradores || [];
+            var sumaHorasDoc = 0;
+
+            for (var i = 0; i < cols.length; i++) {
+                var c = cols[i];
+                if (!c || !c.uid) continue;
+                var horas = parseFloat(c.horas) || 0;
+                sumaHorasDoc += horas;
+                usuariosMap[c.uid] = c.nombre || usuariosMap[c.uid] || c.uid;
+                HS.lineas.push({
+                    docId: d.id,
+                    fecha: fecha,
+                    ms: fecha.getTime(),
+                    uid: c.uid,
+                    nombre: c.nombre || '',
+                    horas: horas,
+                    montoBRL: parseFloat(c.montoRecibido) || 0,
+                    path: path,
+                    actNombre: h.nombre || '',
+                    tipo: h.tipo || 'general'
+                });
+            }
+
+            if (HS_TIPOS_LIMPIEZA[h.tipo] && h.tipo === 'limpieza') {
+                HS.docsLimp.push({
+                    fecha: fecha,
+                    ms: fecha.getTime(),
+                    cabana: (h.cabana !== undefined && h.cabana !== null) ? h.cabana : '?',
+                    totalHoras: parseFloat(h.totalHoras) || sumaHorasDoc,
+                    personas: cols.length,
+                    montoBRL: parseFloat(h.monto) || 0,
+                    cobradoBRL: parseFloat(h.costoLimpiezaBRL) || 0,
+                    uids: cols.map(function(c) { return c.uid; }),
+                    conCronometro: h.conCronometro !== false
+                });
+            }
+        });
+
+        // Ciclo actual: sesiones EN PAUSA (inicio y fin cerrados, actividad aún
+        // no finalizada) cuentan como horas reales. El segmento corriendo ahora
+        // (fin null) se suma recién al pausar o finalizar. Al finalizar, el core
+        // consolida en historial y borra las sesiones — no hay doble conteo.
+        // Requiere la regla de collection group de §16AF; si falta, degrada sin romper.
+        try {
+            var sesSnap = await db.collectionGroup('sesiones').get();
+            sesSnap.forEach(function(d) {
+                var s = d.data();
+                if (s.invalidada) return;
+                if (!s.uid) return;
+                var ini = aDate(s.inicio);
+                var fin = aDate(s.fin);
+                if (!ini || !fin) return; // sin fin = corriendo ahora → afuera
+                var horas = Math.max(0, (fin - ini) / 3600000);
+                if (horas <= 0) return;
+                var actId = (d.ref.parent && d.ref.parent.parent) ? d.ref.parent.parent.id : null;
+                if (!actId) return;
+                var act = HS.actIdx[actId];
+                usuariosMap[s.uid] = s.nombre || usuariosMap[s.uid] || s.uid;
+                HS.lineas.push({
+                    docId: 'ses-' + d.id,
+                    fecha: fin,
+                    ms: fin.getTime(),
+                    uid: s.uid,
+                    nombre: s.nombre || '',
+                    horas: Math.round(horas * 100) / 100,
+                    montoBRL: 0,
+                    path: act ? pathDe(actId) : ['__otros'],
+                    actNombre: act ? act.nombre : '(actividad)',
+                    tipo: act ? act.tipo : 'general',
+                    pausada: true
+                });
+            });
+        } catch (e) { /* regla ausente o sin permiso: solo consolidado */ }
+
+        // Usuarios disponibles (derivados del historial)
+        var uids = Object.keys(usuariosMap);
+        HS.usuarios = uids.map(function(u) { return { uid: u, nombre: usuariosMap[u] }; });
+        HS.usuarios.sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
+        for (var j = 0; j < HS.usuarios.length; j++) HS.uidsSel[HS.usuarios[j].uid] = true;
+
+        // UI de filtros
+        renderPresets();
+        if (HS.esAdmin) {
+            document.getElementById('hsUsuariosWrap').style.display = 'block';
+            renderChipsUsuarios();
+        }
+        aplicarPreset('mes');
+    } catch (e) {
+        console.error('horas-stats:', e);
+        var el = document.getElementById('hsKpis');
+        if (el) el.innerHTML = '<div class="hs-empty">No se pudieron cargar los datos. Revisá la conexión y recargá la página.</div>';
+    }
+}
+
+// ============================================================
+//  FILTROS
+// ============================================================
+var HS_PRESETS = [
+    { id: 'semana', label: 'Semana', dias: 7 },
+    { id: 'mes', label: 'Mes', dias: 30 },
+    { id: 'tres', label: '3 meses', dias: 90 },
+    { id: 'anio', label: 'Año', dias: 365 },
+    { id: 'todo', label: 'Todo', dias: 0 }
+];
+
+function renderPresets() {
+    var html = '';
+    for (var i = 0; i < HS_PRESETS.length; i++) {
+        var p = HS_PRESETS[i];
+        html += '<button class="hs-preset' + (HS.preset === p.id ? ' on' : '') + '" '
+              + 'onclick="aplicarPreset(\'' + p.id + '\')">' + p.label + '</button>';
+    }
+    document.getElementById('hsPresets').innerHTML = html;
+}
+
+function aplicarPreset(id) {
+    HS.preset = id;
+    var hoy = new Date(); hoy.setHours(23, 59, 59, 999);
+    var desde;
+    if (id === 'todo') {
+        var min = null;
+        for (var i = 0; i < HS.lineas.length; i++) {
+            if (min === null || HS.lineas[i].ms < min) min = HS.lineas[i].ms;
+        }
+        desde = min ? new Date(min) : new Date(hoy.getTime() - 30 * 86400000);
+    } else {
+        var p = null;
+        for (var j = 0; j < HS_PRESETS.length; j++) if (HS_PRESETS[j].id === id) p = HS_PRESETS[j];
+        desde = new Date(hoy.getTime() - ((p ? p.dias : 30) - 1) * 86400000);
+    }
+    desde.setHours(0, 0, 0, 0);
+    HS.desde = desde; HS.hasta = hoy;
+    document.getElementById('hsDesde').value = isoDe(desde);
+    document.getElementById('hsHasta').value = isoDe(hoy);
+    renderPresets();
+    render();
+}
+
+function filtroFechaManual() {
+    var d = document.getElementById('hsDesde').value;
+    var h = document.getElementById('hsHasta').value;
+    if (!d || !h) return;
+    HS.desde = new Date(d + 'T00:00:00');
+    HS.hasta = new Date(h + 'T23:59:59');
+    HS.preset = '';
+    renderPresets();
+    render();
+}
+
+function cambioMoneda() {
+    HS.mon = document.getElementById('hsMoneda').value;
+    var syms = document.querySelectorAll('.hsSym');
+    for (var i = 0; i < syms.length; i++) syms[i].textContent = HS_SYM[HS.mon];
+    render();
+}
+
+function renderChipsUsuarios() {
+    var html = '<span class="hs-chip" onclick="toggleTodosUsuarios()">'
+             + '<span class="material-icons">done_all</span> Todos</span>';
+    for (var i = 0; i < HS.usuarios.length; i++) {
+        var u = HS.usuarios[i];
+        var on = !!HS.uidsSel[u.uid];
+        html += '<span class="hs-chip' + (on ? ' on' : '') + '" onclick="toggleUsuario(\'' + u.uid + '\')">'
+              + '<span class="material-icons">' + (on ? 'check_circle' : 'radio_button_unchecked') + '</span> '
+              + esc(u.nombre) + '</span>';
+    }
+    document.getElementById('hsUsuarios').innerHTML = html;
+}
+function toggleUsuario(uid) {
+    HS.uidsSel[uid] = !HS.uidsSel[uid];
+    renderChipsUsuarios();
+    render();
+}
+function toggleTodosUsuarios() {
+    var todosOn = true;
+    for (var i = 0; i < HS.usuarios.length; i++) if (!HS.uidsSel[HS.usuarios[i].uid]) todosOn = false;
+    for (var j = 0; j < HS.usuarios.length; j++) HS.uidsSel[HS.usuarios[j].uid] = !todosOn;
+    renderChipsUsuarios();
+    render();
+}
+
+function pasaUsuario(uid) {
+    if (!HS.esAdmin) return uid === HS.miUid;
+    return !!HS.uidsSel[uid];
+}
+function lineasFiltradas() {
+    var out = [], d = HS.desde.getTime(), h = HS.hasta.getTime();
+    for (var i = 0; i < HS.lineas.length; i++) {
+        var l = HS.lineas[i];
+        if (l.ms < d || l.ms > h) continue;
+        if (!pasaUsuario(l.uid)) continue;
+        out.push(l);
+    }
+    return out;
+}
+function docsLimpFiltrados() {
+    var out = [], d = HS.desde.getTime(), h = HS.hasta.getTime();
+    for (var i = 0; i < HS.docsLimp.length; i++) {
+        var x = HS.docsLimp[i];
+        if (x.ms < d || x.ms > h) continue;
+        var ok = false;
+        for (var j = 0; j < x.uids.length; j++) if (pasaUsuario(x.uids[j])) ok = true;
+        if (x.uids.length === 0 && HS.esAdmin) ok = true;
+        if (ok) out.push(x);
+    }
+    return out;
+}
+
+// ============================================================
+//  RENDER GENERAL
+// ============================================================
+function render() {
+    var lineas = lineasFiltradas();
+    renderKpis(lineas);
+    renderTorta(lineas);
+    renderSim(lineas);
+    renderPersonas(lineas);
+    renderArbol(lineas);
+    renderLimp();
+}
+
+// ── KPIs ─────────────────────────────────────────────────────
+function renderKpis(lineas) {
+    var total = 0, docs = {}, hPausa = 0;
+    for (var i = 0; i < lineas.length; i++) {
+        total += lineas[i].horas;
+        if (lineas[i].pausada) { hPausa += lineas[i].horas; }
+        else { docs[lineas[i].docId] = true; }
+    }
+    var nDocs = Object.keys(docs).length;
+    var dias = Math.max(1, Math.round((HS.hasta - HS.desde) / 86400000) + 1);
+    var promSem = total / (dias / 7);
+    var promMes = total / (dias / 30.44);
+
+    var html = kpi(fmtH(total), 'Horas totales')
+             + kpi(String(nDocs), 'Tareas finalizadas')
+             + kpi(fmtH(promSem), 'Promedio por semana')
+             + kpi(fmtH(promMes), 'Promedio por mes')
+             + (hPausa > 0.001 ? kpi(fmtH(hPausa), 'De eso, en ciclos en pausa') : '')
+             + kpi(String(dias) + ' días', 'Período analizado');
+    document.getElementById('hsKpis').innerHTML = html;
+}
+function kpi(v, l) {
+    return '<div class="hs-kpi"><div class="v">' + v + '</div><div class="l">' + l + '</div></div>';
+}
+
+// ── TORTA POR PROYECTO ───────────────────────────────────────
+function agruparPorRaiz(lineas) {
+    var map = {};
+    for (var i = 0; i < lineas.length; i++) {
+        var raiz = lineas[i].path[0] || '__otros';
+        if (!map[raiz]) map[raiz] = 0;
+        map[raiz] += lineas[i].horas;
+    }
+    var arr = Object.keys(map).map(function(k) { return { id: k, horas: map[k] }; });
+    arr.sort(function(a, b) { return b.horas - a.horas; });
+    return arr;
+}
+
+function renderTorta(lineas) {
+    var el = document.getElementById('hsTorta');
+    var grupos = agruparPorRaiz(lineas).filter(function(g) { return g.horas > 0.001; });
+    if (!grupos.length) { el.innerHTML = '<div class="hs-empty" style="width:100%;">Sin horas registradas en el período y usuarios seleccionados.</div>'; return; }
+
+    // Top 8 + "Otros"
+    var top = grupos.slice(0, 8);
+    if (grupos.length > 8) {
+        var resto = 0;
+        for (var i = 8; i < grupos.length; i++) resto += grupos[i].horas;
+        top.push({ id: '__resto', horas: resto, label: 'Otros proyectos' });
+    }
+    var total = 0;
+    for (var j = 0; j < top.length; j++) total += top[j].horas;
+
+    var cx = 105, cy = 105, R = 95, r = 52;
+    var svg = '<svg width="210" height="210" viewBox="0 0 210 210" role="img" aria-label="Tiempo por proyecto">';
+    if (top.length === 1) {
+        svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ((R + r) / 2) + '" fill="none" stroke="'
+             + HS_COLORES[0] + '" stroke-width="' + (R - r) + '"/>';
+    } else {
+        var ang = -Math.PI / 2;
+        for (var k = 0; k < top.length; k++) {
+            var frac = top[k].horas / total;
+            var a2 = ang + frac * 2 * Math.PI;
+            var large = (a2 - ang) > Math.PI ? 1 : 0;
+            var x1 = cx + R * Math.cos(ang), y1 = cy + R * Math.sin(ang);
+            var x2 = cx + R * Math.cos(a2), y2 = cy + R * Math.sin(a2);
+            var x3 = cx + r * Math.cos(a2), y3 = cy + r * Math.sin(a2);
+            var x4 = cx + r * Math.cos(ang), y4 = cy + r * Math.sin(ang);
+            svg += '<path d="M ' + x1.toFixed(2) + ' ' + y1.toFixed(2)
+                 + ' A ' + R + ' ' + R + ' 0 ' + large + ' 1 ' + x2.toFixed(2) + ' ' + y2.toFixed(2)
+                 + ' L ' + x3.toFixed(2) + ' ' + y3.toFixed(2)
+                 + ' A ' + r + ' ' + r + ' 0 ' + large + ' 0 ' + x4.toFixed(2) + ' ' + y4.toFixed(2)
+                 + ' Z" fill="' + HS_COLORES[k % HS_COLORES.length] + '"/>';
+            ang = a2;
+        }
+    }
+    svg += '<text x="' + cx + '" y="' + (cy - 3) + '" text-anchor="middle" font-size="15" font-weight="700" fill="#212529">' + fmtH(total) + '</text>';
+    svg += '<text x="' + cx + '" y="' + (cy + 14) + '" text-anchor="middle" font-size="9" fill="#868e96">en el período</text>';
+    svg += '</svg>';
+
+    var ch = costoHora();
+    var ley = '<div class="hs-leyenda">';
+    for (var m = 0; m < top.length; m++) {
+        var g = top[m];
+        var pct = total > 0 ? Math.round(g.horas / total * 100) : 0;
+        var nom = g.label || nombreNodo(g.id);
+        ley += '<div class="fila">'
+             + '<span class="dot" style="background:' + HS_COLORES[m % HS_COLORES.length] + ';"></span>'
+             + '<span class="nom">' + esc(nom) + '</span>'
+             + '<span class="hrs">' + fmtH(g.horas)
+             + (ch > 0 ? ' · ' + fmtMonVal(g.horas * ch) : '') + '</span>'
+             + '<span class="pct">' + pct + '%</span>'
+             + '</div>';
+    }
+    ley += '</div>';
+    el.innerHTML = svg + ley;
+}
+
+// ── SIMULACIÓN ───────────────────────────────────────────────
+function renderSim(lineas) {
+    var total = 0, honBRL = 0;
+    for (var i = 0; i < lineas.length; i++) { total += lineas[i].horas; honBRL += lineas[i].montoBRL; }
+    var ch = costoHora();
+    var el = document.getElementById('hsSimRes');
+    if (ch <= 0) {
+        el.innerHTML = 'Ingresá un costo por hora para monetizar el tiempo del período. '
+                     + 'Honorarios reales registrados: <b>' + fmtMonBRL(honBRL) + '</b>';
+        return;
+    }
+    el.innerHTML = 'Costo del tiempo en el período: <b>' + fmtMonVal(total * ch) + '</b> '
+                 + '(' + fmtH(total) + ' × ' + fmtMonVal(ch) + '/h) · '
+                 + 'Honorarios reales registrados: <b>' + fmtMonBRL(honBRL) + '</b>';
+}
+
+// ── POR PERSONA ──────────────────────────────────────────────
+function renderPersonas(lineas) {
+    var map = {}, total = 0;
+    for (var i = 0; i < lineas.length; i++) {
+        var l = lineas[i];
+        if (!map[l.uid]) map[l.uid] = { nombre: l.nombre, horas: 0, honBRL: 0, docs: {} };
+        map[l.uid].horas += l.horas;
+        map[l.uid].honBRL += l.montoBRL;
+        if (!l.pausada) map[l.uid].docs[l.docId] = true;
+        total += l.horas;
+    }
+    var arr = Object.keys(map).map(function(k) { var x = map[k]; x.uid = k; return x; });
+    arr.sort(function(a, b) { return b.horas - a.horas; });
+
+    if (!arr.length) { document.getElementById('hsPersonas').innerHTML = '<div class="hs-empty">Sin datos en el período.</div>'; return; }
+
+    var ch = costoHora();
+    var html = '<table class="hs-tabla"><thead><tr>'
+             + '<th>Persona</th><th class="num">Tareas</th><th class="num">Horas</th><th class="num">%</th>'
+             + (ch > 0 ? '<th class="num">Costo simulado</th>' : '')
+             + '<th class="num">Honorarios reales</th>'
+             + '</tr></thead><tbody>';
+    for (var j = 0; j < arr.length; j++) {
+        var p = arr[j];
+        var pct = total > 0 ? Math.round(p.horas / total * 100) : 0;
+        html += '<tr><td>' + esc(p.nombre) + '</td>'
+              + '<td class="num">' + Object.keys(p.docs).length + '</td>'
+              + '<td class="num"><b>' + fmtH(p.horas) + '</b></td>'
+              + '<td class="num">' + pct + '%</td>'
+              + (ch > 0 ? '<td class="num">' + fmtMonVal(p.horas * ch) + '</td>' : '')
+              + '<td class="num">' + fmtMonBRL(p.honBRL) + '</td>'
+              + '</tr>';
+    }
+    html += '</tbody></table>';
+    document.getElementById('hsPersonas').innerHTML = html;
+}
+
+// ── DESAGREGADO NAVEGABLE ────────────────────────────────────
+var _lineasArbol = [];
+
+function renderArbol(lineas) {
+    _lineasArbol = lineas;
+    var el = document.getElementById('hsArbol');
+    var raices = agruparPorRaiz(lineas);
+    if (!raices.length) { el.innerHTML = '<div class="hs-empty">Sin datos en el período.</div>'; return; }
+    var total = 0;
+    for (var i = 0; i < raices.length; i++) total += raices[i].horas;
+
+    var html = '';
+    for (var j = 0; j < raices.length; j++) {
+        html += nodoHTML(raices[j].id, [raices[j].id], raices[j].horas, total, j);
+    }
+    el.innerHTML = html;
+}
+
+// Líneas cuyo path pasa por el prefijo dado
+function lineasDePrefijo(prefijo) {
+    var out = [];
+    for (var i = 0; i < _lineasArbol.length; i++) {
+        var p = _lineasArbol[i].path;
+        if (p.length < prefijo.length) continue;
+        var ok = true;
+        for (var j = 0; j < prefijo.length; j++) if (p[j] !== prefijo[j]) ok = false;
+        if (ok) out.push(_lineasArbol[i]);
+    }
+    return out;
+}
+
+function nodoHTML(id, prefijo, horas, totalPadre, colorIdx) {
+    var clave = prefijo.join('>');
+    var abierto = !!HS.expand[clave];
+    var pct = totalPadre > 0 ? (horas / totalPadre * 100) : 0;
+    var color = HS_COLORES[colorIdx % HS_COLORES.length];
+    var ch = costoHora();
+
+    var html = '<div class="hs-node">'
+             + '<div class="hs-node-head" onclick="toggleNodo(\'' + clave.replace(/'/g, "\\'") + '\')">'
+             + '<span class="material-icons">' + (abierto ? 'expand_more' : 'chevron_right') + '</span>'
+             + '<span class="nom">' + esc(nombreNodo(id)) + '</span>'
+             + (ch > 0 ? '<span class="cost">' + fmtMonVal(horas * ch) + '</span>' : '')
+             + '<span class="hrs">' + fmtH(horas) + '</span>'
+             + '</div>'
+             + '<div class="hs-bar-wrap"><div class="hs-bar" style="width:' + pct.toFixed(1) + '%;background:' + color + ';"></div></div>';
+
+    if (abierto) {
+        var mias = lineasDePrefijo(prefijo);
+        // Agrupar por el siguiente nivel del camino
+        var hijos = {}, directas = [];
+        for (var i = 0; i < mias.length; i++) {
+            var l = mias[i];
+            if (l.path.length > prefijo.length) {
+                var h = l.path[prefijo.length];
+                if (!hijos[h]) hijos[h] = 0;
+                hijos[h] += l.horas;
+            } else {
+                directas.push(l);
+            }
+        }
+        var arrH = Object.keys(hijos).map(function(k) { return { id: k, horas: hijos[k] }; });
+        arrH.sort(function(a, b) { return b.horas - a.horas; });
+
+        html += '<div class="hs-hijos">';
+        for (var j = 0; j < arrH.length; j++) {
+            html += nodoHTML(arrH[j].id, prefijo.concat([arrH[j].id]), arrH[j].horas, horas, colorIdx);
+        }
+        html += '</div>';
+
+        if (directas.length) {
+            directas.sort(function(a, b) { return b.ms - a.ms; });
+            var tope = Math.min(directas.length, 40);
+            html += '<div class="hs-lineas">';
+            for (var k = 0; k < tope; k++) {
+                var d = directas[k];
+                html += '<div class="hs-linea">'
+                      + '<span class="f">' + CVC.formatFecha(d.fecha) + '</span>'
+                      + '<span class="p">' + esc(d.nombre) + '</span>'
+                      + '<span class="a">' + esc(d.actNombre) + '</span>'
+                      + (d.pausada ? '<span style="color:#4361ee;font-weight:600;white-space:nowrap;">en pausa</span>' : '')
+                      + '<span class="h">' + fmtH(d.horas) + '</span>'
+                      + '</div>';
+            }
+            if (directas.length > tope) {
+                html += '<div class="hs-linea"><span class="f">… y ' + (directas.length - tope) + ' registros más (achicá el período para ver el detalle completo)</span></div>';
+            }
+            html += '</div>';
+        }
+    }
+    html += '</div>';
+    return html;
+}
+
+function toggleNodo(clave) {
+    HS.expand[clave] = !HS.expand[clave];
+    renderArbol(_lineasArbol);
+}
+
+// ── LIMPIEZAS POR CABAÑA · PRECIO SUGERIDO ──────────────────
+function renderLimp() {
+    var docs = docsLimpFiltrados();
+    var card = document.getElementById('hsLimpCard');
+    if (!HS.docsLimp.length) { card.style.display = 'none'; return; }
+    card.style.display = 'block';
+
+    var el = document.getElementById('hsLimp');
+    if (!docs.length) { el.innerHTML = '<div class="hs-empty">Sin limpiezas finalizadas en el período y usuarios seleccionados.</div>'; return; }
+
+    var map = {};
+    for (var i = 0; i < docs.length; i++) {
+        var d = docs[i], k = String(d.cabana);
+        if (!map[k]) map[k] = { cabana: d.cabana, n: 0, horas: 0, pers: 0, honBRL: 0, cobBRL: 0, nCob: 0 };
+        map[k].n++;
+        map[k].horas += d.totalHoras;
+        map[k].pers += d.personas;
+        map[k].honBRL += d.montoBRL;
+        if (d.cobradoBRL > 0) { map[k].cobBRL += d.cobradoBRL; map[k].nCob++; }
+    }
+    var arr = Object.keys(map).map(function(k) { return map[k]; });
+    arr.sort(function(a, b) { return String(a.cabana).localeCompare(String(b.cabana)); });
+
+    var ch = costoHora();
+    var mg = margenPct();
+
+    var html = '<table class="hs-tabla"><thead><tr>'
+             + '<th>Cabaña</th><th class="num">Limpiezas</th><th class="num">Prom. horas</th>'
+             + '<th class="num">Prom. personas</th><th class="num">Honorarios prom.</th>'
+             + '<th class="num">Cobrado prom.</th><th class="num">Precio config.</th>'
+             + (ch > 0 ? '<th class="num">Sugerido (+' + mg + '%)</th>' : '')
+             + '</tr></thead><tbody>';
+
+    for (var j = 0; j < arr.length; j++) {
+        var x = arr[j];
+        var promH = x.horas / x.n;
+        var promP = x.pers / x.n;
+        var honProm = x.honBRL / x.n;
+        var cobProm = x.nCob > 0 ? (x.cobBRL / x.nCob) : 0;
+        var cdoc = cabanaPorNumero(x.cabana);
+        var confBRL = (cdoc && cdoc.tarifas && cdoc.tarifas.precioLimpieza) ? cdoc.tarifas.precioLimpieza : 0;
+        var sugerido = promH * ch * (1 + mg / 100); // en moneda elegida
+        var alerta = cobProm > 0 && honProm > cobProm;
+
+        html += '<tr' + (alerta ? ' class="alerta" title="Los honorarios superan lo cobrado al cliente"' : '') + '>'
+              + '<td>' + esc(etiquetaCabana(x.cabana)) + (alerta ? ' ⚠' : '') + '</td>'
+              + '<td class="num">' + x.n + '</td>'
+              + '<td class="num"><b>' + fmtH(promH) + '</b></td>'
+              + '<td class="num">' + (Math.round(promP * 10) / 10) + '</td>'
+              + '<td class="num">' + fmtMonBRL(honProm) + '</td>'
+              + '<td class="num">' + (cobProm > 0 ? fmtMonBRL(cobProm) : '—') + '</td>'
+              + '<td class="num">' + (confBRL > 0 ? fmtMonBRL(confBRL) : '—') + '</td>'
+              + (ch > 0
+                    ? '<td class="num"><b>' + fmtMonVal(sugerido) + '</b>'
+                      + (HS.mon !== 'BRL' ? '<br><span style="color:#868e96;font-size:.7rem;">≈ R$ ' + (Math.round(aBRL(sugerido) * 100) / 100).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</span>' : '')
+                      + '</td>'
+                    : '')
+              + '</tr>';
+    }
+    html += '</tbody></table>';
+    if (ch <= 0) {
+        html += '<div class="hs-nota">Ingresá un costo por hora en la simulación para ver el precio sugerido por cabaña (fórmula: promedio de horas × costo/hora × (1 + margen)).</div>';
+    }
+    el.innerHTML = html;
+}
+
+// Exponer handlers globales (Safari + onclick inline)
+window.aplicarPreset = aplicarPreset;
+window.filtroFechaManual = filtroFechaManual;
+window.cambioMoneda = cambioMoneda;
+window.toggleUsuario = toggleUsuario;
+window.toggleTodosUsuarios = toggleTodosUsuarios;
+window.toggleNodo = toggleNodo;
+window.render = render;
+
+cargar();
+</script>
+</body>
+</html>
