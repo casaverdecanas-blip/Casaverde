@@ -1,6 +1,31 @@
 // ============================================================
-//  utils.js — Casa Verde Canas  v4.12
+//  utils.js — Casa Verde Canas  v4.38
 //  Funciones compartidas · /interno/
+//
+//  CAMBIOS v4.38 (Reestructura de presentación — sin dashboard):
+//  - [RETIRADO] dashboard.html sale del sistema. La página de inicio
+//    pasa a ser actividades.html (ambos roles). Quitado de
+//    NAV_ADMIN_ITEMS, construirNavColaborador y ALWAYS_ALLOWED.
+//    verificarAuth redirige a actividades.html cuando un colaborador
+//    no tiene permiso para una página.
+//  - [NUEVO] Badges de navegación (superíndices en el menú superior):
+//    · actividades.html  → actividades en semáforo rojo (rojo)
+//    · reservas.html     → reservas sin confirmar (rojo)
+//    · comunicacion.html → hilos con mensajes sin leer (azul)
+//    · honorarios.html   → honorarios pendientes hace más de 14 días (rojo)
+//    Los grupos del menú suman los badges de sus hijos en el trigger.
+//    Cálculo perezoso al cargar cualquier página, cacheado en
+//    sessionStorage con TTL de 5 minutos (BADGES_TTL_MS). Al entrar a
+//    una página fuente se invalida el cache para recalcular al salir.
+//    Para el semáforo de actividades se carga actividades-core.js
+//    dinámicamente si la página no lo incluyó (fuente única de verdad);
+//    si falla la carga hay un semáforo simplificado de respaldo.
+//    CVC.refrescarBadgesNav() fuerza el recálculo desde una página.
+//  - [MOVIDO] El lazy-cron del resumen diario (enviarResumenDiario-
+//    SiCorresponde) se dispara ahora desde el init de badges en
+//    cualquier página (antes lo llamaba solo dashboard.html).
+//  - [MOVIDO] El botón flotante "Gasto" pasa del dashboard a la nueva
+//    página de inicio (actividades.html).
 //
 //  CAMBIOS v4.12:
 //  - API key de Firebase movida a Firestore (config/integraciones.firebaseApiKey)
@@ -142,8 +167,7 @@ const CALENDAR_IDS = {
 // ── MENÚS DE NAVEGACIÓN ───────────────────────────────────────────────────────
 const NAV_ADMIN_ITEMS = [
 
-    // Items directos
-    { href: 'dashboard.html',  icon: 'dashboard',      label: 'Dashboard'  },
+    // Items directos — actividades.html es la página de inicio (v4.38, sin dashboard)
     { href: 'actividades.html', icon: 'account_tree',  label: 'Actividades' },
     { href: 'calendario.html', icon: 'calendar_month', label: 'Calendario' },
     { href: 'comunicacion.html', icon: 'forum',        label: 'Comunicación' },
@@ -227,7 +251,6 @@ const NAV_ADMIN_ITEMS = [
 ];
 
 const NAV_USER_ITEMS = [
-    { href: 'dashboard.html',      icon: 'dashboard',          label: 'Inicio'       },
     { href: 'actividades.html',    icon: 'account_tree',       label: 'Actividades'  },
     { href: 'reservas.html',       icon: 'event',              label: 'Reservas'     },
     { href: 'presupuestos.html',   icon: 'request_quote',      label: 'Presupuestos' },
@@ -250,7 +273,7 @@ const NAV_USER_ITEMS = [
 //  usados por puede() y renderNav().
 // ============================================================
 var _userDataActual = null;
-var ALWAYS_ALLOWED = ['dashboard', 'actividades', 'gastos-mantenimiento', 'notificaciones', 'manual-sistema'];
+var ALWAYS_ALLOWED = ['actividades', 'gastos-mantenimiento', 'notificaciones', 'manual-sistema'];
 var CATALOGO_PERMISOS = [
     { grupo: 'Operación', icon: 'checklist', items: [
         { href: 'calendario.html',     icon: 'calendar_month',       label: 'Calendario' },
@@ -294,7 +317,7 @@ var CATALOGO_PERMISOS = [
 ];
 
 function construirNavColaborador() {
-    var nav = [{ href: 'dashboard.html', icon: 'dashboard', label: 'Inicio' }, { href: 'actividades.html', icon: 'account_tree', label: 'Actividades' }];
+    var nav = [{ href: 'actividades.html', icon: 'account_tree', label: 'Actividades' }];
     CATALOGO_PERMISOS.forEach(function(g) {
         var its = g.items.filter(function(x) { return puede(x.href); });
         if (its.length) nav.push({ group: g.grupo, icon: g.icon, items: its });
@@ -404,7 +427,7 @@ function verificarAuth(rolesPermitidos) {
                             (ALWAYS_ALLOWED.indexOf(_pag) !== -1) ||
                             (_ps.indexOf(_pag) !== -1) ||
                             (roles.indexOf(userData.rol) !== -1);
-                        if (!_permitido) { window.location.href = 'dashboard.html'; return; }
+                        if (!_permitido) { window.location.href = 'actividades.html'; return; }
                     }
 
                     resolve({ user: user, userData: userData });
@@ -1476,6 +1499,298 @@ function guardarConciliacion() { return Promise.resolve(); }
 function cargarConfigConciliacion() { return Promise.resolve({}); }
 
 
+// ── BADGES DE NAVEGACIÓN (v4.38) ─────────────────────────────────────────────
+//
+//  Superíndices en el menú superior que marcan lo que requiere atención.
+//  Reemplazan las alertas del dashboard retirado. Cuatro fuentes:
+//
+//    actividades   ROJO  — actividades en semáforo rojo (hojas trabajables)
+//    reservas      ROJO  — reservas con estado 'pendiente' (sin confirmar)
+//    comunicacion  AZUL  — hilos visibles con mensajes sin leer
+//    honorarios    ROJO  — honorarios pendientes hace más de 14 días
+//
+//  Los rojos son ESTADO (desaparecen al resolverse, no al verlos).
+//  El azul es NOVEDAD (usa comunicaciones_lecturas, se apaga al leer).
+//
+//  El cálculo corre una vez al cargar cualquier página y se cachea en
+//  sessionStorage con TTL de 5 minutos, para no disparar queries en
+//  cada navegación. Al entrar a una página que ES fuente de badges se
+//  invalida el cache: la próxima navegación recalcula con lo resuelto.
+//
+//  El semáforo de actividades es el de actividades-core.js (fuente
+//  única de verdad). Si la página no lo cargó, se inyecta el script
+//  dinámicamente; si la carga falla, hay un respaldo simplificado.
+//
+var BADGES_NAV_FUENTES = {
+    'actividades.html':  'actividades',
+    'reservas.html':     'reservas',
+    'comunicacion.html': 'comunicacion',
+    'honorarios.html':   'honorarios'
+};
+var BADGES_TIPO = { actividades: 'rojo', reservas: 'rojo', comunicacion: 'azul', honorarios: 'rojo' };
+var BADGES_CACHE_KEY = 'cvc_badges_nav_v1';
+var BADGES_TTL_MS = 5 * 60 * 1000;
+var _badgesIniciado = false;
+
+function _badgeHtmlDe(href) {
+    var key = BADGES_NAV_FUENTES[href];
+    if (!key) return '';
+    return '<span class="nav-sup' + (BADGES_TIPO[key] === 'azul' ? ' sup-azul' : '') + '" data-badge="' + key + '"></span>';
+}
+
+function _badgeLeerCache() {
+    try {
+        var raw = sessionStorage.getItem(BADGES_CACHE_KEY);
+        if (!raw) return null;
+        var obj = JSON.parse(raw);
+        if (!obj || !obj.t || (Date.now() - obj.t) > BADGES_TTL_MS) return null;
+        return obj.counts || null;
+    } catch (e) { return null; }
+}
+function _badgeGuardarCache(counts) {
+    try { sessionStorage.setItem(BADGES_CACHE_KEY, JSON.stringify({ t: Date.now(), counts: counts })); } catch (e) { /* no bloquea */ }
+}
+function _badgeBorrarCache() {
+    try { sessionStorage.removeItem(BADGES_CACHE_KEY); } catch (e) { /* no bloquea */ }
+}
+
+// Semáforo de respaldo si actividades-core.js no se pudo cargar.
+// Réplica mínima de las reglas rojas de actSemaforo (sin factor de temporada).
+function _badgeSemaforoSimple(t) {
+    var hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    var limite = t.fechaCheckIn || t.fechaVencimiento;
+    if (limite) {
+        var fl = new Date(String(limite) + 'T00:00:00');
+        if (!isNaN(fl.getTime()) && (fl.getTime() - hoy.getTime()) <= 2 * 86400000) return 'rojo';
+    }
+    if (t.recurrente && t.fechaInicio) {
+        var fi = new Date(String(t.fechaInicio) + 'T00:00:00');
+        if (!isNaN(fi.getTime())) {
+            var atraso = Math.floor((hoy.getTime() - fi.getTime()) / 86400000);
+            var ciclo = (t.recurrencia > 0) ? t.recurrencia : 3;
+            if (atraso > ciclo) return 'rojo';
+        }
+    }
+    return 'otro';
+}
+
+// Garantiza que CVC.actSemaforo esté disponible (carga actividades-core.js si falta).
+function _badgeAsegurarActCore() {
+    return new Promise(function(resolve) {
+        if (window.CVC && typeof window.CVC.actSemaforo === 'function') { resolve(true); return; }
+        try {
+            var s = document.createElement('script');
+            s.src = 'actividades-core.js';
+            s.onload  = function() { resolve(!!(window.CVC && typeof window.CVC.actSemaforo === 'function')); };
+            s.onerror = function() { resolve(false); };
+            document.head.appendChild(s);
+        } catch (e) { resolve(false); }
+    });
+}
+
+// Actividades en rojo: solo hojas trabajables (descarta proyectos, categorías
+// y nodos de chequeo de inventario), respetando la visibilidad del colaborador.
+function _badgeContarActividades(uid, rol) {
+    return _badgeAsegurarActCore().then(function(tieneCore) {
+        var pTemp = Promise.resolve();
+        if (tieneCore && window.CVC && typeof window.CVC.actCargarTemporada === 'function') {
+            pTemp = Promise.resolve().then(function() { return window.CVC.actCargarTemporada(); }).catch(function() { /* sigue sin temporada */ });
+        }
+        return pTemp.then(function() {
+            return db.collection('actividades').get();
+        }).then(function(snap) {
+            var docs = [];
+            var padres = {};
+            snap.forEach(function(d) {
+                var a = d.data();
+                a.id = d.id;
+                docs.push(a);
+                if (a.parentId) padres[a.parentId] = true;
+            });
+            var n = 0;
+            docs.forEach(function(a) {
+                if (!a.parentId) return;                    // proyecto raíz
+                if (padres[a.id]) return;                   // tiene hijos: categoría/contenedor
+                if (a.tipo === 'chequeo-inventario' || a.tipo === 'categoria-chequeo' || a.tipo === 'item-chequeo') return;
+                if (a.hecho === true || a.estado === 'finalizada') return;
+                if (rol !== 'admin') {
+                    var alc = a.alcance || 'equipo';
+                    if (alc !== 'equipo') {
+                        var comp = a.competencias || [];
+                        if (a.creadoPor !== uid && comp.indexOf(uid) === -1) return;
+                    }
+                }
+                var color = 'otro';
+                if (tieneCore) {
+                    try {
+                        var s = window.CVC.actSemaforo(a);
+                        color = (s && s.color) ? s.color : s;
+                    } catch (e) { color = _badgeSemaforoSimple(a); }
+                } else {
+                    color = _badgeSemaforoSimple(a);
+                }
+                if (color === 'rojo') n++;
+            });
+            return n;
+        });
+    }).catch(function() { return 0; });
+}
+
+function _badgeContarReservas() {
+    return db.collection('reservas').where('estado', '==', 'pendiente').get()
+        .then(function(snap) { return snap.size; })
+        .catch(function() { return 0; });
+}
+
+// Hilos visibles con actividad posterior a la última lectura del usuario.
+// Excluye archivadas. Misma visibilidad por audiencia que comunicacion.html.
+function _badgeContarComunicacion(uid, rol) {
+    return Promise.all([
+        db.collection('comunicaciones').get(),
+        db.collection('comunicaciones_lecturas').doc(uid).get()
+    ]).then(function(res) {
+        var vistos = (res[1].exists && res[1].data().vistos) ? res[1].data().vistos : {};
+        var n = 0;
+        res[0].forEach(function(d) {
+            var c = d.data();
+            if (c.archivada === true) return;
+            var visible = false;
+            if (rol === 'admin') {
+                visible = true;
+            } else {
+                var aud = c.audiencia || 'todos';
+                if (aud === 'todos' || aud === 'solo_colaboradores') visible = true;
+                else if (aud === 'un_usuario') visible = (c.destinatarioUid === uid || c.creadoPor === uid);
+                else if (aud === 'solo_admin') visible = (c.creadoPor === uid);
+                // 'entre_admins': nunca visible para colaborador
+            }
+            if (!visible) return;
+            var ult = (c.ultimaActividad && c.ultimaActividad.toMillis) ? c.ultimaActividad.toMillis() : 0;
+            if (ult > (vistos[d.id] || 0)) n++;
+        });
+        return n;
+    }).catch(function() { return 0; });
+}
+
+function _badgeContarHonorarios(uid, rol) {
+    return db.collection('honorarios').where('estado', '==', 'pendiente').get()
+        .then(function(snap) {
+            var limite = Date.now() - 14 * 86400000;
+            var n = 0;
+            snap.forEach(function(d) {
+                var h = d.data();
+                if (rol !== 'admin' && h.uid !== uid) return;
+                var f = (h.creadoEn && h.creadoEn.toDate) ? h.creadoEn.toDate().getTime() : null;
+                if (f !== null && f < limite) n++;
+            });
+            return n;
+        })
+        .catch(function() { return 0; });
+}
+
+// Pinta los superíndices en los items del nav y suma en los triggers de grupo.
+function _pintarBadgesNav(counts) {
+    try {
+        counts = counts || {};
+        var spans = document.querySelectorAll('.nav-sup[data-badge]');
+        var i;
+        for (i = 0; i < spans.length; i++) {
+            var el = spans[i];
+            var key = el.getAttribute('data-badge');
+            var n = counts[key] || 0;
+            if (n > 0) {
+                el.textContent = n > 99 ? '99+' : String(n);
+                el.classList.add('show');
+            } else {
+                el.textContent = '';
+                el.classList.remove('show');
+            }
+        }
+        var drops = document.querySelectorAll('.nav-dropdown');
+        for (i = 0; i < drops.length; i++) {
+            var drop = drops[i];
+            var sup = drop.querySelector('.nav-dropdown__trigger .nav-sup[data-badge-group]');
+            if (!sup) continue;
+            var hijos = drop.querySelectorAll('.nav-sup[data-badge]');
+            var total = 0, hayRojo = false;
+            for (var k = 0; k < hijos.length; k++) {
+                var kk = hijos[k].getAttribute('data-badge');
+                var nn = counts[kk] || 0;
+                total += nn;
+                if (nn > 0 && BADGES_TIPO[kk] === 'rojo') hayRojo = true;
+            }
+            if (total > 0) {
+                sup.textContent = total > 99 ? '99+' : String(total);
+                sup.classList.add('show');
+                if (hayRojo) sup.classList.remove('sup-azul');
+                else sup.classList.add('sup-azul');
+            } else {
+                sup.textContent = '';
+                sup.classList.remove('show');
+            }
+        }
+    } catch (e) { /* pintar badges nunca rompe la página */ }
+}
+
+// Punto de entrada: lo llama renderNav al final. Espera la sesión,
+// resuelve el rol, dispara el lazy-cron del resumen diario (que antes
+// vivía en dashboard.html) y calcula o lee del cache los contadores.
+function _initBadgesNav(paginaActiva) {
+    if (_badgesIniciado) return;
+    _badgesIniciado = true;
+
+    var pag = String(paginaActiva || (window.location.pathname.split('/').pop() || ''));
+    if (pag && pag.indexOf('.html') === -1) pag = pag + '.html';
+    if (BADGES_NAV_FUENTES[pag]) _badgeBorrarCache();
+
+    var cache = _badgeLeerCache();
+    if (cache) {
+        _pintarBadgesNav(cache);
+        return;
+    }
+
+    var _fired = false;
+    var unsub = auth.onAuthStateChanged(function(u) {
+        if (_fired) return;
+        _fired = true;
+        try { if (typeof unsub === 'function') unsub(); } catch (e) { /* no bloquea */ }
+        if (!u) return;
+
+        try { enviarResumenDiarioSiCorresponde(); } catch (e) { /* no bloquea */ }
+
+        var pRol;
+        if (_userDataActual && _userDataActual.rol) {
+            pRol = Promise.resolve(_userDataActual.rol);
+        } else {
+            pRol = db.collection('usuarios').doc(u.uid).get()
+                .then(function(d) { return (d.exists && d.data().rol) ? d.data().rol : 'user'; })
+                .catch(function() { return 'user'; });
+        }
+
+        pRol.then(function(rol) {
+            return Promise.all([
+                _badgeContarActividades(u.uid, rol),
+                _badgeContarReservas(),
+                _badgeContarComunicacion(u.uid, rol),
+                _badgeContarHonorarios(u.uid, rol)
+            ]);
+        }).then(function(r) {
+            var counts = { actividades: r[0], reservas: r[1], comunicacion: r[2], honorarios: r[3] };
+            _badgeGuardarCache(counts);
+            _pintarBadgesNav(counts);
+        }).catch(function() { /* sin badges no pasa nada */ });
+    });
+}
+
+// Fuerza el recálculo inmediato (p. ej. tras confirmar una reserva).
+function refrescarBadgesNav() {
+    _badgeBorrarCache();
+    _badgesIniciado = false;
+    _initBadgesNav();
+}
+
+
 // ── NAV CENTRALIZADA ──────────────────────────────────────────────────────────
 function renderNav(paginaActiva, rol) {
     rol = rol || 'admin';
@@ -1487,7 +1802,8 @@ function renderNav(paginaActiva, rol) {
         if (item.href) {
             const activo = item.href === paginaActiva;
             return '<a href="' + item.href + '" class="nav-item' + (activo ? ' active' : '') + '">'
-                + '<span class="material-icons">' + item.icon + '</span> ' + item.label + '</a>';
+                + '<span class="material-icons">' + item.icon + '</span> ' + item.label
+                + _badgeHtmlDe(item.href) + '</a>';
         }
         if (item.group) {
             const grupoId     = 'navdrop-' + gi;
@@ -1498,13 +1814,15 @@ function renderNav(paginaActiva, rol) {
                 if (sub.sep) return '<div class="nav-dropdown__sep"></div>';
                 const esActivo = sub.href === paginaActiva || sub.href.replace('.html', '') === paginaActiva;
                 return '<a href="' + sub.href + '" class="nav-dropdown__item' + (esActivo ? ' active' : '') + '">'
-                    + '<span class="material-icons">' + sub.icon + '</span> ' + sub.label + '</a>';
+                    + '<span class="material-icons">' + sub.icon + '</span> ' + sub.label
+                    + _badgeHtmlDe(sub.href) + '</a>';
             }).join('');
 
             return '<div class="nav-dropdown' + (tieneActivo ? ' has-active' : '') + '" id="' + grupoId + '">'
                 + '<button class="nav-dropdown__trigger" onclick="toggleNavDrop(event,\'' + grupoId + '\')">'
                 + '<span class="material-icons">' + item.icon + '</span> ' + item.group
                 + '<span class="material-icons nav-arrow">expand_more</span>'
+                + '<span class="nav-sup" data-badge-group="' + grupoId + '"></span>'
                 + '</button>'
                 + '<div class="nav-dropdown__panel">' + panelItems + '</div>'
                 + '</div>';
@@ -1516,6 +1834,7 @@ function renderNav(paginaActiva, rol) {
     document.addEventListener('click', _cerrarDropdowns);
 
     inyectarBotonGasto(paginaActiva);
+    _initBadgesNav(paginaActiva);
 }
 
 // Botón flotante para registrar un gasto rápido (carga básica, igual que colaboradores).
@@ -1524,7 +1843,7 @@ function inyectarBotonGasto(paginaActiva) {
     try {
         if (document.getElementById('cvcGastoFab')) return;
         var pag = paginaActiva || (window.location.pathname.split('/').pop() || '');
-        if (String(pag).indexOf('dashboard') === -1) return; // el botón flotante de Gasto solo aparece en el dashboard
+        if (String(pag).indexOf('actividades') === -1) return; // el botón flotante de Gasto vive en la página de inicio (actividades, v4.38)
         if (String(pag).indexOf('gastos-mantenimiento') !== -1) return; // ya estás en la carga
         var a = document.createElement('a');
         a.id = 'cvcGastoFab';
@@ -2485,7 +2804,7 @@ function eliminarTransferencia(t) {
 window.CVC = {
     db, auth,
     ESTADOS_RESERVA, ESTADOS_TAREA, PRIORIDADES, CALENDAR_IDS, ESTADOS_BLOQUEANTES,
-    NAV_ADMIN_ITEMS, NAV_USER_ITEMS, renderNav,
+    NAV_ADMIN_ITEMS, NAV_USER_ITEMS, renderNav, refrescarBadgesNav,
     SECCIONES_SOLO_ADMIN, puede, CATALOGO_PERMISOS, ALWAYS_ALLOWED,
     badgeEstado, badgePrioridad,
     verificarAuth, cerrarSesion,
