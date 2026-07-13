@@ -64,6 +64,13 @@
   .act-star { flex: 0 0 auto; cursor: pointer; color: #c4cec0; font-size: 20px; user-select: none; padding: 2px; line-height: 1; }
   .act-star.on { color: #e0a800; }
   .act-star:hover { color: #b8944d; }
+  /* v4.39: horas acumuladas de trabajo */
+  .chip-horas { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; font-weight: 600; color: #44513f; background: #eef2ee; border: 1px solid #dfe6dd; border-radius: 999px; padding: 2px 8px; cursor: pointer; font-variant-numeric: tabular-nums; line-height: 1.3; }
+  .chip-horas.on { background: #2d5a27; border-color: #2d5a27; color: #fff; }
+  .hh-panel { background: #f4f7f3; border: 1px solid #dfe6dd; border-radius: 10px; padding: 8px 10px; margin: 4px 6px 8px 30px; font-size: 12.5px; color: #44513f; }
+  .hh-tot { font-weight: 700; margin-bottom: 4px; }
+  .hh-lin { padding: 4px 0; border-top: 1px dashed #dfe6dd; display: flex; gap: 8px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+  .hh-curso { color: #1f5fb0; font-weight: 700; }
   .ruta-mini { font-size: 11.5px; color: #7a8a76; padding: 7px 10px 0 10px; background: #fff; border-top: 1px solid #eef2ec; }
   /* Pestañas v4.37: Mantenimiento grande + fila de 3, con superíndices */
   .tabs-cv { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
@@ -390,12 +397,135 @@ async function cargar() {
     }
     items = docs;
     indexar();
+    await cargarHoras();
     if (!_estadoCargado) { await cargarEstadoUsuario(); _estadoCargado = true; }
     else if (esAdmin) { podarEstado(); }
     render();
   } catch (e) {
     document.getElementById('zonaContenido').innerHTML = '<div class="muted-note">No se pudieron cargar las actividades: ' + esc(e.message) + '</div>';
   }
+}
+
+// ── Horas trabajadas (todo derivado, nunca guardado) ───────
+// Fuentes: historial_tareas (finalizaciones, horas por colaborador) + subcolección
+// sesiones de cada actividad (ciclo actual: pausadas y en curso; al finalizar, el
+// core las consolida en historial y las borra — no hay doble conteo).
+var horasIdx = {};   // actId -> { horas, ult (millis), lineas: [{ts, nombre, horas, sesion}] }
+var _agg = {};       // memo por render del agregado de subárbol
+var desglose = {};   // actId -> bool: panel de desagregado abierto
+
+async function cargarHoras() {
+  horasIdx = {};
+  try {
+    var hsSnap = await db.collection('historial_tareas').get();
+    hsSnap.forEach(function (d) {
+      var h = d.data() || {};
+      if (!h.tareaId) return;
+      var reg = horasIdx[h.tareaId] || (horasIdx[h.tareaId] = { horas: 0, ult: 0, lineas: [] });
+      var ts = (h.finalizadoEn && h.finalizadoEn.toMillis) ? h.finalizadoEn.toMillis() : 0;
+      if (ts > reg.ult) reg.ult = ts;  // una tildada sin reloj también cuenta como "se trabajó"
+      var cols = h.colaboradores || [];
+      var sumo = false;
+      for (var i = 0; i < cols.length; i++) {
+        var c = cols[i];
+        if ((c.horas || 0) <= 0) continue;
+        reg.horas += c.horas;
+        reg.lineas.push({ ts: ts, nombre: c.nombre || '', horas: c.horas, sesion: '' });
+        sumo = true;
+      }
+      if (!sumo && (h.totalHoras || 0) > 0) {
+        reg.horas += h.totalHoras;
+        reg.lineas.push({ ts: ts, nombre: h.finalizadoNombre || '', horas: h.totalHoras, sesion: '' });
+      }
+    });
+  } catch (e) { }
+  // Ciclo actual (requiere en las reglas: match /{path=**}/sesiones — si falla, degrada sin romper)
+  try {
+    var sgSnap = await db.collectionGroup('sesiones').get();
+    var ahoraMs = Date.now();
+    sgSnap.forEach(function (d) {
+      var s = d.data() || {};
+      if (s.invalidada) return;
+      var actId = (d.ref.parent && d.ref.parent.parent) ? d.ref.parent.parent.id : null;
+      if (!actId) return;
+      var ini = (s.inicio && s.inicio.toMillis) ? s.inicio.toMillis() : 0;
+      if (!ini) return;
+      var fin = (s.fin && s.fin.toMillis) ? s.fin.toMillis() : 0;
+      var abierta = !fin;
+      var hrs = Math.max(0, ((abierta ? ahoraMs : fin) - ini) / 3600000);
+      var reg = horasIdx[actId] || (horasIdx[actId] = { horas: 0, ult: 0, lineas: [] });
+      reg.horas += hrs;
+      var tref = abierta ? ahoraMs : fin;
+      if (tref > reg.ult) reg.ult = tref;
+      reg.lineas.push({ ts: ini, nombre: s.nombre || '', horas: hrs, sesion: abierta ? 'en curso' : 'pausada' });
+    });
+  } catch (e) { }
+}
+
+// Agregado de subárbol (memo limpiado en cada render)
+function horasArbol(id) {
+  if (_agg[id]) return _agg[id];
+  var base = horasIdx[id] || { horas: 0, ult: 0 };
+  var r = { horas: base.horas, ult: base.ult };
+  var hs = hijosDe(id);
+  for (var i = 0; i < hs.length; i++) {
+    var c = horasArbol(hs[i].id);
+    r.horas += c.horas;
+    if (c.ult > r.ult) r.ult = c.ult;
+  }
+  _agg[id] = r;
+  return r;
+}
+function fmtHorasHM(horas) {
+  var min = Math.round(horas * 60);
+  if (min < 60) return min + ' min';
+  var hh = Math.floor(min / 60), mm = min % 60;
+  return hh + ':' + (mm < 10 ? '0' : '') + mm + ' h';
+}
+window.toggleDesglose = function (id) {
+  desglose[id] = !desglose[id];
+  render();
+};
+// Desagregado: quién sumó horas en el subárbol, línea por línea (registros y sesiones del ciclo).
+function desgloseHTML(it) {
+  var lineas = [], porPersona = {}, ids = [it.id], vistosIds = {};
+  while (ids.length) {
+    var id = ids.shift();
+    if (vistosIds[id]) continue; vistosIds[id] = 1;
+    var reg = horasIdx[id];
+    if (reg) {
+      for (var i = 0; i < reg.lineas.length; i++) {
+        var l = reg.lineas[i];
+        lineas.push({ ts: l.ts, nombre: l.nombre, horas: l.horas, sesion: l.sesion, tit: (id !== it.id && byId[id]) ? (byId[id].titulo || '') : '' });
+        var k = l.nombre || '(sin nombre)';
+        porPersona[k] = (porPersona[k] || 0) + l.horas;
+      }
+    }
+    var hs = hijosDe(id);
+    for (var j = 0; j < hs.length; j++) ids.push(hs[j].id);
+  }
+  var ag = horasArbol(it.id);
+  var resumen = Object.keys(porPersona).sort(function (a, b) { return porPersona[b] - porPersona[a]; })
+    .map(function (n) { return esc(n) + ' ' + fmtHorasHM(porPersona[n]); }).join(' \u00b7 ');
+  var h = '<div class="hh-panel">';
+  h += '<div class="hh-tot">\u23f1 Total ' + fmtHorasHM(ag.horas) + (resumen ? ' \u2014 ' + resumen : '') + '</div>';
+  lineas.sort(function (a, b) { return b.ts - a.ts; });
+  var tope = Math.min(lineas.length, 30);
+  for (var m = 0; m < tope; m++) {
+    var x = lineas[m];
+    var dx = x.ts ? new Date(x.ts) : null;
+    var fx = dx ? (pad2(dx.getDate()) + '/' + pad2(dx.getMonth() + 1)) : '\u2014';
+    h += '<div class="hh-lin"><span>' + fx + '</span>'
+      + '<span>' + esc(x.nombre || '\u2014') + '</span>'
+      + '<span>' + fmtHorasHM(x.horas) + '</span>'
+      + (x.tit ? '<span style="color:#7a8a76">\u00ab' + esc(x.tit) + '\u00bb</span>' : '')
+      + (x.sesion ? '<span class="hh-curso">' + x.sesion + '</span>' : '')
+      + '</div>';
+  }
+  if (lineas.length > tope) h += '<div class="hh-lin" style="color:#7a8a76">\u2026 y ' + (lineas.length - tope) + ' m\u00e1s (ver Historial de cada actividad)</div>';
+  if (!lineas.length) h += '<div class="hh-lin">Sin registros de tiempo todav\u00eda.</div>';
+  h += '</div>';
+  return h;
 }
 
 // ── Estado por usuario: vistos + destacados ────────────────
@@ -627,6 +757,7 @@ window.abrirActividad = function (id) {
 
 // ── Render ─────────────────────────────────────────────────
 function render() {
+  _agg = {};  // el agregado de horas se recalcula en cada render
   // Superíndices: Proyectos = novedades sin ver · Favoritos = destacadas pendientes ·
   // Compras = listas nuevas desde la última visita a la pestaña.
   var nuevasTotal = items.filter(esNueva).length;
@@ -697,7 +828,10 @@ window.toggleEstrella = function (id) {
 // Proyectos = árbol completo. Todo cuelga de un proyecto; ya no hay "sueltos".
 // (Si por algún motivo quedara una actividad sin proyecto, se muestra aparte para reasignarla.)
 function renderProyectos() {
+  // Orden: primero los proyectos con trabajo más reciente (derivado del subárbol);
+  // los que nunca registraron trabajo quedan al final, en orden alfabético.
   var proys = items.filter(function (it) { return !it.parentId && esProy(it); }).sort(byTitulo);
+  proys.sort(function (a, b) { return horasArbol(b.id).ult - horasArbol(a.id).ult; });
   var huerfanas = items.filter(function (it) { return !it.parentId && !esProy(it); }).sort(byTitulo);
   var html = '<div class="act-toolbar">';
   html += '<button class="btn btn-primary" onclick="nuevoRoot(\'proyecto\')"><span class="material-icons">add</span> Nuevo proyecto</button>';
@@ -743,7 +877,11 @@ function nodoHTML(it, nivel) {
   h += '<span class="act-tit' + (it.hecho ? ' done' : '') + '">' + esc(it.titulo) + '</span>';
   if (!esSubChequeo) {
     var estrellada = destacados.indexOf(it.id) >= 0;
-    h += '<span class="material-icons act-star' + (estrellada ? ' on' : '') + '" title="' + (estrellada ? 'Sacar de tu Foco' : 'Destacar en tu Foco') + '" onclick="event.stopPropagation();toggleEstrella(\'' + it.id + '\')">' + (estrellada ? 'star' : 'star_border') + '</span>';
+    h += '<span class="material-icons act-star' + (estrellada ? ' on' : '') + '" title="' + (estrellada ? 'Sacar de Favoritos' : 'Marcar como favorito') + '" onclick="event.stopPropagation();toggleEstrella(\'' + it.id + '\')">' + (estrellada ? 'star' : 'star_border') + '</span>';
+    var agH = horasArbol(it.id);
+    if (agH.horas > 0.008) {
+      h += '<span class="chip-horas' + (desglose[it.id] ? ' on' : '') + '" title="Horas trabajadas \u2014 toc\u00e1 para ver qui\u00e9n y cu\u00e1ndo" onclick="event.stopPropagation();toggleDesglose(\'' + it.id + '\')"><span class="material-icons" style="font-size:13px">schedule</span>' + fmtHorasHM(agH.horas) + '</span>';
+    }
   }
 
   h += '<span class="act-badges">';
@@ -787,6 +925,9 @@ function nodoHTML(it, nivel) {
   }
   h += '</span>';
   h += '</div>'; // act-row
+
+  // Desagregado de horas (independiente del despliegue de la actividad)
+  if (desglose[it.id]) h += desgloseHTML(it);
 
   // Al desplegar (un solo clic): detalle + acciones + subítems
   if (ab) {
