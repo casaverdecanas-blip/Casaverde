@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Migración de sesiones</title>
+</head>
+<body>
+<h1>Migrando sesiones...</h1>
+<div id="log"></div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+
+<script>
+// ⚠️ SOLO ADMIN — Esta página migra todas las sesiones existentes
+// Una vez migrado, BORRAR este archivo del servidor
+
+async function migrar() {
+    var log = document.getElementById('log');
+    log.innerHTML += 'Iniciando migración...<br>';
+    
+    try {
+        await CVC.verificarAuth(['admin']);
+        var db = CVC.db;
+        
+        var sesiones = await db.collectionGroup('sesiones').get();
+        log.innerHTML += 'Encontradas ' + sesiones.size + ' sesiones<br>';
+        
+        var batch = db.batch();
+        var count = 0;
+        var total = 0;
+        
+        for (var doc of sesiones.docs) {
+            var s = doc.data();
+            // Saltar si ya tiene campos denormalizados
+            if (s.alcance !== undefined && s.creadoPor !== undefined) {
+                total++;
+                continue;
+            }
+            
+            var actId = doc.ref.parent.parent.id;
+            var act = await db.collection('actividades').doc(actId).get();
+            if (!act.exists) {
+                log.innerHTML += '⚠️ Actividad no existe: ' + actId + '<br>';
+                continue;
+            }
+            var a = act.data();
+            
+            batch.update(doc.ref, {
+                alcance: a.alcance || 'personal',
+                creadoPor: a.creadoPor || null,
+                competencias: a.competencias || []
+            });
+            count++;
+            total++;
+            
+            if (count % 500 === 0) {
+                await batch.commit();
+                log.innerHTML += 'Commit de ' + count + ' sesiones...<br>';
+                batch = db.batch();
+            }
+            
+            if (total % 50 === 0) {
+                log.innerHTML += 'Procesadas ' + total + ' sesiones...<br>';
+            }
+        }
+        if (count % 500 !== 0) {
+            await batch.commit();
+        }
+        log.innerHTML += '✅ Migración completada. Actualizadas ' + count + ' sesiones.<br>';
+    } catch (e) {
+        log.innerHTML += '❌ Error: ' + e.message + '<br>';
+    }
+}
+
+migrar();
+</script>
+</body>
+</html>
