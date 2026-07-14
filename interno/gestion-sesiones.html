@@ -32,7 +32,7 @@ td { padding: 6px 8px; border-bottom: 1px solid #f1f3f5; vertical-align: middle;
 td .material-icons { font-size: 16px; vertical-align: middle; }
 .estado-abierta { color: #2d5a27; font-weight: 700; }
 .estado-cerrada { color: #6c757d; }
-.estado-huérfana { color: #c0271f; }
+.estado-huerfana { color: #c0271f; }
 .filtros { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; align-items: center; }
 .filtros select, .filtros input { border: 1px solid #ced4da; border-radius: 6px; padding: 5px 8px; font-size: .78rem; background: #fff; }
 .filtros label { font-size: .78rem; color: #495057; display: flex; align-items: center; gap: 4px; }
@@ -74,7 +74,7 @@ td .material-icons { font-size: 16px; vertical-align: middle; }
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-primary" onclick="cargarSesiones()">📋 Cargar sesiones</button>
             <button class="btn btn-warning" onclick="cerrarTodasAbiertas()">⏹️ Cerrar todas las abiertas</button>
-            <button class="btn btn-danger" onclick="eliminarHuérfanas()">🗑️ Eliminar huérfanas</button>
+            <button class="btn btn-danger" onclick="eliminarHuerfanas()">🗑️ Eliminar huérfanas</button>
             <button class="btn btn-secondary" onclick="limpiarLog()">🗑️ Limpiar log</button>
         </div>
     </div>
@@ -94,7 +94,7 @@ td .material-icons { font-size: 16px; vertical-align: middle; }
                     <option value="todas">Todas</option>
                     <option value="abiertas">Abiertas</option>
                     <option value="cerradas">Cerradas</option>
-                    <option value="huérfanas">Huérfanas</option>
+                    <option value="huerfanas">Huérfanas</option>
                 </select>
             </label>
             <label>Buscar:
@@ -131,7 +131,7 @@ td .material-icons { font-size: 16px; vertical-align: middle; }
 
 <script>
 // ============================================================
-//  GESTIÓN DE SESIONES — v1.0
+//  GESTIÓN DE SESIONES — v1.1 (corregido)
 //  Admin: ver, cerrar, eliminar sesiones
 // ============================================================
 
@@ -184,7 +184,6 @@ function fechaDesdeTimestamp(ts) {
 function nombreUsuario(uid) {
     if (!uid) return '—';
     if (ESTADO.usuarios[uid]) return ESTADO.usuarios[uid];
-    // Buscar en sesiones
     for (var i = 0; i < ESTADO.sesiones.length; i++) {
         if (ESTADO.sesiones[i].uid === uid && ESTADO.sesiones[i].nombre) {
             ESTADO.usuarios[uid] = ESTADO.sesiones[i].nombre;
@@ -229,8 +228,9 @@ async function cargarSesiones() {
             return;
         }
 
-        // Cargar todas las actividades (para resolver nombres)
+        // Cargar todas las actividades
         var actSnap = await ESTADO.db.collection('actividades').get();
+        ESTADO.actividades = {};
         actSnap.forEach(function(d) {
             var a = d.data();
             ESTADO.actividades[d.id] = a.nombre || a.titulo || '(sin nombre)';
@@ -252,7 +252,7 @@ async function cargarSesiones() {
             var s = d.data();
             var actId = d.ref.parent.parent.id;
             var esAbierta = (s.fin === null || s.fin === undefined);
-            var esHuérfana = !ESTADO.actividades[actId];
+            var esHuerfana = !ESTADO.actividades[actId];
 
             var sesion = {
                 id: d.id,
@@ -263,7 +263,7 @@ async function cargarSesiones() {
                 inicio: s.inicio || null,
                 fin: s.fin || null,
                 abierta: esAbierta,
-                huérfana: esHuérfana,
+                huerfana: esHuerfana,
                 alcance: s.alcance || '—',
                 creadoPor: s.creadoPor || '—',
                 data: s
@@ -272,7 +272,7 @@ async function cargarSesiones() {
             ESTADO.sesiones.push(sesion);
             stats['Total']++;
 
-            if (esHuérfana) stats['Huérfanas']++;
+            if (esHuerfana) stats['Huérfanas']++;
             else if (esAbierta) stats['Abiertas']++;
             else stats['Cerradas']++;
         });
@@ -312,7 +312,7 @@ function renderTabla() {
     var filtradas = ESTADO.sesiones.filter(function(s) {
         if (filtro === 'abiertas' && !s.abierta) return false;
         if (filtro === 'cerradas' && s.abierta) return false;
-        if (filtro === 'huérfanas' && !s.huérfana) return false;
+        if (filtro === 'huerfanas' && !s.huerfana) return false;
 
         if (soloMauro && s.uid !== 'hftkmTlB55V9AdwawMOlKvMtOf43') return false;
 
@@ -344,9 +344,9 @@ function renderTabla() {
     } else {
         for (var i = 0; i < filtradas.length; i++) {
             var s = filtradas[i];
-            var actNom = s.huérfana ? '<span class="estado-huérfana">⚠️ ' + s.actId.slice(0, 8) + '…</span>' : (ESTADO.actividades[s.actId] || '(sin nombre)');
+            var actNom = s.huerfana ? '<span class="estado-huerfana">⚠️ ' + s.actId.slice(0, 8) + '…</span>' : (ESTADO.actividades[s.actId] || '(sin nombre)');
             var estado = s.abierta ? '<span class="estado-abierta">▶ Abierta</span>' : '<span class="estado-cerrada">⏹ Cerrada</span>';
-            if (s.huérfana) estado = '<span class="estado-huérfana">⚠️ Huérfana</span>';
+            if (s.huerfana) estado = '<span class="estado-huerfana">⚠️ Huérfana</span>';
 
             var tieneDenorm = (s.alcance !== '—' && s.alcance !== undefined && s.alcance !== null);
 
@@ -357,8 +357,8 @@ function renderTabla() {
                 '<td style="font-size:.7rem;">' + (s.abierta ? '—' : fechaDesdeTimestamp(s.fin)) + '</td>' +
                 '<td>' + estado + '</td>' +
                 '<td>' +
-                (s.abierta ? '<button class="btn btn-warning btn-sm" onclick="cerrarSesion(\'' + s.id + '\')">⏹ Cerrar</button> ' : '') +
-                '<button class="btn btn-danger btn-sm" onclick="eliminarSesion(\'' + s.id + '\', \'' + s.actId + '\')">🗑️ Eliminar</button>' +
+                (s.abierta ? '<button class="btn btn-warning btn-sm" onclick="cerrarSesion(\'' + s.actId + '\', \'' + s.id + '\')">⏹ Cerrar</button> ' : '') +
+                '<button class="btn btn-danger btn-sm" onclick="eliminarSesion(\'' + s.actId + '\', \'' + s.id + '\')">🗑️ Eliminar</button>' +
                 '</td>' +
                 '</tr>';
         }
@@ -368,11 +368,12 @@ function renderTabla() {
     document.getElementById('tablaSesiones').innerHTML = html;
 }
 
-async function cerrarSesion(id) {
+// ── CORREGIDO: usar ruta completa actividades/{actId}/sesiones/{id} ──
+async function cerrarSesion(actId, id) {
     if (!confirm('¿Cerrar esta sesión (poner fin)?')) return;
 
     try {
-        var ref = ESTADO.db.collectionGroup('sesiones').doc(id);
+        var ref = ESTADO.db.collection('actividades').doc(actId).collection('sesiones').doc(id);
         await ref.update({
             fin: firebase.firestore.Timestamp.now()
         });
@@ -383,31 +384,23 @@ async function cerrarSesion(id) {
     }
 }
 
-async function eliminarSesion(id, actId) {
+// ── CORREGIDO: usar ruta completa actividades/{actId}/sesiones/{id} ──
+async function eliminarSesion(actId, id) {
     if (!confirm('¿ELIMINAR esta sesión permanentemente? Esta acción no se puede deshacer.')) return;
     if (!confirm('¿Estás seguro? La sesión se borrará de la base de datos.')) return;
 
     try {
-        // Intentar eliminar por ruta directa si es posible
         var ref = ESTADO.db.collection('actividades').doc(actId).collection('sesiones').doc(id);
         await ref.delete();
         log('🗑️ Sesión ' + id.slice(0, 8) + ' eliminada', 'ok');
         await cargarSesiones();
     } catch (e) {
-        // Fallback: intentar por collectionGroup
-        try {
-            var ref2 = ESTADO.db.collectionGroup('sesiones').doc(id);
-            await ref2.delete();
-            log('🗑️ Sesión ' + id.slice(0, 8) + ' eliminada (por collectionGroup)', 'ok');
-            await cargarSesiones();
-        } catch (e2) {
-            log('❌ Error al eliminar sesión: ' + e2.message, 'err');
-        }
+        log('❌ Error al eliminar sesión: ' + e.message, 'err');
     }
 }
 
 async function cerrarTodasAbiertas() {
-    var abiertas = ESTADO.sesiones.filter(function(s) { return s.abierta && !s.huérfana; });
+    var abiertas = ESTADO.sesiones.filter(function(s) { return s.abierta && !s.huerfana; });
     if (abiertas.length === 0) {
         log('ℹ️ No hay sesiones abiertas para cerrar.', 'info');
         return;
@@ -441,8 +434,8 @@ async function cerrarTodasAbiertas() {
     await cargarSesiones();
 }
 
-async function eliminarHuérfanas() {
-    var huerfanas = ESTADO.sesiones.filter(function(s) { return s.huérfana; });
+async function eliminarHuerfanas() {
+    var huerfanas = ESTADO.sesiones.filter(function(s) { return s.huerfana; });
     if (huerfanas.length === 0) {
         log('ℹ️ No hay sesiones huérfanas para eliminar.', 'info');
         return;
@@ -456,21 +449,13 @@ async function eliminarHuérfanas() {
 
     for (var i = 0; i < huerfanas.length; i++) {
         try {
-            // Intentar eliminar por collectionGroup
+            // Para huérfanas, intentar por collectionGroup (no tenemos actId válida)
             var ref = ESTADO.db.collectionGroup('sesiones').doc(huerfanas[i].id);
-            batch.delete(ref);
+            await ref.delete();
             count++;
-            if (count % 400 === 0) {
-                await batch.commit();
-                batch = ESTADO.db.batch();
-            }
         } catch (e) {
             log('⚠️ No se pudo eliminar sesión ' + huerfanas[i].id.slice(0, 8) + ': ' + e.message, 'warn');
         }
-    }
-
-    if (count % 400 !== 0) {
-        await batch.commit();
     }
 
     log('🗑️ Eliminadas ' + count + ' sesiones huérfanas', 'ok');
@@ -483,7 +468,7 @@ window.renderTabla = renderTabla;
 window.cerrarSesion = cerrarSesion;
 window.eliminarSesion = eliminarSesion;
 window.cerrarTodasAbiertas = cerrarTodasAbiertas;
-window.eliminarHuérfanas = eliminarHuérfanas;
+window.eliminarHuerfanas = eliminarHuerfanas;
 window.limpiarLog = limpiarLog;
 
 // Inicialización
