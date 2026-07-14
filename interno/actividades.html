@@ -41,6 +41,7 @@
   .act-ico .material-icons { font-size: 17px; color: #5a6a55; }
   .btn-play { background: #2d5a27 !important; border-color: #2d5a27 !important; color: #fff !important; font-weight: 600; }
   .btn-play .material-icons { font-size: 18px; }
+  .btn-play:disabled { background: #9aa69a !important; border-color: #9aa69a !important; cursor: not-allowed; }
   .crono-live { display: inline-flex; align-items: center; gap: 6px; background: #eaf3fe; border: 1px solid #bcd7f7; color: #1f5fb0; border-radius: 9px; padding: 5px 10px; font-weight: 700; font-size: 13.5px; font-variant-numeric: tabular-nums; }
   .banner-crono { display: flex; align-items: center; gap: 8px; background: #eaf3fe; border: 1px solid #bcd7f7; color: #1f5fb0; border-radius: 10px; padding: 10px 12px; font-size: 13.5px; margin-bottom: 12px; cursor: pointer; font-weight: 600; }
   .banner-crono .crono-tiempo { font-variant-numeric: tabular-nums; font-weight: 700; }
@@ -88,7 +89,6 @@
   .modal-cv .form-row2 { display: flex; gap: 8px; }
   .modal-cv .form-row2 > div { flex: 1; }
   .modal-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
-  /* Corrección: botón de cerrar sesión siempre visible */
   .admin-header__actions { display: flex; align-items: center; gap: 12px; }
   .btn-logout { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 4px; }
   .btn-logout:hover { background: rgba(255,255,255,0.15); }
@@ -329,7 +329,8 @@ var _estadoCargado = false;
 var _estadoTimer = null;
 var proveedoresDefault = ['Supermercado', 'Ferreter\u00eda', 'Farmacia', 'Vivero', 'Otros'];
 var proveedores = proveedoresDefault.slice();
-var _cargandoSesiones = false;
+var _cronoCache = null;
+var _cronoCacheTime = 0;
 
 // ── Helpers ────────────────────────────────────────────────
 function esc(s) { return (CVC.escapeHtml ? CVC.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s)); }
@@ -357,7 +358,6 @@ async function sincronizarSesionesActivas(actId) {
     var snap = await ref.get();
     if (!snap.exists) return;
 
-    // Obtener todas las sesiones de la subcolección
     var sesSnap = await ref.collection('sesiones').get();
     var activasReales = [];
     var ahora = firebase.firestore.Timestamp.now();
@@ -373,11 +373,16 @@ async function sincronizarSesionesActivas(actId) {
       }
     });
 
-    // Actualizar sesionesActivas
     await ref.update({
       sesionesActivas: activasReales,
       estado: activasReales.length ? 'en_curso' : 'pendiente'
     });
+
+    var it = byId[actId];
+    if (it) {
+      it.sesionesActivas = activasReales;
+      it.estado = activasReales.length ? 'en_curso' : 'pendiente';
+    }
 
     return activasReales;
   } catch (e) {
@@ -386,17 +391,62 @@ async function sincronizarSesionesActivas(actId) {
   }
 }
 
-// ── Verificar si realmente tengo una sesión activa ────────
-async function verificarSesionReal(actId) {
+// ── Verificar si tengo otro cronómetro corriendo ──────────
+async function tengoOtroCrono(actIdExcluir) {
   try {
-    var snap = await db.collection('actividades').doc(actId).collection('sesiones')
+    var snap = await db.collectionGroup('sesiones')
       .where('uid', '==', uid)
       .where('fin', '==', null)
       .get();
-    return !snap.empty;
+
+    for (var doc of snap.docs) {
+      var actId = doc.ref.parent.parent.id;
+      if (actId !== actIdExcluir) {
+        return true;
+      }
+    }
+    return false;
   } catch (e) {
     return false;
   }
+}
+
+// ── Mi cronómetro corriendo (con cache) ────────────────────
+async function miCronoCorriendo() {
+  var ahora = Date.now();
+
+  if (_cronoCacheTime && (ahora - _cronoCacheTime) < 2000) {
+    return _cronoCache;
+  }
+
+  for (var i = 0; i < items.length; i++) {
+    var ses = items[i].sesionesActivas || [];
+    for (var j = 0; j < ses.length; j++) {
+      if (ses[j].uid === uid) {
+        try {
+          var snap = await db.collection('actividades').doc(items[i].id).collection('sesiones')
+            .where('uid', '==', uid)
+            .where('fin', '==', null)
+            .get();
+
+          if (!snap.empty) {
+            _cronoCache = items[i];
+            _cronoCacheTime = ahora;
+            return items[i];
+          } else {
+            await sincronizarSesionesActivas(items[i].id);
+            await cargar();
+          }
+        } catch (e) {
+          return null;
+        }
+      }
+    }
+  }
+
+  _cronoCache = null;
+  _cronoCacheTime = ahora;
+  return null;
 }
 
 // ── Proveedores de compras ─────────────────────────────────
@@ -445,12 +495,11 @@ async function cargar() {
       }
     }
 
-    // ── CORRECCIÓN: Sincronizar sesionesActivas de todas las actividades ──
+    // Limpiar referencias huérfanas
     for (var i = 0; i < docs.length; i++) {
       var act = docs[i];
       if (act.sesionesActivas && act.sesionesActivas.length) {
         try {
-          // Verificar si las sesiones en el array existen realmente
           var ref = db.collection('actividades').doc(act.id);
           var sesSnap = await ref.collection('sesiones').get();
           var uidsEnSubcoleccion = {};
@@ -460,23 +509,17 @@ async function cargar() {
               uidsEnSubcoleccion[s.uid] = true;
             }
           });
-
-          // Filtrar sesionesActivas a solo las que existen en la subcolección
           var activasFiltradas = (act.sesionesActivas || []).filter(function(s) {
             return uidsEnSubcoleccion[s.uid];
           });
-
           if (activasFiltradas.length !== (act.sesionesActivas || []).length) {
-            // Hay referencias huérfanas, limpiar
             await ref.update({
               sesionesActivas: activasFiltradas,
               estado: activasFiltradas.length ? 'en_curso' : 'pendiente'
             });
             act.sesionesActivas = activasFiltradas;
           }
-        } catch (e) {
-          // Si hay error de permisos, ignorar (el core lo manejará)
-        }
+        } catch (e) { /* ignorar */ }
       }
     }
 
@@ -522,7 +565,6 @@ async function cargarHoras() {
     });
   } catch (e) { }
 
-  // Ciclo actual - solo si no estamos en modo admin con problemas de permisos
   try {
     var sgSnap = await db.collectionGroup('sesiones').get();
     var ahoraMs = Date.now();
@@ -542,7 +584,7 @@ async function cargarHoras() {
       if (tref > reg.ult) reg.ult = tref;
       reg.lineas.push({ ts: ini, nombre: s.nombre || '', horas: hrs, sesion: abierta ? 'en curso' : 'pausada' });
     });
-  } catch (e) { /* degrada silenciosamente */ }
+  } catch (e) { }
 }
 
 function horasArbol(id) {
@@ -786,11 +828,13 @@ function inicioCrono(it) {
   }
   return minTs || Date.now();
 }
+
 function fmtCrono(ms) {
   var s = Math.max(0, Math.floor(ms / 1000));
   var hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60;
   return hh + ':' + (mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss;
 }
+
 function tickCronos() {
   var els = document.querySelectorAll('.crono-tiempo');
   var ahora = Date.now();
@@ -801,24 +845,31 @@ function tickCronos() {
 }
 setInterval(tickCronos, 1000);
 
-// ── CORRECCIÓN: miCronoCorriendo verifica la subcolección ──
-async function miCronoCorriendo() {
-  for (var i = 0; i < items.length; i++) {
-    var ses = items[i].sesionesActivas || [];
-    for (var j = 0; j < ses.length; j++) {
-      if (ses[j].uid === uid) {
-        // Verificar que realmente existe en la subcolección
-        var existe = await verificarSesionReal(items[i].id);
-        if (existe) {
-          return items[i];
-        } else {
-          // Referencia huérfana - sincronizar
-          await sincronizarSesionesActivas(items[i].id);
-        }
-      }
-    }
+// ── Render ─────────────────────────────────────────────────
+async function render() {
+  _agg = {};
+  var nuevasTotal = items.filter(esNueva).length;
+  var favTotal = destacados.filter(function (id) { return byId[id] && !byId[id].hecho; }).length;
+  setSup('supProy', nuevasTotal);
+  setSup('supFav', favTotal);
+  setSup('supCompras', tabActual === 'compras' ? 0 : comprasNuevas(ultimaVistaCompras));
+
+  var z = document.getElementById('zonaContenido');
+  var banner = diagCarga ? ('<div class="muted-note" style="border-color:#e0a3a3;color:#a33;background:#fdf3f3">' + esc(diagCarga) + '</div>') : '';
+
+  var enCurso = await miCronoCorriendo();
+  if (enCurso) {
+    banner += '<div class="banner-crono" onclick="abrirActividad(\'' + enCurso.id + '\')">'
+      + '<span class="material-icons" style="font-size:19px">timer</span>'
+      + '<span>Ten\u00e9s un contador corriendo: \u00ab' + esc(enCurso.titulo) + '\u00bb</span>'
+      + '<span class="crono-tiempo" data-ini="' + inicioCrono(enCurso) + '" style="margin-left:auto">0:00:00</span>'
+      + '</div>';
   }
-  return null;
+
+  if (tabActual === 'compras') { z.innerHTML = banner + renderCompras(); tickCronos(); return; }
+  if (tabActual === 'favoritos') { z.innerHTML = banner + renderFavoritos(); tickCronos(); return; }
+  z.innerHTML = banner + renderProyectos();
+  tickCronos();
 }
 
 window.abrirActividad = function (id) {
@@ -834,34 +885,6 @@ window.abrirActividad = function (id) {
   var el = document.getElementById('nodo-' + id);
   if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 };
-
-// ── Render ─────────────────────────────────────────────────
-async function render() {
-  _agg = {};
-  var nuevasTotal = items.filter(esNueva).length;
-  var favTotal = destacados.filter(function (id) { return byId[id] && !byId[id].hecho; }).length;
-  setSup('supProy', nuevasTotal);
-  setSup('supFav', favTotal);
-  setSup('supCompras', tabActual === 'compras' ? 0 : comprasNuevas(ultimaVistaCompras));
-
-  var z = document.getElementById('zonaContenido');
-  var banner = diagCarga ? ('<div class="muted-note" style="border-color:#e0a3a3;color:#a33;background:#fdf3f3">' + esc(diagCarga) + '</div>') : '';
-
-  // ── CORRECCIÓN: verificar sesión real antes de mostrar banner ──
-  var enCurso = await miCronoCorriendo();
-  if (enCurso) {
-    banner += '<div class="banner-crono" onclick="abrirActividad(\'' + enCurso.id + '\')">'
-      + '<span class="material-icons" style="font-size:19px">timer</span>'
-      + '<span>Ten\u00e9s un contador corriendo: \u00ab' + esc(enCurso.titulo) + '\u00bb</span>'
-      + '<span class="crono-tiempo" data-ini="' + inicioCrono(enCurso) + '" style="margin-left:auto">0:00:00</span>'
-      + '</div>';
-  }
-
-  if (tabActual === 'compras') { z.innerHTML = banner + renderCompras(); tickCronos(); return; }
-  if (tabActual === 'favoritos') { z.innerHTML = banner + renderFavoritos(); tickCronos(); return; }
-  z.innerHTML = banner + renderProyectos();
-  tickCronos();
-}
 
 function renderFavoritos() {
   var lista = [];
@@ -1012,7 +1035,27 @@ function nodoHTML(it, nivel) {
         h += '<button class="act-ico" title="Pausar" onclick="cronoPausar(\'' + it.id + '\')"><span class="material-icons" style="color:#b8860b">pause</span></button>';
         h += '<button class="act-ico" title="Finalizar y registrar" onclick="cronoFinalizar(\'' + it.id + '\')"><span class="material-icons" style="color:#1f7a32">stop</span></button>';
       } else {
-        h += '<button class="btn-play" onclick="cronoIniciar(\'' + it.id + '\')"><span class="material-icons">play_arrow</span> Iniciar</button>';
+        // Verificar si el usuario tiene OTRO cronómetro corriendo
+        var tieneOtro = false;
+        for (var i = 0; i < items.length; i++) {
+          if (items[i].id === it.id) continue;
+          var ses = items[i].sesionesActivas || [];
+          for (var j = 0; j < ses.length; j++) {
+            if (ses[j].uid === uid) {
+              tieneOtro = true;
+              break;
+            }
+          }
+          if (tieneOtro) break;
+        }
+
+        if (tieneOtro) {
+          h += '<button class="btn-play" style="background:#9aa69a !important;border-color:#9aa69a !important;cursor:not-allowed;" disabled title="Ya tienes otro cronómetro corriendo">';
+          h += '<span class="material-icons">block</span> Ocupado</button>';
+        } else {
+          h += '<button class="btn-play" onclick="cronoIniciar(\'' + it.id + '\')">';
+          h += '<span class="material-icons">play_arrow</span> Iniciar</button>';
+        }
       }
     }
     h += '<button class="act-ico" title="Agregar sub-\u00edtem" onclick="nuevoHijo(\'' + it.id + '\')"><span class="material-icons">add</span></button>';
@@ -1033,8 +1076,7 @@ function nodoHTML(it, nivel) {
   return h;
 }
 
-// ── Compras ──────────────────────────────────────────────────
-function esContenedorCompra(it) {
+// ── Compras ──────────────────────────────────────────────────function esContenedorCompra(it) {
   return items.some(function (x) { return x.parentId === it.id && x.esCompra; });
 }
 function contextoCompra(it) {
@@ -1125,6 +1167,7 @@ window.toggleHecho = async function (id) {
       var col = await CVC.actFinalizar(id, { uid: uid, nombre: miNombre });
       var n = (col && col.length) ? col.length : 0;
       toast('Finalizada con tiempo registrado' + (n ? (' \u00b7 ' + n + ' persona(s)') : ''), 'success');
+      _cronoCacheTime = 0;
       await cargar();
       return;
     }
@@ -1132,6 +1175,7 @@ window.toggleHecho = async function (id) {
       if (!confirm('\u00bfDar la tarea por realizada SIN cron\u00f3metro? Queda registrada, pero sin contar tiempo.')) { render(); return; }
       await CVC.actTildar(id, { uid: uid, nombre: miNombre });
       toast(esRecurrente(it) ? 'Tarea recurrente realizada (sin reloj) y reprogramada' : 'Realizada (sin reloj)', 'success');
+      _cronoCacheTime = 0;
       await cargar();
       return;
     }
@@ -1394,6 +1438,7 @@ window.guardarItem = async function () {
     }
 
     cerrarModal('modalItem');
+    _cronoCacheTime = 0;
     await cargar();
     if (idGuardado) { marcarVisto(idGuardado); render(); }
   } catch (e) {
@@ -1416,6 +1461,7 @@ window.borrarItem = async function (id) {
     for (var i = 0; i < ids.length; i++) b.delete(refAct(ids[i]));
     await b.commit();
     toast('Borrado.', 'success');
+    _cronoCacheTime = 0;
     await cargar();
   } catch (e) { toast('No se pudo borrar: ' + e.message, 'error'); }
 };
@@ -1423,13 +1469,24 @@ window.borrarItem = async function (id) {
 // ── Cronómetro ──────────────────────────────────────────────
 window.cronoIniciar = async function (id) {
   if (!CVC.actIniciar) { toast('Falta actividades-core.js', 'error'); return; }
+
+  // Verificar si ya tengo otro cronómetro corriendo
+  var tieneOtro = await tengoOtroCrono(id);
+  if (tieneOtro) {
+    toast('⚠️ Ya tienes otro cronómetro corriendo. Finalízalo o pausalo antes de iniciar este.', 'warning');
+    return;
+  }
+
   marcarVisto(id);
   try {
     await CVC.actIniciar(id, { uid: uid, nombre: miNombre });
+    _cronoCacheTime = 0;
     await cargar();
   } catch (e) {
-    if (e.message && e.message.indexOf('permission') !== -1) {
-      toast('No tienes permiso para iniciar esta actividad. Si es tuya, intentá recargar.', 'error');
+    if (e.message && e.message.indexOf('Ya tienes otro cronómetro') !== -1) {
+      toast('⚠️ ' + e.message, 'warning');
+    } else if (e.message && e.message.indexOf('permission') !== -1) {
+      toast('No tienes permiso para iniciar esta actividad.', 'error');
     } else {
       toast('No se pudo iniciar: ' + e.message, 'error');
     }
@@ -1440,10 +1497,11 @@ window.cronoPausar = async function (id) {
   if (!CVC.actPausar) { toast('Falta actividades-core.js', 'error'); return; }
   try {
     await CVC.actPausar(id, { uid: uid, nombre: miNombre });
+    _cronoCacheTime = 0;
     await cargar();
   } catch (e) {
     if (e.message && e.message.indexOf('permission') !== -1) {
-      toast('No tienes permiso para pausar esta sesión. Probá finalizarla o usar la herramienta de limpieza.', 'error');
+      toast('No tienes permiso para pausar esta sesión.', 'error');
     } else {
       toast('No se pudo pausar: ' + e.message, 'error');
     }
@@ -1457,10 +1515,11 @@ window.cronoFinalizar = async function (id) {
     var col = await CVC.actFinalizar(id, { uid: uid, nombre: miNombre });
     var n = (col && col.length) ? col.length : 0;
     toast('Finalizada' + (n ? (' \u00b7 honorario para ' + n + ' persona(s)') : ''), 'success');
+    _cronoCacheTime = 0;
     await cargar();
   } catch (e) {
     if (e.message && e.message.indexOf('permission') !== -1) {
-      toast('No tienes permiso para finalizar esta sesión. Probá usando la herramienta de limpieza.', 'error');
+      toast('No tienes permiso para finalizar esta sesión.', 'error');
     } else {
       toast('No se pudo finalizar: ' + e.message, 'error');
     }
@@ -1488,6 +1547,7 @@ window.validarItemChequeo = async function (itemId) {
     if (!CVC.actValidarItemChequeo) { toast('Falta actividades-core.js actualizado.', 'error'); return; }
     await CVC.actValidarItemChequeo(itemId, cant, nota, { uid: uid, nombre: miNombre });
     toast('\u00cdtem validado.', 'success');
+    _cronoCacheTime = 0;
     await cargar();
   } catch (e) { toast('No se pudo validar: ' + e.message, 'error'); }
 };
@@ -1627,6 +1687,5 @@ await cargarProveedores();
 await cargar();
 
 </script>
-
 </body>
 </html>
