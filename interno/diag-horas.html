@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diagnóstico de horas — Casa Verde Canas</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<link rel="stylesheet" href="design-system.css">
+<style>
+.diag-main { max-width: 900px; margin: 0 auto; padding: 16px 14px 40px; }
+.diag-card { background: #fff; border: 1px solid #e6e8eb; border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+.diag-card h2 { font-size: .95rem; margin: 0 0 10px; display: flex; align-items: center; gap: 6px; }
+.diag-card h2 .material-icons { font-size: 18px; }
+.diag-table { width: 100%; border-collapse: collapse; font-size: .75rem; }
+.diag-table th { text-align: left; color: #6c757d; font-weight: 600; padding: 4px 6px; border-bottom: 2px solid #e9ecef; }
+.diag-table td { padding: 4px 6px; border-bottom: 1px solid #f1f3f5; font-family: monospace; word-break: break-all; }
+.diag-ok { color: #1f7a32; }
+.diag-warn { color: #b8860b; }
+.diag-err { color: #c0271f; }
+.diag-summary { background: #f8f9fa; border-radius: 8px; padding: 10px; margin-bottom: 10px; font-size: .82rem; }
+.diag-summary b { color: #212529; }
+.diag-code { background: #f1f3f5; border-radius: 6px; padding: 8px 10px; font-family: monospace; font-size: .7rem; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow: auto; }
+</style>
+</head>
+<body>
+
+<nav id="appNav" class="admin-nav"></nav>
+
+<main class="diag-main">
+    <div class="diag-title">
+        <h1>🔍 Diagnóstico de horas</h1>
+        <p style="color:#6c757d;font-size:.85rem;">Muestra qué actividades y sesiones están visibles para el usuario actual.</p>
+    </div>
+
+    <div id="diagContent">
+        <div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>
+    </div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+
+<script>
+// ============================================================
+//  DIAGNÓSTICO DE HORAS — v1.0
+//  Muestra el estado real de actividades, historial y sesiones
+// ============================================================
+
+var DIAG = {
+    actIdx: {},
+    lineas: [],
+    sesiones: [],
+    usuarios: [],
+    errores: []
+};
+
+function esc(s) { return CVC.escapeHtml(s); }
+
+function aDate(x) {
+    if (!x) return null;
+    if (x.toDate) { try { return x.toDate(); } catch (e) { return null; } }
+    var d = new Date(x);
+    return isNaN(d.getTime()) ? null : d;
+}
+
+function fmtFecha(d) {
+    if (!d) return '—';
+    return d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function fmtH(horas) {
+    var min = Math.round(horas * 60);
+    if (min < 60) return min + 'min';
+    var hh = Math.floor(min / 60), mm = min % 60;
+    return hh + 'h ' + mm + 'm';
+}
+
+async function cargarDiagnostico() {
+    try {
+        var r = await CVC.verificarAuth(['admin', 'user']);
+        var userData = r.userData;
+        var uid = r.user.uid;
+        var esAdmin = userData.rol === 'admin';
+
+        CVC.renderNav('diagnostico-horas.html', userData.rol);
+
+        var el = document.getElementById('diagContent');
+
+        // ── 1. Actividades visibles ──
+        var docsAct = [];
+        if (esAdmin) {
+            var sAct = await db.collection('actividades').get();
+            sAct.forEach(function(d) { docsAct.push(Object.assign({ id: d.id }, d.data())); });
+        } else {
+            var seen = {};
+            var consultas = [
+                { etq: 'equipo',    q: db.collection('actividades').where('alcance', '==', 'equipo') },
+                { etq: 'propios',   q: db.collection('actividades').where('creadoPor', '==', uid) },
+                { etq: 'asignados', q: db.collection('actividades').where('competencias', 'array-contains', uid) }
+            ];
+            for (var c = 0; c < consultas.length; c++) {
+                try {
+                    var snap = await consultas[c].q.get();
+                    snap.forEach(function(d) {
+                        if (!seen[d.id]) { seen[d.id] = 1; docsAct.push(Object.assign({ id: d.id }, d.data())); }
+                    });
+                } catch (eq) {
+                    DIAG.errores.push('Consulta ' + consultas[c].etq + ' falló: ' + eq.message);
+                }
+            }
+        }
+
+        for (var i = 0; i < docsAct.length; i++) {
+            var a = docsAct[i];
+            DIAG.actIdx[a.id] = {
+                nombre: a.nombre || a.titulo || '(sin nombre)',
+                parentId: a.parentId || null,
+                alcance: a.alcance || 'personal',
+                creadoPor: a.creadoPor || null,
+                competencias: a.competencias || []
+            };
+        }
+
+        // ── 2. Historial de tareas ──
+        var sHist = await db.collection('historial_tareas').get();
+        sHist.forEach(function(d) {
+            var h = d.data();
+            var fecha = aDate(h.finalizadoEn);
+            if (!fecha) return;
+            var cols = h.colaboradores || [];
+            for (var j = 0; j < cols.length; j++) {
+                var c2 = cols[j];
+                if (!c2 || !c2.uid) continue;
+                var horas = parseFloat(c2.horas) || 0;
+                DIAG.lineas.push({
+                    docId: d.id,
+                    tareaId: h.tareaId || '(sin id)',
+                    nombreAct: h.nombre || '(sin nombre)',
+                    fecha: fecha,
+                    uid: c2.uid,
+                    nombre: c2.nombre || '',
+                    horas: horas,
+                    alcanceReal: DIAG.actIdx[h.tareaId] ? DIAG.actIdx[h.tareaId].alcance : '—',
+                    existe: !!DIAG.actIdx[h.tareaId]
+                });
+            }
+        });
+
+        // ── 3. Sesiones (collectionGroup) ──
+        try {
+            var sesSnap = await db.collectionGroup('sesiones').get();
+            sesSnap.forEach(function(d) {
+                var s = d.data();
+                if (s.invalidada) return;
+                var actId = (d.ref.parent && d.ref.parent.parent) ? d.ref.parent.parent.id : null;
+                var ini = aDate(s.inicio);
+                var fin = aDate(s.fin);
+                var horas = (ini && fin) ? Math.max(0, (fin - ini) / 3600000) : 0;
+                DIAG.sesiones.push({
+                    id: d.id,
+                    actId: actId,
+                    uid: s.uid || '(sin uid)',
+                    nombre: s.nombre || '',
+                    ini: ini,
+                    fin: fin,
+                    horas: horas,
+                    abierta: !fin,
+                    alcanceReal: DIAG.actIdx[actId] ? DIAG.actIdx[actId].alcance : '—',
+                    existe: !!DIAG.actIdx[actId]
+                });
+            });
+        } catch (e) {
+            DIAG.errores.push('collectionGroup sesiones falló: ' + e.message);
+        }
+
+        // ── 4. Usuarios ──
+        try {
+            var uSnap = await db.collection('usuarios').get();
+            uSnap.forEach(function(d) {
+                var x = d.data() || {};
+                if (x.activo === false) return;
+                DIAG.usuarios.push({ uid: d.id, nombre: x.nombre || x.email || d.id });
+            });
+        } catch (e) {
+            DIAG.errores.push('No se pudieron leer usuarios: ' + e.message);
+        }
+
+        // ── 5. Render ──
+        renderDiagnostico(el);
+    } catch (e) {
+        document.getElementById('diagContent').innerHTML = '<div class="diag-card"><div class="diag-err">Error: ' + esc(e.message) + '</div></div>';
+    }
+}
+
+function renderDiagnostico(el) {
+    var html = '';
+
+    // ── Resumen ──
+    var totalLineas = DIAG.lineas.length;
+    var huérfanas = DIAG.lineas.filter(function(l) { return !l.existe; });
+    var totalSes = DIAG.sesiones.length;
+    var sesHuérfanas = DIAG.sesiones.filter(function(s) { return !s.existe; });
+
+    html += '<div class="diag-card">';
+    html += '<h2><span class="material-icons">info</span> Resumen</h2>';
+    html += '<div class="diag-summary">';
+    html += 'Actividades visibles: <b>' + Object.keys(DIAG.actIdx).length + '</b><br>';
+    html += 'Líneas de historial: <b>' + totalLineas + '</b> · ';
+    html += 'Huérfanas (actividad no visible): <b class="diag-err">' + huérfanas.length + '</b><br>';
+    html += 'Sesiones: <b>' + totalSes + '</b> · ';
+    html += 'Huérfanas: <b class="diag-err">' + sesHuérfanas.length + '</b>';
+    if (DIAG.errores.length) {
+        html += '<br>⚠️ Errores: <b class="diag-warn">' + DIAG.errores.length + '</b>';
+    }
+    html += '</div>';
+
+    // ── Actividades visibles ──
+    html += '<h3 style="margin:12px 0 6px;">📁 Actividades visibles (' + Object.keys(DIAG.actIdx).length + ')</h3>';
+    var actList = Object.keys(DIAG.actIdx).map(function(id) {
+        var a = DIAG.actIdx[id];
+        return { id: id, nombre: a.nombre, alcance: a.alcance, creadoPor: a.creadoPor };
+    });
+    actList.sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
+
+    if (actList.length) {
+        html += '<table class="diag-table"><thead><tr><th>ID</th><th>Nombre</th><th>Alcance</th><th>Creado por</th></tr></thead><tbody>';
+        for (var i = 0; i < actList.length; i++) {
+            var a = actList[i];
+            html += '<tr><td style="font-size:.65rem;">' + esc(a.id) + '</td><td>' + esc(a.nombre) + '</td><td>' + esc(a.alcance) + '</td><td>' + esc(a.creadoPor || '—') + '</td></tr>';
+        }
+        html += '</tbody></table>';
+    } else {
+        html += '<div class="diag-warn">No hay actividades visibles para este usuario.</div>';
+    }
+
+    // ── Líneas huérfanas ──
+    html += '<h3 style="margin:12px 0 6px;">📝 Líneas huérfanas (actividad no visible) — ' + huérfanas.length + '</h3>';
+    if (huérfanas.length) {
+        var topH = huérfanas.slice(0, 50);
+        html += '<table class="diag-table"><thead><tr><th>Fecha</th><th>Actividad (ID)</th><th>Nombre registrado</th><th>Usuario</th><th>Horas</th></tr></thead><tbody>';
+        for (var j = 0; j < topH.length; j++) {
+            var l = topH[j];
+            html += '<tr><td style="font-size:.7rem;">' + fmtFecha(l.fecha) + '</td><td style="font-size:.65rem;">' + esc(l.tareaId) + '</td><td>' + esc(l.nombreAct) + '</td><td>' + esc(l.nombre) + '</td><td>' + fmtH(l.horas) + '</td></tr>';
+        }
+        if (huérfanas.length > 50) {
+            html += '<tr><td colspan="5">… y ' + (huérfanas.length - 50) + ' más</td></tr>';
+        }
+        html += '</tbody></table>';
+        html += '<div class="diag-warn" style="margin-top:6px;">⚠️ Estas líneas NO se están agrupando correctamente porque la actividad padre no es visible para el usuario actual.</div>';
+    } else {
+        html += '<div class="diag-ok">✅ Todas las líneas tienen su actividad visible.</div>';
+    }
+
+    // ── Sesiones huérfanas ──
+    html += '<h3 style="margin:12px 0 6px;">⏱️ Sesiones huérfanas (actividad no visible) — ' + sesHuérfanas.length + '</h3>';
+    if (sesHuérfanas.length) {
+        var topS = sesHuérfanas.slice(0, 30);
+        html += '<table class="diag-table"><thead><tr><th>Actividad ID</th><th>Usuario</th><th>Inicio</th><th>Fin</th><th>Horas</th><th>Estado</th></tr></thead><tbody>';
+        for (var k = 0; k < topS.length; k++) {
+            var s = topS[k];
+            html += '<tr><td style="font-size:.65rem;">' + esc(s.actId || '—') + '</td><td>' + esc(s.nombre) + '</td><td style="font-size:.7rem;">' + fmtFecha(s.ini) + '</td><td style="font-size:.7rem;">' + (s.fin ? fmtFecha(s.fin) : '—') + '</td><td>' + fmtH(s.horas) + '</td><td>' + (s.abierta ? '<span class="diag-warn">en curso</span>' : 'pausada') + '</td></tr>';
+        }
+        if (sesHuérfanas.length > 30) {
+            html += '<tr><td colspan="6">… y ' + (sesHuérfanas.length - 30) + ' más</td></tr>';
+        }
+        html += '</tbody></table>';
+        html += '<div class="diag-warn" style="margin-top:6px;">⚠️ Estas sesiones NO se están sumando a las horas porque la actividad padre no es visible para el usuario actual.</div>';
+    } else {
+        html += '<div class="diag-ok">✅ Todas las sesiones tienen su actividad visible.</div>';
+    }
+
+    // ── Diagnóstico específico para "Desarmado de la Yurta" ──
+    html += '<h3 style="margin:12px 0 6px;">🔎 Buscar: "Desarmado" o "Yurta"</h3>';
+    var found = DIAG.lineas.filter(function(l) {
+        return l.nombreAct.toLowerCase().indexOf('desarmado') !== -1
+            || l.nombreAct.toLowerCase().indexOf('yurta') !== -1
+            || (l.tareaId && DIAG.actIdx[l.tareaId] && DIAG.actIdx[l.tareaId].nombre.toLowerCase().indexOf('desarmado') !== -1)
+            || (l.tareaId && DIAG.actIdx[l.tareaId] && DIAG.actIdx[l.tareaId].nombre.toLowerCase().indexOf('yurta') !== -1);
+    });
+    if (found.length) {
+        html += '<table class="diag-table"><thead><tr><th>Fecha</th><th>Actividad ID</th><th>Nombre registrado</th><th>Usuario</th><th>Horas</th><th>¿Visible?</th></tr></thead><tbody>';
+        for (var m = 0; m < found.length; m++) {
+            var f = found[m];
+            html += '<tr><td style="font-size:.7rem;">' + fmtFecha(f.fecha) + '</td><td style="font-size:.65rem;">' + esc(f.tareaId) + '</td><td>' + esc(f.nombreAct) + '</td><td>' + esc(f.nombre) + '</td><td>' + fmtH(f.horas) + '</td><td>' + (f.existe ? '<span class="diag-ok">✅ visible</span>' : '<span class="diag-err">❌ NO visible</span>') + '</td></tr>';
+        }
+        html += '</tbody></table>';
+        if (found.some(function(f) { return !f.existe; })) {
+            html += '<div class="diag-warn">⚠️ Las líneas marcadas como NO visible tienen su actividad padre con alcance que no incluye al usuario actual. Para que aparezcan en la página de horas, el proyecto debe tener <b>alcance: "equipo"</b> o el usuario debe estar en <b>competencias</b>.</div>';
+        }
+    } else {
+        html += '<div class="diag-ok">No se encontraron líneas relacionadas con "Desarmado" o "Yurta".</div>';
+    }
+
+    // ── Errores ──
+    if (DIAG.errores.length) {
+        html += '<h3 style="margin:12px 0 6px;">⚠️ Errores</h3>';
+        html += '<div class="diag-code">' + DIAG.errores.map(function(e) { return esc(e); }).join('\n') + '</div>';
+    }
+
+    // ── Sugerencia ──
+    html += '<div class="diag-card" style="background:#f0f7f0;border-color:#2a9d8f;">';
+    html += '<h2><span class="material-icons">lightbulb</span> Solución para horas en pausa</h2>';
+    html += '<p style="font-size:.85rem;color:#1d6f65;">';
+    html += 'Si ves sesiones huérfanas, el problema es que la actividad padre no es visible para el usuario actual. ';
+    html += 'Para que las horas en pausa se sumen en <b>horas-stats.html</b>, la actividad debe ser visible. ';
+    html += 'La solución correcta para "Desarmado de la Yurta" es que el usuario que ve la página de horas ';
+    html += 'sea el <b>creador</b> de la actividad o esté en la lista de <b>competencias</b> del proyecto. ';
+    html += 'Si el usuario debe ver las horas aunque no trabaje en el proyecto, el alcance debe ser <b>"equipo"</b>.';
+    html += '</p>';
+    html += '</div>';
+
+    el.innerHTML = html;
+}
+
+cargarDiagnostico();
+</script>
+</body>
+</html>
