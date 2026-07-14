@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diagnóstico de horas — Casa Verde Canas</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<link rel="stylesheet" href="design-system.css">
+<style>
+body { background: #f5f7f5; padding: 16px; font-family: system-ui, -apple-system, sans-serif; }
+.container { max-width: 900px; margin: 0 auto; }
+.card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.card h2 { font-size: 1rem; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+.card h2 .material-icons { font-size: 20px; }
+.btn { border: none; border-radius: 8px; padding: 10px 20px; font-size: .9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.btn-primary { background: #2d5a27; color: #fff; }
+.btn-secondary { background: #e9ecef; color: #343a40; }
+.btn-danger { background: #c0271f; color: #fff; }
+.log-box { background: #1a1a1a; color: #e0e0e0; border-radius: 8px; padding: 12px; font-family: monospace; font-size: .78rem; max-height: 600px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin-top: 12px; }
+.log-box .ok { color: #4caf50; }
+.log-box .err { color: #f44336; }
+.log-box .warn { color: #ff9800; }
+.log-box .info { color: #64b5f6; }
+.log-box .highlight { color: #ffd700; font-weight: bold; }
+.log-box .mauro { color: #ff6b6b; font-weight: bold; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 10px 0; }
+.stat-box { background: #f8f9fa; border-radius: 8px; padding: 8px; text-align: center; }
+.stat-box .num { font-size: 1.2rem; font-weight: 700; color: #212529; }
+.stat-box .lbl { font-size: .65rem; color: #6c757d; text-transform: uppercase; letter-spacing: .04em; }
+.hidden { display: none; }
+table { width: 100%; border-collapse: collapse; font-size: .75rem; margin-top: 8px; }
+th { text-align: left; color: #6c757d; font-weight: 600; padding: 4px 6px; border-bottom: 2px solid #e9ecef; }
+td { padding: 4px 6px; border-bottom: 1px solid #f1f3f5; font-family: monospace; word-break: break-all; }
+tr.ok td { background: #e8f5e9; }
+tr.err td { background: #ffebee; }
+tr.warn td { background: #fff8e1; }
+</style>
+</head>
+<body>
+
+<header class="admin-header">
+  <div class="admin-header__brand">
+    <span class="material-icons">cottage</span>
+    Casa Verde Canas
+  </div>
+  <div class="admin-header__actions">
+    <div class="user-chip">
+      <span class="material-icons">person</span>
+      <span id="userName">—</span>
+    </div>
+    <button class="btn-logout" onclick="CVC.cerrarSesion()">
+      <span class="material-icons">logout</span> Salir
+    </button>
+  </div>
+</header>
+
+<nav id="appNav" class="admin-nav"></nav>
+
+<main style="max-width:900px;margin:0 auto;padding:16px;">
+
+<div class="container">
+    <div class="card">
+        <h2><span class="material-icons" style="color:#2a9d8f;">bug_report</span> Diagnóstico de horas — Actividades</h2>
+        <p style="font-size:.85rem;color:#6c757d;margin:0 0 12px;">
+            Emula las consultas que hace <code>actividades.html</code> para cargar horas.
+            Muestra qué sesiones y registros ve el usuario actual.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="ejecutarDiagnostico()">▶️ Ejecutar diagnóstico</button>
+            <button class="btn btn-secondary" onclick="limpiarLog()">🗑️ Limpiar log</button>
+            <button class="btn btn-secondary" onclick="window.location.reload()">🔄 Recargar</button>
+        </div>
+    </div>
+
+    <div id="statsContainer" class="hidden">
+        <div class="card">
+            <h2><span class="material-icons">dashboard</span> Resumen</h2>
+            <div class="stats-grid" id="statsGrid"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2><span class="material-icons">receipt_long</span> Log detallado</h2>
+        <div id="logBox" class="log-box">Esperando acción...</div>
+    </div>
+
+    <div class="card" style="background:#fef9e7;border-color:#f0c674;">
+        <p style="font-size:.8rem;color:#7a6a2a;margin:0;">
+            💡 Este diagnóstico <b>NO modifica</b> nada. Solo lee datos y muestra lo que encuentra.
+            Busca específicamente actividades que contengan "Yurta" o "Desarmado".
+        </p>
+    </div>
+</div>
+
+</main>
+
+<!-- Firebase 8.10.1 -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+
+<script>
+// ============================================================
+//  DIAGNÓSTICO DE HORAS — v1.0
+//  Emula las consultas de actividades.html
+// ============================================================
+
+var DIAG = {
+    uid: null,
+    userData: null,
+    esAdmin: false,
+    actIdx: {},
+    lineas: [],
+    sesionesEncontradas: [],
+    errores: [],
+    totalSesiones: 0,
+    sesionesMauro: 0,
+    registrosMauro: 0
+};
+
+function esc(s) { return CVC.escapeHtml ? CVC.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s); }
+
+function log(msg, tipo) {
+    tipo = tipo || 'info';
+    var box = document.getElementById('logBox');
+    var cls = '';
+    if (tipo === 'ok') cls = 'ok';
+    else if (tipo === 'err') cls = 'err';
+    else if (tipo === 'warn') cls = 'warn';
+    else if (tipo === 'info') cls = 'info';
+    else if (tipo === 'highlight') cls = 'highlight';
+    else if (tipo === 'mauro') cls = 'mauro';
+    box.innerHTML += '<div class="' + cls + '">' + msg + '</div>';
+    box.scrollTop = box.scrollHeight;
+}
+
+function limpiarLog() {
+    document.getElementById('logBox').innerHTML = '';
+}
+
+function aDate(x) {
+    if (!x) return null;
+    if (x.toDate) { try { return x.toDate(); } catch (e) { return null; } }
+    var d = new Date(x);
+    return isNaN(d.getTime()) ? null : d;
+}
+
+function fmtH(horas) {
+    var min = Math.round(horas * 60);
+    if (min < 60) return min + 'min';
+    var hh = Math.floor(min / 60), mm = min % 60;
+    return hh + 'h ' + mm + 'm';
+}
+
+function setStats(stats) {
+    var container = document.getElementById('statsContainer');
+    container.classList.remove('hidden');
+    var grid = document.getElementById('statsGrid');
+    var html = '';
+    for (var key in stats) {
+        html += '<div class="stat-box"><div class="num">' + stats[key] + '</div><div class="lbl">' + key + '</div></div>';
+    }
+    grid.innerHTML = html;
+}
+
+async function ejecutarDiagnostico() {
+    limpiarLog();
+    log('═══════════════════════════════════════════════════', 'highlight');
+    log('🔍 DIAGNÓSTICO DE HORAS — actividades.html', 'highlight');
+    log('═══════════════════════════════════════════════════', 'info');
+
+    try {
+        // ── 1. Autenticación ──
+        log('📱 Verificando autenticación...', 'info');
+        var r = await CVC.verificarAuth(['admin', 'user']);
+        DIAG.uid = r.user.uid;
+        DIAG.userData = r.userData;
+        DIAG.esAdmin = r.userData.rol === 'admin';
+
+        document.getElementById('userName').textContent = r.userData.nombre || r.user.email || 'Usuario';
+        CVC.renderNav('diagnostico-horas.html', r.userData.rol);
+
+        var esMauro = (DIAG.uid === 'hftkmTlB55V9AdwawMOlKvMtOf43');
+        log('✅ Autenticado como: ' + (r.userData.nombre || r.user.email), 'ok');
+        log('📌 UID: ' + DIAG.uid + (esMauro ? ' 🔴 ¡ES MAURO!' : ''), esMauro ? 'mauro' : 'info');
+        log('📌 Rol: ' + (DIAG.esAdmin ? 'admin' : 'user'), 'info');
+
+        var stats = {};
+
+        // ── 2. Cargar actividades visibles (igual que actividades.html) ──
+        log('', '');
+        log('📁 PASO 1: Cargando actividades visibles...', 'info');
+        log('   (usa 3 consultas: equipo, propios, asignados)', 'info');
+
+        var docsAct = [];
+        if (DIAG.esAdmin) {
+            var sAct = await db.collection('actividades').get();
+            sAct.forEach(function(d) { docsAct.push(Object.assign({ id: d.id }, d.data())); });
+            log('   ✅ Admin: lectura directa de todas las actividades', 'ok');
+        } else {
+            var seen = {};
+            var consultas = [
+                { etq: 'equipo',    q: db.collection('actividades').where('alcance', '==', 'equipo') },
+                { etq: 'propios',   q: db.collection('actividades').where('creadoPor', '==', DIAG.uid) },
+                { etq: 'asignados', q: db.collection('actividades').where('competencias', 'array-contains', DIAG.uid) }
+            ];
+            var oks = [], fails = [];
+            for (var c = 0; c < consultas.length; c++) {
+                try {
+                    var snap = await consultas[c].q.get();
+                    snap.forEach(function(d) {
+                        if (!seen[d.id]) { seen[d.id] = 1; docsAct.push(Object.assign({ id: d.id }, d.data())); }
+                    });
+                    oks.push(consultas[c].etq);
+                } catch (eq) {
+                    fails.push(consultas[c].etq + ': ' + (eq && eq.code ? eq.code : (eq && eq.message ? eq.message : 'error')));
+                }
+            }
+            log('   ✅ Consultas OK: [' + (oks.join(', ') || 'ninguna') + ']', 'ok');
+            if (fails.length) {
+                log('   ⚠️ FALLARON: [' + fails.join('  |  ') + ']', 'warn');
+            }
+        }
+
+        // Indexar actividades
+        DIAG.actIdx = {};
+        for (var i = 0; i < docsAct.length; i++) {
+            var a = docsAct[i];
+            DIAG.actIdx[a.id] = {
+                nombre: a.nombre || a.titulo || '(sin nombre)',
+                parentId: a.parentId || null,
+                alcance: a.alcance || 'personal',
+                creadoPor: a.creadoPor || null,
+                competencias: a.competencias || []
+            };
+        }
+
+        stats['Actividades visibles'] = Object.keys(DIAG.actIdx).length;
+        log('📊 Actividades visibles: ' + Object.keys(DIAG.actIdx).length, 'ok');
+
+        // ── 3. Buscar "Desarmado" o "Yurta" ──
+        log('', '');
+        log('🔎 PASO 2: Buscando "Desarmado" o "Yurta" en actividades visibles...', 'info');
+
+        var encontradas = [];
+        for (var id in DIAG.actIdx) {
+            var a = DIAG.actIdx[id];
+            var nom = (a.nombre || '').toLowerCase();
+            if (nom.indexOf('desarmado') !== -1 || nom.indexOf('yurta') !== -1) {
+                encontradas.push({ id: id, nombre: a.nombre, alcance: a.alcance, creadoPor: a.creadoPor, competencias: a.competencias });
+            }
+        }
+
+        if (encontradas.length) {
+            log('✅ Encontradas ' + encontradas.length + ' actividad(es):', 'ok');
+            for (var e = 0; e < encontradas.length; e++) {
+                var act = encontradas[e];
+                var esMauroComp = (act.competencias && act.competencias.indexOf(DIAG.uid) !== -1);
+                log('   📌 ID: ' + act.id, 'info');
+                log('      Nombre: ' + act.nombre, 'info');
+                log('      Alcance: ' + act.alcance, 'info');
+                log('      Creado por: ' + act.creadoPor, 'info');
+                log('      Competencias: ' + JSON.stringify(act.competencias), 'info');
+                log('      ¿Usuario en competencias? ' + (esMauroComp ? '✅ SÍ' : '❌ NO'), esMauroComp ? 'ok' : 'err');
+            }
+        } else {
+            log('❌ NO se encontraron actividades con "Desarmado" o "Yurta".', 'err');
+        }
+
+        // ── 4. Historial de tareas (igual que actividades.html) ──
+        log('', '');
+        log('📝 PASO 3: Leyendo historial_tareas (collection)...', 'info');
+        log('   (db.collection("historial_tareas").get())', 'info');
+
+        var historialMauro = [];
+        var historialTotal = 0;
+        try {
+            var hSnap = await db.collection('historial_tareas').get();
+            historialTotal = hSnap.size;
+            log('📊 Total registros en historial: ' + historialTotal, 'info');
+
+            hSnap.forEach(function(d) {
+                var h = d.data();
+                var cols = h.colaboradores || [];
+                // Buscar si Mauro está en los colaboradores
+                var esMauroEnRegistro = cols.some(function(c) { return c.uid === DIAG.uid; });
+                if (esMauroEnRegistro) {
+                    historialMauro.push({
+                        id: d.id,
+                        tareaId: h.tareaId || null,
+                        nombre: h.nombre || '(sin nombre)',
+                        fecha: aDate(h.finalizadoEn),
+                        horas: cols.reduce(function(sum, c) { return sum + (parseFloat(c.horas) || 0); }, 0),
+                        uid: DIAG.uid,
+                        nombreUsuario: cols.find(function(c) { return c.uid === DIAG.uid; }),
+                        actVisible: h.tareaId ? !!DIAG.actIdx[h.tareaId] : false
+                    });
+                }
+            });
+
+            log('🔴 Registros de Mauro en historial: ' + historialMauro.length, 'mauro');
+            stats['Registros Mauro (historial)'] = historialMauro.length;
+
+            if (historialMauro.length) {
+                log('   Detalle de registros de Mauro:', 'mauro');
+                for (var h2 = 0; h2 < historialMauro.length; h2++) {
+                    var reg = historialMauro[h2];
+                    var actNom = reg.tareaId && DIAG.actIdx[reg.tareaId] ? DIAG.actIdx[reg.tareaId].nombre : '(actividad no visible)';
+                    log('      📌 ID: ' + reg.id, 'info');
+                    log('         Actividad: ' + actNom + (reg.actVisible ? ' ✅ visible' : ' ❌ NO visible'), reg.actVisible ? 'ok' : 'err');
+                    log('         Nombre: ' + reg.nombre, 'info');
+                    log('         Horas: ' + fmtH(reg.horas), 'info');
+                    if (!reg.actVisible && reg.tareaId) {
+                        log('         ⚠️ Actividad padre NO visible (ID: ' + reg.tareaId + ')', 'warn');
+                    }
+                }
+            } else {
+                log('ℹ️ Mauro no tiene registros en historial_tareas.', 'info');
+            }
+        } catch (e) {
+            log('❌ Error al leer historial_tareas: ' + e.message, 'err');
+            DIAG.errores.push('historial_tareas: ' + e.message);
+        }
+
+        // ── 5. Sesiones (collectionGroup) — igual que actividades.html ──
+        log('', '');
+        log('⏱️ PASO 4: Leyendo sesiones (collectionGroup)...', 'info');
+        log('   (db.collectionGroup("sesiones").get())', 'info');
+
+        var sesionesMauro = [];
+        var sesionesTotal = 0;
+        try {
+            var sgSnap = await db.collectionGroup('sesiones').get();
+            sesionesTotal = sgSnap.size;
+            log('📊 Total sesiones en collectionGroup: ' + sesionesTotal, 'info');
+
+            sgSnap.forEach(function(d) {
+                var s = d.data() || {};
+                var ref = d.ref;
+                var parent = ref.parent;
+                var grandParent = parent ? parent.parent : null;
+                var actId = grandParent ? grandParent.id : null;
+
+                var esMauroSesion = (s.uid === DIAG.uid);
+                if (esMauroSesion) {
+                    sesionesMauro.push({
+                        id: d.id,
+                        actId: actId,
+                        uid: s.uid,
+                        nombre: s.nombre || '',
+                        inicio: aDate(s.inicio),
+                        fin: aDate(s.fin),
+                        abierta: !s.fin,
+                        alcance: s.alcance || '—',
+                        creadoPor: s.creadoPor || '—',
+                        competencias: s.competencias || [],
+                        tieneDenorm: (s.alcance !== undefined && s.creadoPor !== undefined),
+                        actVisible: actId ? !!DIAG.actIdx[actId] : false
+                    });
+                }
+            });
+
+            log('🔴 Sesiones de Mauro en collectionGroup: ' + sesionesMauro.length, 'mauro');
+            stats['Sesiones Mauro (CG)'] = sesionesMauro.length;
+
+            if (sesionesMauro.length) {
+                log('   Detalle de sesiones de Mauro:', 'mauro');
+                for (var s2 = 0; s2 < sesionesMauro.length; s2++) {
+                    var ses = sesionesMauro[s2];
+                    var actNom = ses.actId && DIAG.actIdx[ses.actId] ? DIAG.actIdx[ses.actId].nombre : '(actividad no visible)';
+                    var estado = ses.abierta ? '▶ En curso' : '⏸ Pausada';
+                    var horas = ses.inicio && ses.fin ? (ses.fin - ses.inicio) / 3600000 : (ses.inicio ? (Date.now() - ses.inicio.getTime()) / 3600000 : 0);
+
+                    log('      📌 ID: ' + ses.id, 'info');
+                    log('         Actividad: ' + actNom + (ses.actVisible ? ' ✅ visible' : ' ❌ NO visible'), ses.actVisible ? 'ok' : 'err');
+                    log('         Estado: ' + estado, 'info');
+                    log('         Horas: ' + fmtH(horas), 'info');
+                    log('         Denormalizada: ' + (ses.tieneDenorm ? '✅ SÍ' : '❌ NO'), ses.tieneDenorm ? 'ok' : 'err');
+                    log('         Alcance: ' + ses.alcance, 'info');
+                    log('         CreadoPor: ' + ses.creadoPor, 'info');
+                    if (!ses.actVisible && ses.actId) {
+                        log('         ⚠️ Actividad padre NO visible (ID: ' + ses.actId + ')', 'warn');
+                    }
+                    if (!ses.tieneDenorm) {
+                        log('         ⚠️ Esta sesión NO tiene campos denormalizados.', 'warn');
+                    }
+                }
+            } else {
+                log('ℹ️ Mauro no tiene sesiones en collectionGroup.', 'info');
+            }
+        } catch (e) {
+            log('❌ Error al leer collectionGroup de sesiones: ' + e.message, 'err');
+            log('⚠️ Este es el error que bloquea la lectura de sesiones.', 'warn');
+            DIAG.errores.push('collectionGroup: ' + e.message);
+        }
+
+        // ── 6. Lectura alternativa: sesiones por actividad (la que sugerí) ──
+        log('', '');
+        log('🔄 PASO 5: Lectura alternativa — sesiones por actividad visible...', 'info');
+        log('   (db.collection("actividades").doc(id).collection("sesiones").get())', 'info');
+
+        var sesionesPorActividad = [];
+        var actIds = Object.keys(DIAG.actIdx);
+        var erroresLectura = 0;
+
+        for (var aId = 0; aId < actIds.length; aId++) {
+            try {
+                var sesSnap = await db.collection('actividades').doc(actIds[aId]).collection('sesiones').get();
+                sesSnap.forEach(function(d) {
+                    var s = d.data() || {};
+                    if (s.uid === DIAG.uid) {
+                        sesionesPorActividad.push({
+                            id: d.id,
+                            actId: actIds[aId],
+                            uid: s.uid,
+                            nombre: s.nombre || '',
+                            inicio: aDate(s.inicio),
+                            fin: aDate(s.fin),
+                            abierta: !s.fin,
+                            alcance: s.alcance || '—',
+                            creadoPor: s.creadoPor || '—',
+                            tieneDenorm: (s.alcance !== undefined && s.creadoPor !== undefined)
+                        });
+                    }
+                });
+            } catch (e) {
+                erroresLectura++;
+            }
+        }
+
+        log('🔴 Sesiones de Mauro por actividad visible: ' + sesionesPorActividad.length, 'mauro');
+        stats['Sesiones Mauro (por actividad)'] = sesionesPorActividad.length;
+        if (erroresLectura) {
+            log('   ⚠️ ' + erroresLectura + ' errores al leer sesiones de actividades', 'warn');
+        }
+
+        if (sesionesPorActividad.length) {
+            log('   Detalle de sesiones de Mauro (por actividad):', 'mauro');
+            for (var s3 = 0; s3 < sesionesPorActividad.length; s3++) {
+                var ses2 = sesionesPorActividad[s3];
+                var actNom2 = DIAG.actIdx[ses2.actId] ? DIAG.actIdx[ses2.actId].nombre : '(actividad no visible)';
+                var estado2 = ses2.abierta ? '▶ En curso' : '⏸ Pausada';
+                var horas2 = ses2.inicio && ses2.fin ? (ses2.fin - ses2.inicio) / 3600000 : (ses2.inicio ? (Date.now() - ses2.inicio.getTime()) / 3600000 : 0);
+
+                log('      📌 ID: ' + ses2.id, 'info');
+                log('         Actividad: ' + actNom2, 'info');
+                log('         Estado: ' + estado2, 'info');
+                log('         Horas: ' + fmtH(horas2), 'info');
+                log('         Denormalizada: ' + (ses2.tieneDenorm ? '✅ SÍ' : '❌ NO'), ses2.tieneDenorm ? 'ok' : 'err');
+            }
+        }
+
+        // ── 7. Resumen final ──
+        log('', '');
+        log('═══════════════════════════════════════════════════', 'highlight');
+        log('📊 RESUMEN FINAL', 'highlight');
+        log('═══════════════════════════════════════════════════', 'info');
+
+        var problemas = [];
+
+        if (DIAG.actIdx && Object.keys(DIAG.actIdx).length === 0) {
+            problemas.push('❌ No hay actividades visibles para el usuario');
+        }
+
+        if (encontradas.length === 0) {
+            problemas.push('❌ No se encontró "Desarmado Yurta" en actividades visibles');
+        } else {
+            // Verificar si Mauro está en competencias de las encontradas
+            var mauroEnComp = encontradas.some(function(a) {
+                return a.competencias && a.competencias.indexOf(DIAG.uid) !== -1;
+            });
+            if (!mauroEnComp && encontradas.some(function(a) { return a.alcance !== 'equipo'; })) {
+                problemas.push('⚠️ Mauro NO está en competencias de "Desarmado Yurta"');
+            } else {
+                log('✅ Mauro SÍ puede ver "Desarmado Yurta"', 'ok');
+            }
+        }
+
+        if (historialMauro.length === 0) {
+            log('ℹ️ Mauro no tiene registros en historial_tareas.', 'info');
+        } else {
+            var historialNoVisible = historialMauro.filter(function(r) { return !r.actVisible; });
+            if (historialNoVisible.length) {
+                problemas.push('⚠️ ' + historialNoVisible.length + ' registros de historial tienen actividad NO visible');
+            }
+        }
+
+        // Comparar collectionGroup vs porActividad
+        if (sesionesMauro.length === 0 && sesionesPorActividad.length > 0) {
+            problemas.push('❌ collectionGroup devuelve 0 sesiones, pero por actividad hay ' + sesionesPorActividad.length);
+            log('⚠️ El problema es la regla de collectionGroup', 'warn');
+        } else if (sesionesMauro.length > 0) {
+            log('✅ collectionGroup funciona correctamente', 'ok');
+        }
+
+        if (problemas.length === 0) {
+            log('🎉 ¡TODO ESTÁ BIEN! Las horas deberían verse correctamente.', 'ok');
+        } else {
+            log('⚠️ Se encontraron ' + problemas.length + ' problema(s):', 'warn');
+            for (var p = 0; p < problemas.length; p++) {
+                log('   ' + problemas[p], 'err');
+            }
+            log('', '');
+            log('💡 SOLUCIONES RECOMENDADAS:', 'highlight');
+            if (sesionesMauro.length === 0 && sesionesPorActividad.length > 0) {
+                log('   1. ⚠️ collectionGroup NO funciona para este usuario.', 'warn');
+                log('      📌 Causa: Las sesiones no tienen campos denormalizados.', 'warn');
+                log('      🔧 Solución: Ejecutar migrar-sesiones.html (como admin)', 'info');
+                log('      🔧 Alternativa: Cambiar código de actividades.html para usar lectura por actividad', 'info');
+            }
+            if (historialNoVisible && historialNoVisible.length) {
+                log('   2. 📝 ' + historialNoVisible.length + ' registros de historial con actividad no visible.', 'warn');
+                log('      🔧 Solución: Las actividades borradas no se recuperan. Sus horas van a "Otras actividades".', 'info');
+            }
+        }
+
+        // ── Recomendación específica para Mauro ──
+        if (esMauro && sesionesMauro.length === 0 && sesionesPorActividad.length > 0) {
+            log('', '');
+            log('🔴 RECOMENDACIÓN PARA MAURO:', 'highlight');
+            log('   CollectionGroup NO devuelve tus sesiones porque las reglas las bloquean.', 'warn');
+            log('   Para solucionarlo, el admin debe ejecutar el script de migración.', 'info');
+            log('   O se puede modificar actividades.html para leer sesiones por actividad.', 'info');
+        }
+
+        setStats(stats);
+        log('', '');
+        log('═══════════════════════════════════════════════════', 'info');
+        log('✅ DIAGNÓSTICO COMPLETADO', 'ok');
+        log('═══════════════════════════════════════════════════', 'info');
+
+    } catch (e) {
+        log('❌ Error grave: ' + e.message, 'err');
+        console.error(e);
+    }
+}
+
+// Exponer funciones globales
+window.ejecutarDiagnostico = ejecutarDiagnostico;
+window.limpiarLog = limpiarLog;
+</script>
+</body>
+</html>
