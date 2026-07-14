@@ -8,10 +8,10 @@
 <link rel="stylesheet" href="design-system.css">
 <style>
 /* ============================================================
-   horas-stats.html — Análisis general de horas (v4.41)
+   horas-stats.html — Análisis general de horas (v4.42)
    Reemplaza a limpieza-stats.html. Todo derivado, nada guardado.
    Sin backticks · sin ?. · sin ?? · filtrado 100% client-side.
-   v4.41: collectionGroup de sesiones con denormalización.
+   v4.42: Gestión de sesiones activas (eliminar desde la vista)
    ============================================================ */
 .hs-main { max-width: 1100px; margin: 0 auto; padding: 16px 14px 90px; }
 .hs-title { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; }
@@ -103,17 +103,27 @@
 .hs-link { color: #2a9d8f; font-size: .8rem; text-decoration: none; display: inline-flex;
            align-items: center; gap: 4px; margin-top: 8px; }
 .hs-empty { text-align: center; color: #868e96; font-size: .85rem; padding: 24px 0; }
+
+/* Sesiones activas */
+.hs-sesion { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f1f3f5; flex-wrap: wrap; }
+.hs-sesion .act { flex: 1 1 auto; min-width: 120px; font-weight: 600; color: #212529; }
+.hs-sesion .usr { color: #495057; font-size: .82rem; }
+.hs-sesion .tiempo { font-family: monospace; font-weight: 700; color: #2d5a27; }
+.hs-sesion .estado { font-size: .72rem; padding: 2px 8px; border-radius: 999px; }
+.hs-sesion .estado.activa { background: #d4edda; color: #155724; }
+.hs-sesion .estado.pausada { background: #cce5ff; color: #004085; }
+.hs-sesion .btn-del { background: none; border: none; color: #c0271f; cursor: pointer; padding: 4px; }
+.hs-sesion .btn-del:hover { color: #a02020; }
+.hs-sesion .sin-denorm { color: #d97706; font-size: .7rem; }
 @media (max-width: 560px) {
   .hs-main { padding: 12px 8px 90px; }
   .hs-torta { justify-content: center; }
+  .hs-sesion { font-size: .78rem; }
 }
 </style>
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!--  HEADER con botón de salir (igual que todas las páginas)      -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
 <header class="admin-header">
   <div class="admin-header__brand">
     <span class="material-icons">cottage</span>
@@ -157,6 +167,16 @@
             <div class="hs-lbl-min">Usuarios (tocá para incluir / excluir)</div>
             <div class="hs-chips" id="hsUsuarios"></div>
         </div>
+    </div>
+
+    <!-- SESIONES ACTIVAS / EN PAUSA -->
+    <div class="hs-card" id="hsSesionesCard" style="display:none;">
+        <h2><span class="material-icons">timer</span> Sesiones activas / en pausa</h2>
+        <p style="font-size:.78rem;color:#6c757d;margin:0 0 8px;">
+            Sesiones que aún no han sido finalizadas. <span style="color:#d97706;">⚠️</span> = sesión sin denormalizar (puede causar problemas al pausar).
+            <span style="color:#c0271f;">🗑️</span> = eliminar (solo admin o dueño).
+        </p>
+        <div id="hsSesionesLista"></div>
     </div>
 
     <!-- KPIs -->
@@ -221,17 +241,18 @@ var HS = {
     esAdmin: false,
     miUid: null,
     miNombre: '',
-    lineas: [],        // una línea por colaborador por registro de historial
-    docsLimp: [],      // registros de limpieza (a nivel documento)
-    actIdx: {},        // id actividad -> { nombre, parentId, tipo, cabana }
-    cabanas: [],       // docs de cabanas (para precio configurado y nombres)
-    usuarios: [],      // [{uid, nombre}] derivados del historial
-    uidsSel: {},       // uid -> true (selección admin)
-    desde: null,       // Date
-    hasta: null,       // Date
+    lineas: [],
+    docsLimp: [],
+    actIdx: {},
+    cabanas: [],
+    usuarios: [],
+    uidsSel: {},
+    desde: null,
+    hasta: null,
     preset: 'mes',
     mon: 'BRL',
-    expand: {}         // clave de nodo -> true
+    expand: {},
+    sesionesActivas: []   // v4.42: sesiones en curso o pausa
 };
 
 var HS_COLORES = ['#2a9d8f', '#e76f51', '#4361ee', '#ff9f1c', '#7209b7',
@@ -258,7 +279,12 @@ function isoDe(d) {
 
 function fmtH(horas) { return CVC.formatHoras(horas); }
 
-// Convierte un monto BRL a la moneda elegida y lo formatea con símbolo.
+function fmtCrono(ms) {
+    var s = Math.max(0, Math.floor(ms / 1000));
+    var hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60;
+    return hh + ':' + (mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss;
+}
+
 function fmtMonBRL(montoBRL) {
     var v = CVC.convertir(montoBRL || 0, 'BRL', HS.mon);
     return fmtMonVal(v);
@@ -267,7 +293,6 @@ function fmtMonVal(v) {
     var n = Math.round((v || 0) * 100) / 100;
     return HS_SYM[HS.mon] + ' ' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-// Convierte un valor ingresado en la moneda elegida a BRL.
 function aBRL(v) { return CVC.convertir(v || 0, HS.mon, 'BRL'); }
 
 function costoHora() {
@@ -298,7 +323,6 @@ function etiquetaCabana(num) {
     return nom ? ('C' + num + ' · ' + nom) : ('Cabaña ' + num);
 }
 
-// Nombre visible de un nodo del árbol (real o sintético)
 function nombreNodo(id) {
     if (HS.actIdx[id]) return HS.actIdx[id].nombre || '(sin nombre)';
     if (id === '__limp') return 'Limpiezas';
@@ -325,8 +349,6 @@ function pathDe(actId) {
     return path;
 }
 
-// Camino de un registro de historial: real si la actividad existe,
-// sintético si fue borrada (limpiezas viejas → Limpiezas/cabaña).
 function pathDeRegistro(h) {
     if (h.tareaId && HS.actIdx[h.tareaId]) {
         var p = pathDe(h.tareaId);
@@ -352,13 +374,11 @@ async function cargar() {
         HS.miUid = r.user.uid;
         HS.miNombre = userData.nombre || '';
 
-        // ── Setear nombre en el header ──
         document.getElementById('userName').textContent = userData.nombre || userData.email || 'Usuario';
 
         CVC.renderNav('horas-stats.html', userData.rol);
         CVC.initAyuda('horas-stats.html');
 
-        // ── 1. Leer actividades ──
         var docsAct = [];
         if (HS.esAdmin) {
             var sAct = await db.collection('actividades').get();
@@ -380,7 +400,6 @@ async function cargar() {
             }
         }
 
-        // ── 2. Índice de actividades ──
         for (var i = 0; i < docsAct.length; i++) {
             var a = docsAct[i];
             HS.actIdx[a.id] = {
@@ -391,16 +410,20 @@ async function cargar() {
             };
         }
 
-        // ── 3. Cabañas ──
         var sCab = await db.collection('cabanas').get();
         sCab.forEach(function(d) {
             var c = d.data(); c.id = d.id;
             HS.cabanas.push(c);
         });
 
-        // ── 4. Historial → líneas por colaborador + docs de limpieza ──
         var usuariosMap = {};
         var sHist = await db.collection('historial_tareas').get();
+
+        // ── RESETEAR lineas y docsLimp ──
+        HS.lineas = [];
+        HS.docsLimp = [];
+        HS.sesionesActivas = [];
+
         sHist.forEach(function(d) {
             var h = d.data();
             var fecha = aDate(h.finalizadoEn);
@@ -444,48 +467,71 @@ async function cargar() {
             }
         });
 
-        // ── 5. Ciclo actual: sesiones EN PAUSA ──
-        // Con la denormalización, collectionGroup funciona con reglas simples
+        // ── Sesiones activas (collectionGroup) ──
         try {
             var sesSnap = await db.collectionGroup('sesiones').get();
+            var ahoraMs = Date.now();
             sesSnap.forEach(function(d) {
                 var s = d.data();
                 if (s.invalidada) return;
-                if (!s.uid) return;
-                var ini = aDate(s.inicio);
-                var fin = aDate(s.fin);
-                if (!ini || !fin) return;
-                var horas = Math.max(0, (fin - ini) / 3600000);
-                if (horas <= 0) return;
                 var actId = (d.ref.parent && d.ref.parent.parent) ? d.ref.parent.parent.id : null;
                 if (!actId) return;
+                var ini = aDate(s.inicio);
+                if (!ini) return;
+                var fin = aDate(s.fin);
+                var abierta = !fin;
+                var horas = fin ? Math.max(0, (fin - ini) / 3600000) : Math.max(0, (ahoraMs - ini.getTime()) / 3600000);
                 var act = HS.actIdx[actId];
-                usuariosMap[s.uid] = s.nombre || usuariosMap[s.uid] || s.uid;
-                HS.lineas.push({
-                    docId: 'ses-' + d.id,
-                    fecha: fin,
-                    ms: fin.getTime(),
-                    uid: s.uid,
-                    nombre: s.nombre || '',
-                    horas: Math.round(horas * 100) / 100,
-                    montoBRL: 0,
-                    path: act ? pathDe(actId) : ['__otros'],
-                    actNombre: act ? act.nombre : '(actividad)',
-                    tipo: act ? act.tipo : 'general',
-                    pausada: true
+                var tieneDenorm = (s.alcance !== undefined && s.creadoPor !== undefined);
+                var esMia = (s.uid === HS.miUid);
+                var puedeEliminar = HS.esAdmin || esMia;
+
+                // Guardar para la sección de sesiones activas
+                HS.sesionesActivas.push({
+                    id: d.id,
+                    ref: d.ref,
+                    actId: actId,
+                    actNombre: act ? act.nombre : '(actividad no visible)',
+                    uid: s.uid || null,
+                    nombre: s.nombre || '(sin nombre)',
+                    inicio: ini,
+                    fin: fin,
+                    abierta: abierta,
+                    horas: horas,
+                    tieneDenorm: tieneDenorm,
+                    esMia: esMia,
+                    puedeEliminar: puedeEliminar,
+                    alcance: s.alcance || '—',
+                    creadoPor: s.creadoPor || '—'
                 });
+
+                // Si tiene fin (pausada), sumar al historial (ya se hace en horas-stats)
+                if (fin) {
+                    usuariosMap[s.uid] = s.nombre || usuariosMap[s.uid] || s.uid;
+                    HS.lineas.push({
+                        docId: 'ses-' + d.id,
+                        fecha: fin,
+                        ms: fin.getTime(),
+                        uid: s.uid,
+                        nombre: s.nombre || '',
+                        horas: Math.round(horas * 100) / 100,
+                        montoBRL: 0,
+                        path: act ? pathDe(actId) : ['__otros'],
+                        actNombre: act ? act.nombre : '(actividad)',
+                        tipo: act ? act.tipo : 'general',
+                        pausada: true
+                    });
+                }
             });
         } catch (e) {
-            // Degrada silenciosamente: solo consolidado
+            // Degrada silenciosamente
         }
 
-        // ── 6. Usuarios disponibles ──
         var uids = Object.keys(usuariosMap);
         HS.usuarios = uids.map(function(u) { return { uid: u, nombre: usuariosMap[u] }; });
         HS.usuarios.sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
         for (var k = 0; k < HS.usuarios.length; k++) HS.uidsSel[HS.usuarios[k].uid] = true;
 
-        // ── 7. UI de filtros ──
         renderPresets();
         if (HS.esAdmin) {
             document.getElementById('hsUsuariosWrap').style.display = 'block';
@@ -613,10 +659,30 @@ function docsLimpFiltrados() {
     return out;
 }
 
+// ── Eliminar sesión ──
+window.eliminarSesion = async function(actId, sesId) {
+    if (!confirm('¿ELIMINAR esta sesión permanentemente? Esta acción no se puede deshacer.')) return;
+    if (!confirm('¿Estás seguro? La sesión se borrará de la base de datos.')) return;
+
+    try {
+        var ref = db.collection('actividades').doc(actId).collection('sesiones').doc(sesId);
+        await ref.delete();
+        if (CVC.showToast) CVC.showToast('🗑️ Sesión eliminada', 'success');
+        // Recargar la página para reflejar el cambio
+        await cargar();
+        render();
+    } catch (e) {
+        if (CVC.showToast) CVC.showToast('❌ Error: ' + e.message, 'error');
+    }
+};
+
 // ============================================================
 //  RENDER GENERAL
 // ============================================================
 function render() {
+    // ── Renderizar sesiones activas ──
+    renderSesiones();
+
     var lineas = lineasFiltradas();
     renderKpis(lineas);
     renderTorta(lineas);
@@ -624,6 +690,54 @@ function render() {
     renderPersonas(lineas);
     renderArbol(lineas);
     renderLimp();
+}
+
+// ── SESIONES ACTIVAS ──
+function renderSesiones() {
+    var card = document.getElementById('hsSesionesCard');
+    var lista = document.getElementById('hsSesionesLista');
+
+    // Filtrar sesiones visibles para el usuario
+    var visibles = HS.sesionesActivas.filter(function(s) {
+        // Solo mostrar si la actividad es visible o si es admin
+        if (!HS.esAdmin && !HS.actIdx[s.actId]) return false;
+        // Si no es admin y no es su sesión, no la ve
+        if (!HS.esAdmin && s.uid !== HS.miUid) return false;
+        return true;
+    });
+
+    if (visibles.length === 0) {
+        card.style.display = 'none';
+        return;
+    }
+
+    card.style.display = 'block';
+    var html = '';
+
+    for (var i = 0; i < visibles.length; i++) {
+        var s = visibles[i];
+        var actNom = HS.actIdx[s.actId] ? HS.actIdx[s.actId].nombre : '(actividad no visible)';
+        var estadoCls = s.abierta ? 'activa' : 'pausada';
+        var estadoLabel = s.abierta ? '▶ En curso' : '⏸ En pausa';
+        var tiempo = s.abierta ? fmtCrono(Date.now() - s.inicio.getTime()) : fmtH(s.horas);
+
+        html += '<div class="hs-sesion">';
+        html += '<span class="act">' + esc(actNom) + '</span>';
+        html += '<span class="usr">' + esc(s.nombre || s.uid || '—') + '</span>';
+        html += '<span class="tiempo">' + tiempo + '</span>';
+        html += '<span class="estado ' + estadoCls + '">' + estadoLabel + '</span>';
+        if (!s.tieneDenorm) {
+            html += '<span class="sin-denorm">⚠️ sin denorm</span>';
+        }
+        if (s.puedeEliminar) {
+            html += '<button class="btn-del" onclick="eliminarSesion(\'' + s.actId + '\', \'' + s.id + '\')" title="Eliminar sesión">';
+            html += '<span class="material-icons" style="font-size:18px;">delete_outline</span>';
+            html += '</button>';
+        }
+        html += '</div>';
+    }
+
+    lista.innerHTML = html;
 }
 
 // ── KPIs ─────────────────────────────────────────────────────
@@ -669,7 +783,6 @@ function renderTorta(lineas) {
     var grupos = agruparPorRaiz(lineas).filter(function(g) { return g.horas > 0.001; });
     if (!grupos.length) { el.innerHTML = '<div class="hs-empty" style="width:100%;">Sin horas registradas en el período y usuarios seleccionados.</div>'; return; }
 
-    // Top 8 + "Otros"
     var top = grupos.slice(0, 8);
     if (grupos.length > 8) {
         var resto = 0;
@@ -795,7 +908,6 @@ function renderArbol(lineas) {
     el.innerHTML = html;
 }
 
-// Líneas cuyo path pasa por el prefijo dado
 function lineasDePrefijo(prefijo) {
     var out = [];
     for (var i = 0; i < _lineasArbol.length; i++) {
@@ -941,7 +1053,7 @@ function renderLimp() {
     el.innerHTML = html;
 }
 
-// Exponer handlers globales (Safari + onclick inline)
+// Exponer handlers globales
 window.aplicarPreset = aplicarPreset;
 window.filtroFechaManual = filtroFechaManual;
 window.cambioMoneda = cambioMoneda;
@@ -949,6 +1061,7 @@ window.toggleUsuario = toggleUsuario;
 window.toggleTodosUsuarios = toggleTodosUsuarios;
 window.toggleNodo = toggleNodo;
 window.render = render;
+window.eliminarSesion = eliminarSesion;
 
 cargar();
 </script>
