@@ -37,7 +37,6 @@
   .act-acc { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .act-acc button { border: 1px solid #dfe6dd; background: #fff; cursor: pointer; font-size: 13px; padding: 7px 11px; border-radius: 9px; color: #44513f; line-height: 1; display: inline-flex; align-items: center; gap: 5px; }
   .act-acc button:hover { background: #eef2ee; }
-  /* v4.37: acciones como iconos chicos, a la altura de los indicadores */
   .act-ico { width: 32px; height: 30px; padding: 0 !important; justify-content: center; border-radius: 8px !important; }
   .act-ico .material-icons { font-size: 17px; color: #5a6a55; }
   .btn-play { background: #2d5a27 !important; border-color: #2d5a27 !important; color: #fff !important; font-weight: 600; }
@@ -56,7 +55,6 @@
   .dot-rojo { background: #dc2626; }
   .dot-amarillo { background: #d97706; }
   .dot-verde { background: #16a34a; }
-  /* Novedades (sin ver) y Foco (destacadas) — v4.34 */
   .act-row.nueva { background: #eef5fd; box-shadow: inset 3px 0 0 #1f5fb0; }
   .act-row.nueva .act-tit { font-weight: 700; }
   .act-badge.nuevo { background: #1f5fb0; color: #fff; font-weight: 700; }
@@ -64,7 +62,6 @@
   .act-star { flex: 0 0 auto; cursor: pointer; color: #c4cec0; font-size: 20px; user-select: none; padding: 2px; line-height: 1; }
   .act-star.on { color: #e0a800; }
   .act-star:hover { color: #b8944d; }
-  /* v4.39: horas acumuladas de trabajo */
   .chip-horas { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; font-weight: 600; color: #44513f; background: #eef2ee; border: 1px solid #dfe6dd; border-radius: 999px; padding: 2px 8px; cursor: pointer; font-variant-numeric: tabular-nums; line-height: 1.3; }
   .chip-horas.on { background: #2d5a27; border-color: #2d5a27; color: #fff; }
   .hh-panel { background: #f4f7f3; border: 1px solid #dfe6dd; border-radius: 10px; padding: 8px 10px; margin: 4px 6px 8px 30px; font-size: 12.5px; color: #44513f; }
@@ -72,7 +69,6 @@
   .hh-lin { padding: 4px 0; border-top: 1px dashed #dfe6dd; display: flex; gap: 8px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
   .hh-curso { color: #1f5fb0; font-weight: 700; }
   .ruta-mini { font-size: 11.5px; color: #7a8a76; padding: 7px 10px 0 10px; background: #fff; border-top: 1px solid #eef2ec; }
-  /* Pestañas v4.37: Mantenimiento grande + fila de 3, con superíndices */
   .tabs-cv { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
   .tab-cv { position: relative; border: 1.5px solid #cdd8c8; background: #fff; color: #3c4a37; border-radius: 12px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 14px 8px; font-size: 14.5px; line-height: 1.15; }
   .tab-cv .material-icons { font-size: 20px; }
@@ -92,6 +88,10 @@
   .modal-cv .form-row2 { display: flex; gap: 8px; }
   .modal-cv .form-row2 > div { flex: 1; }
   .modal-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+  /* Corrección: botón de cerrar sesión siempre visible */
+  .admin-header__actions { display: flex; align-items: center; gap: 12px; }
+  .btn-logout { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 4px; }
+  .btn-logout:hover { background: rgba(255,255,255,0.15); }
 </style>
 </head>
 <body>
@@ -318,18 +318,18 @@ var items     = [];
 var byId      = {};
 var childrenOf = {};
 var usuarios  = [];
-var abierto = {};   // id -> true: actividad desplegada (detalle + acciones + subítems). Default: contraído.
+var abierto = {};
 var tabActual = 'proyectos';
-var diagCarga = '';   // diagnóstico de permisos cuando alguna consulta del colaborador falla
-// Estado por usuario (doc actividades_usuario/<uid>): qué vio y qué destacó — v4.34
-var vistos = {};          // actId -> millis del actualizadoEn/creadoEn ya visto por este usuario
-var destacados = [];      // actIds marcados con estrella (lista de "Favoritos")
-var ultimaVistaCompras = 0;   // millis de la última vez que este usuario abrió la pestaña Compras
-var _comprasCorte = 0;        // corte usado para resaltar lo nuevo DENTRO de Compras en esta visita
+var diagCarga = '';
+var vistos = {};
+var destacados = [];
+var ultimaVistaCompras = 0;
+var _comprasCorte = 0;
 var _estadoCargado = false;
 var _estadoTimer = null;
 var proveedoresDefault = ['Supermercado', 'Ferreter\u00eda', 'Farmacia', 'Vivero', 'Otros'];
-var proveedores = proveedoresDefault.slice();   // lista de proveedores de compras (editable por admin)
+var proveedores = proveedoresDefault.slice();
+var _cargandoSesiones = false;
 
 // ── Helpers ────────────────────────────────────────────────
 function esc(s) { return (CVC.escapeHtml ? CVC.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s)); }
@@ -350,7 +350,56 @@ function dotClase(p) {
   return 'dot-gris';
 }
 
-// ── Proveedores de compras (config editable por admin) ──
+// ── Sincronizar sesionesActivas con la subcolección ──────
+async function sincronizarSesionesActivas(actId) {
+  try {
+    var ref = db.collection('actividades').doc(actId);
+    var snap = await ref.get();
+    if (!snap.exists) return;
+
+    // Obtener todas las sesiones de la subcolección
+    var sesSnap = await ref.collection('sesiones').get();
+    var activasReales = [];
+    var ahora = firebase.firestore.Timestamp.now();
+
+    sesSnap.forEach(function(d) {
+      var s = d.data();
+      if (s.fin === null || s.fin === undefined) {
+        activasReales.push({
+          uid: s.uid,
+          nombre: s.nombre || '',
+          inicio: s.inicio || ahora
+        });
+      }
+    });
+
+    // Actualizar sesionesActivas
+    await ref.update({
+      sesionesActivas: activasReales,
+      estado: activasReales.length ? 'en_curso' : 'pendiente'
+    });
+
+    return activasReales;
+  } catch (e) {
+    console.warn('Error sincronizando sesiones:', e.message);
+    return null;
+  }
+}
+
+// ── Verificar si realmente tengo una sesión activa ────────
+async function verificarSesionReal(actId) {
+  try {
+    var snap = await db.collection('actividades').doc(actId).collection('sesiones')
+      .where('uid', '==', uid)
+      .where('fin', '==', null)
+      .get();
+    return !snap.empty;
+  } catch (e) {
+    return false;
+  }
+}
+
+// ── Proveedores de compras ─────────────────────────────────
 async function cargarProveedores() {
   try {
     var d = await db.collection('config').doc('compras_proveedores').get();
@@ -358,7 +407,7 @@ async function cargarProveedores() {
   } catch (e) { /* usa los default */ }
 }
 
-// ── Carga (respetando reglas: admin = todo; colaborador = 3 consultas) ──
+// ── Carga ──────────────────────────────────────────────────
 async function cargar() {
   try {
     var uSnap = await db.collection('usuarios').get();
@@ -395,6 +444,42 @@ async function cargar() {
         diagCarga = 'Diagnóstico — consultas OK: [' + (oks.join(', ') || 'ninguna') + ']  ·  FALLARON: [' + fails.join('  |  ') + ']';
       }
     }
+
+    // ── CORRECCIÓN: Sincronizar sesionesActivas de todas las actividades ──
+    for (var i = 0; i < docs.length; i++) {
+      var act = docs[i];
+      if (act.sesionesActivas && act.sesionesActivas.length) {
+        try {
+          // Verificar si las sesiones en el array existen realmente
+          var ref = db.collection('actividades').doc(act.id);
+          var sesSnap = await ref.collection('sesiones').get();
+          var uidsEnSubcoleccion = {};
+          sesSnap.forEach(function(d) {
+            var s = d.data();
+            if (s.fin === null || s.fin === undefined) {
+              uidsEnSubcoleccion[s.uid] = true;
+            }
+          });
+
+          // Filtrar sesionesActivas a solo las que existen en la subcolección
+          var activasFiltradas = (act.sesionesActivas || []).filter(function(s) {
+            return uidsEnSubcoleccion[s.uid];
+          });
+
+          if (activasFiltradas.length !== (act.sesionesActivas || []).length) {
+            // Hay referencias huérfanas, limpiar
+            await ref.update({
+              sesionesActivas: activasFiltradas,
+              estado: activasFiltradas.length ? 'en_curso' : 'pendiente'
+            });
+            act.sesionesActivas = activasFiltradas;
+          }
+        } catch (e) {
+          // Si hay error de permisos, ignorar (el core lo manejará)
+        }
+      }
+    }
+
     items = docs;
     indexar();
     await cargarHoras();
@@ -406,13 +491,10 @@ async function cargar() {
   }
 }
 
-// ── Horas trabajadas (todo derivado, nunca guardado) ───────
-// Fuentes: historial_tareas (finalizaciones, horas por colaborador) + subcolección
-// sesiones de cada actividad (ciclo actual: pausadas y en curso; al finalizar, el
-// core las consolida en historial y las borra — no hay doble conteo).
-var horasIdx = {};   // actId -> { horas, ult (millis), lineas: [{ts, nombre, horas, sesion}] }
-var _agg = {};       // memo por render del agregado de subárbol
-var desglose = {};   // actId -> bool: panel de desagregado abierto
+// ── Horas trabajadas ────────────────────────────────────────
+var horasIdx = {};
+var _agg = {};
+var desglose = {};
 
 async function cargarHoras() {
   horasIdx = {};
@@ -423,7 +505,7 @@ async function cargarHoras() {
       if (!h.tareaId) return;
       var reg = horasIdx[h.tareaId] || (horasIdx[h.tareaId] = { horas: 0, ult: 0, lineas: [] });
       var ts = (h.finalizadoEn && h.finalizadoEn.toMillis) ? h.finalizadoEn.toMillis() : 0;
-      if (ts > reg.ult) reg.ult = ts;  // una tildada sin reloj también cuenta como "se trabajó"
+      if (ts > reg.ult) reg.ult = ts;
       var cols = h.colaboradores || [];
       var sumo = false;
       for (var i = 0; i < cols.length; i++) {
@@ -439,7 +521,8 @@ async function cargarHoras() {
       }
     });
   } catch (e) { }
-  // Ciclo actual (requiere en las reglas: match /{path=**}/sesiones — si falla, degrada sin romper)
+
+  // Ciclo actual - solo si no estamos en modo admin con problemas de permisos
   try {
     var sgSnap = await db.collectionGroup('sesiones').get();
     var ahoraMs = Date.now();
@@ -459,10 +542,9 @@ async function cargarHoras() {
       if (tref > reg.ult) reg.ult = tref;
       reg.lineas.push({ ts: ini, nombre: s.nombre || '', horas: hrs, sesion: abierta ? 'en curso' : 'pausada' });
     });
-  } catch (e) { }
+  } catch (e) { /* degrada silenciosamente */ }
 }
 
-// Agregado de subárbol (memo limpiado en cada render)
 function horasArbol(id) {
   if (_agg[id]) return _agg[id];
   var base = horasIdx[id] || { horas: 0, ult: 0 };
@@ -476,17 +558,19 @@ function horasArbol(id) {
   _agg[id] = r;
   return r;
 }
+
 function fmtHorasHM(horas) {
   var min = Math.round(horas * 60);
   if (min < 60) return min + ' min';
   var hh = Math.floor(min / 60), mm = min % 60;
   return hh + ':' + (mm < 10 ? '0' : '') + mm + ' h';
 }
+
 window.toggleDesglose = function (id) {
   desglose[id] = !desglose[id];
   render();
 };
-// Desagregado: quién sumó horas en el subárbol, línea por línea (registros y sesiones del ciclo).
+
 function desgloseHTML(it) {
   var lineas = [], porPersona = {}, ids = [it.id], vistosIds = {};
   while (ids.length) {
@@ -528,21 +612,20 @@ function desgloseHTML(it) {
   return h;
 }
 
-// ── Estado por usuario: vistos + destacados ────────────────
+// ── Estado por usuario ─────────────────────────────────────
 function tsAct(it) {
   var t = it.actualizadoEn || it.creadoEn;
   return (t && t.toMillis) ? t.toMillis() : 0;
 }
 function esNueva(it) {
   if (it.hecho) return false;
-  // Los sub-ítems del chequeo de inventario no cuentan: la novedad es el chequeo/limpieza en sí.
   if (it.tipo === 'item-chequeo' || it.tipo === 'categoria-chequeo') return false;
   var v = vistos[it.id];
   if (v == null) {
-    if (it.creadoPor === uid) return false;   // lo creaste vos
+    if (it.creadoPor === uid) return false;
     return tsAct(it) > 0;
   }
-  return tsAct(it) > (v + 2000);   // margen 2s por diferencia de reloj con serverTimestamp
+  return tsAct(it) > (v + 2000);
 }
 function nuevasDesc(id) {
   var d = descendientes(id), n = 0;
@@ -575,7 +658,7 @@ async function flushEstado() {
       ultimaVistaCompras: ultimaVistaCompras,
       actualizadoEn: serverTs()
     });
-  } catch (e) { /* silencioso: es estado auxiliar, no bloquea el trabajo */ }
+  } catch (e) { /* silencioso */ }
 }
 document.addEventListener('visibilitychange', function () {
   if (document.visibilityState === 'hidden') flushEstado();
@@ -587,12 +670,9 @@ async function cargarEstadoUsuario() {
       var x = d.data() || {};
       vistos = x.vistos || {};
       destacados = (x.destacados || []).slice();
-      // Primer uso del contador de Compras: arranca "al día" para no inundar el superíndice.
       if (x.ultimaVistaCompras) { ultimaVistaCompras = x.ultimaVistaCompras; }
       else { ultimaVistaCompras = Date.now(); programarGuardadoEstado(); }
     } else {
-      // Primer uso de la función: todo lo existente arranca como "visto",
-      // para no inundar la pantalla. De acá en más, lo nuevo se resalta solo.
       vistos = {};
       for (var i = 0; i < items.length; i++) { var t0 = tsAct(items[i]); vistos[items[i].id] = t0 || Date.now(); }
       destacados = [];
@@ -602,8 +682,6 @@ async function cargarEstadoUsuario() {
     if (esAdmin) podarEstado();
   } catch (e) { vistos = vistos || {}; destacados = destacados || []; }
 }
-// Limpieza de referencias a actividades borradas. Solo el admin (que ve todo el árbol)
-// puede podar con seguridad; para un colaborador, "no lo veo" no implica "no existe".
 function podarEstado() {
   var cambio = false;
   for (var k in vistos) { if (!byId[k]) { delete vistos[k]; cambio = true; } }
@@ -659,14 +737,11 @@ function esRecurrente(it) { return (parseInt(it.recurrencia, 10) || 0) > 0; }
 function rankSem(it) { return (CVC.actSemaforo ? (CVC.actSemaforo(it).rank) : 5); }
 function tsCreado(it) { var t = it.creadoEn; return (t && t.toMillis) ? t.toMillis() : 0; }
 
-// Unidad de compra = una "lista" para el usuario: un contenedor de compras cuenta 1
-// (sus sub-ítems no cuentan aparte) y una compra suelta cuenta 1.
 function esCompraUnidad(it) {
   if (!it.esCompra) return false;
   var padre = it.parentId ? byId[it.parentId] : null;
   return !(padre && padre.esCompra);
 }
-// Listas de compras nuevas (creadas por otros) desde la última vez que abrí la pestaña Compras.
 function comprasNuevas(corte) {
   var n = 0;
   for (var i = 0; i < items.length; i++) {
@@ -677,21 +752,16 @@ function comprasNuevas(corte) {
   }
   return n;
 }
-// Color del proyecto raíz (para la barra vertical del árbol).
 function colorDeRaiz(it) {
   var cur = it, guard = 0;
   while (cur && cur.parentId && byId[cur.parentId] && guard < 15) { cur = byId[cur.parentId]; guard++; }
   return (cur && cur.color) ? cur.color : '#2d5a27';
 }
-// Cronómetro universal (v4.37): toda actividad trabajable se puede cronometrar,
-// salvo los nodos internos del chequeo de inventario, los faltantes y las raíces (contenedores).
 var _TIPOS_SIN_CRONO = ['chequeo-inventario', 'categoria-chequeo', 'item-chequeo', 'faltante-inventario'];
 function puedeCronometrar(it) {
   if (!it.parentId) return false;
   return _TIPOS_SIN_CRONO.indexOf(it.tipo || '') === -1;
 }
-// Al tildar SIN reloj, se registra realización en historial solo cuando aporta:
-// recurrentes (reprograman), limpiezas/controles (estadísticas) o actividades con honorario.
 function debeRegistrarTilde(it) {
   if (esRecurrente(it)) return true;
   if (it.tipo === 'limpieza' || it.tipo === 'control') return true;
@@ -705,7 +775,6 @@ function setSup(idEl, n) {
 }
 
 // ── Cronómetro vivo ────────────────────────────────────────
-// Millis de inicio de MI sesión en la actividad (si no tengo, la más vieja de las abiertas).
 function inicioCrono(it) {
   var ses = it.sesionesActivas || [];
   var minTs = 0;
@@ -722,7 +791,6 @@ function fmtCrono(ms) {
   var hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60;
   return hh + ':' + (mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss;
 }
-// Actualiza cada segundo todos los contadores visibles (tarjetas y banner).
 function tickCronos() {
   var els = document.querySelectorAll('.crono-tiempo');
   var ahora = Date.now();
@@ -732,15 +800,27 @@ function tickCronos() {
   }
 }
 setInterval(tickCronos, 1000);
-// Mi actividad con cronómetro corriendo (para el banner al inicio), si hay alguna.
-function miCronoCorriendo() {
+
+// ── CORRECCIÓN: miCronoCorriendo verifica la subcolección ──
+async function miCronoCorriendo() {
   for (var i = 0; i < items.length; i++) {
     var ses = items[i].sesionesActivas || [];
-    for (var j = 0; j < ses.length; j++) { if (ses[j].uid === uid) return items[i]; }
+    for (var j = 0; j < ses.length; j++) {
+      if (ses[j].uid === uid) {
+        // Verificar que realmente existe en la subcolección
+        var existe = await verificarSesionReal(items[i].id);
+        if (existe) {
+          return items[i];
+        } else {
+          // Referencia huérfana - sincronizar
+          await sincronizarSesionesActivas(items[i].id);
+        }
+      }
+    }
   }
   return null;
 }
-// Toque en el banner: abre el árbol hasta la actividad y la muestra.
+
 window.abrirActividad = function (id) {
   var it = byId[id]; if (!it) return;
   var cur = it, guard = 0;
@@ -756,10 +836,8 @@ window.abrirActividad = function (id) {
 };
 
 // ── Render ─────────────────────────────────────────────────
-function render() {
-  _agg = {};  // el agregado de horas se recalcula en cada render
-  // Superíndices: Proyectos = novedades sin ver · Favoritos = destacadas pendientes ·
-  // Compras = listas nuevas desde la última visita a la pestaña.
+async function render() {
+  _agg = {};
   var nuevasTotal = items.filter(esNueva).length;
   var favTotal = destacados.filter(function (id) { return byId[id] && !byId[id].hecho; }).length;
   setSup('supProy', nuevasTotal);
@@ -768,8 +846,9 @@ function render() {
 
   var z = document.getElementById('zonaContenido');
   var banner = diagCarga ? ('<div class="muted-note" style="border-color:#e0a3a3;color:#a33;background:#fdf3f3">' + esc(diagCarga) + '</div>') : '';
-  // Contador corriendo de este usuario (aunque haya cerrado la ventana): siempre visible al inicio.
-  var enCurso = miCronoCorriendo();
+
+  // ── CORRECCIÓN: verificar sesión real antes de mostrar banner ──
+  var enCurso = await miCronoCorriendo();
   if (enCurso) {
     banner += '<div class="banner-crono" onclick="abrirActividad(\'' + enCurso.id + '\')">'
       + '<span class="material-icons" style="font-size:19px">timer</span>'
@@ -777,13 +856,13 @@ function render() {
       + '<span class="crono-tiempo" data-ini="' + inicioCrono(enCurso) + '" style="margin-left:auto">0:00:00</span>'
       + '</div>';
   }
+
   if (tabActual === 'compras') { z.innerHTML = banner + renderCompras(); tickCronos(); return; }
   if (tabActual === 'favoritos') { z.innerHTML = banner + renderFavoritos(); tickCronos(); return; }
   z.innerHTML = banner + renderProyectos();
   tickCronos();
 }
 
-// Favoritos = lista plana de lo que el usuario destacó con la estrella, ordenada por urgencia.
 function renderFavoritos() {
   var lista = [];
   for (var i = 0; i < destacados.length; i++) { var it = byId[destacados[i]]; if (it) lista.push(it); }
@@ -825,11 +904,7 @@ window.toggleEstrella = function (id) {
   render();
 };
 
-// Proyectos = árbol completo. Todo cuelga de un proyecto; ya no hay "sueltos".
-// (Si por algún motivo quedara una actividad sin proyecto, se muestra aparte para reasignarla.)
 function renderProyectos() {
-  // Orden: primero los proyectos con trabajo más reciente (derivado del subárbol);
-  // los que nunca registraron trabajo quedan al final, en orden alfabético.
   var proys = items.filter(function (it) { return !it.parentId && esProy(it); }).sort(byTitulo);
   proys.sort(function (a, b) { return horasArbol(b.id).ult - horasArbol(a.id).ult; });
   var huerfanas = items.filter(function (it) { return !it.parentId && !esProy(it); }).sort(byTitulo);
@@ -858,14 +933,13 @@ function renderProyectos() {
 function nodoHTML(it, nivel) {
   var hijos = hijosDe(it.id);
   var tiene = hijos.length > 0;
-  var ab = !!abierto[it.id];   // un solo estado: contraído por defecto
+  var ab = !!abierto[it.id];
   var sem = (CVC.actSemaforo && !it.hecho) ? CVC.actSemaforo(it) : { color: 'gris', label: '' };
   var esRec = (parseInt(it.recurrencia, 10) || 0) > 0;
   var nueva = esNueva(it);
   var esSubChequeo = (it.tipo === 'item-chequeo' || it.tipo === 'categoria-chequeo');
 
   var h = '<div class="act-item" id="nodo-' + it.id + '">';
-  // Fila compacta. Un clic en la fila (menos el check) despliega detalle + acciones + subítems.
   h += '<div class="act-row act-clic' + (ab ? ' abierto' : '') + (nueva ? ' nueva' : '') + '" onclick="toggleAbierto(\'' + it.id + '\')">';
   h += '<span class="act-caret' + (tiene ? ' tiene' : '') + '">' + (ab ? '\u25be' : '\u25b8') + '</span>';
   if (it.tipo === 'item-chequeo') {
@@ -924,17 +998,14 @@ function nodoHTML(it, nivel) {
     else h += '<span class="act-badge">\ud83d\udd12</span>';
   }
   h += '</span>';
-  h += '</div>'; // act-row
+  h += '</div>';
 
-  // Desagregado de horas (independiente del despliegue de la actividad)
   if (desglose[it.id]) h += desgloseHTML(it);
 
-  // Al desplegar (un solo clic): detalle + acciones + subítems
   if (ab) {
     h += '<div class="act-detalle">';
     if (it.detalle) h += '<div class="act-desc">' + esc(it.detalle) + '</div>';
     h += '<div class="act-acc">';
-    // Cronómetro: el play es el único botón con texto; corriendo, ese espacio muestra el tiempo vivo.
     if (puedeCronometrar(it) && !it.hecho) {
       if (it.estado === 'en_curso') {
         h += '<span class="crono-live"><span class="material-icons" style="font-size:17px">timer</span><span class="crono-tiempo" data-ini="' + inicioCrono(it) + '">0:00:00</span></span>';
@@ -944,7 +1015,6 @@ function nodoHTML(it, nivel) {
         h += '<button class="btn-play" onclick="cronoIniciar(\'' + it.id + '\')"><span class="material-icons">play_arrow</span> Iniciar</button>';
       }
     }
-    // Acciones como iconos chicos, a la altura de los indicadores.
     h += '<button class="act-ico" title="Agregar sub-\u00edtem" onclick="nuevoHijo(\'' + it.id + '\')"><span class="material-icons">add</span></button>';
     h += '<button class="act-ico" title="Reportar" onclick="abrirReporte(\'' + it.id + '\')"><span class="material-icons" style="color:#b8860b">campaign</span></button>';
     var puedeGestionar = (esAdmin || it.creadoPor === uid);
@@ -953,20 +1023,18 @@ function nodoHTML(it, nivel) {
     if (puedeGestionar) h += '<button class="act-ico" title="Borrar" onclick="borrarItem(\'' + it.id + '\')"><span class="material-icons" style="color:#a33">delete_outline</span></button>';
     h += '</div>';
     h += '</div>';
-    // Subítems (en la misma acción). La barra vertical lleva el color del proyecto raíz.
     if (tiene) {
       h += '<div class="act-children" style="border-left-color:' + esc(colorDeRaiz(it)) + '">';
       for (var i = 0; i < hijos.length; i++) h += nodoHTML(hijos[i], nivel + 1);
       h += '</div>';
     }
   }
-  h += '</div>'; // act-item
+  h += '</div>';
   return h;
 }
 
-// ── Compras: lista central de cosas a conseguir ────────────
+// ── Compras ──────────────────────────────────────────────────
 function esContenedorCompra(it) {
-  // Una compra con sub-ítems de compra es un contenedor ("Lista materiales"): no se lista, se listan sus ítems
   return items.some(function (x) { return x.parentId === it.id && x.esCompra; });
 }
 function contextoCompra(it) {
@@ -988,7 +1056,6 @@ function renderCompras() {
     for (var i = 0; i < lista.length; i++) {
       var it = lista[i];
       var ctx = contextoCompra(it);
-      // Nueva desde la última visita a Compras (creada por otro): se resalta en azul.
       var raizCompra = it;
       while (raizCompra.parentId && byId[raizCompra.parentId] && byId[raizCompra.parentId].esCompra) raizCompra = byId[raizCompra.parentId];
       var esNuevaCompra = (raizCompra.creadoPor !== uid) && (tsCreado(raizCompra) > _comprasCorte);
@@ -1028,15 +1095,13 @@ function renderCompras() {
   return html;
 }
 
-// ── Interacción ────────────────────────────────────────────
+// ── Interacción ─────────────────────────────────────────────
 window.irTab = function (t, btn) {
   tabActual = t;
   var tabs = document.querySelectorAll('.tab-cv');
   for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
   if (btn) btn.classList.add('active');
   if (t === 'compras') {
-    // Al abrir Compras: lo llegado desde la última visita se resalta en la lista,
-    // y el corte se actualiza (el superíndice vuelve a cero para la próxima).
     _comprasCorte = ultimaVistaCompras;
     ultimaVistaCompras = Date.now();
     programarGuardadoEstado();
@@ -1055,7 +1120,6 @@ window.toggleHecho = async function (id) {
   marcarVisto(id);
   var nuevo = !it.hecho;
   try {
-    // Con cronómetro corriendo: finaliza registrando el tiempo trabajado.
     if (nuevo && it.estado === 'en_curso') {
       if (!confirm('Hay un cronómetro corriendo. ¿Finalizar y registrar el tiempo trabajado?')) { render(); return; }
       var col = await CVC.actFinalizar(id, { uid: uid, nombre: miNombre });
@@ -1064,8 +1128,6 @@ window.toggleHecho = async function (id) {
       await cargar();
       return;
     }
-    // Recurrentes, limpiezas/controles y actividades con honorario: la realización
-    // sin reloj queda registrada en historial (y las recurrentes se reprograman).
     if (nuevo && debeRegistrarTilde(it)) {
       if (!confirm('\u00bfDar la tarea por realizada SIN cron\u00f3metro? Queda registrada, pero sin contar tiempo.')) { render(); return; }
       await CVC.actTildar(id, { uid: uid, nombre: miNombre });
@@ -1073,7 +1135,6 @@ window.toggleHecho = async function (id) {
       await cargar();
       return;
     }
-    // Items simples (no cronometrables): tilde con cascada hacia los hijos
     if (nuevo) {
       var ids = [id].concat(descendientes(id));
       var batch = db.batch();
@@ -1122,8 +1183,7 @@ window.toggleCompraUI = function () {
 };
 window.togglePadreUI = function () {
   var bp = document.getElementById('bloquePadre');
-  if (!bp || bp.style.display === 'none') return; // selector oculto: no toca el bloque de alcance
-  // Toda actividad pertenece a un proyecto: el alcance se hereda (se oculta), se muestra la nota de hijo
+  if (!bp || bp.style.display === 'none') return;
   document.getElementById('bloqueRaiz').style.display = 'none';
   document.getElementById('hijoNota').style.display = 'block';
 };
@@ -1144,11 +1204,9 @@ function prepararModal(o) {
   document.getElementById('itVence').value = it ? (it.fechaVencimiento || '') : '';
   document.getElementById('itHora').value = it ? (it.hora || '') : '';
   document.getElementById('itPrioridad').value = it ? (it.prioridad || 'gris') : 'gris';
-  // Hijo creado dentro de una lista de compras: hereda "es compra" + proveedor
   var padre = parentId ? byId[parentId] : null;
   var heredaCompra = (!it && padre && padre.esCompra);
   document.getElementById('itCompra').checked = it ? !!it.esCompra : !!heredaCompra;
-  // Selector de proveedor: opciones desde la lista (+ valor antiguo del ítem si no está)
   var catVal = it ? (it.categoriaCompra || '') : (heredaCompra ? (padre.categoriaCompra || '') : (proveedores[0] || ''));
   var copts = '';
   if (catVal && proveedores.indexOf(catVal) === -1) copts += '<option value="' + esc(catVal) + '">' + esc(catVal) + '</option>';
@@ -1162,11 +1220,9 @@ function prepararModal(o) {
   document.getElementById('itTiempoEst').value = it ? (it.tiempoEstimado || 0) : 0;
 
   var esProyecto = (esRoot && tipoRaiz === 'proyecto');
-  // Bloque raíz vs hijo
   document.getElementById('bloqueRaiz').style.display = esRoot ? 'block' : 'none';
   document.getElementById('hijoNota').style.display = esRoot ? 'none' : 'block';
   document.getElementById('bloqueColor').style.display = esProyecto ? 'block' : 'none';
-  // Frecuencia: cualquier actividad puede ser recurrente (los proyectos contenedores no)
   document.getElementById('bloqueRutina').style.display = esProyecto ? 'none' : 'block';
   document.getElementById('itColor').value = (it && it.color) ? it.color : '#2d5a27';
   var alcanceDefault = (!it && !!o.recurrenteDefault) ? 'equipo' : 'personal';
@@ -1175,9 +1231,6 @@ function prepararModal(o) {
   toggleAlcanceUI();
   toggleCompraUI();
 
-  // Selector "Pertenece a…": toda actividad que no sea un proyecto contenedor debe estar
-  // dentro de un proyecto. Se muestra al EDITAR (si la pertenencia es representable) y al
-  // crear una tarea recurrente. NO existe la opción "sin proyecto".
   var bp = document.getElementById('bloquePadre');
   var padreActual = parentId ? byId[parentId] : null;
   var padreEsProyTop = !!(padreActual && padreActual.tipoRaiz === 'proyecto' && !padreActual.parentId);
@@ -1231,7 +1284,6 @@ window.guardarItem = async function () {
       actualizadoEn: serverTs()
     };
 
-    // Alcance + competencias (raíz manda; hijo hereda del padre)
     var alcance, competencias, color, tipoRaiz, raizId;
     if (esRoot) {
       alcance = document.getElementById('itAlcance').value;
@@ -1251,26 +1303,21 @@ window.guardarItem = async function () {
       raizId = padre.raizId || parentId;
     }
 
-    // Frecuencia y tiempo estimado: cualquier actividad puede ser recurrente (los proyectos contenedores no)
     var esProyecto = esRoot && tipoRaiz === 'proyecto';
-    // Regla del modelo: toda actividad que no sea un proyecto contenedor debe pertenecer a un proyecto.
     if (!esProyecto && !parentId) { toast('Toda actividad tiene que estar dentro de un proyecto. Eleg\u00ed uno en \u201cPertenece a\u201d.', 'error'); btn.disabled = false; return; }
     var recurrencia = esProyecto ? 0 : (parseInt(document.getElementById('itRecurrencia').value, 10) || 0);
     var tiempoEstimado = esProyecto ? 0 : (parseInt(document.getElementById('itTiempoEst').value, 10) || 0);
 
     var idGuardado = id;
     if (id) {
-      // EDITAR (con posible reasignación de proyecto)
       var it = byId[id] || {};
       var origParent = it.parentId || '';
       var selVisible = document.getElementById('bloquePadre').style.display !== 'none';
       var nuevoParentId = selVisible ? (document.getElementById('itPadre').value || '') : origParent;
       var reparent = (nuevoParentId !== origParent);
 
-      // Estado resultante de jerarquía + herencia (alcance/competencias/tipoRaiz/raizId)
       var resTipo, resRaiz, resAlc, resComp, resColor;
       if (nuevoParentId) {
-        // queda como hijo del proyecto/actividad elegido: hereda todo del padre
         var P = byId[nuevoParentId] || {};
         resTipo = P.tipoRaiz || 'proyecto';
         resRaiz = P.raizId || P.id || nuevoParentId;
@@ -1278,7 +1325,6 @@ window.guardarItem = async function () {
         resComp = (P.competencias || []).slice();
         resColor = '';
       } else {
-        // queda como raíz: proyecto solo si ya era un proyecto contenedor de nivel superior
         resTipo = esProyecto ? 'proyecto' : 'suelto';
         resRaiz = id;
         if (document.getElementById('bloqueRaiz').style.display !== 'none') {
@@ -1303,7 +1349,6 @@ window.guardarItem = async function () {
       upd.color = resColor;
       await refAct(id).update(upd);
 
-      // Cascada a descendientes si cambió jerarquía o herencia
       var cambio = reparent
         || (it.alcance !== resAlc)
         || (JSON.stringify(it.competencias || []) !== JSON.stringify(resComp))
@@ -1319,7 +1364,6 @@ window.guardarItem = async function () {
       }
       toast(reparent ? 'Movido y guardado.' : 'Guardado.', 'success');
     } else {
-      // CREAR (id pre-generado para fijar raizId en raíces)
       var ref = db.collection('actividades').doc();
       idGuardado = ref.id;
       var doc = Object.assign({}, base, {
@@ -1340,9 +1384,8 @@ window.guardarItem = async function () {
         cabana: null, reservaId: null, sesionesActivas: []
       });
       await ref.set(doc);
-      if (parentId) { abierto[parentId] = true; } // dejar el padre desplegado para ver el nuevo sub-ítem
+      if (parentId) { abierto[parentId] = true; }
 
-      // Aviso a las personas asignadas (si corresponde)
       if (alcance === 'asignados' && competencias.length && CVC.avisar) {
         var otros = competencias.filter(function (x) { return x !== uid; });
         if (otros.length) { try { await CVC.avisar('actividad', 'Nueva actividad asignada', titulo, otros, uid); } catch (e2) { } }
@@ -1377,18 +1420,36 @@ window.borrarItem = async function (id) {
   } catch (e) { toast('No se pudo borrar: ' + e.message, 'error'); }
 };
 
-// ── Cronómetro (motor en actividades-core.js) ─────────────
+// ── Cronómetro ──────────────────────────────────────────────
 window.cronoIniciar = async function (id) {
   if (!CVC.actIniciar) { toast('Falta actividades-core.js', 'error'); return; }
   marcarVisto(id);
-  try { await CVC.actIniciar(id, { uid: uid, nombre: miNombre }); await cargar(); }
-  catch (e) { toast('No se pudo iniciar: ' + e.message, 'error'); }
+  try {
+    await CVC.actIniciar(id, { uid: uid, nombre: miNombre });
+    await cargar();
+  } catch (e) {
+    if (e.message && e.message.indexOf('permission') !== -1) {
+      toast('No tienes permiso para iniciar esta actividad. Si es tuya, intentá recargar.', 'error');
+    } else {
+      toast('No se pudo iniciar: ' + e.message, 'error');
+    }
+  }
 };
+
 window.cronoPausar = async function (id) {
   if (!CVC.actPausar) { toast('Falta actividades-core.js', 'error'); return; }
-  try { await CVC.actPausar(id, { uid: uid, nombre: miNombre }); await cargar(); }
-  catch (e) { toast('No se pudo pausar: ' + e.message, 'error'); }
+  try {
+    await CVC.actPausar(id, { uid: uid, nombre: miNombre });
+    await cargar();
+  } catch (e) {
+    if (e.message && e.message.indexOf('permission') !== -1) {
+      toast('No tienes permiso para pausar esta sesión. Probá finalizarla o usar la herramienta de limpieza.', 'error');
+    } else {
+      toast('No se pudo pausar: ' + e.message, 'error');
+    }
+  }
 };
+
 window.cronoFinalizar = async function (id) {
   if (!CVC.actFinalizar) { toast('Falta actividades-core.js', 'error'); return; }
   if (!confirm('Finalizar y registrar el tiempo/honorario de esta actividad?')) return;
@@ -1397,16 +1458,16 @@ window.cronoFinalizar = async function (id) {
     var n = (col && col.length) ? col.length : 0;
     toast('Finalizada' + (n ? (' \u00b7 honorario para ' + n + ' persona(s)') : ''), 'success');
     await cargar();
-  } catch (e) { toast('No se pudo finalizar: ' + e.message, 'error'); }
+  } catch (e) {
+    if (e.message && e.message.indexOf('permission') !== -1) {
+      toast('No tienes permiso para finalizar esta sesión. Probá usando la herramienta de limpieza.', 'error');
+    } else {
+      toast('No se pudo finalizar: ' + e.message, 'error');
+    }
+  }
 };
 
-// ── Validar un ítem del chequeo de inventario (check-in/check-out) ──
-// Pide la cantidad confirmada con un cuadro nativo (simple y funciona bien en iPad). Si la
-// cantidad confirmada es menor a la sugerida, o si se anota algo, ese ítem se agrega solo a la
-// lista "Faltantes o daños" de la cabaña (sin duplicar si ya hay uno abierto para ese ítem).
-// Cuando se valida el último ítem del chequeo, CVC.actValidarItemChequeo consolida todo en
-// reservas.inventarioEntrada/Salida + cabanas.inventarioActual, y si es el de entrada, genera
-// ahí mismo el chequeo de salida.
+// ── Validar ítem de chequeo ─────────────────────────────────
 window.validarItemChequeo = async function (itemId) {
   var it = byId[itemId];
   if (!it) return;
@@ -1431,7 +1492,7 @@ window.validarItemChequeo = async function (itemId) {
   } catch (e) { toast('No se pudo validar: ' + e.message, 'error'); }
 };
 
-// ── Reportar / observación al admin (con foto, como en facturas) ──
+// ── Reportar ─────────────────────────────────────────────────
 var _repActId = null, _repFoto = null;
 window.abrirReporte = function (id) {
   _repActId = id; _repFoto = null;
@@ -1478,7 +1539,7 @@ window.enviarReporte = async function (btn) {
   btn.disabled = false; btn.innerHTML = '<span class="material-icons" style="font-size:18px;vertical-align:-4px">send</span> Enviar reporte';
 };
 
-// ── Proveedores de compras (editor admin) ─────────────────
+// ── Proveedores ──────────────────────────────────────────────
 var _provEdit = [];
 window.abrirProveedores = function () {
   _provEdit = proveedores.slice();
@@ -1519,7 +1580,7 @@ window.guardarProveedores = async function () {
   } catch (e) { toast('No se pudo guardar: ' + e.message, 'error'); }
 };
 
-// ── Historial de realizaciones (admin) ────────────────────
+// ── Historial ────────────────────────────────────────────────
 window.verHistorial = async function (id) {
   var it = byId[id];
   document.getElementById('histTitulo').textContent = 'Historial \u00b7 ' + ((it && it.titulo) ? it.titulo : '');
