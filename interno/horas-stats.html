@@ -7,11 +7,6 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <link rel="stylesheet" href="design-system.css">
 <style>
-/* ============================================================
-   horas-stats.html — Análisis general de horas (v4.43)
-   Reemplaza a limpieza-stats.html. Todo derivado, nada guardado.
-   v4.43: Corrección de visibilidad para no-admin
-   ============================================================ */
 .hs-main { max-width: 1100px; margin: 0 auto; padding: 16px 14px 90px; }
 .hs-title { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; }
 .hs-title h1 { font-size: 1.35rem; margin: 0; }
@@ -253,9 +248,6 @@ var HS_COLORES = ['#2a9d8f', '#e76f51', '#4361ee', '#ff9f1c', '#7209b7',
 var HS_SYM = { BRL: 'R$', USD: 'US$', ARS: '$' };
 var HS_TIPOS_LIMPIEZA = { limpieza: true, control_salida: true, control: true };
 
-// ============================================================
-//  HELPERS
-// ============================================================
 function esc(s) { return CVC.escapeHtml(s); }
 
 function aDate(x) {
@@ -325,7 +317,6 @@ function nombreNodo(id) {
     return '(actividad eliminada)';
 }
 
-// ── Caminos ──────────────────────────────────────────────────
 var _pathCache = {};
 function pathDe(actId) {
     if (_pathCache[actId]) return _pathCache[actId];
@@ -354,7 +345,6 @@ function pathDeRegistro(h) {
     return ['__otros'];
 }
 
-// ── Eliminar sesión (admin o dueño) ────────────────────────
 window.eliminarSesion = async function(actId, sesId) {
     if (!confirm('¿ELIMINAR esta sesión permanentemente? Esta acción no se puede deshacer.')) return;
     if (!confirm('¿Estás seguro?')) return;
@@ -370,7 +360,6 @@ window.eliminarSesion = async function(actId, sesId) {
     }
 };
 
-// ── CARGA ──────────────────────────────────────────────────
 async function cargar() {
     try {
         var r = await CVC.verificarAuth(['admin', 'user']);
@@ -384,7 +373,6 @@ async function cargar() {
         CVC.renderNav('horas-stats.html', userData.rol);
         CVC.initAyuda('horas-stats.html');
 
-        // ── 1. Leer actividades ──
         var docsAct = [];
         if (HS.esAdmin) {
             var sAct = await db.collection('actividades').get();
@@ -416,14 +404,12 @@ async function cargar() {
             };
         }
 
-        // ── 2. Cabañas ──
         var sCab = await db.collection('cabanas').get();
         sCab.forEach(function(d) {
             var c = d.data(); c.id = d.id;
             HS.cabanas.push(c);
         });
 
-        // ── 3. Historial ──
         var usuariosMap = {};
         var sHist = await db.collection('historial_tareas').get();
 
@@ -474,7 +460,6 @@ async function cargar() {
             }
         });
 
-        // ── 4. Sesiones activas ──
         try {
             var sesSnap = await db.collectionGroup('sesiones').get();
             var ahoraMs = Date.now();
@@ -494,7 +479,6 @@ async function cargar() {
                 var esMia = (s.uid === HS.miUid);
                 var puedeEliminar = HS.esAdmin || esMia;
 
-                // Solo guardar si la actividad es visible o es admin
                 if (!HS.esAdmin && !act) return;
                 if (!HS.esAdmin && s.uid !== HS.miUid) return;
 
@@ -516,7 +500,6 @@ async function cargar() {
                     creadoPor: s.creadoPor || '—'
                 });
 
-                // Si está pausada, sumar al historial
                 if (fin) {
                     usuariosMap[s.uid] = s.nombre || usuariosMap[s.uid] || s.uid;
                     HS.lineas.push({
@@ -534,21 +517,16 @@ async function cargar() {
                     });
                 }
             });
-        } catch (e) {
-            // Silencioso: degrada sin collectionGroup
-        }
+        } catch (e) { /* silencioso */ }
 
-        // ── 5. Usuarios ──
         var uids = Object.keys(usuariosMap);
         HS.usuarios = uids.map(function(u) { return { uid: u, nombre: usuariosMap[u] }; });
         HS.usuarios.sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
 
-        // ── 6. Selección de usuarios ──
         HS.uidsSel = {};
         for (var k = 0; k < HS.usuarios.length; k++) {
             HS.uidsSel[HS.usuarios[k].uid] = true;
         }
-        // Si es no-admin, forzar que solo vea su propio uid
         if (!HS.esAdmin) {
             HS.uidsSel = {};
             HS.uidsSel[HS.miUid] = true;
@@ -568,7 +546,6 @@ async function cargar() {
     }
 }
 
-// ── FILTROS ──────────────────────────────────────────────────
 var HS_PRESETS = [
     { id: 'semana', label: 'Semana', dias: 7 },
     { id: 'mes', label: 'Mes', dias: 30 },
@@ -642,7 +619,7 @@ function renderChipsUsuarios() {
 }
 
 function toggleUsuario(uid) {
-    if (!HS.esAdmin) return; // no-admin no puede cambiar
+    if (!HS.esAdmin) return;
     HS.uidsSel[uid] = !HS.uidsSel[uid];
     renderChipsUsuarios();
     render();
@@ -686,7 +663,6 @@ function docsLimpFiltrados() {
     return out;
 }
 
-// ── RENDER ──────────────────────────────────────────────────
 function render() {
     renderSesiones();
 
@@ -699,7 +675,6 @@ function render() {
     renderLimp();
 }
 
-// ── SESIONES ────────────────────────────────────────────────
 function renderSesiones() {
     var card = document.getElementById('hsSesionesCard');
     var lista = document.getElementById('hsSesionesLista');
@@ -744,7 +719,6 @@ function renderSesiones() {
     lista.innerHTML = html;
 }
 
-// ── KPIs ─────────────────────────────────────────────────────
 function renderKpis(lineas) {
     var total = 0, docs = {}, hPausa = 0;
     for (var i = 0; i < lineas.length; i++) {
@@ -769,7 +743,6 @@ function kpi(v, l) {
     return '<div class="hs-kpi"><div class="v">' + v + '</div><div class="l">' + l + '</div></div>';
 }
 
-// ── TORTA ────────────────────────────────────────────────────
 function agruparPorRaiz(lineas) {
     var map = {};
     for (var i = 0; i < lineas.length; i++) {
@@ -841,7 +814,6 @@ function renderTorta(lineas) {
     el.innerHTML = svg + ley;
 }
 
-// ── SIMULACIÓN ──────────────────────────────────────────────
 function renderSim(lineas) {
     var total = 0, honBRL = 0;
     for (var i = 0; i < lineas.length; i++) { total += lineas[i].horas; honBRL += lineas[i].montoBRL; }
@@ -857,7 +829,6 @@ function renderSim(lineas) {
                  + 'Honorarios reales registrados: <b>' + fmtMonBRL(honBRL) + '</b>';
 }
 
-// ── POR PERSONA ─────────────────────────────────────────────
 function renderPersonas(lineas) {
     var map = {}, total = 0;
     for (var i = 0; i < lineas.length; i++) {
@@ -894,7 +865,6 @@ function renderPersonas(lineas) {
     document.getElementById('hsPersonas').innerHTML = html;
 }
 
-// ── DESAGREGADO ─────────────────────────────────────────────
 var _lineasArbol = [];
 
 function renderArbol(lineas) {
@@ -991,7 +961,6 @@ function toggleNodo(clave) {
     renderArbol(_lineasArbol);
 }
 
-// ── LIMPIEZAS ───────────────────────────────────────────────
 function renderLimp() {
     var docs = docsLimpFiltrados();
     var card = document.getElementById('hsLimpCard');
@@ -1057,7 +1026,6 @@ function renderLimp() {
     el.innerHTML = html;
 }
 
-// ── EXPONER GLOBALES ────────────────────────────────────────
 window.aplicarPreset = aplicarPreset;
 window.filtroFechaManual = filtroFechaManual;
 window.cambioMoneda = cambioMoneda;
@@ -1067,7 +1035,6 @@ window.toggleNodo = toggleNodo;
 window.render = render;
 window.eliminarSesion = eliminarSesion;
 
-// ── INICIO ──────────────────────────────────────────────────
 cargar();
 </script>
 </body>
