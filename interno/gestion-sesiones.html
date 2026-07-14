@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestión de sesiones — Casa Verde Canas</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<link rel="stylesheet" href="design-system.css">
+<style>
+body { background: #f5f7f5; padding: 16px; font-family: system-ui, -apple-system, sans-serif; }
+.container { max-width: 900px; margin: 0 auto; }
+.card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.card h2 { font-size: 1rem; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+.btn { border: none; border-radius: 8px; padding: 8px 16px; font-size: .8rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+.btn-primary { background: #2d5a27; color: #fff; }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.btn-secondary { background: #e9ecef; color: #343a40; }
+.btn-danger { background: #c0271f; color: #fff; }
+.btn-warning { background: #d97706; color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: .7rem; }
+.log-box { background: #1a1a1a; color: #e0e0e0; border-radius: 8px; padding: 12px; font-family: monospace; font-size: .78rem; max-height: 300px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin-top: 12px; }
+.log-box .ok { color: #4caf50; }
+.log-box .err { color: #f44336; }
+.log-box .warn { color: #ff9800; }
+.log-box .info { color: #64b5f6; }
+.log-box .highlight { color: #ffd700; font-weight: bold; }
+.hidden { display: none; }
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+th { text-align: left; color: #6c757d; font-weight: 600; padding: 6px 8px; border-bottom: 2px solid #e9ecef; white-space: nowrap; }
+td { padding: 6px 8px; border-bottom: 1px solid #f1f3f5; vertical-align: middle; }
+td .material-icons { font-size: 16px; vertical-align: middle; }
+.estado-abierta { color: #2d5a27; font-weight: 700; }
+.estado-cerrada { color: #6c757d; }
+.estado-huérfana { color: #c0271f; }
+.filtros { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; align-items: center; }
+.filtros select, .filtros input { border: 1px solid #ced4da; border-radius: 6px; padding: 5px 8px; font-size: .78rem; background: #fff; }
+.filtros label { font-size: .78rem; color: #495057; display: flex; align-items: center; gap: 4px; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; margin: 10px 0; }
+.stat-box { background: #f8f9fa; border-radius: 8px; padding: 8px; text-align: center; }
+.stat-box .num { font-size: 1.2rem; font-weight: 700; color: #212529; }
+.stat-box .lbl { font-size: .65rem; color: #6c757d; text-transform: uppercase; letter-spacing: .04em; }
+</style>
+</head>
+<body>
+
+<header class="admin-header">
+  <div class="admin-header__brand">
+    <span class="material-icons">cottage</span>
+    Casa Verde Canas
+  </div>
+  <div class="admin-header__actions">
+    <div class="user-chip">
+      <span class="material-icons">person</span>
+      <span id="userName">—</span>
+    </div>
+    <button class="btn-logout" onclick="CVC.cerrarSesion()">
+      <span class="material-icons">logout</span> Salir
+    </button>
+  </div>
+</header>
+
+<nav id="appNav" class="admin-nav"></nav>
+
+<main style="max-width:900px;margin:0 auto;padding:16px;">
+
+<div class="container">
+    <div class="card">
+        <h2><span class="material-icons" style="color:#c0271f;">delete_sweep</span> Gestión de sesiones</h2>
+        <p style="font-size:.85rem;color:#6c757d;margin:0 0 12px;">
+            Administra todas las sesiones de cronómetro. Puedes <b>cerrar</b> (poner fin) o <b>eliminar</b> sesiones mal registradas.
+            Solo visible para administradores.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="cargarSesiones()">📋 Cargar sesiones</button>
+            <button class="btn btn-warning" onclick="cerrarTodasAbiertas()">⏹️ Cerrar todas las abiertas</button>
+            <button class="btn btn-danger" onclick="eliminarHuérfanas()">🗑️ Eliminar huérfanas</button>
+            <button class="btn btn-secondary" onclick="limpiarLog()">🗑️ Limpiar log</button>
+        </div>
+    </div>
+
+    <div id="statsContainer" class="hidden">
+        <div class="card">
+            <h2><span class="material-icons">dashboard</span> Resumen</h2>
+            <div class="stats-grid" id="statsGrid"></div>
+        </div>
+    </div>
+
+    <div class="card" id="tablaContainer" style="display:none;">
+        <h2><span class="material-icons">list</span> Sesiones</h2>
+        <div class="filtros">
+            <label>Filtrar:
+                <select id="filtroEstado" onchange="renderTabla()">
+                    <option value="todas">Todas</option>
+                    <option value="abiertas">Abiertas</option>
+                    <option value="cerradas">Cerradas</option>
+                    <option value="huérfanas">Huérfanas</option>
+                </select>
+            </label>
+            <label>Buscar:
+                <input type="text" id="filtroBuscar" placeholder="Usuario o actividad..." oninput="renderTabla()">
+            </label>
+            <label>
+                <input type="checkbox" id="filtroSoloMauro" onchange="renderTabla()"> Solo Mauro
+            </label>
+            <span style="font-size:.7rem;color:#6c757d;margin-left:auto;" id="contadorSesiones">0 sesiones</span>
+        </div>
+        <div class="table-wrap" id="tablaSesiones"></div>
+    </div>
+
+    <div class="card">
+        <h2><span class="material-icons">receipt_long</span> Log</h2>
+        <div id="logBox" class="log-box">Esperando acción...</div>
+    </div>
+
+    <div class="card" style="background:#fef9e7;border-color:#f0c674;">
+        <p style="font-size:.8rem;color:#7a6a2a;margin:0;">
+            ⚠️ <b>Eliminar</b> una sesión la borra permanentemente. <b>Cerrar</b> solo agrega un timestamp de fin.
+            Las sesiones huérfanas son aquellas cuya actividad padre ya no existe.
+        </p>
+    </div>
+</div>
+
+</main>
+
+<!-- Firebase 8.10.1 -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+
+<script>
+// ============================================================
+//  GESTIÓN DE SESIONES — v1.0
+//  Admin: ver, cerrar, eliminar sesiones
+// ============================================================
+
+var ESTADO = {
+    db: null,
+    uid: null,
+    esAdmin: false,
+    sesiones: [],
+    actividades: {},
+    usuarios: {},
+    cargando: false
+};
+
+function log(msg, tipo) {
+    tipo = tipo || 'info';
+    var box = document.getElementById('logBox');
+    var cls = '';
+    if (tipo === 'ok') cls = 'ok';
+    else if (tipo === 'err') cls = 'err';
+    else if (tipo === 'warn') cls = 'warn';
+    else if (tipo === 'info') cls = 'info';
+    else if (tipo === 'highlight') cls = 'highlight';
+    box.innerHTML += '<div class="' + cls + '">' + msg + '</div>';
+    box.scrollTop = box.scrollHeight;
+}
+
+function limpiarLog() {
+    document.getElementById('logBox').innerHTML = '';
+}
+
+function setStats(stats) {
+    var container = document.getElementById('statsContainer');
+    container.classList.remove('hidden');
+    var grid = document.getElementById('statsGrid');
+    var html = '';
+    for (var key in stats) {
+        html += '<div class="stat-box"><div class="num">' + stats[key] + '</div><div class="lbl">' + key + '</div></div>';
+    }
+    grid.innerHTML = html;
+}
+
+function fechaDesdeTimestamp(ts) {
+    if (!ts) return '—';
+    var d = ts.toDate ? ts.toDate() : new Date(ts);
+    if (isNaN(d.getTime())) return '—';
+    return d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear() + ' ' +
+           String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function nombreUsuario(uid) {
+    if (!uid) return '—';
+    if (ESTADO.usuarios[uid]) return ESTADO.usuarios[uid];
+    // Buscar en sesiones
+    for (var i = 0; i < ESTADO.sesiones.length; i++) {
+        if (ESTADO.sesiones[i].uid === uid && ESTADO.sesiones[i].nombre) {
+            ESTADO.usuarios[uid] = ESTADO.sesiones[i].nombre;
+            return ESTADO.sesiones[i].nombre;
+        }
+    }
+    return uid.slice(0, 8) + '…';
+}
+
+function nombreActividad(id) {
+    if (!id) return '—';
+    if (ESTADO.actividades[id]) return ESTADO.actividades[id];
+    return '⚠️ ' + id.slice(0, 8) + '…';
+}
+
+async function cargarSesiones() {
+    if (ESTADO.cargando) return;
+    ESTADO.cargando = true;
+
+    var btn = document.querySelector('.btn-primary');
+    btn.disabled = true;
+    btn.textContent = '⏳ Cargando...';
+
+    log('═══════════════════════════════════════════════════', 'info');
+    log('📋 CARGANDO SESIONES', 'highlight');
+    log('═══════════════════════════════════════════════════', 'info');
+
+    try {
+        var r = await CVC.verificarAuth(['admin']);
+        ESTADO.db = CVC.db;
+        ESTADO.uid = r.user.uid;
+        ESTADO.esAdmin = r.userData.rol === 'admin';
+
+        document.getElementById('userName').textContent = r.userData.nombre || r.user.email || 'Admin';
+        CVC.renderNav('gestion-sesiones.html', r.userData.rol);
+
+        if (!ESTADO.esAdmin) {
+            log('❌ Solo administradores pueden usar esta herramienta.', 'err');
+            btn.disabled = false;
+            btn.textContent = '📋 Cargar sesiones';
+            ESTADO.cargando = false;
+            return;
+        }
+
+        // Cargar todas las actividades (para resolver nombres)
+        var actSnap = await ESTADO.db.collection('actividades').get();
+        actSnap.forEach(function(d) {
+            var a = d.data();
+            ESTADO.actividades[d.id] = a.nombre || a.titulo || '(sin nombre)';
+        });
+        log('📁 Actividades cargadas: ' + Object.keys(ESTADO.actividades).length, 'ok');
+
+        // Cargar todas las sesiones (collectionGroup)
+        var sesSnap = await ESTADO.db.collectionGroup('sesiones').get();
+        ESTADO.sesiones = [];
+
+        var stats = {
+            'Total': 0,
+            'Abiertas': 0,
+            'Cerradas': 0,
+            'Huérfanas': 0
+        };
+
+        sesSnap.forEach(function(d) {
+            var s = d.data();
+            var actId = d.ref.parent.parent.id;
+            var esAbierta = (s.fin === null || s.fin === undefined);
+            var esHuérfana = !ESTADO.actividades[actId];
+
+            var sesion = {
+                id: d.id,
+                ref: d.ref,
+                actId: actId,
+                uid: s.uid || null,
+                nombre: s.nombre || '(sin nombre)',
+                inicio: s.inicio || null,
+                fin: s.fin || null,
+                abierta: esAbierta,
+                huérfana: esHuérfana,
+                alcance: s.alcance || '—',
+                creadoPor: s.creadoPor || '—',
+                data: s
+            };
+
+            ESTADO.sesiones.push(sesion);
+            stats['Total']++;
+
+            if (esHuérfana) stats['Huérfanas']++;
+            else if (esAbierta) stats['Abiertas']++;
+            else stats['Cerradas']++;
+        });
+
+        // Ordenar: abiertas primero, luego por fecha
+        ESTADO.sesiones.sort(function(a, b) {
+            if (a.abierta && !b.abierta) return -1;
+            if (!a.abierta && b.abierta) return 1;
+            var ia = a.inicio ? (a.inicio.toMillis ? a.inicio.toMillis() : new Date(a.inicio).getTime()) : 0;
+            var ib = b.inicio ? (b.inicio.toMillis ? b.inicio.toMillis() : new Date(b.inicio).getTime()) : 0;
+            return ib - ia;
+        });
+
+        setStats(stats);
+        document.getElementById('tablaContainer').style.display = 'block';
+        renderTabla();
+
+        log('✅ Cargadas ' + ESTADO.sesiones.length + ' sesiones', 'ok');
+        log('   📌 Abiertas: ' + stats['Abiertas'], 'info');
+        log('   📌 Cerradas: ' + stats['Cerradas'], 'info');
+        log('   📌 Huérfanas: ' + stats['Huérfanas'], stats['Huérfanas'] > 0 ? 'warn' : 'ok');
+
+    } catch (e) {
+        log('❌ Error: ' + e.message, 'err');
+    }
+
+    btn.disabled = false;
+    btn.textContent = '📋 Cargar sesiones';
+    ESTADO.cargando = false;
+}
+
+function renderTabla() {
+    var filtro = document.getElementById('filtroEstado').value;
+    var buscar = document.getElementById('filtroBuscar').value.toLowerCase();
+    var soloMauro = document.getElementById('filtroSoloMauro').checked;
+
+    var filtradas = ESTADO.sesiones.filter(function(s) {
+        if (filtro === 'abiertas' && !s.abierta) return false;
+        if (filtro === 'cerradas' && s.abierta) return false;
+        if (filtro === 'huérfanas' && !s.huérfana) return false;
+
+        if (soloMauro && s.uid !== 'hftkmTlB55V9AdwawMOlKvMtOf43') return false;
+
+        if (buscar) {
+            var actNom = ESTADO.actividades[s.actId] || '';
+            var nombre = (s.nombre || '').toLowerCase();
+            var uid = (s.uid || '').toLowerCase();
+            var act = actNom.toLowerCase();
+            if (nombre.indexOf(buscar) === -1 &&
+                uid.indexOf(buscar) === -1 &&
+                act.indexOf(buscar) === -1) return false;
+        }
+        return true;
+    });
+
+    document.getElementById('contadorSesiones').textContent = filtradas.length + ' sesiones';
+
+    var html = '<table><thead><tr>' +
+        '<th>Actividad</th>' +
+        '<th>Usuario</th>' +
+        '<th>Inicio</th>' +
+        '<th>Fin</th>' +
+        '<th>Estado</th>' +
+        '<th>Acciones</th>' +
+        '</tr></thead><tbody>';
+
+    if (filtradas.length === 0) {
+        html += '<tr><td colspan="6" style="text-align:center;color:#6c757d;padding:20px;">No hay sesiones que coincidan con los filtros</td></tr>';
+    } else {
+        for (var i = 0; i < filtradas.length; i++) {
+            var s = filtradas[i];
+            var actNom = s.huérfana ? '<span class="estado-huérfana">⚠️ ' + s.actId.slice(0, 8) + '…</span>' : (ESTADO.actividades[s.actId] || '(sin nombre)');
+            var estado = s.abierta ? '<span class="estado-abierta">▶ Abierta</span>' : '<span class="estado-cerrada">⏹ Cerrada</span>';
+            if (s.huérfana) estado = '<span class="estado-huérfana">⚠️ Huérfana</span>';
+
+            var tieneDenorm = (s.alcance !== '—' && s.alcance !== undefined && s.alcance !== null);
+
+            html += '<tr>' +
+                '<td>' + actNom + (tieneDenorm ? '' : ' <span style="color:#d97706;font-size:.65rem;">⚠️</span>') + '</td>' +
+                '<td>' + nombreUsuario(s.uid) + '</td>' +
+                '<td style="font-size:.7rem;">' + fechaDesdeTimestamp(s.inicio) + '</td>' +
+                '<td style="font-size:.7rem;">' + (s.abierta ? '—' : fechaDesdeTimestamp(s.fin)) + '</td>' +
+                '<td>' + estado + '</td>' +
+                '<td>' +
+                (s.abierta ? '<button class="btn btn-warning btn-sm" onclick="cerrarSesion(\'' + s.id + '\')">⏹ Cerrar</button> ' : '') +
+                '<button class="btn btn-danger btn-sm" onclick="eliminarSesion(\'' + s.id + '\', \'' + s.actId + '\')">🗑️ Eliminar</button>' +
+                '</td>' +
+                '</tr>';
+        }
+    }
+
+    html += '</tbody></table>';
+    document.getElementById('tablaSesiones').innerHTML = html;
+}
+
+async function cerrarSesion(id) {
+    if (!confirm('¿Cerrar esta sesión (poner fin)?')) return;
+
+    try {
+        var ref = ESTADO.db.collectionGroup('sesiones').doc(id);
+        await ref.update({
+            fin: firebase.firestore.Timestamp.now()
+        });
+        log('✅ Sesión ' + id.slice(0, 8) + ' cerrada', 'ok');
+        await cargarSesiones();
+    } catch (e) {
+        log('❌ Error al cerrar sesión: ' + e.message, 'err');
+    }
+}
+
+async function eliminarSesion(id, actId) {
+    if (!confirm('¿ELIMINAR esta sesión permanentemente? Esta acción no se puede deshacer.')) return;
+    if (!confirm('¿Estás seguro? La sesión se borrará de la base de datos.')) return;
+
+    try {
+        // Intentar eliminar por ruta directa si es posible
+        var ref = ESTADO.db.collection('actividades').doc(actId).collection('sesiones').doc(id);
+        await ref.delete();
+        log('🗑️ Sesión ' + id.slice(0, 8) + ' eliminada', 'ok');
+        await cargarSesiones();
+    } catch (e) {
+        // Fallback: intentar por collectionGroup
+        try {
+            var ref2 = ESTADO.db.collectionGroup('sesiones').doc(id);
+            await ref2.delete();
+            log('🗑️ Sesión ' + id.slice(0, 8) + ' eliminada (por collectionGroup)', 'ok');
+            await cargarSesiones();
+        } catch (e2) {
+            log('❌ Error al eliminar sesión: ' + e2.message, 'err');
+        }
+    }
+}
+
+async function cerrarTodasAbiertas() {
+    var abiertas = ESTADO.sesiones.filter(function(s) { return s.abierta && !s.huérfana; });
+    if (abiertas.length === 0) {
+        log('ℹ️ No hay sesiones abiertas para cerrar.', 'info');
+        return;
+    }
+
+    if (!confirm('Cerrar ' + abiertas.length + ' sesiones abiertas?')) return;
+
+    var batch = ESTADO.db.batch();
+    var count = 0;
+    var ahora = firebase.firestore.Timestamp.now();
+
+    for (var i = 0; i < abiertas.length; i++) {
+        try {
+            var ref = ESTADO.db.collection('actividades').doc(abiertas[i].actId).collection('sesiones').doc(abiertas[i].id);
+            batch.update(ref, { fin: ahora });
+            count++;
+            if (count % 400 === 0) {
+                await batch.commit();
+                batch = ESTADO.db.batch();
+            }
+        } catch (e) {
+            log('⚠️ No se pudo cerrar sesión ' + abiertas[i].id.slice(0, 8) + ': ' + e.message, 'warn');
+        }
+    }
+
+    if (count % 400 !== 0) {
+        await batch.commit();
+    }
+
+    log('✅ Cerradas ' + count + ' sesiones abiertas', 'ok');
+    await cargarSesiones();
+}
+
+async function eliminarHuérfanas() {
+    var huerfanas = ESTADO.sesiones.filter(function(s) { return s.huérfana; });
+    if (huerfanas.length === 0) {
+        log('ℹ️ No hay sesiones huérfanas para eliminar.', 'info');
+        return;
+    }
+
+    if (!confirm('Eliminar ' + huerfanas.length + ' sesiones huérfanas (actividad no existe)?')) return;
+    if (!confirm('¿Estás seguro? Esta acción no se puede deshacer.')) return;
+
+    var batch = ESTADO.db.batch();
+    var count = 0;
+
+    for (var i = 0; i < huerfanas.length; i++) {
+        try {
+            // Intentar eliminar por collectionGroup
+            var ref = ESTADO.db.collectionGroup('sesiones').doc(huerfanas[i].id);
+            batch.delete(ref);
+            count++;
+            if (count % 400 === 0) {
+                await batch.commit();
+                batch = ESTADO.db.batch();
+            }
+        } catch (e) {
+            log('⚠️ No se pudo eliminar sesión ' + huerfanas[i].id.slice(0, 8) + ': ' + e.message, 'warn');
+        }
+    }
+
+    if (count % 400 !== 0) {
+        await batch.commit();
+    }
+
+    log('🗑️ Eliminadas ' + count + ' sesiones huérfanas', 'ok');
+    await cargarSesiones();
+}
+
+// Exponer funciones globales
+window.cargarSesiones = cargarSesiones;
+window.renderTabla = renderTabla;
+window.cerrarSesion = cerrarSesion;
+window.eliminarSesion = eliminarSesion;
+window.cerrarTodasAbiertas = cerrarTodasAbiertas;
+window.eliminarHuérfanas = eliminarHuérfanas;
+window.limpiarLog = limpiarLog;
+
+// Inicialización
+document.addEventListener('DOMContentLoaded', function() {
+    log('📱 Gestión de sesiones cargada. Presioná "Cargar sesiones" para comenzar.', 'info');
+});
+</script>
+</body>
+</html>
