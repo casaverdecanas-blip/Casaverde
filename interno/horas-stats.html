@@ -111,6 +111,25 @@
 </head>
 <body>
 
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!--  HEADER con botón de salir (igual que todas las páginas)      -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<header class="admin-header">
+  <div class="admin-header__brand">
+    <span class="material-icons">cottage</span>
+    Casa Verde Canas
+  </div>
+  <div class="admin-header__actions">
+    <div class="user-chip">
+      <span class="material-icons">person</span>
+      <span id="userName">—</span>
+    </div>
+    <button class="btn-logout" onclick="CVC.cerrarSesion()">
+      <span class="material-icons">logout</span> Salir
+    </button>
+  </div>
+</header>
+
 <nav id="appNav" class="admin-nav"></nav>
 
 <main class="hs-main">
@@ -333,14 +352,13 @@ async function cargar() {
         HS.miUid = r.user.uid;
         HS.miNombre = userData.nombre || '';
 
+        // ── Setear nombre en el header ──
+        document.getElementById('userName').textContent = userData.nombre || userData.email || 'Usuario';
+
         CVC.renderNav('horas-stats.html', userData.rol);
         CVC.initAyuda('horas-stats.html');
 
         // ── 1. Leer actividades ──
-        // ⚠️ CRÍTICO: un no-admin NO puede hacer .get() sin filtros.
-        // Firestore rechaza la consulta porque no puede garantizar
-        // que todos los documentos cumplan las condiciones de lectura.
-        // Solución: 3 consultas con where (igual que en actividades.html).
         var docsAct = [];
         if (HS.esAdmin) {
             var sAct = await db.collection('actividades').get();
@@ -358,7 +376,7 @@ async function cargar() {
                     snap.forEach(function(d) {
                         if (!seen[d.id]) { seen[d.id] = 1; docsAct.push(Object.assign({ id: d.id }, d.data())); }
                     });
-                } catch (eq) { /* silencioso: una consulta puede fallar si la regla cambia */ }
+                } catch (eq) { /* silencioso */ }
             }
         }
 
@@ -427,8 +445,7 @@ async function cargar() {
         });
 
         // ── 5. Ciclo actual: sesiones EN PAUSA ──
-        // Con la denormalización (v4.41), collectionGroup funciona con reglas simples
-        // sin necesidad de get() al padre. Si falla, degrada silenciosamente.
+        // Con la denormalización, collectionGroup funciona con reglas simples
         try {
             var sesSnap = await db.collectionGroup('sesiones').get();
             sesSnap.forEach(function(d) {
@@ -460,11 +477,9 @@ async function cargar() {
             });
         } catch (e) {
             // Degrada silenciosamente: solo consolidado
-            // Esto puede pasar si las reglas de Firestore no permiten collectionGroup
-            // o si las sesiones no tienen los campos denormalizados.
         }
 
-        // ── 6. Usuarios disponibles (derivados del historial) ──
+        // ── 6. Usuarios disponibles ──
         var uids = Object.keys(usuariosMap);
         HS.usuarios = uids.map(function(u) { return { uid: u, nombre: usuariosMap[u] }; });
         HS.usuarios.sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
@@ -811,7 +826,6 @@ function nodoHTML(id, prefijo, horas, totalPadre, colorIdx) {
 
     if (abierto) {
         var mias = lineasDePrefijo(prefijo);
-        // Agrupar por el siguiente nivel del camino
         var hijos = {}, directas = [];
         for (var i = 0; i < mias.length; i++) {
             var l = mias[i];
@@ -902,7 +916,7 @@ function renderLimp() {
         var cobProm = x.nCob > 0 ? (x.cobBRL / x.nCob) : 0;
         var cdoc = cabanaPorNumero(x.cabana);
         var confBRL = (cdoc && cdoc.tarifas && cdoc.tarifas.precioLimpieza) ? cdoc.tarifas.precioLimpieza : 0;
-        var sugerido = promH * ch * (1 + mg / 100); // en moneda elegida
+        var sugerido = promH * ch * (1 + mg / 100);
         var alerta = cobProm > 0 && honProm > cobProm;
 
         html += '<tr' + (alerta ? ' class="alerta" title="Los honorarios superan lo cobrado al cliente"' : '') + '>'
