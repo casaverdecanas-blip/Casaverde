@@ -72,12 +72,15 @@
 .hs-bar { height: 100%; border-radius: 3px; }
 .hs-hijos { margin-left: 18px; border-left: 3px solid #eef0f2; padding-left: 4px; }
 .hs-lineas { margin: 2px 4px 10px 30px; font-size: .76rem; color: #495057; }
-.hs-linea { display: flex; gap: 8px; padding: 3px 0; border-bottom: 1px dashed #f1f3f5; flex-wrap: wrap; }
+.hs-linea { display: flex; gap: 8px; padding: 3px 0; border-bottom: 1px dashed #f1f3f5; flex-wrap: wrap; align-items: center; }
 .hs-linea .f { color: #868e96; white-space: nowrap; }
 .hs-linea .p { font-weight: 600; }
 .hs-linea .a { color: #6c757d; flex: 1 1 auto; min-width: 0; overflow: hidden;
                text-overflow: ellipsis; white-space: nowrap; }
 .hs-linea .h { font-weight: 600; white-space: nowrap; }
+.hs-linea .btn-del { background: none; border: none; color: #c0271f; cursor: pointer; padding: 2px 4px; font-size: 16px; }
+.hs-linea .btn-del:hover { color: #a02020; }
+.hs-linea .btn-del:disabled { opacity: .3; cursor: not-allowed; }
 
 .hs-sim { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; margin-bottom: 10px; }
 .hs-sim label { font-size: .78rem; color: #495057; display: flex; flex-direction: column; gap: 4px; }
@@ -103,10 +106,22 @@
 .hs-sesion .btn-del:hover { color: #a02020; }
 .hs-sesion .sin-denorm { color: #d97706; font-size: .7rem; }
 
+/* Selector de usuarios en desagregado */
+.hs-user-selector { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; padding: 8px 0; border-top: 1px solid #eef2ec; }
+.hs-user-selector .label { font-size: .72rem; color: #6c757d; text-transform: uppercase; letter-spacing: .04em; margin-right: 6px; display: flex; align-items: center; }
+.hs-user-chip { border: 1px solid #ced4da; background: #fff; color: #495057; border-radius: 20px;
+               padding: 3px 10px; font-size: .75rem; cursor: pointer; display: inline-flex;
+               align-items: center; gap: 4px; user-select: none; -webkit-user-select: none; }
+.hs-user-chip .material-icons { font-size: 14px; }
+.hs-user-chip.on { background: #e7f5f3; border-color: #2a9d8f; color: #1d6f65; }
+.hs-user-chip.todos { background: #e9ecef; border-color: #adb5bd; }
+.hs-user-chip.todos.on { background: #2d5a27; border-color: #2d5a27; color: #fff; }
+
 @media (max-width: 560px) {
   .hs-main { padding: 12px 8px 90px; }
   .hs-torta { justify-content: center; }
   .hs-sesion { font-size: .78rem; }
+  .hs-linea { font-size: .7rem; gap: 4px; }
 }
 </style>
 </head>
@@ -202,6 +217,10 @@
     <!-- DESAGREGADO -->
     <div class="hs-card">
         <h2><span class="material-icons">account_tree</span> Desagregado por proyecto</h2>
+        <!-- Selector de usuarios (solo admin) -->
+        <div id="hsUserSelectorContainer" style="display:none;">
+            <div class="hs-user-selector" id="hsUserSelector"></div>
+        </div>
         <div id="hsArbol"></div>
     </div>
 
@@ -240,7 +259,9 @@ var HS = {
     preset: 'mes',
     mon: 'BRL',
     expand: {},
-    sesionesActivas: []
+    sesionesActivas: [],
+    // Selector de usuarios en desagregado
+    arbolUidsSel: {}   // uid -> true (selección para el desagregado)
 };
 
 var HS_COLORES = ['#2a9d8f', '#e76f51', '#4361ee', '#ff9f1c', '#7209b7',
@@ -248,6 +269,9 @@ var HS_COLORES = ['#2a9d8f', '#e76f51', '#4361ee', '#ff9f1c', '#7209b7',
 var HS_SYM = { BRL: 'R$', USD: 'US$', ARS: '$' };
 var HS_TIPOS_LIMPIEZA = { limpieza: true, control_salida: true, control: true };
 
+// ============================================================
+//  HELPERS
+// ============================================================
 function esc(s) { return CVC.escapeHtml(s); }
 
 function aDate(x) {
@@ -317,6 +341,7 @@ function nombreNodo(id) {
     return '(actividad eliminada)';
 }
 
+// ── Caminos ──────────────────────────────────────────────────
 var _pathCache = {};
 function pathDe(actId) {
     if (_pathCache[actId]) return _pathCache[actId];
@@ -345,6 +370,28 @@ function pathDeRegistro(h) {
     return ['__otros'];
 }
 
+// ── Eliminar registro de historial ──────────────────────────
+window.eliminarRegistroHistorial = async function(docId, actNombre, horas) {
+    if (!HS.esAdmin) {
+        toast('Solo administradores pueden eliminar registros.', 'warning');
+        return;
+    }
+
+    var msg = '¿Eliminar registro de "' + actNombre + '" (' + fmtH(horas) + ')?\nEsta acción no se puede deshacer.';
+    if (!confirm(msg)) return;
+    if (!confirm('¿Estás seguro? El registro se borrará permanentemente.')) return;
+
+    try {
+        await db.collection('historial_tareas').doc(docId).delete();
+        toast('🗑️ Registro eliminado', 'success');
+        await cargar();
+        render();
+    } catch (e) {
+        toast('❌ Error: ' + e.message, 'error');
+    }
+};
+
+// ── Eliminar sesión ──────────────────────────────────────────
 window.eliminarSesion = async function(actId, sesId) {
     if (!confirm('¿ELIMINAR esta sesión permanentemente? Esta acción no se puede deshacer.')) return;
     if (!confirm('¿Estás seguro?')) return;
@@ -352,14 +399,15 @@ window.eliminarSesion = async function(actId, sesId) {
     try {
         var ref = db.collection('actividades').doc(actId).collection('sesiones').doc(sesId);
         await ref.delete();
-        if (CVC.showToast) CVC.showToast('🗑️ Sesión eliminada', 'success');
+        toast('🗑️ Sesión eliminada', 'success');
         await cargar();
         render();
     } catch (e) {
-        if (CVC.showToast) CVC.showToast('❌ Error: ' + e.message, 'error');
+        toast('❌ Error: ' + e.message, 'error');
     }
 };
 
+// ── CARGA ──────────────────────────────────────────────────
 async function cargar() {
     try {
         var r = await CVC.verificarAuth(['admin', 'user']);
@@ -373,6 +421,7 @@ async function cargar() {
         CVC.renderNav('horas-stats.html', userData.rol);
         CVC.initAyuda('horas-stats.html');
 
+        // ── 1. Leer actividades ──
         var docsAct = [];
         if (HS.esAdmin) {
             var sAct = await db.collection('actividades').get();
@@ -404,12 +453,15 @@ async function cargar() {
             };
         }
 
+        // ── 2. Cabañas ──
         var sCab = await db.collection('cabanas').get();
+        HS.cabanas = [];
         sCab.forEach(function(d) {
             var c = d.data(); c.id = d.id;
             HS.cabanas.push(c);
         });
 
+        // ── 3. Historial ──
         var usuariosMap = {};
         var sHist = await db.collection('historial_tareas').get();
 
@@ -441,7 +493,9 @@ async function cargar() {
                     montoBRL: parseFloat(c2.montoRecibido) || 0,
                     path: path,
                     actNombre: h.nombre || '',
-                    tipo: h.tipo || 'general'
+                    tipo: h.tipo || 'general',
+                    actId: h.tareaId || null,
+                    docRef: d.ref
                 });
             }
 
@@ -460,6 +514,7 @@ async function cargar() {
             }
         });
 
+        // ── 4. Sesiones activas ──
         try {
             var sesSnap = await db.collectionGroup('sesiones').get();
             var ahoraMs = Date.now();
@@ -467,7 +522,10 @@ async function cargar() {
             sesSnap.forEach(function(d) {
                 var s = d.data();
                 if (s.invalidada) return;
-                var actId = (d.ref.parent && d.ref.parent.parent) ? d.ref.parent.parent.id : null;
+                var ref = d.ref;
+                var parent = ref.parent;
+                var grandParent = parent ? parent.parent : null;
+                var actId = grandParent ? grandParent.id : null;
                 if (!actId) return;
                 var ini = aDate(s.inicio);
                 if (!ini) return;
@@ -513,29 +571,40 @@ async function cargar() {
                         path: act ? pathDe(actId) : ['__otros'],
                         actNombre: act ? act.nombre : '(actividad)',
                         tipo: act ? act.tipo : 'general',
-                        pausada: true
+                        pausada: true,
+                        actId: actId,
+                        docRef: d.ref
                     });
                 }
             });
         } catch (e) { /* silencioso */ }
 
+        // ── 5. Usuarios ──
         var uids = Object.keys(usuariosMap);
         HS.usuarios = uids.map(function(u) { return { uid: u, nombre: usuariosMap[u] }; });
         HS.usuarios.sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
 
+        // ── 6. Selección de usuarios ──
         HS.uidsSel = {};
+        HS.arbolUidsSel = {};
         for (var k = 0; k < HS.usuarios.length; k++) {
             HS.uidsSel[HS.usuarios[k].uid] = true;
+            HS.arbolUidsSel[HS.usuarios[k].uid] = true;
         }
         if (!HS.esAdmin) {
             HS.uidsSel = {};
             HS.uidsSel[HS.miUid] = true;
+            HS.arbolUidsSel = {};
+            HS.arbolUidsSel[HS.miUid] = true;
         }
 
         renderPresets();
         if (HS.esAdmin) {
             document.getElementById('hsUsuariosWrap').style.display = 'block';
             renderChipsUsuarios();
+            // Mostrar selector de usuarios en desagregado
+            document.getElementById('hsUserSelectorContainer').style.display = 'block';
+            renderArbolUserSelector();
         }
         aplicarPreset('mes');
 
@@ -546,6 +615,7 @@ async function cargar() {
     }
 }
 
+// ── FILTROS ──────────────────────────────────────────────────
 var HS_PRESETS = [
     { id: 'semana', label: 'Semana', dias: 7 },
     { id: 'mes', label: 'Mes', dias: 30 },
@@ -639,12 +709,28 @@ function pasaUsuario(uid) {
     return !!HS.uidsSel[uid];
 }
 
+function pasaArbolUsuario(uid) {
+    if (!HS.esAdmin) return uid === HS.miUid;
+    return !!HS.arbolUidsSel[uid];
+}
+
 function lineasFiltradas() {
     var out = [], d = HS.desde.getTime(), h = HS.hasta.getTime();
     for (var i = 0; i < HS.lineas.length; i++) {
         var l = HS.lineas[i];
         if (l.ms < d || l.ms > h) continue;
         if (!pasaUsuario(l.uid)) continue;
+        out.push(l);
+    }
+    return out;
+}
+
+function lineasFiltradasArbol() {
+    var out = [], d = HS.desde.getTime(), h = HS.hasta.getTime();
+    for (var i = 0; i < HS.lineas.length; i++) {
+        var l = HS.lineas[i];
+        if (l.ms < d || l.ms > h) continue;
+        if (!pasaArbolUsuario(l.uid)) continue;
         out.push(l);
     }
     return out;
@@ -663,6 +749,52 @@ function docsLimpFiltrados() {
     return out;
 }
 
+// ── SELECTOR DE USUARIOS EN DESAGREGADO ─────────────────────
+function renderArbolUserSelector() {
+    var container = document.getElementById('hsUserSelector');
+    if (!HS.esAdmin || HS.usuarios.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    // Verificar si todos están seleccionados
+    var todosOn = true;
+    for (var i = 0; i < HS.usuarios.length; i++) {
+        if (!HS.arbolUidsSel[HS.usuarios[i].uid]) { todosOn = false; break; }
+    }
+
+    var html = '<span class="label">👤 Mostrar en desagregado:</span>';
+    html += '<span class="hs-user-chip todos' + (todosOn ? ' on' : '') + '" onclick="toggleArbolTodosUsuarios()">'
+          + '<span class="material-icons">' + (todosOn ? 'check_circle' : 'radio_button_unchecked') + '</span> Todos</span>';
+
+    for (var j = 0; j < HS.usuarios.length; j++) {
+        var u = HS.usuarios[j];
+        var on = !!HS.arbolUidsSel[u.uid];
+        html += '<span class="hs-user-chip' + (on ? ' on' : '') + '" onclick="toggleArbolUsuario(\'' + u.uid + '\')">'
+              + '<span class="material-icons">' + (on ? 'check_circle' : 'radio_button_unchecked') + '</span> '
+              + esc(u.nombre) + '</span>';
+    }
+
+    container.innerHTML = html;
+}
+
+function toggleArbolUsuario(uid) {
+    if (!HS.esAdmin) return;
+    HS.arbolUidsSel[uid] = !HS.arbolUidsSel[uid];
+    renderArbolUserSelector();
+    render();
+}
+
+function toggleArbolTodosUsuarios() {
+    if (!HS.esAdmin) return;
+    var todosOn = true;
+    for (var i = 0; i < HS.usuarios.length; i++) if (!HS.arbolUidsSel[HS.usuarios[i].uid]) todosOn = false;
+    for (var j = 0; j < HS.usuarios.length; j++) HS.arbolUidsSel[HS.usuarios[j].uid] = !todosOn;
+    renderArbolUserSelector();
+    render();
+}
+
+// ── RENDER ──────────────────────────────────────────────────
 function render() {
     renderSesiones();
 
@@ -671,10 +803,15 @@ function render() {
     renderTorta(lineas);
     renderSim(lineas);
     renderPersonas(lineas);
-    renderArbol(lineas);
+
+    // El árbol usa el selector de usuarios del desagregado
+    var lineasArbol = lineasFiltradasArbol();
+    renderArbol(lineasArbol);
+
     renderLimp();
 }
 
+// ── SESIONES ────────────────────────────────────────────────
 function renderSesiones() {
     var card = document.getElementById('hsSesionesCard');
     var lista = document.getElementById('hsSesionesLista');
@@ -682,6 +819,7 @@ function renderSesiones() {
     var visibles = HS.sesionesActivas.filter(function(s) {
         if (!HS.esAdmin && !HS.actIdx[s.actId]) return false;
         if (!HS.esAdmin && s.uid !== HS.miUid) return false;
+        if (!pasaUsuario(s.uid)) return false;
         return true;
     });
 
@@ -719,6 +857,7 @@ function renderSesiones() {
     lista.innerHTML = html;
 }
 
+// ── KPIs ─────────────────────────────────────────────────────
 function renderKpis(lineas) {
     var total = 0, docs = {}, hPausa = 0;
     for (var i = 0; i < lineas.length; i++) {
@@ -743,6 +882,7 @@ function kpi(v, l) {
     return '<div class="hs-kpi"><div class="v">' + v + '</div><div class="l">' + l + '</div></div>';
 }
 
+// ── TORTA ────────────────────────────────────────────────────
 function agruparPorRaiz(lineas) {
     var map = {};
     for (var i = 0; i < lineas.length; i++) {
@@ -814,6 +954,7 @@ function renderTorta(lineas) {
     el.innerHTML = svg + ley;
 }
 
+// ── SIMULACIÓN ──────────────────────────────────────────────
 function renderSim(lineas) {
     var total = 0, honBRL = 0;
     for (var i = 0; i < lineas.length; i++) { total += lineas[i].horas; honBRL += lineas[i].montoBRL; }
@@ -829,6 +970,7 @@ function renderSim(lineas) {
                  + 'Honorarios reales registrados: <b>' + fmtMonBRL(honBRL) + '</b>';
 }
 
+// ── POR PERSONA ─────────────────────────────────────────────
 function renderPersonas(lineas) {
     var map = {}, total = 0;
     for (var i = 0; i < lineas.length; i++) {
@@ -865,6 +1007,7 @@ function renderPersonas(lineas) {
     document.getElementById('hsPersonas').innerHTML = html;
 }
 
+// ── DESAGREGADO NAVEGABLE ────────────────────────────────────
 var _lineasArbol = [];
 
 function renderArbol(lineas) {
@@ -938,13 +1081,23 @@ function nodoHTML(id, prefijo, horas, totalPadre, colorIdx) {
             html += '<div class="hs-lineas">';
             for (var k = 0; k < tope; k++) {
                 var d = directas[k];
+                var docId = d.docId || '';
+                var canDelete = HS.esAdmin && docId && docId.indexOf('ses-') !== 0;
+
                 html += '<div class="hs-linea">'
                       + '<span class="f">' + CVC.formatFecha(d.fecha) + '</span>'
                       + '<span class="p">' + esc(d.nombre) + '</span>'
                       + '<span class="a">' + esc(d.actNombre) + '</span>'
                       + (d.pausada ? '<span style="color:#4361ee;font-weight:600;white-space:nowrap;">en pausa</span>' : '')
-                      + '<span class="h">' + fmtH(d.horas) + '</span>'
-                      + '</div>';
+                      + '<span class="h">' + fmtH(d.horas) + '</span>';
+
+                if (HS.esAdmin && docId && docId.indexOf('ses-') !== 0) {
+                    html += '<button class="btn-del" onclick="eliminarRegistroHistorial(\'' + docId + '\', \'' + esc(d.actNombre) + '\', ' + d.horas + ')" title="Eliminar registro">';
+                    html += '<span class="material-icons" style="font-size:16px;">delete_outline</span>';
+                    html += '</button>';
+                }
+
+                html += '</div>';
             }
             if (directas.length > tope) {
                 html += '<div class="hs-linea"><span class="f">… y ' + (directas.length - tope) + ' registros más (achicá el período para ver el detalle completo)</span></div>';
@@ -961,6 +1114,7 @@ function toggleNodo(clave) {
     renderArbol(_lineasArbol);
 }
 
+// ── LIMPIEZAS ───────────────────────────────────────────────
 function renderLimp() {
     var docs = docsLimpFiltrados();
     var card = document.getElementById('hsLimpCard');
@@ -1026,15 +1180,20 @@ function renderLimp() {
     el.innerHTML = html;
 }
 
+// ── EXPONER GLOBALES ────────────────────────────────────────
 window.aplicarPreset = aplicarPreset;
 window.filtroFechaManual = filtroFechaManual;
 window.cambioMoneda = cambioMoneda;
 window.toggleUsuario = toggleUsuario;
 window.toggleTodosUsuarios = toggleTodosUsuarios;
+window.toggleArbolUsuario = toggleArbolUsuario;
+window.toggleArbolTodosUsuarios = toggleArbolTodosUsuarios;
 window.toggleNodo = toggleNodo;
 window.render = render;
 window.eliminarSesion = eliminarSesion;
+window.eliminarRegistroHistorial = eliminarRegistroHistorial;
 
+// ── INICIO ──────────────────────────────────────────────────
 cargar();
 </script>
 </body>
