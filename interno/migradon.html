@@ -3,24 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Migración de sesiones — Casa Verde Canas</title>
+<title>Migrar sesiones — Casa Verde Canas</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <link rel="stylesheet" href="design-system.css">
 <style>
 body { background: #f5f7f5; padding: 16px; font-family: system-ui, -apple-system, sans-serif; }
 .container { max-width: 700px; margin: 0 auto; }
 .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
 .card h2 { font-size: 1rem; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
-.btn { border: none; border-radius: 8px; padding: 10px 20px; font-size: .9rem; font-weight: 600; cursor: pointer; }
+.btn { border: none; border-radius: 8px; padding: 10px 20px; font-size: .9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .btn-primary { background: #2d5a27; color: #fff; }
 .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
 .btn-secondary { background: #e9ecef; color: #343a40; }
 .btn-danger { background: #c0271f; color: #fff; }
+.btn-warning { background: #d97706; color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: .75rem; }
 .log-box { background: #1a1a1a; color: #e0e0e0; border-radius: 8px; padding: 12px; font-family: monospace; font-size: .78rem; max-height: 450px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin-top: 12px; }
 .log-box .ok { color: #4caf50; }
 .log-box .err { color: #f44336; }
 .log-box .warn { color: #ff9800; }
 .log-box .info { color: #64b5f6; }
 .log-box .highlight { color: #ffd700; font-weight: bold; }
+.log-box .mauro { color: #ff6b6b; font-weight: bold; }
 .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0; }
 .stat-box { background: #f8f9fa; border-radius: 8px; padding: 10px; text-align: center; }
 .stat-box .num { font-size: 1.3rem; font-weight: 700; color: #212529; }
@@ -54,7 +58,7 @@ body { background: #f5f7f5; padding: 16px; font-family: system-ui, -apple-system
 
 <div class="container">
     <div class="card">
-        <h2><span class="material-icons" style="color:#2d5a27;">sync</span> Migración de sesiones v2</h2>
+        <h2><span class="material-icons" style="color:#2d5a27;">sync</span> Migrar sesiones</h2>
         <p style="font-size:.85rem;color:#6c757d;margin:0 0 12px;">
             Copia los campos <code>alcance</code>, <code>creadoPor</code> y <code>competencias</code> a todas las sesiones.
             <b>Ejecutar como ADMIN.</b>
@@ -87,7 +91,8 @@ body { background: #f5f7f5; padding: 16px; font-family: system-ui, -apple-system
     <div class="card" style="background:#fef9e7;border-color:#f0c674;">
         <p style="font-size:.8rem;color:#7a6a2a;margin:0;">
             ⚠️ Esta página <b>modifica</b> la base de datos. Ejecutar SOLO como admin.
-            Después de la migración, <b>borrar</b> este archivo del servidor.
+            <br>💡 Después de la migración, <b>borrar</b> este archivo del servidor.
+            <br>🔴 Las sesiones de <b>Mauro</b> se resaltan en el log.
         </p>
     </div>
 </div>
@@ -102,7 +107,9 @@ body { background: #f5f7f5; padding: 16px; font-family: system-ui, -apple-system
 
 <script>
 // ============================================================
-//  MIGRACIÓN DE SESIONES v2 — con verificación detallada
+//  MIGRACIÓN DE SESIONES — v1.0
+//  Copia alcance, creadoPor, competencias desde actividad padre
+//  a todas las sesiones. Resalta las de Mauro.
 // ============================================================
 
 var ESTADO = {
@@ -114,7 +121,8 @@ var ESTADO = {
     migradas: 0,
     pendientes: 0,
     errores: 0,
-    verificando: false
+    verificando: false,
+    uidMauro: 'hftkmTlB55V9AdwawMOlKvMtOf43'
 };
 
 function log(msg, tipo) {
@@ -126,6 +134,7 @@ function log(msg, tipo) {
     else if (tipo === 'warn') cls = 'warn';
     else if (tipo === 'info') cls = 'info';
     else if (tipo === 'highlight') cls = 'highlight';
+    else if (tipo === 'mauro') cls = 'mauro';
     box.innerHTML += '<div class="' + cls + '">' + msg + '</div>';
     box.scrollTop = box.scrollHeight;
 }
@@ -144,11 +153,12 @@ function actualizarStats() {
     document.getElementById('statsContainer').classList.remove('hidden');
 }
 
+// ── Verificar estado ──────────────────────────────────────
 async function verificarEstado() {
     if (ESTADO.verificando) return;
     ESTADO.verificando = true;
 
-    var btn = document.querySelector('.btn-secondary');
+    var btn = document.querySelectorAll('.btn-secondary')[0];
     btn.disabled = true;
     btn.textContent = '⏳ Verificando...';
 
@@ -161,12 +171,17 @@ async function verificarEstado() {
         ESTADO.total = 0;
         ESTADO.migradas = 0;
         ESTADO.pendientes = 0;
+        var mauroTotal = 0, mauroMigradas = 0;
 
         for (var doc of sesSnap.docs) {
             var s = doc.data();
             ESTADO.total++;
+            var esMauro = (s.uid === ESTADO.uidMauro);
+            if (esMauro) mauroTotal++;
+
             if (s.alcance !== undefined && s.creadoPor !== undefined) {
                 ESTADO.migradas++;
+                if (esMauro) mauroMigradas++;
             } else {
                 ESTADO.pendientes++;
             }
@@ -177,6 +192,8 @@ async function verificarEstado() {
         log('📊 Total sesiones: ' + ESTADO.total, 'info');
         log('✅ Migradas: ' + ESTADO.migradas, 'ok');
         log('⏳ Pendientes: ' + ESTADO.pendientes, ESTADO.pendientes > 0 ? 'warn' : 'ok');
+        log('', '');
+        log('🔴 Sesiones de Mauro: ' + mauroTotal + ' total, ' + mauroMigradas + ' migradas', 'mauro');
 
         if (ESTADO.pendientes === 0) {
             log('🎉 ¡Todas las sesiones ya están migradas!', 'ok');
@@ -195,6 +212,7 @@ async function verificarEstado() {
     ESTADO.verificando = false;
 }
 
+// ── Iniciar migración ──────────────────────────────────────
 async function iniciarMigracion() {
     if (ESTADO.corriendo) return;
 
@@ -251,25 +269,25 @@ async function iniciarMigracion() {
         var commitCount = 0;
         var docs = sesSnap.docs;
 
-        // Primero, identificar las sesiones de Mauro para asegurar que se migren
-        var uidMauro = 'hftkmTlB55V9AdwawMOlKvMtOf43';
-        var sesionesMauro = 0;
+        // Contadores para Mauro
+        var mauroTotal = 0, mauroMigradas = 0, mauroPendientes = 0;
 
         for (var i = 0; i < docs.length; i++) {
             var doc = docs[i];
             var s = doc.data();
-
-            // Contar sesiones de Mauro
-            if (s.uid === uidMauro) sesionesMauro++;
+            var esMauro = (s.uid === ESTADO.uidMauro);
+            if (esMauro) mauroTotal++;
 
             // Saltar si ya tiene campos denormalizados
             if (s.alcance !== undefined && s.creadoPor !== undefined) {
                 ESTADO.migradas++;
+                if (esMauro) mauroMigradas++;
                 actualizarStats();
                 continue;
             }
 
             ESTADO.pendientes++;
+            if (esMauro) mauroPendientes++;
             actualizarStats();
 
             try {
@@ -277,7 +295,9 @@ async function iniciarMigracion() {
                 var act = await ESTADO.db.collection('actividades').doc(actId).get();
 
                 if (!act.exists) {
-                    log('⚠️ Actividad no existe: ' + actId + ' — sesión: ' + doc.id, 'warn');
+                    var msg = '⚠️ Actividad no existe: ' + actId + ' — sesión: ' + doc.id;
+                    if (esMauro) log(msg + ' 🔴', 'mauro');
+                    else log(msg, 'warn');
                     ESTADO.errores++;
                     continue;
                 }
@@ -293,6 +313,7 @@ async function iniciarMigracion() {
                 count++;
                 ESTADO.migradas++;
                 ESTADO.pendientes--;
+                if (esMauro) { mauroMigradas++; mauroPendientes--; }
                 actualizarStats();
 
                 // Commit cada 400
@@ -309,8 +330,15 @@ async function iniciarMigracion() {
                     document.getElementById('progressFill').style.width = pct + '%';
                 }
 
+                // Log cada 10 sesiones de Mauro
+                if (esMauro && mauroMigradas % 5 === 0 && mauroMigradas > 0) {
+                    log('🔴 Mauro: ' + mauroMigradas + ' sesiones migradas', 'mauro');
+                }
+
             } catch (err) {
-                log('❌ Error en sesión ' + doc.id + ': ' + err.message, 'err');
+                var errMsg = '❌ Error en sesión ' + doc.id + ': ' + err.message;
+                if (esMauro) log(errMsg + ' 🔴', 'mauro');
+                else log(errMsg, 'err');
                 ESTADO.errores++;
             }
         }
@@ -324,36 +352,14 @@ async function iniciarMigracion() {
 
         document.getElementById('progressFill').style.width = '100%';
 
-        // ── Verificar sesiones de Mauro específicamente ──
+        // ── Resumen de Mauro ──
         log('', '');
-        log('🔍 Verificando sesiones de Mauro...', 'info');
-        try {
-            var sesMauro = await ESTADO.db.collectionGroup('sesiones')
-                .where('uid', '==', uidMauro)
-                .get();
-
-            var mauroTotal = 0;
-            var mauroDenorm = 0;
-
-            for (var doc2 of sesMauro.docs) {
-                var s2 = doc2.data();
-                mauroTotal++;
-                if (s2.alcance !== undefined && s2.creadoPor !== undefined) {
-                    mauroDenorm++;
-                }
-            }
-
-            log('📊 Sesiones de Mauro: ' + mauroTotal + ' total, ' + mauroDenorm + ' denormalizadas.', mauroDenorm === mauroTotal ? 'ok' : 'warn');
-            if (mauroDenorm === mauroTotal && mauroTotal > 0) {
-                log('✅ ¡Todas las sesiones de Mauro están denormalizadas!', 'ok');
-            } else if (mauroTotal === 0) {
-                log('ℹ️ Mauro no tiene sesiones (las horas en pausa se ven desde el historial).', 'info');
-            } else {
-                log('⚠️ ' + (mauroTotal - mauroDenorm) + ' sesiones de Mauro aún no están denormalizadas.', 'warn');
-            }
-        } catch (e) {
-            log('⚠️ No se pudieron verificar sesiones de Mauro: ' + e.message, 'warn');
-        }
+        log('═══════════════════════════════════════════════════', 'info');
+        log('📊 RESUMEN DE MAURO', 'highlight');
+        log('🔴 Mauro: ' + mauroTotal + ' sesiones totales', 'mauro');
+        log('✅ Migradas: ' + mauroMigradas, 'ok');
+        log('⏳ Pendientes: ' + mauroPendientes, mauroPendientes > 0 ? 'warn' : 'ok');
+        log('═══════════════════════════════════════════════════', 'info');
 
         // ── Resumen final ──
         log('', '');
@@ -367,13 +373,18 @@ async function iniciarMigracion() {
 
         if (ESTADO.pendientes === 0 && ESTADO.errores === 0) {
             log('🎉 ¡Todas las sesiones migradas exitosamente!', 'ok');
-            log('💡 Ahora Mauro debería ver sus horas en pausa en horas-stats.html', 'highlight');
+            if (mauroPendientes === 0) {
+                log('🔴 ¡Las sesiones de Mauro están completas!', 'mauro');
+            }
             btn.disabled = true;
             btn.textContent = '✅ Completado';
         } else if (ESTADO.pendientes === 0 && ESTADO.errores > 0) {
             log('⚠️ Completado con ' + ESTADO.errores + ' errores.', 'warn');
         } else {
             log('⚠️ Quedan ' + ESTADO.pendientes + ' sesiones. Ejecutar de nuevo.', 'warn');
+            if (mauroPendientes > 0) {
+                log('🔴 De esas, ' + mauroPendientes + ' son de Mauro.', 'mauro');
+            }
             btn.disabled = false;
             btn.textContent = '▶️ Reintentar';
         }
@@ -387,7 +398,7 @@ async function iniciarMigracion() {
     ESTADO.corriendo = false;
 }
 
-// ── Inicialización ────────────────────────────────────────────
+// ── Inicialización ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
     log('📱 Página de migración cargada.', 'info');
 
