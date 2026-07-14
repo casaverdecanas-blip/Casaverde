@@ -14,6 +14,10 @@
 //
 //  Convivencia: utils.js sigue manejando la colección 'tareas' para el
 //  tareas.html viejo. Cuando se jubile (T6), este pasa a ser el único motor.
+//
+//  v4.41 — Denormalización de sesiones para collectionGroup:
+//   - Al crear una sesión se copian alcance, creadoPor y competencias
+//   - Permite collectionGroup con reglas simples (sin get() al padre)
 // =========================================================
 (function () {
   var CVC = window.CVC;
@@ -132,7 +136,21 @@
     var activas = (t.sesionesActivas || []).slice();
     if (activas.some(function (s) { return s.uid === user.uid; })) return; // ya tengo una sesión abierta
     var ahora = tsAhora();
-    await ref.collection('sesiones').add({ uid: user.uid, nombre: user.nombre || '', inicio: ahora, fin: null });
+
+    // ═══════════════════════════════════════════════════════════════
+    //  DENORMALIZACIÓN: copiar campos de alcance a la sesión
+    //  para que collectionGroup pueda filtrar sin get() al padre
+    // ═══════════════════════════════════════════════════════════════
+    await ref.collection('sesiones').add({
+      uid: user.uid,
+      nombre: user.nombre || '',
+      inicio: ahora,
+      fin: null,
+      // Denormalizados para collectionGroup
+      alcance: t.alcance || 'personal',
+      creadoPor: t.creadoPor || null,
+      competencias: t.competencias || []
+    });
     activas.push({ uid: user.uid, nombre: user.nombre || '', inicio: ahora });
     await ref.update({ estado: 'en_curso', sesionesActivas: activas });
   }
