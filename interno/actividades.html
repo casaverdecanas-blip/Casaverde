@@ -400,7 +400,10 @@ async function tengoOtroCrono(actIdExcluir) {
       .get();
 
     for (var doc of snap.docs) {
-      var actId = doc.ref.parent.parent.id;
+      var ref = doc.ref;
+      var parent = ref.parent;
+      var grandParent = parent ? parent.parent : null;
+      var actId = grandParent ? grandParent.id : null;
       if (actId !== actIdExcluir) {
         return true;
       }
@@ -565,13 +568,17 @@ async function cargarHoras() {
     });
   } catch (e) { }
 
+  // Ciclo actual
   try {
     var sgSnap = await db.collectionGroup('sesiones').get();
     var ahoraMs = Date.now();
     sgSnap.forEach(function (d) {
       var s = d.data() || {};
       if (s.invalidada) return;
-      var actId = (d.ref.parent && d.ref.parent.parent) ? d.ref.parent.parent.id : null;
+      var ref = d.ref;
+      var parent = ref.parent;
+      var grandParent = parent ? parent.parent : null;
+      var actId = grandParent ? grandParent.id : null;
       if (!actId) return;
       var ini = (s.inicio && s.inicio.toMillis) ? s.inicio.toMillis() : 0;
       if (!ini) return;
@@ -1076,7 +1083,8 @@ function nodoHTML(it, nivel) {
   return h;
 }
 
-// ── Compras ──────────────────────────────────────────────────function esContenedorCompra(it) {
+// ── Compras ──────────────────────────────────────────────────
+function esContenedorCompra(it) {
   return items.some(function (x) { return x.parentId === it.id && x.esCompra; });
 }
 function contextoCompra(it) {
@@ -1470,7 +1478,6 @@ window.borrarItem = async function (id) {
 window.cronoIniciar = async function (id) {
   if (!CVC.actIniciar) { toast('Falta actividades-core.js', 'error'); return; }
 
-  // Verificar si ya tengo otro cronómetro corriendo
   var tieneOtro = await tengoOtroCrono(id);
   if (tieneOtro) {
     toast('⚠️ Ya tienes otro cronómetro corriendo. Finalízalo o pausalo antes de iniciar este.', 'warning');
