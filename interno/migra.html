@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Migración de sesiones — Casa Verde Canas</title>
+<link rel="stylesheet" href="design-system.css">
+<style>
+body { background: #f5f7f5; padding: 16px; font-family: system-ui, -apple-system, sans-serif; }
+.container { max-width: 700px; margin: 0 auto; }
+.card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.card h2 { font-size: 1rem; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+.btn { border: none; border-radius: 8px; padding: 10px 20px; font-size: .9rem; font-weight: 600; cursor: pointer; }
+.btn-primary { background: #2d5a27; color: #fff; }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.btn-secondary { background: #e9ecef; color: #343a40; }
+.btn-danger { background: #c0271f; color: #fff; }
+.log-box { background: #1a1a1a; color: #e0e0e0; border-radius: 8px; padding: 12px; font-family: monospace; font-size: .78rem; max-height: 450px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin-top: 12px; }
+.log-box .ok { color: #4caf50; }
+.log-box .err { color: #f44336; }
+.log-box .warn { color: #ff9800; }
+.log-box .info { color: #64b5f6; }
+.log-box .highlight { color: #ffd700; font-weight: bold; }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0; }
+.stat-box { background: #f8f9fa; border-radius: 8px; padding: 10px; text-align: center; }
+.stat-box .num { font-size: 1.3rem; font-weight: 700; color: #212529; }
+.stat-box .lbl { font-size: .65rem; color: #6c757d; text-transform: uppercase; letter-spacing: .04em; }
+.progress-bar { width: 100%; height: 6px; background: #e9ecef; border-radius: 3px; overflow: hidden; margin: 8px 0; }
+.progress-bar .fill { height: 100%; background: #2d5a27; border-radius: 3px; transition: width .3s; width: 0%; }
+.hidden { display: none; }
+</style>
+</head>
+<body>
+
+<header class="admin-header">
+  <div class="admin-header__brand">
+    <span class="material-icons">cottage</span>
+    Casa Verde Canas
+  </div>
+  <div class="admin-header__actions">
+    <div class="user-chip">
+      <span class="material-icons">person</span>
+      <span id="userName">—</span>
+    </div>
+    <button class="btn-logout" onclick="CVC.cerrarSesion()">
+      <span class="material-icons">logout</span> Salir
+    </button>
+  </div>
+</header>
+
+<nav id="appNav" class="admin-nav"></nav>
+
+<main style="max-width:700px;margin:0 auto;padding:16px;">
+
+<div class="container">
+    <div class="card">
+        <h2><span class="material-icons" style="color:#2d5a27;">sync</span> Migración de sesiones v2</h2>
+        <p style="font-size:.85rem;color:#6c757d;margin:0 0 12px;">
+            Copia los campos <code>alcance</code>, <code>creadoPor</code> y <code>competencias</code> a todas las sesiones.
+            <b>Ejecutar como ADMIN.</b>
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" id="btnMigrar" onclick="iniciarMigracion()">▶️ Iniciar migración</button>
+            <button class="btn btn-secondary" onclick="verificarEstado()">🔍 Verificar estado</button>
+            <button class="btn btn-secondary" onclick="limpiarLog()">🗑️ Limpiar log</button>
+        </div>
+    </div>
+
+    <div id="statsContainer" class="hidden">
+        <div class="card">
+            <h2><span class="material-icons">dashboard</span> Progreso</h2>
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-box"><div class="num" id="totalSesiones">0</div><div class="lbl">Total</div></div>
+                <div class="stat-box"><div class="num" id="migradasSesiones">0</div><div class="lbl">Migradas</div></div>
+                <div class="stat-box"><div class="num" id="pendientesSesiones">0</div><div class="lbl">Pendientes</div></div>
+                <div class="stat-box"><div class="num" id="erroresSesiones">0</div><div class="lbl">Errores</div></div>
+            </div>
+            <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2><span class="material-icons">receipt_long</span> Log</h2>
+        <div id="logBox" class="log-box">Esperando acción...</div>
+    </div>
+
+    <div class="card" style="background:#fef9e7;border-color:#f0c674;">
+        <p style="font-size:.8rem;color:#7a6a2a;margin:0;">
+            ⚠️ Esta página <b>modifica</b> la base de datos. Ejecutar SOLO como admin.
+            Después de la migración, <b>borrar</b> este archivo del servidor.
+        </p>
+    </div>
+</div>
+
+</main>
+
+<!-- Firebase 8.10.1 -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+
+<script>
+// ============================================================
+//  MIGRACIÓN DE SESIONES v2 — con verificación detallada
+// ============================================================
+
+var ESTADO = {
+    db: null,
+    uid: null,
+    esAdmin: false,
+    corriendo: false,
+    total: 0,
+    migradas: 0,
+    pendientes: 0,
+    errores: 0,
+    verificando: false
+};
+
+function log(msg, tipo) {
+    tipo = tipo || 'info';
+    var box = document.getElementById('logBox');
+    var cls = '';
+    if (tipo === 'ok') cls = 'ok';
+    else if (tipo === 'err') cls = 'err';
+    else if (tipo === 'warn') cls = 'warn';
+    else if (tipo === 'info') cls = 'info';
+    else if (tipo === 'highlight') cls = 'highlight';
+    box.innerHTML += '<div class="' + cls + '">' + msg + '</div>';
+    box.scrollTop = box.scrollHeight;
+}
+
+function limpiarLog() {
+    document.getElementById('logBox').innerHTML = '';
+}
+
+function actualizarStats() {
+    document.getElementById('totalSesiones').textContent = ESTADO.total;
+    document.getElementById('migradasSesiones').textContent = ESTADO.migradas;
+    document.getElementById('pendientesSesiones').textContent = ESTADO.pendientes;
+    document.getElementById('erroresSesiones').textContent = ESTADO.errores;
+    var pct = ESTADO.total > 0 ? Math.round((ESTADO.migradas / ESTADO.total) * 100) : 0;
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('statsContainer').classList.remove('hidden');
+}
+
+async function verificarEstado() {
+    if (ESTADO.verificando) return;
+    ESTADO.verificando = true;
+
+    var btn = document.querySelector('.btn-secondary');
+    btn.disabled = true;
+    btn.textContent = '⏳ Verificando...';
+
+    log('═══════════════════════════════════════════════════', 'info');
+    log('🔍 VERIFICANDO ESTADO DE SESIONES', 'highlight');
+    log('═══════════════════════════════════════════════════', 'info');
+
+    try {
+        var sesSnap = await ESTADO.db.collectionGroup('sesiones').get();
+        ESTADO.total = 0;
+        ESTADO.migradas = 0;
+        ESTADO.pendientes = 0;
+
+        for (var doc of sesSnap.docs) {
+            var s = doc.data();
+            ESTADO.total++;
+            if (s.alcance !== undefined && s.creadoPor !== undefined) {
+                ESTADO.migradas++;
+            } else {
+                ESTADO.pendientes++;
+            }
+        }
+
+        actualizarStats();
+
+        log('📊 Total sesiones: ' + ESTADO.total, 'info');
+        log('✅ Migradas: ' + ESTADO.migradas, 'ok');
+        log('⏳ Pendientes: ' + ESTADO.pendientes, ESTADO.pendientes > 0 ? 'warn' : 'ok');
+
+        if (ESTADO.pendientes === 0) {
+            log('🎉 ¡Todas las sesiones ya están migradas!', 'ok');
+            document.getElementById('btnMigrar').disabled = true;
+        } else {
+            log('⚠️ Hay ' + ESTADO.pendientes + ' sesiones pendientes.', 'warn');
+            document.getElementById('btnMigrar').disabled = false;
+        }
+
+    } catch (e) {
+        log('❌ Error al verificar: ' + e.message, 'err');
+    }
+
+    btn.disabled = false;
+    btn.textContent = '🔍 Verificar estado';
+    ESTADO.verificando = false;
+}
+
+async function iniciarMigracion() {
+    if (ESTADO.corriendo) return;
+
+    var btn = document.getElementById('btnMigrar');
+    btn.disabled = true;
+    btn.textContent = '⏳ Migrando...';
+    ESTADO.corriendo = true;
+
+    log('═══════════════════════════════════════════════════', 'info');
+    log('▶️ INICIANDO MIGRACIÓN DE SESIONES', 'highlight');
+    log('═══════════════════════════════════════════════════', 'info');
+    log('⚠️ No cerrar esta página hasta que termine.', 'warn');
+
+    try {
+        // Verificar autenticación
+        var r = await CVC.verificarAuth(['admin']);
+        ESTADO.db = CVC.db;
+        ESTADO.uid = r.user.uid;
+        ESTADO.esAdmin = r.userData.rol === 'admin';
+
+        document.getElementById('userName').textContent = r.userData.nombre || r.user.email || 'Admin';
+
+        if (!ESTADO.esAdmin) {
+            log('❌ Solo el administrador puede ejecutar esta migración.', 'err');
+            btn.disabled = false;
+            btn.textContent = '▶️ Iniciar migración';
+            ESTADO.corriendo = false;
+            return;
+        }
+
+        log('✅ Autenticado como admin: ' + (r.userData.nombre || r.user.email), 'ok');
+
+        // Obtener todas las sesiones
+        var sesSnap = await ESTADO.db.collectionGroup('sesiones').get();
+        ESTADO.total = sesSnap.size;
+        ESTADO.migradas = 0;
+        ESTADO.pendientes = 0;
+        ESTADO.errores = 0;
+        actualizarStats();
+
+        if (ESTADO.total === 0) {
+            log('ℹ️ No hay sesiones para migrar.', 'info');
+            btn.disabled = true;
+            btn.textContent = '✅ Completado';
+            ESTADO.corriendo = false;
+            return;
+        }
+
+        log('📊 Encontradas ' + ESTADO.total + ' sesiones.', 'info');
+
+        // Procesar en lotes de 400
+        var batch = ESTADO.db.batch();
+        var count = 0;
+        var commitCount = 0;
+        var docs = sesSnap.docs;
+
+        // Primero, identificar las sesiones de Mauro para asegurar que se migren
+        var uidMauro = 'hftkmTlB55V9AdwawMOlKvMtOf43';
+        var sesionesMauro = 0;
+
+        for (var i = 0; i < docs.length; i++) {
+            var doc = docs[i];
+            var s = doc.data();
+
+            // Contar sesiones de Mauro
+            if (s.uid === uidMauro) sesionesMauro++;
+
+            // Saltar si ya tiene campos denormalizados
+            if (s.alcance !== undefined && s.creadoPor !== undefined) {
+                ESTADO.migradas++;
+                actualizarStats();
+                continue;
+            }
+
+            ESTADO.pendientes++;
+            actualizarStats();
+
+            try {
+                var actId = doc.ref.parent.parent.id;
+                var act = await ESTADO.db.collection('actividades').doc(actId).get();
+
+                if (!act.exists) {
+                    log('⚠️ Actividad no existe: ' + actId + ' — sesión: ' + doc.id, 'warn');
+                    ESTADO.errores++;
+                    continue;
+                }
+
+                var a = act.data();
+
+                batch.update(doc.ref, {
+                    alcance: a.alcance || 'personal',
+                    creadoPor: a.creadoPor || null,
+                    competencias: a.competencias || []
+                });
+
+                count++;
+                ESTADO.migradas++;
+                ESTADO.pendientes--;
+                actualizarStats();
+
+                // Commit cada 400
+                if (count >= 400) {
+                    await batch.commit();
+                    commitCount += count;
+                    log('📦 Commit de ' + count + ' sesiones (' + commitCount + '/' + ESTADO.total + ')', 'info');
+                    batch = ESTADO.db.batch();
+                    count = 0;
+                }
+
+                if (i % 20 === 0) {
+                    var pct = Math.round((i / ESTADO.total) * 100);
+                    document.getElementById('progressFill').style.width = pct + '%';
+                }
+
+            } catch (err) {
+                log('❌ Error en sesión ' + doc.id + ': ' + err.message, 'err');
+                ESTADO.errores++;
+            }
+        }
+
+        // Commit final
+        if (count > 0) {
+            await batch.commit();
+            commitCount += count;
+            log('📦 Commit final de ' + count + ' sesiones (' + commitCount + '/' + ESTADO.total + ')', 'info');
+        }
+
+        document.getElementById('progressFill').style.width = '100%';
+
+        // ── Verificar sesiones de Mauro específicamente ──
+        log('', '');
+        log('🔍 Verificando sesiones de Mauro...', 'info');
+        try {
+            var sesMauro = await ESTADO.db.collectionGroup('sesiones')
+                .where('uid', '==', uidMauro)
+                .get();
+
+            var mauroTotal = 0;
+            var mauroDenorm = 0;
+
+            for (var doc2 of sesMauro.docs) {
+                var s2 = doc2.data();
+                mauroTotal++;
+                if (s2.alcance !== undefined && s2.creadoPor !== undefined) {
+                    mauroDenorm++;
+                }
+            }
+
+            log('📊 Sesiones de Mauro: ' + mauroTotal + ' total, ' + mauroDenorm + ' denormalizadas.', mauroDenorm === mauroTotal ? 'ok' : 'warn');
+            if (mauroDenorm === mauroTotal && mauroTotal > 0) {
+                log('✅ ¡Todas las sesiones de Mauro están denormalizadas!', 'ok');
+            } else if (mauroTotal === 0) {
+                log('ℹ️ Mauro no tiene sesiones (las horas en pausa se ven desde el historial).', 'info');
+            } else {
+                log('⚠️ ' + (mauroTotal - mauroDenorm) + ' sesiones de Mauro aún no están denormalizadas.', 'warn');
+            }
+        } catch (e) {
+            log('⚠️ No se pudieron verificar sesiones de Mauro: ' + e.message, 'warn');
+        }
+
+        // ── Resumen final ──
+        log('', '');
+        log('═══════════════════════════════════════════════════', 'info');
+        log('✅ MIGRACIÓN COMPLETADA', 'ok');
+        log('📊 Total sesiones: ' + ESTADO.total, 'info');
+        log('✅ Migradas: ' + ESTADO.migradas, 'ok');
+        log('⏳ Pendientes: ' + ESTADO.pendientes, ESTADO.pendientes > 0 ? 'warn' : 'ok');
+        log('❌ Errores: ' + ESTADO.errores, ESTADO.errores > 0 ? 'err' : 'ok');
+        log('═══════════════════════════════════════════════════', 'info');
+
+        if (ESTADO.pendientes === 0 && ESTADO.errores === 0) {
+            log('🎉 ¡Todas las sesiones migradas exitosamente!', 'ok');
+            log('💡 Ahora Mauro debería ver sus horas en pausa en horas-stats.html', 'highlight');
+            btn.disabled = true;
+            btn.textContent = '✅ Completado';
+        } else if (ESTADO.pendientes === 0 && ESTADO.errores > 0) {
+            log('⚠️ Completado con ' + ESTADO.errores + ' errores.', 'warn');
+        } else {
+            log('⚠️ Quedan ' + ESTADO.pendientes + ' sesiones. Ejecutar de nuevo.', 'warn');
+            btn.disabled = false;
+            btn.textContent = '▶️ Reintentar';
+        }
+
+    } catch (e) {
+        log('❌ Error grave: ' + e.message, 'err');
+        btn.disabled = false;
+        btn.textContent = '▶️ Reintentar';
+    }
+
+    ESTADO.corriendo = false;
+}
+
+// ── Inicialización ────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+    log('📱 Página de migración cargada.', 'info');
+
+    CVC.verificarAuth(['admin'])
+        .then(function(r) {
+            ESTADO.db = CVC.db;
+            ESTADO.uid = r.user.uid;
+            ESTADO.esAdmin = r.userData.rol === 'admin';
+            document.getElementById('userName').textContent = r.userData.nombre || r.user.email || 'Admin';
+            CVC.renderNav('migrar-sesiones.html', r.userData.rol);
+            log('✅ Sesión verificada: ' + (r.userData.nombre || r.user.email), 'ok');
+            setTimeout(verificarEstado, 500);
+        })
+        .catch(function(e) {
+            log('❌ Error de autenticación: ' + e.message, 'err');
+        });
+});
+
+// Exponer funciones globales
+window.iniciarMigracion = iniciarMigracion;
+window.verificarEstado = verificarEstado;
+window.limpiarLog = limpiarLog;
+</script>
+</body>
+</html>
