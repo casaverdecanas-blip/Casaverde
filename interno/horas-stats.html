@@ -8,9 +8,10 @@
 <link rel="stylesheet" href="design-system.css">
 <style>
 /* ============================================================
-   horas-stats.html — Análisis general de horas (v4.40)
+   horas-stats.html — Análisis general de horas (v4.41)
    Reemplaza a limpieza-stats.html. Todo derivado, nada guardado.
    Sin backticks · sin ?. · sin ?? · filtrado 100% client-side.
+   v4.41: collectionGroup de sesiones con denormalización.
    ============================================================ */
 .hs-main { max-width: 1100px; margin: 0 auto; padding: 16px 14px 90px; }
 .hs-title { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; }
@@ -426,7 +427,8 @@ async function cargar() {
         });
 
         // ── 5. Ciclo actual: sesiones EN PAUSA ──
-        //    (requiere la regla dentro de actividades; si falla, degrada)
+        // Con la denormalización (v4.41), collectionGroup funciona con reglas simples
+        // sin necesidad de get() al padre. Si falla, degrada silenciosamente.
         try {
             var sesSnap = await db.collectionGroup('sesiones').get();
             sesSnap.forEach(function(d) {
@@ -456,7 +458,11 @@ async function cargar() {
                     pausada: true
                 });
             });
-        } catch (e) { /* regla ausente o sin permiso: solo consolidado */ }
+        } catch (e) {
+            // Degrada silenciosamente: solo consolidado
+            // Esto puede pasar si las reglas de Firestore no permiten collectionGroup
+            // o si las sesiones no tienen los campos denormalizados.
+        }
 
         // ── 6. Usuarios disponibles (derivados del historial) ──
         var uids = Object.keys(usuariosMap);
