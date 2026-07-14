@@ -335,33 +335,54 @@ async function cargar() {
         CVC.renderNav('horas-stats.html', userData.rol);
         CVC.initAyuda('horas-stats.html');
 
-        var res = await Promise.all([
-            db.collection('historial_tareas').get(),
-            db.collection('actividades').get(),
-            db.collection('cabanas').get(),
-            CVC.cargarCotizaciones()
-        ]);
+        // ── 1. Leer actividades ──
+        // ⚠️ CRÍTICO: un no-admin NO puede hacer .get() sin filtros.
+        // Firestore rechaza la consulta porque no puede garantizar
+        // que todos los documentos cumplan las condiciones de lectura.
+        // Solución: 3 consultas con where (igual que en actividades.html).
+        var docsAct = [];
+        if (HS.esAdmin) {
+            var sAct = await db.collection('actividades').get();
+            sAct.forEach(function(d) { docsAct.push(Object.assign({ id: d.id }, d.data())); });
+        } else {
+            var seen = {};
+            var consultas = [
+                { etq: 'equipo',    q: db.collection('actividades').where('alcance', '==', 'equipo') },
+                { etq: 'propios',   q: db.collection('actividades').where('creadoPor', '==', r.user.uid) },
+                { etq: 'asignados', q: db.collection('actividades').where('competencias', 'array-contains', r.user.uid) }
+            ];
+            for (var c = 0; c < consultas.length; c++) {
+                try {
+                    var snap = await consultas[c].q.get();
+                    snap.forEach(function(d) {
+                        if (!seen[d.id]) { seen[d.id] = 1; docsAct.push(Object.assign({ id: d.id }, d.data())); }
+                    });
+                } catch (eq) { /* silencioso: una consulta puede fallar si la regla cambia */ }
+            }
+        }
 
-        // Índice de actividades
-        res[1].forEach(function(d) {
-            var a = d.data();
-            HS.actIdx[d.id] = {
-                nombre: a.nombre || '',
+        // ── 2. Índice de actividades ──
+        for (var i = 0; i < docsAct.length; i++) {
+            var a = docsAct[i];
+            HS.actIdx[a.id] = {
+                nombre: a.nombre || a.titulo || '',
                 parentId: a.parentId || null,
                 tipo: a.tipo || '',
                 cabana: (a.cabana !== undefined && a.cabana !== null) ? a.cabana : null
             };
-        });
+        }
 
-        // Cabañas
-        res[2].forEach(function(d) {
+        // ── 3. Cabañas ──
+        var sCab = await db.collection('cabanas').get();
+        sCab.forEach(function(d) {
             var c = d.data(); c.id = d.id;
             HS.cabanas.push(c);
         });
 
-        // Historial → líneas por colaborador + docs de limpieza
+        // ── 4. Historial → líneas por colaborador + docs de limpieza ──
         var usuariosMap = {};
-        res[0].forEach(function(d) {
+        var sHist = await db.collection('historial_tareas').get();
+        sHist.forEach(function(d) {
             var h = d.data();
             var fecha = aDate(h.finalizadoEn);
             if (!fecha) return;
@@ -369,20 +390,20 @@ async function cargar() {
             var cols = h.colaboradores || [];
             var sumaHorasDoc = 0;
 
-            for (var i = 0; i < cols.length; i++) {
-                var c = cols[i];
-                if (!c || !c.uid) continue;
-                var horas = parseFloat(c.horas) || 0;
+            for (var j = 0; j < cols.length; j++) {
+                var c2 = cols[j];
+                if (!c2 || !c2.uid) continue;
+                var horas = parseFloat(c2.horas) || 0;
                 sumaHorasDoc += horas;
-                usuariosMap[c.uid] = c.nombre || usuariosMap[c.uid] || c.uid;
+                usuariosMap[c2.uid] = c2.nombre || usuariosMap[c2.uid] || c2.uid;
                 HS.lineas.push({
                     docId: d.id,
                     fecha: fecha,
                     ms: fecha.getTime(),
-                    uid: c.uid,
-                    nombre: c.nombre || '',
+                    uid: c2.uid,
+                    nombre: c2.nombre || '',
                     horas: horas,
-                    montoBRL: parseFloat(c.montoRecibido) || 0,
+                    montoBRL: parseFloat(c2.montoRecibido) || 0,
                     path: path,
                     actNombre: h.nombre || '',
                     tipo: h.tipo || 'general'
@@ -398,17 +419,14 @@ async function cargar() {
                     personas: cols.length,
                     montoBRL: parseFloat(h.monto) || 0,
                     cobradoBRL: parseFloat(h.costoLimpiezaBRL) || 0,
-                    uids: cols.map(function(c) { return c.uid; }),
+                    uids: cols.map(function(c3) { return c3.uid; }),
                     conCronometro: h.conCronometro !== false
                 });
             }
         });
 
-        // Ciclo actual: sesiones EN PAUSA (inicio y fin cerrados, actividad aún
-        // no finalizada) cuentan como horas reales. El segmento corriendo ahora
-        // (fin null) se suma recién al pausar o finalizar. Al finalizar, el core
-        // consolida en historial y borra las sesiones — no hay doble conteo.
-        // Requiere la regla de collection group de §16AF; si falta, degrada sin romper.
+        // ── 5. Ciclo actual: sesiones EN PAUSA ──
+        //    (requiere la regla dentro de actividades; si falla, degrada)
         try {
             var sesSnap = await db.collectionGroup('sesiones').get();
             sesSnap.forEach(function(d) {
@@ -417,7 +435,7 @@ async function cargar() {
                 if (!s.uid) return;
                 var ini = aDate(s.inicio);
                 var fin = aDate(s.fin);
-                if (!ini || !fin) return; // sin fin = corriendo ahora → afuera
+                if (!ini || !fin) return;
                 var horas = Math.max(0, (fin - ini) / 3600000);
                 if (horas <= 0) return;
                 var actId = (d.ref.parent && d.ref.parent.parent) ? d.ref.parent.parent.id : null;
@@ -440,13 +458,13 @@ async function cargar() {
             });
         } catch (e) { /* regla ausente o sin permiso: solo consolidado */ }
 
-        // Usuarios disponibles (derivados del historial)
+        // ── 6. Usuarios disponibles (derivados del historial) ──
         var uids = Object.keys(usuariosMap);
         HS.usuarios = uids.map(function(u) { return { uid: u, nombre: usuariosMap[u] }; });
         HS.usuarios.sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
-        for (var j = 0; j < HS.usuarios.length; j++) HS.uidsSel[HS.usuarios[j].uid] = true;
+        for (var k = 0; k < HS.usuarios.length; k++) HS.uidsSel[HS.usuarios[k].uid] = true;
 
-        // UI de filtros
+        // ── 7. UI de filtros ──
         renderPresets();
         if (HS.esAdmin) {
             document.getElementById('hsUsuariosWrap').style.display = 'block';
