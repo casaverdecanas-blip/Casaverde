@@ -154,7 +154,7 @@
 
     <div class="form-group">
       <label class="form-label">Detalle (opcional)</label>
-      <textarea id="itDetalle" class="form-control" rows="2" placeholder="Notas, instrucciones…"></textarea>
+      <textarea id="itDetalle" class="form-control" rows="2" placeholder="Notas, instrucciones..."></textarea>
     </div>
 
     <div class="form-group" id="bloquePadre" style="display:none">
@@ -265,10 +265,10 @@
 <div class="modal-cv" id="modalReporte">
   <div class="box">
     <h3><span class="material-icons" style="vertical-align:-5px;color:#b8860b">campaign</span> Reportar al administrador</h3>
-    <p class="muted-note" style="margin-bottom:8px">Actividad: <b id="repTitulo">\u2014</b></p>
+    <p class="muted-note" style="margin-bottom:8px">Actividad: <b id="repTitulo">—</b></p>
     <div class="form-group">
       <label class="form-label">Comentario / observación</label>
-      <textarea id="repComentario" class="form-control" rows="4" placeholder="Escrib\u00ed tu comentario para el administrador\u2026" style="resize:vertical"></textarea>
+      <textarea id="repComentario" class="form-control" rows="4" placeholder="Escribí tu comentario para el administrador..." style="resize:vertical"></textarea>
     </div>
     <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-secondary" onclick="elegirFotoReporte()"><span class="material-icons" style="font-size:18px;vertical-align:-4px">photo_camera</span> Adjuntar foto</button>
@@ -285,10 +285,10 @@
 <div class="modal-cv" id="modalProveedores">
   <div class="box">
     <h3><span class="material-icons" style="vertical-align:-5px">storefront</span> Proveedores de compras</h3>
-    <p class="muted-note" style="margin-bottom:8px">Los lugares donde conseguís cosas (Supermercado, Ferretería…). La lista de compras se agrupa por estos.</p>
+    <p class="muted-note" style="margin-bottom:8px">Los lugares donde conseguís cosas (Supermercado, Ferretería...). La lista de compras se agrupa por estos.</p>
     <div id="provLista"></div>
     <div style="display:flex;gap:8px;margin-top:10px">
-      <input type="text" id="provNuevo" class="form-control" placeholder="Nuevo proveedor…">
+      <input type="text" id="provNuevo" class="form-control" placeholder="Nuevo proveedor...">
       <button class="btn btn-secondary" onclick="agregarProveedor()">Agregar</button>
     </div>
     <div class="modal-foot">
@@ -327,7 +327,7 @@ var ultimaVistaCompras = 0;
 var _comprasCorte = 0;
 var _estadoCargado = false;
 var _estadoTimer = null;
-var proveedoresDefault = ['Supermercado', 'Ferreter\u00eda', 'Farmacia', 'Vivero', 'Otros'];
+var proveedoresDefault = ['Supermercado', 'Ferretería', 'Farmacia', 'Vivero', 'Otros'];
 var proveedores = proveedoresDefault.slice();
 var _cronoCache = null;
 var _cronoCacheTime = 0;
@@ -349,115 +349,6 @@ function dotClase(p) {
   if (p === 'amarillo') return 'dot-amarillo';
   if (p === 'verde') return 'dot-verde';
   return 'dot-gris';
-}
-
-// ── Sincronizar sesionesActivas con la subcolección ──────
-async function sincronizarSesionesActivas(actId) {
-  try {
-    var ref = db.collection('actividades').doc(actId);
-    var snap = await ref.get();
-    if (!snap.exists) return;
-
-    var sesSnap = await ref.collection('sesiones').get();
-    var activasReales = [];
-    var ahora = firebase.firestore.Timestamp.now();
-
-    sesSnap.forEach(function(d) {
-      var s = d.data();
-      if (s.fin === null || s.fin === undefined) {
-        activasReales.push({
-          uid: s.uid,
-          nombre: s.nombre || '',
-          inicio: s.inicio || ahora
-        });
-      }
-    });
-
-    await ref.update({
-      sesionesActivas: activasReales,
-      estado: activasReales.length ? 'en_curso' : 'pendiente'
-    });
-
-    var it = byId[actId];
-    if (it) {
-      it.sesionesActivas = activasReales;
-      it.estado = activasReales.length ? 'en_curso' : 'pendiente';
-    }
-
-    return activasReales;
-  } catch (e) {
-    console.warn('Error sincronizando sesiones:', e.message);
-    return null;
-  }
-}
-
-// ── Verificar si tengo otro cronómetro corriendo ──────────
-async function tengoOtroCrono(actIdExcluir) {
-  try {
-    var snap = await db.collectionGroup('sesiones')
-      .where('uid', '==', uid)
-      .where('fin', '==', null)
-      .get();
-
-    for (var doc of snap.docs) {
-      var ref = doc.ref;
-      var parent = ref.parent;
-      var grandParent = parent ? parent.parent : null;
-      var actId = grandParent ? grandParent.id : null;
-      if (actId !== actIdExcluir) {
-        return true;
-      }
-    }
-    return false;
-  } catch (e) {
-    return false;
-  }
-}
-
-// ── Mi cronómetro corriendo (con cache) ────────────────────
-async function miCronoCorriendo() {
-  var ahora = Date.now();
-
-  if (_cronoCacheTime && (ahora - _cronoCacheTime) < 2000) {
-    return _cronoCache;
-  }
-
-  for (var i = 0; i < items.length; i++) {
-    var ses = items[i].sesionesActivas || [];
-    for (var j = 0; j < ses.length; j++) {
-      if (ses[j].uid === uid) {
-        try {
-          var snap = await db.collection('actividades').doc(items[i].id).collection('sesiones')
-            .where('uid', '==', uid)
-            .where('fin', '==', null)
-            .get();
-
-          if (!snap.empty) {
-            _cronoCache = items[i];
-            _cronoCacheTime = ahora;
-            return items[i];
-          } else {
-            await sincronizarSesionesActivas(items[i].id);
-            await cargar();
-          }
-        } catch (e) {
-          return null;
-        }
-      }
-    }
-  }
-
-  _cronoCache = null;
-  _cronoCacheTime = ahora;
-  return null;
-}
-
-// ── Proveedores de compras ─────────────────────────────────
-async function cargarProveedores() {
-  try {
-    var d = await db.collection('config').doc('compras_proveedores').get();
-    if (d.exists && d.data() && Array.isArray(d.data().lista) && d.data().lista.length) proveedores = d.data().lista.slice();
-  } catch (e) { /* usa los default */ }
 }
 
 // ── Carga ──────────────────────────────────────────────────
@@ -495,34 +386,6 @@ async function cargar() {
       }
       if (fails.length) {
         diagCarga = 'Diagnóstico — consultas OK: [' + (oks.join(', ') || 'ninguna') + ']  ·  FALLARON: [' + fails.join('  |  ') + ']';
-      }
-    }
-
-    // Limpiar referencias huérfanas
-    for (var i = 0; i < docs.length; i++) {
-      var act = docs[i];
-      if (act.sesionesActivas && act.sesionesActivas.length) {
-        try {
-          var ref = db.collection('actividades').doc(act.id);
-          var sesSnap = await ref.collection('sesiones').get();
-          var uidsEnSubcoleccion = {};
-          sesSnap.forEach(function(d) {
-            var s = d.data();
-            if (s.fin === null || s.fin === undefined) {
-              uidsEnSubcoleccion[s.uid] = true;
-            }
-          });
-          var activasFiltradas = (act.sesionesActivas || []).filter(function(s) {
-            return uidsEnSubcoleccion[s.uid];
-          });
-          if (activasFiltradas.length !== (act.sesionesActivas || []).length) {
-            await ref.update({
-              sesionesActivas: activasFiltradas,
-              estado: activasFiltradas.length ? 'en_curso' : 'pendiente'
-            });
-            act.sesionesActivas = activasFiltradas;
-          }
-        } catch (e) { /* ignorar */ }
       }
     }
 
@@ -568,28 +431,23 @@ async function cargarHoras() {
     });
   } catch (e) { }
 
-  // Ciclo actual
+  // Sesiones del nuevo sistema unificado
   try {
-    var sgSnap = await db.collectionGroup('sesiones').get();
+    var sgSnap = await db.collection('sesiones').get();
     var ahoraMs = Date.now();
     sgSnap.forEach(function (d) {
       var s = d.data() || {};
-      if (s.invalidada) return;
-      var ref = d.ref;
-      var parent = ref.parent;
-      var grandParent = parent ? parent.parent : null;
-      var actId = grandParent ? grandParent.id : null;
-      if (!actId) return;
+      if (!s.actividadId) return;
       var ini = (s.inicio && s.inicio.toMillis) ? s.inicio.toMillis() : 0;
       if (!ini) return;
       var fin = (s.fin && s.fin.toMillis) ? s.fin.toMillis() : 0;
       var abierta = !fin;
-      var hrs = Math.max(0, ((abierta ? ahoraMs : fin) - ini) / 3600000);
-      var reg = horasIdx[actId] || (horasIdx[actId] = { horas: 0, ult: 0, lineas: [] });
+      var hrs = s.horas || (abierta ? Math.max(0, (ahoraMs - ini) / 3600000) : 0);
+      var reg = horasIdx[s.actividadId] || (horasIdx[s.actividadId] = { horas: 0, ult: 0, lineas: [] });
       reg.horas += hrs;
       var tref = abierta ? ahoraMs : fin;
       if (tref > reg.ult) reg.ult = tref;
-      reg.lineas.push({ ts: ini, nombre: s.nombre || '', horas: hrs, sesion: abierta ? 'en curso' : 'pausada' });
+      reg.lineas.push({ ts: ini, nombre: s.nombre || '', horas: hrs, sesion: abierta ? 'en curso' : (s.estado || '') });
     });
   } catch (e) { }
 }
@@ -639,24 +497,24 @@ function desgloseHTML(it) {
   }
   var ag = horasArbol(it.id);
   var resumen = Object.keys(porPersona).sort(function (a, b) { return porPersona[b] - porPersona[a]; })
-    .map(function (n) { return esc(n) + ' ' + fmtHorasHM(porPersona[n]); }).join(' \u00b7 ');
+    .map(function (n) { return esc(n) + ' ' + fmtHorasHM(porPersona[n]); }).join(' · ');
   var h = '<div class="hh-panel">';
-  h += '<div class="hh-tot">\u23f1 Total ' + fmtHorasHM(ag.horas) + (resumen ? ' \u2014 ' + resumen : '') + '</div>';
+  h += '<div class="hh-tot">⏱ Total ' + fmtHorasHM(ag.horas) + (resumen ? ' — ' + resumen : '') + '</div>';
   lineas.sort(function (a, b) { return b.ts - a.ts; });
   var tope = Math.min(lineas.length, 30);
   for (var m = 0; m < tope; m++) {
     var x = lineas[m];
     var dx = x.ts ? new Date(x.ts) : null;
-    var fx = dx ? (pad2(dx.getDate()) + '/' + pad2(dx.getMonth() + 1)) : '\u2014';
+    var fx = dx ? (pad2(dx.getDate()) + '/' + pad2(dx.getMonth() + 1)) : '—';
     h += '<div class="hh-lin"><span>' + fx + '</span>'
-      + '<span>' + esc(x.nombre || '\u2014') + '</span>'
+      + '<span>' + esc(x.nombre || '—') + '</span>'
       + '<span>' + fmtHorasHM(x.horas) + '</span>'
-      + (x.tit ? '<span style="color:#7a8a76">\u00ab' + esc(x.tit) + '\u00bb</span>' : '')
+      + (x.tit ? '<span style="color:#7a8a76">«' + esc(x.tit) + '»</span>' : '')
       + (x.sesion ? '<span class="hh-curso">' + x.sesion + '</span>' : '')
       + '</div>';
   }
-  if (lineas.length > tope) h += '<div class="hh-lin" style="color:#7a8a76">\u2026 y ' + (lineas.length - tope) + ' m\u00e1s (ver Historial de cada actividad)</div>';
-  if (!lineas.length) h += '<div class="hh-lin">Sin registros de tiempo todav\u00eda.</div>';
+  if (lineas.length > tope) h += '<div class="hh-lin" style="color:#7a8a76">... y ' + (lineas.length - tope) + ' más (ver Historial de cada actividad)</div>';
+  if (!lineas.length) h += '<div class="hh-lin">Sin registros de tiempo todavía.</div>';
   h += '</div>';
   return h;
 }
@@ -684,7 +542,7 @@ function nuevasDesc(id) {
 function rutaDe(it) {
   var partes = [], p = it.parentId, guard = 0;
   while (p && byId[p] && guard < 12) { partes.unshift(byId[p].titulo || ''); p = byId[p].parentId; guard++; }
-  return partes.length ? partes.join(' \u203a ') : '(nivel superior)';
+  return partes.length ? partes.join(' › ') : '(nivel superior)';
 }
 function marcarVisto(id) {
   var it = byId[id];
@@ -852,6 +710,51 @@ function tickCronos() {
 }
 setInterval(tickCronos, 1000);
 
+// ── Mi cronómetro corriendo (con cache) ────────────────────
+async function miCronoCorriendo() {
+  var ahora = Date.now();
+
+  if (_cronoCacheTime && (ahora - _cronoCacheTime) < 2000) {
+    return _cronoCache;
+  }
+
+  // Buscar usando el nuevo sistema unificado de sesiones
+  if (CVC.actObtenerSesionActiva) {
+    try {
+      var sesionActiva = await CVC.actObtenerSesionActiva(uid);
+      if (sesionActiva && sesionActiva.actividadId && byId[sesionActiva.actividadId]) {
+        _cronoCache = byId[sesionActiva.actividadId];
+        _cronoCacheTime = ahora;
+        return _cronoCache;
+      }
+    } catch (e) { /* fallback al método viejo */ }
+  }
+
+  // Fallback: buscar en sesionesActivas de cada actividad
+  for (var i = 0; i < items.length; i++) {
+    var ses = items[i].sesionesActivas || [];
+    for (var j = 0; j < ses.length; j++) {
+      if (ses[j].uid === uid) {
+        _cronoCache = items[i];
+        _cronoCacheTime = ahora;
+        return items[i];
+      }
+    }
+  }
+
+  _cronoCache = null;
+  _cronoCacheTime = ahora;
+  return null;
+}
+
+// ── Proveedores de compras ─────────────────────────────────
+async function cargarProveedores() {
+  try {
+    var d = await db.collection('config').doc('compras_proveedores').get();
+    if (d.exists && d.data() && Array.isArray(d.data().lista) && d.data().lista.length) proveedores = d.data().lista.slice();
+  } catch (e) { /* usa los default */ }
+}
+
 // ── Render ─────────────────────────────────────────────────
 async function render() {
   _agg = {};
@@ -868,7 +771,7 @@ async function render() {
   if (enCurso) {
     banner += '<div class="banner-crono" onclick="abrirActividad(\'' + enCurso.id + '\')">'
       + '<span class="material-icons" style="font-size:19px">timer</span>'
-      + '<span>Ten\u00e9s un contador corriendo: \u00ab' + esc(enCurso.titulo) + '\u00bb</span>'
+      + '<span>Tenés un contador corriendo: «' + esc(enCurso.titulo) + '»</span>'
       + '<span class="crono-tiempo" data-ini="' + inicioCrono(enCurso) + '" style="margin-left:auto">0:00:00</span>'
       + '</div>';
   }
@@ -903,8 +806,8 @@ function renderFavoritos() {
     if (ra !== rb) return ra - rb;
     return byTitulo(a, b);
   });
-  var html = '<div class="muted-note">Tus favoritos: las actividades que marcaste con \u2605 en cualquier vista, juntas y ordenadas por urgencia. Toc\u00e1 la estrella de nuevo para sacarla de ac\u00e1.</div>';
-  if (!lista.length) return html + '<div class="muted-note">Todav\u00eda no marcaste favoritos. En cualquier actividad, toc\u00e1 la estrella \u2606 para traerla a esta lista.</div>';
+  var html = '<div class="muted-note">Tus favoritos: las actividades que marcaste con ★ en cualquier vista, juntas y ordenadas por urgencia. Tocá la estrella de nuevo para sacarla de acá.</div>';
+  if (!lista.length) return html + '<div class="muted-note">Todavía no marcaste favoritos. En cualquier actividad, tocá la estrella ☆ para traerla a esta lista.</div>';
   html += '<div class="act-list">';
   for (var j = 0; j < lista.length; j++) {
     html += '<div class="ruta-mini">' + esc(rutaDe(lista[j])) + '</div>';
@@ -929,7 +832,7 @@ window.marcarTodoVisto = function () {
 window.toggleEstrella = function (id) {
   var i = destacados.indexOf(id);
   if (i >= 0) { destacados.splice(i, 1); toast('Sacada de Favoritos.', 'info'); }
-  else { destacados.push(id); toast('Agregada a Favoritos \u2b50', 'success'); }
+  else { destacados.push(id); toast('Agregada a Favoritos ⭐', 'success'); }
   programarGuardadoEstado();
   render();
 };
@@ -943,16 +846,16 @@ function renderProyectos() {
   html += '<button class="btn btn-secondary" onclick="nuevoRoot(\'recurrente\')"><span class="material-icons" style="font-size:17px">build</span> Nueva tarea recurrente</button>';
   if (items.some(esNueva)) html += '<button class="btn btn-secondary" onclick="marcarTodoVisto()"><span class="material-icons" style="font-size:17px">done_all</span> Marcar todas como vistas</button>';
   html += '</div>';
-  if (items.some(esNueva)) html += '<div class="muted-note">Lo nuevo o modificado por otros se resalta en azul; en los padres cerrados ves \u201c\u25cf N sin ver\u201d. Al abrir una actividad, queda como vista.</div>';
-  if (!proys.length && !huerfanas.length) return html + '<div class="muted-note">No hay proyectos todav\u00eda. Cre\u00e1 uno con \u201cNuevo proyecto\u201d; despu\u00e9s, dentro de cada proyecto, agreg\u00e1 categor\u00edas e \u00edtems con \u201c\uff0b Sub-\u00edtem\u201d.</div>';
+  if (items.some(esNueva)) html += '<div class="muted-note">Lo nuevo o modificado por otros se resalta en azul; en los padres cerrados ves "● N sin ver". Al abrir una actividad, queda como vista.</div>';
+  if (!proys.length && !huerfanas.length) return html + '<div class="muted-note">No hay proyectos todavía. Creá uno con "Nuevo proyecto"; después, dentro de cada proyecto, agregá categorías e ítems con "＋ Sub-ítem".</div>';
   if (proys.length) {
     html += '<div class="act-list">';
     for (var i = 0; i < proys.length; i++) html += nodoHTML(proys[i], 0);
     html += '</div>';
   }
   if (huerfanas.length) {
-    html += '<div class="cal-head" style="color:#c0271f">\u26a0 Sin proyecto \u2014 reasignar</div>';
-    html += '<div class="muted-note">Estas actividades no est\u00e1n dentro de un proyecto. Abrilas, tocá Editar y eleg\u00ed un proyecto en \u201cPertenece a\u201d.</div>';
+    html += '<div class="cal-head" style="color:#c0271f">⚠ Sin proyecto — reasignar</div>';
+    html += '<div class="muted-note">Estas actividades no están dentro de un proyecto. Abrilas, tocá Editar y elegí un proyecto en "Pertenece a".</div>';
     html += '<div class="act-list">';
     for (var j = 0; j < huerfanas.length; j++) html += nodoHTML(huerfanas[j], 0);
     html += '</div>';
@@ -971,7 +874,7 @@ function nodoHTML(it, nivel) {
 
   var h = '<div class="act-item" id="nodo-' + it.id + '">';
   h += '<div class="act-row act-clic' + (ab ? ' abierto' : '') + (nueva ? ' nueva' : '') + '" onclick="toggleAbierto(\'' + it.id + '\')">';
-  h += '<span class="act-caret' + (tiene ? ' tiene' : '') + '">' + (ab ? '\u25be' : '\u25b8') + '</span>';
+  h += '<span class="act-caret' + (tiene ? ' tiene' : '') + '">' + (ab ? '▾' : '▸') + '</span>';
   if (it.tipo === 'item-chequeo') {
     h += '<input type="checkbox" class="act-chk" ' + (it.hecho ? 'checked' : '') + ' onclick="event.stopPropagation();validarItemChequeo(\'' + it.id + '\')">';
   } else {
@@ -984,7 +887,7 @@ function nodoHTML(it, nivel) {
     h += '<span class="material-icons act-star' + (estrellada ? ' on' : '') + '" title="' + (estrellada ? 'Sacar de Favoritos' : 'Marcar como favorito') + '" onclick="event.stopPropagation();toggleEstrella(\'' + it.id + '\')">' + (estrellada ? 'star' : 'star_border') + '</span>';
     var agH = horasArbol(it.id);
     if (agH.horas > 0.008) {
-      h += '<span class="chip-horas' + (desglose[it.id] ? ' on' : '') + '" title="Horas trabajadas \u2014 toc\u00e1 para ver qui\u00e9n y cu\u00e1ndo" onclick="event.stopPropagation();toggleDesglose(\'' + it.id + '\')"><span class="material-icons" style="font-size:13px">schedule</span>' + fmtHorasHM(agH.horas) + '</span>';
+      h += '<span class="chip-horas' + (desglose[it.id] ? ' on' : '') + '" title="Horas trabajadas — tocá para ver quién y cuándo" onclick="event.stopPropagation();toggleDesglose(\'' + it.id + '\')"><span class="material-icons" style="font-size:13px">schedule</span>' + fmtHorasHM(agH.horas) + '</span>';
     }
   }
 
@@ -992,40 +895,40 @@ function nodoHTML(it, nivel) {
   if (nueva) h += '<span class="act-badge nuevo">NUEVO</span>';
   if (!ab && tiene) {
     var nd = nuevasDesc(it.id);
-    if (nd) h += '<span class="act-badge sinver">\u25cf ' + nd + ' sin ver</span>';
+    if (nd) h += '<span class="act-badge sinver">● ' + nd + ' sin ver</span>';
   }
-  if (it.tipo === 'control' && it.reservaId && !byId['chk-ctrl-' + it.reservaId]) h += '<span class="act-badge">\ud83d\udccb chequeo: se genera al completar el de entrada</span>';
-  if (it.tipo === 'chequeo-inventario') h += '<span class="act-badge">\ud83d\udccb ' + (it.tipoChequeo === 'entrada' ? 'check-in' : 'check-out') + '</span>';
-  if (it.tipo === 'faltante-inventario') h += '<span class="act-badge rojo">\u26a0 ' + esc(it.origen || 'faltante') + '</span>';
+  if (it.tipo === 'control' && it.reservaId && !byId['chk-ctrl-' + it.reservaId]) h += '<span class="act-badge">📋 chequeo: se genera al completar el de entrada</span>';
+  if (it.tipo === 'chequeo-inventario') h += '<span class="act-badge">📋 ' + (it.tipoChequeo === 'entrada' ? 'check-in' : 'check-out') + '</span>';
+  if (it.tipo === 'faltante-inventario') h += '<span class="act-badge rojo">⚠ ' + esc(it.origen || 'faltante') + '</span>';
   if (it.tipo === 'item-chequeo') {
     h += it.hecho
-      ? ('<span class="act-badge">confirmado ' + (it.cantidadConfirmada != null ? it.cantidadConfirmada : '\u2014') + '</span>')
-      : ('<span class="act-badge">sugerido ' + (it.cantidadSugerida != null ? it.cantidadSugerida : '\u2014') + '</span>');
+      ? ('<span class="act-badge">confirmado ' + (it.cantidadConfirmada != null ? it.cantidadConfirmada : '—') + '</span>')
+      : ('<span class="act-badge">sugerido ' + (it.cantidadSugerida != null ? it.cantidadSugerida : '—') + '</span>');
   }
   if (!it.hecho && sem && sem.color !== 'gris' && sem.label) h += '<span class="act-badge ' + sem.color + '">' + esc(sem.label) + '</span>';
   if (!it.hecho && sem && sem.fecha) {
-    var pref = (sem.fechaTipo === 'prox') ? 'pr\u00f3x ' : (sem.fechaTipo === 'vencio') ? 'venci\u00f3 ' : 'l\u00edmite ';
-    h += '<span class="act-badge">\ud83d\uddd3 ' + pref + fmtDMY(sem.fecha) + (it.hora ? ' ' + it.hora : '') + '</span>';
+    var pref = (sem.fechaTipo === 'prox') ? 'próx ' : (sem.fechaTipo === 'vencio') ? 'venció ' : 'límite ';
+    h += '<span class="act-badge">🗓 ' + pref + fmtDMY(sem.fecha) + (it.hora ? ' ' + it.hora : '') + '</span>';
   } else if (it.fechaVencimiento) {
-    h += '<span class="act-badge">\ud83d\uddd3 vence ' + fmtDMY(it.fechaVencimiento) + (it.hora ? ' ' + it.hora : '') + '</span>';
+    h += '<span class="act-badge">🗓 vence ' + fmtDMY(it.fechaVencimiento) + (it.hora ? ' ' + it.hora : '') + '</span>';
   } else if (!esRec && it.fechaInicio && !it.ultimaRealizacion) {
-    h += '<span class="act-badge">\ud83d\uddd3 ' + fmtDMY(it.fechaInicio) + (it.hora ? ' ' + it.hora : '') + '</span>';
+    h += '<span class="act-badge">🗓 ' + fmtDMY(it.fechaInicio) + (it.hora ? ' ' + it.hora : '') + '</span>';
   }
   if (it.ultimaRealizacion) {
-    var quien = it.ultimaRealizacionPor ? (' \u00b7 ' + esc(it.ultimaRealizacionPor)) : '';
-    h += '<span class="act-badge">\u21bb \u00falt ' + fmtDMY(it.ultimaRealizacion) + quien + '</span>';
+    var quien = it.ultimaRealizacionPor ? (' · ' + esc(it.ultimaRealizacionPor)) : '';
+    h += '<span class="act-badge">↻ últ ' + fmtDMY(it.ultimaRealizacion) + quien + '</span>';
   }
   var pr = progresoDe(it.id);
-  if (pr) h += '<span class="act-badge">\u2713 ' + pr.hechos + '/' + pr.total + '</span>';
-  if (it.esCompra) h += '<span class="act-badge compra">\ud83d\uded2 ' + esc(it.categoriaCompra || 'compra') + '</span>';
+  if (pr) h += '<span class="act-badge">✓ ' + pr.hechos + '/' + pr.total + '</span>';
+  if (it.esCompra) h += '<span class="act-badge compra">🛒 ' + esc(it.categoriaCompra || 'compra') + '</span>';
   if (it.estado === 'en_curso') {
     var quienes = (it.sesionesActivas || []).map(function (s) { return s.nombre || ''; }).filter(Boolean).join(', ');
-    h += '<span class="act-badge curso">\u23f1 en curso' + (quienes ? ' (' + esc(quienes) + ')' : '') + '</span>';
+    h += '<span class="act-badge curso">⏱ en curso' + (quienes ? ' (' + esc(quienes) + ')' : '') + '</span>';
   }
   if (!it.parentId) {
-    if (it.alcance === 'equipo') h += '<span class="act-badge">\ud83d\udc65</span>';
-    else if (it.alcance === 'asignados') h += '<span class="act-badge">\ud83d\udccc ' + ((it.competencias || []).length) + '</span>';
-    else h += '<span class="act-badge">\ud83d\udd12</span>';
+    if (it.alcance === 'equipo') h += '<span class="act-badge">👥</span>';
+    else if (it.alcance === 'asignados') h += '<span class="act-badge">📌 ' + ((it.competencias || []).length) + '</span>';
+    else h += '<span class="act-badge">🔒</span>';
   }
   h += '</span>';
   h += '</div>';
@@ -1042,30 +945,12 @@ function nodoHTML(it, nivel) {
         h += '<button class="act-ico" title="Pausar" onclick="cronoPausar(\'' + it.id + '\')"><span class="material-icons" style="color:#b8860b">pause</span></button>';
         h += '<button class="act-ico" title="Finalizar y registrar" onclick="cronoFinalizar(\'' + it.id + '\')"><span class="material-icons" style="color:#1f7a32">stop</span></button>';
       } else {
-        // Verificar si el usuario tiene OTRO cronómetro corriendo
-        var tieneOtro = false;
-        for (var i = 0; i < items.length; i++) {
-          if (items[i].id === it.id) continue;
-          var ses = items[i].sesionesActivas || [];
-          for (var j = 0; j < ses.length; j++) {
-            if (ses[j].uid === uid) {
-              tieneOtro = true;
-              break;
-            }
-          }
-          if (tieneOtro) break;
-        }
-
-        if (tieneOtro) {
-          h += '<button class="btn-play" style="background:#9aa69a !important;border-color:#9aa69a !important;cursor:not-allowed;" disabled title="Ya tienes otro cronómetro corriendo">';
-          h += '<span class="material-icons">block</span> Ocupado</button>';
-        } else {
-          h += '<button class="btn-play" onclick="cronoIniciar(\'' + it.id + '\')">';
-          h += '<span class="material-icons">play_arrow</span> Iniciar</button>';
-        }
+        // Botón iniciar simplificado — la verificación de sesión activa la hace el core
+        h += '<button class="btn-play" onclick="cronoIniciar(\'' + it.id + '\')">';
+        h += '<span class="material-icons">play_arrow</span> Iniciar</button>';
       }
     }
-    h += '<button class="act-ico" title="Agregar sub-\u00edtem" onclick="nuevoHijo(\'' + it.id + '\')"><span class="material-icons">add</span></button>';
+    h += '<button class="act-ico" title="Agregar sub-ítem" onclick="nuevoHijo(\'' + it.id + '\')"><span class="material-icons">add</span></button>';
     h += '<button class="act-ico" title="Reportar" onclick="abrirReporte(\'' + it.id + '\')"><span class="material-icons" style="color:#b8860b">campaign</span></button>';
     var puedeGestionar = (esAdmin || it.creadoPor === uid);
     if (puedeGestionar && puedeCronometrar(it)) h += '<button class="act-ico" title="Historial" onclick="verHistorial(\'' + it.id + '\')"><span class="material-icons">history</span></button>';
@@ -1096,13 +981,13 @@ function contextoCompra(it) {
 function renderCompras() {
   var compras = items.filter(function (it) { return it.esCompra && !esContenedorCompra(it); });
   var toolbar = '<div class="act-toolbar">' + (esAdmin ? '<button class="btn btn-secondary" onclick="abrirProveedores()"><span class="material-icons">storefront</span> Proveedores</button>' : '') + '</div>';
-  if (!compras.length) return toolbar + '<div class="muted-note">Todav\u00eda no hay nada en la lista de compras. En cualquier actividad marc\u00e1 "es una compra" (eleg\u00eds el proveedor), o agreg\u00e1 \u00edtems dentro de una lista de compras de un proyecto.</div>';
+  if (!compras.length) return toolbar + '<div class="muted-note">Todavía no hay nada en la lista de compras. En cualquier actividad marcá "es una compra" (elegís el proveedor), o agregá ítems dentro de una lista de compras de un proyecto.</div>';
   var pend = compras.filter(function (it) { return !it.hecho; });
-  var html = toolbar + '<div class="muted-note">Tu lista para conseguir las cosas, agrupada por proveedor. Tild\u00e1 lo que vas consiguiendo (en el dep\u00f3sito, la ferreter\u00eda, el s\u00faper\u2026) y sale de la lista.</div>';
+  var html = toolbar + '<div class="muted-note">Tu lista para conseguir las cosas, agrupada por proveedor. Tildá lo que vas consiguiendo (en el depósito, la ferretería, el súper...) y sale de la lista.</div>';
 
   function grupo(titulo, lista) {
     lista.sort(function (a, b) { return String(a.titulo || '').localeCompare(String(b.titulo || '')); });
-    var g = '<div class="cal-head">\ud83d\uded2 ' + esc(titulo) + ' (' + lista.length + ')</div><div class="act-list">';
+    var g = '<div class="cal-head">🛒 ' + esc(titulo) + ' (' + lista.length + ')</div><div class="act-list">';
     for (var i = 0; i < lista.length; i++) {
       var it = lista[i];
       var ctx = contextoCompra(it);
@@ -1112,9 +997,9 @@ function renderCompras() {
       g += '<div class="act-row' + (esNuevaCompra ? ' nueva' : '') + '">';
       g += '<input type="checkbox" class="act-chk" onclick="toggleHecho(\'' + it.id + '\')">';
       g += '<span class="dot ' + dotClase(it.prioridad) + '"></span>';
-      g += '<span class="act-tit">' + esc(it.titulo) + (ctx ? ' <span style="color:#7a8a76;font-size:12px">\u00b7 ' + esc(ctx) + '</span>' : '') + '</span>';
+      g += '<span class="act-tit">' + esc(it.titulo) + (ctx ? ' <span style="color:#7a8a76;font-size:12px">· ' + esc(ctx) + '</span>' : '') + '</span>';
       if (esNuevaCompra) g += '<span class="act-badge nuevo">NUEVO</span>';
-      g += '<span class="act-acc"><button onclick="editarItem(\'' + it.id + '\')">\u270e Editar</button></span>';
+      g += '<span class="act-acc"><button onclick="editarItem(\'' + it.id + '\')">✎ Editar</button></span>';
       g += '</div>';
     }
     g += '</div>';
@@ -1130,7 +1015,7 @@ function renderCompras() {
   }
   var resto = pend.filter(function (it) { return !usados[it.id]; });
   if (resto.length) { huboPend = true; html += grupo('Sin proveedor', resto); }
-  if (!huboPend) html += '<div class="muted-note">\u2705 No queda nada por conseguir. \u00a1Todo tildado!</div>';
+  if (!huboPend) html += '<div class="muted-note">✅ No queda nada por conseguir. ¡Todo tildado!</div>';
 
   var hechas = compras.filter(function (it) { return it.hecho; });
   if (hechas.length) {
@@ -1172,15 +1057,14 @@ window.toggleHecho = async function (id) {
   try {
     if (nuevo && it.estado === 'en_curso') {
       if (!confirm('Hay un cronómetro corriendo. ¿Finalizar y registrar el tiempo trabajado?')) { render(); return; }
-      var col = await CVC.actFinalizar(id, { uid: uid, nombre: miNombre });
-      var n = (col && col.length) ? col.length : 0;
-      toast('Finalizada con tiempo registrado' + (n ? (' \u00b7 ' + n + ' persona(s)') : ''), 'success');
+      var resultado = await CVC.actFinalizar(id, { uid: uid, nombre: miNombre }, true);
+      toast('Finalizada con tiempo registrado — ' + fmtHorasHM(resultado.horas), 'success');
       _cronoCacheTime = 0;
       await cargar();
       return;
     }
     if (nuevo && debeRegistrarTilde(it)) {
-      if (!confirm('\u00bfDar la tarea por realizada SIN cron\u00f3metro? Queda registrada, pero sin contar tiempo.')) { render(); return; }
+      if (!confirm('¿Dar la tarea por realizada SIN cronómetro? Queda registrada, pero sin contar tiempo.')) { render(); return; }
       await CVC.actTildar(id, { uid: uid, nombre: miNombre });
       toast(esRecurrente(it) ? 'Tarea recurrente realizada (sin reloj) y reprogramada' : 'Realizada (sin reloj)', 'success');
       _cronoCacheTime = 0;
@@ -1293,7 +1177,7 @@ function prepararModal(o) {
   if (mostrarPadre) {
     var proys = items.filter(function (x) { return !x.parentId && x.tipoRaiz === 'proyecto' && x.id !== (it ? it.id : ''); }).sort(byTitulo);
     var opts = '';
-    for (var pi = 0; pi < proys.length; pi++) opts += '<option value="' + proys[pi].id + '">\ud83d\udcc1 ' + esc(proys[pi].titulo) + '</option>';
+    for (var pi = 0; pi < proys.length; pi++) opts += '<option value="' + proys[pi].id + '">📁 ' + esc(proys[pi].titulo) + '</option>';
     var selP = document.getElementById('itPadre');
     selP.innerHTML = opts;
     selP.value = padreEsProyTop ? parentId : (proys[0] ? proys[0].id : '');
@@ -1303,7 +1187,7 @@ function prepararModal(o) {
   }
   togglePadreUI();
 
-  var tipoTxt = esProyecto ? 'proyecto' : (esRecurrente(it || {}) || o.recurrenteDefault ? 'tarea recurrente' : 'actividad');
+  var tipoTxt = esProyecto ? 'proyecto' : ((it && (parseInt(it.recurrencia, 10) || 0) > 0) || o.recurrenteDefault ? 'tarea recurrente' : 'actividad');
   var nuevoTxt = esProyecto ? 'Nuevo proyecto' : (o.recurrenteDefault ? 'Nueva tarea recurrente' : (esRoot ? 'Nueva actividad' : 'Nueva sub-actividad'));
   document.getElementById('modalItemTitulo').textContent = it ? ('Editar ' + tipoTxt) : nuevoTxt;
 
@@ -1356,7 +1240,7 @@ window.guardarItem = async function () {
     }
 
     var esProyecto = esRoot && tipoRaiz === 'proyecto';
-    if (!esProyecto && !parentId) { toast('Toda actividad tiene que estar dentro de un proyecto. Eleg\u00ed uno en \u201cPertenece a\u201d.', 'error'); btn.disabled = false; return; }
+    if (!esProyecto && !parentId) { toast('Toda actividad tiene que estar dentro de un proyecto. Elegí uno en "Pertenece a".', 'error'); btn.disabled = false; return; }
     var recurrencia = esProyecto ? 0 : (parseInt(document.getElementById('itRecurrencia').value, 10) || 0);
     var tiempoEstimado = esProyecto ? 0 : (parseInt(document.getElementById('itTiempoEst').value, 10) || 0);
 
@@ -1474,19 +1358,14 @@ window.borrarItem = async function (id) {
   } catch (e) { toast('No se pudo borrar: ' + e.message, 'error'); }
 };
 
-// ── Cronómetro ──────────────────────────────────────────────
+// ── Cronómetro (SISTEMA UNIFICADO v5.0) ────────────────────
 window.cronoIniciar = async function (id) {
   if (!CVC.actIniciar) { toast('Falta actividades-core.js', 'error'); return; }
-
-  var tieneOtro = await tengoOtroCrono(id);
-  if (tieneOtro) {
-    toast('⚠️ Ya tienes otro cronómetro corriendo. Finalízalo o pausalo antes de iniciar este.', 'warning');
-    return;
-  }
 
   marcarVisto(id);
   try {
     await CVC.actIniciar(id, { uid: uid, nombre: miNombre });
+    toast('▶ Cronómetro iniciado', 'success');
     _cronoCacheTime = 0;
     await cargar();
   } catch (e) {
@@ -1503,7 +1382,8 @@ window.cronoIniciar = async function (id) {
 window.cronoPausar = async function (id) {
   if (!CVC.actPausar) { toast('Falta actividades-core.js', 'error'); return; }
   try {
-    await CVC.actPausar(id, { uid: uid, nombre: miNombre });
+    var resultado = await CVC.actPausar(id, { uid: uid, nombre: miNombre });
+    toast('⏸ Pausado — ' + fmtHorasHM(resultado.horas) + ' registradas', 'info');
     _cronoCacheTime = 0;
     await cargar();
   } catch (e) {
@@ -1517,11 +1397,10 @@ window.cronoPausar = async function (id) {
 
 window.cronoFinalizar = async function (id) {
   if (!CVC.actFinalizar) { toast('Falta actividades-core.js', 'error'); return; }
-  if (!confirm('Finalizar y registrar el tiempo/honorario de esta actividad?')) return;
+  if (!confirm('¿Finalizar y registrar el tiempo trabajado?')) return;
   try {
-    var col = await CVC.actFinalizar(id, { uid: uid, nombre: miNombre });
-    var n = (col && col.length) ? col.length : 0;
-    toast('Finalizada' + (n ? (' \u00b7 honorario para ' + n + ' persona(s)') : ''), 'success');
+    var resultado = await CVC.actFinalizar(id, { uid: uid, nombre: miNombre }, true);
+    toast('✅ Finalizado — ' + fmtHorasHM(resultado.horas) + ' registradas', 'success');
     _cronoCacheTime = 0;
     await cargar();
   } catch (e) {
@@ -1542,18 +1421,18 @@ window.validarItemChequeo = async function (itemId) {
   var val = window.prompt('Cantidad confirmada de "' + (it.itemNombre || it.titulo) + '" (sugerido: ' + sugerida + '):', String(valActual));
   if (val === null) return;
   var cant = parseInt(val, 10);
-  if (isNaN(cant) || cant < 0) { toast('Ingres\u00e1 un n\u00famero v\u00e1lido.', 'error'); return; }
+  if (isNaN(cant) || cant < 0) { toast('Ingresá un número válido.', 'error'); return; }
   var nota = '';
   if (cant < sugerida) {
-    nota = window.prompt('Faltan ' + (sugerida - cant) + '. \u00bfAlgo para anotar (opcional)?', '') || '';
+    nota = window.prompt('Faltan ' + (sugerida - cant) + '. ¿Algo para anotar (opcional)?', '') || '';
   } else {
-    var notaOp = window.prompt('\u00bfAlgo da\u00f1ado para anotar? (dejalo vac\u00edo si no)', '');
+    var notaOp = window.prompt('¿Algo dañado para anotar? (dejalo vacío si no)', '');
     if (notaOp) nota = notaOp;
   }
   try {
     if (!CVC.actValidarItemChequeo) { toast('Falta actividades-core.js actualizado.', 'error'); return; }
     await CVC.actValidarItemChequeo(itemId, cant, nota, { uid: uid, nombre: miNombre });
-    toast('\u00cdtem validado.', 'success');
+    toast('Ítem validado.', 'success');
     _cronoCacheTime = 0;
     await cargar();
   } catch (e) { toast('No se pudo validar: ' + e.message, 'error'); }
@@ -1570,17 +1449,17 @@ window.abrirReporte = function (id) {
   abrirModal('modalReporte');
 };
 window.elegirFotoReporte = function () {
-  if (!CVC.elegirFuenteFoto) { toast('No se pudo abrir la c\u00e1mara/galer\u00eda.', 'error'); return; }
+  if (!CVC.elegirFuenteFoto) { toast('No se pudo abrir la cámara/galería.', 'error'); return; }
   CVC.elegirFuenteFoto(function (f) {
     _repFoto = f;
     var th = document.getElementById('repThumb');
-    th.style.display = 'inline'; th.textContent = '\ud83d\udcce ' + ((f && f.name) ? f.name : 'foto adjunta');
+    th.style.display = 'inline'; th.textContent = '📎 ' + ((f && f.name) ? f.name : 'foto adjunta');
   });
 };
 window.enviarReporte = async function (btn) {
   var comentario = document.getElementById('repComentario').value.trim();
-  if (!comentario && !_repFoto) { toast('Escrib\u00ed un comentario o adjunt\u00e1 una foto.', 'info'); return; }
-  btn.disabled = true; btn.textContent = 'Enviando\u2026';
+  if (!comentario && !_repFoto) { toast('Escribí un comentario o adjuntá una foto.', 'info'); return; }
+  btn.disabled = true; btn.textContent = 'Enviando...';
   try {
     var it = byId[_repActId];
     var nombreAct = (it && it.titulo) ? it.titulo : 'Actividad';
@@ -1590,7 +1469,7 @@ window.enviarReporte = async function (btn) {
       refTipo: 'actividad', refLabel: nombreAct,
       creadoPor: uid, creadoPorNombre: miNombre,
       creadoEn: serverTs(), ultimaActividad: serverTs(),
-      ultimoMensaje: (comentario || '\ud83d\udcf7 foto').slice(0, 80)
+      ultimoMensaje: (comentario || '📷 foto').slice(0, 80)
     });
     var imagenUrl = null;
     if (_repFoto && CVC.subirComprobante) imagenUrl = await CVC.subirComprobante(_repFoto, 'comunicacion', ref.id);
@@ -1599,7 +1478,7 @@ window.enviarReporte = async function (btn) {
       autorUid: uid, autorNombre: miNombre,
       creadoEn: serverTs()
     });
-    if (CVC.avisar) CVC.avisar('comunicacion', 'Reporte de actividad', miNombre + ' report\u00f3 "' + nombreAct + '": ' + (comentario || '\ud83d\udcf7 foto').slice(0, 120), 'admins', uid);
+    if (CVC.avisar) CVC.avisar('comunicacion', 'Reporte de actividad', miNombre + ' reportó "' + nombreAct + '": ' + (comentario || '📷 foto').slice(0, 120), 'admins', uid);
     toast('Reporte enviado al administrador.', 'success');
     cerrarModal('modalReporte');
   } catch (e) { toast('No se pudo enviar: ' + e.message, 'error'); }
@@ -1616,10 +1495,10 @@ window.abrirProveedores = function () {
 };
 function renderProvLista() {
   var c = document.getElementById('provLista');
-  if (!_provEdit.length) { c.innerHTML = '<div class="muted-note">Sin proveedores todav\u00eda. Agreg\u00e1 al menos uno.</div>'; return; }
+  if (!_provEdit.length) { c.innerHTML = '<div class="muted-note">Sin proveedores todavía. Agregá al menos uno.</div>'; return; }
   var h = '<div class="act-list">';
   for (var i = 0; i < _provEdit.length; i++) {
-    h += '<div class="act-row"><span class="act-tit">' + esc(_provEdit[i]) + '</span><span class="act-acc"><button onclick="quitarProveedor(' + i + ')">\u2715 Quitar</button></span></div>';
+    h += '<div class="act-row"><span class="act-tit">' + esc(_provEdit[i]) + '</span><span class="act-acc"><button onclick="quitarProveedor(' + i + ')">✕ Quitar</button></span></div>';
   }
   h += '</div>';
   c.innerHTML = h;
@@ -1628,7 +1507,7 @@ window.agregarProveedor = function () {
   var inp = document.getElementById('provNuevo');
   var v = (inp.value || '').trim();
   if (!v) return;
-  if (_provEdit.some(function (p) { return p.toLowerCase() === v.toLowerCase(); })) { toast('Ese proveedor ya est\u00e1 en la lista.', 'info'); return; }
+  if (_provEdit.some(function (p) { return p.toLowerCase() === v.toLowerCase(); })) { toast('Ese proveedor ya está en la lista.', 'info'); return; }
   _provEdit.push(v);
   inp.value = '';
   renderProvLista();
@@ -1650,7 +1529,7 @@ window.guardarProveedores = async function () {
 // ── Historial ────────────────────────────────────────────────
 window.verHistorial = async function (id) {
   var it = byId[id];
-  document.getElementById('histTitulo').textContent = 'Historial \u00b7 ' + ((it && it.titulo) ? it.titulo : '');
+  document.getElementById('histTitulo').textContent = 'Historial · ' + ((it && it.titulo) ? it.titulo : '');
   document.getElementById('histBody').innerHTML = '<div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>';
   abrirModal('modalHist');
   try {
@@ -1662,18 +1541,18 @@ window.verHistorial = async function (id) {
       var fb = (b.finalizadoEn && b.finalizadoEn.toMillis) ? b.finalizadoEn.toMillis() : 0;
       return fb - fa;
     });
-    if (!regs.length) { document.getElementById('histBody').innerHTML = '<div class="muted-note">Todav\u00eda no hay realizaciones registradas.</div>'; return; }
+    if (!regs.length) { document.getElementById('histBody').innerHTML = '<div class="muted-note">Todavía no hay realizaciones registradas.</div>'; return; }
     var conReloj = regs.filter(function (r) { return r.conCronometro; }).length;
     var sinReloj = regs.length - conReloj;
-    var h = '<div class="muted-note">' + regs.length + ' realizaci\u00f3n(es) \u00b7 ' + conReloj + ' con reloj \u00b7 ' + sinReloj + ' sin reloj</div>';
+    var h = '<div class="muted-note">' + regs.length + ' realización(es) · ' + conReloj + ' con reloj · ' + sinReloj + ' sin reloj</div>';
     h += '<div class="act-list">';
     for (var i = 0; i < regs.length; i++) {
       var r = regs[i];
       var quienes = (r.colaboradores || []).map(function (c) { return (c.nombre || '') + (c.horas ? (' (' + c.horas + 'h)') : ''); }).filter(Boolean).join(', ');
-      if (!quienes) quienes = r.finalizadoNombre || '\u2014';
-      var crono = r.conCronometro ? '\u23f1 con reloj' : '\u270b sin reloj';
+      if (!quienes) quienes = r.finalizadoNombre || '—';
+      var crono = r.conCronometro ? '⏱ con reloj' : '✋ sin reloj';
       h += '<div class="act-row" style="flex-direction:column;align-items:flex-start;gap:2px">';
-      h += '<div style="font-weight:600;font-size:13.5px">' + esc(fmtTs(r.finalizadoEn)) + ' \u00b7 ' + crono + (r.totalHoras ? (' \u00b7 ' + r.totalHoras + 'h') : '') + '</div>';
+      h += '<div style="font-weight:600;font-size:13.5px">' + esc(fmtTs(r.finalizadoEn)) + ' · ' + crono + (r.totalHoras ? (' · ' + r.totalHoras + 'h') : '') + '</div>';
       h += '<div style="font-size:13px;color:#46583f">' + esc(quienes) + '</div>';
       h += '</div>';
     }
