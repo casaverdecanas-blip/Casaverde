@@ -31,7 +31,6 @@
   .gs-totcard .num { font-size: 20px; font-weight: 700; color: #2d5a27; }
   .gs-totcard .lbl { font-size: 11px; color: #66735f; margin-top: 2px; }
 
-  /* Árbol */
   .gs-tree { border: 1px solid #e7ece4; border-radius: 12px; overflow: hidden; background: #fff; }
   .gs-node { border-bottom: 1px solid #eef2ec; }
   .gs-node:last-child { border-bottom: none; }
@@ -50,12 +49,10 @@
   .gs-nhrs { font-weight: 700; font-size: 14px; color: #2d5a27; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
   .gs-nbadge { font-size: 10px; padding: 1px 6px; border-radius: 999px; font-weight: 600; flex: 0 0 auto; }
   .gs-nbadge.migrado { background: #fdf4dd; color: #8a5d00; }
-  .gs-nbadge.nuevo { background: #e6f5e6; color: #1f7a32; }
 
   .gs-children { margin-left: 16px; padding-left: 10px; border-left: 3px solid #aebeaa; background: rgba(45,90,39,0.015); }
   .gs-children .gs-children { background: rgba(45,90,39,0.03); }
 
-  /* Sesiones hoja */
   .gs-seslist { padding: 4px 10px 8px 44px; }
   .gs-sesion { 
     display: flex; align-items: center; gap: 8px; padding: 6px 10px;
@@ -79,7 +76,6 @@
 
   .gs-empty { text-align: center; color: #868e96; font-size: .85rem; padding: 24px 0; }
 
-  /* Modal */
   .gs-modal {
     position: fixed; inset: 0; background: rgba(0,0,0,0.45);
     display: flex; align-items: flex-start; justify-content: center;
@@ -113,7 +109,6 @@
 <main class="admin-content">
   <div class="gs-wrap">
     
-    <!-- Filtros -->
     <div class="gs-fbar">
       <div class="gs-fg"><label>Usuario</label><select id="fUsr" onchange="aplicarFiltros()"><option value="">Todos</option></select></div>
       <div class="gs-fg"><label>Proyecto</label><select id="fProy" onchange="aplicarFiltros()"><option value="">Todos</option></select></div>
@@ -126,10 +121,7 @@
       </button>
     </div>
 
-    <!-- Totales -->
     <div class="gs-totbar" id="gsTotales"></div>
-
-    <!-- Árbol -->
     <div class="gs-tree" id="gsArbol"></div>
 
   </div>
@@ -141,7 +133,8 @@
     <h3 id="gsModalTitulo">Nuevo registro manual</h3>
     <input type="hidden" id="mId">
     
-    <div class="form-group"><label class="form-label">Actividad</label><select id="mAct" class="form-control"></select></div>
+    <div class="form-group"><label class="form-label">Proyecto</label><select id="mProy" class="form-control" onchange="filtrarActividadesPorProyecto()"><option value="">Elegí un proyecto...</option></select></div>
+    <div class="form-group"><label class="form-label">Actividad</label><select id="mAct" class="form-control"><option value="">Primero elegí un proyecto</option></select></div>
     <div class="form-group"><label class="form-label">Usuario</label><select id="mUsr" class="form-control"></select></div>
     
     <div class="gs-frow">
@@ -166,7 +159,6 @@
 
 <script type="module">
 
-// ── Auth ────────────────────────────────────────────────────
 var sesion = await CVC.verificarAuth(['admin', 'user']);
 var user = sesion.user;
 var userData = sesion.userData;
@@ -174,8 +166,8 @@ var esAdmin = userData.rol === 'admin';
 var uid = user.uid;
 
 document.getElementById('userName').textContent = userData.nombre || user.email;
-CVC.renderNav('gestor-sesiones.html');
-if (typeof CVC.initAyuda === 'function') CVC.initAyuda('gestor-sesiones.html');
+CVC.renderNav('gestion-sesiones.html');
+if (typeof CVC.initAyuda === 'function') CVC.initAyuda('gestion-sesiones.html');
 
 var db = CVC.db;
 
@@ -186,6 +178,7 @@ var childrenOf = {};
 var actRoots = [];
 var usuarios = [];
 var abiertos = {};
+var hojasPorProyecto = {};  // proyId -> [{id, nombre}]
 
 // ── Carga ───────────────────────────────────────────────────
 async function cargarTodo() {
@@ -214,6 +207,7 @@ async function cargarTodo() {
     actIdx = {};
     childrenOf = {};
     actRoots = [];
+    hojasPorProyecto = {};
 
     aSnap.forEach(function(d) {
         var a = d.data();
@@ -229,12 +223,36 @@ async function cargarTodo() {
         childrenOf[p].push(a);
     });
 
+    // Proyectos raíz
     for (var id in actIdx) {
-        if (!actIdx[id].parentId && actIdx[id].tipoRaiz === 'proyecto') actRoots.push(id);
+        if (!actIdx[id].parentId && actIdx[id].tipoRaiz === 'proyecto') {
+            actRoots.push(id);
+            hojasPorProyecto[id] = [];
+        }
     }
     actRoots.sort(function(a, b) { return (actIdx[a].nombre || '').localeCompare(actIdx[b].nombre || ''); });
 
-    // Selector de proyectos
+    // Hojas por proyecto (para el selector en cascada)
+    for (var aid in actIdx) {
+        var a = actIdx[aid];
+        if (!a.parentId) continue;
+        if (childrenOf[aid]) continue;
+        var tipo = a.tipo || '';
+        if (tipo === 'chequeo-inventario' || tipo === 'categoria-chequeo' || tipo === 'item-chequeo' || tipo === 'faltante-inventario') continue;
+        var rz = raizDe(aid);
+        if (rz && hojasPorProyecto[rz]) {
+            hojasPorProyecto[rz].push({ id: aid, nombre: a.nombre });
+        } else if (!rz) {
+            if (!hojasPorProyecto['__sin']) hojasPorProyecto['__sin'] = [];
+            hojasPorProyecto['__sin'].push({ id: aid, nombre: a.nombre });
+        }
+    }
+    // Ordenar hojas
+    for (var pk in hojasPorProyecto) {
+        hojasPorProyecto[pk].sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
+    }
+
+    // Selector de proyectos (filtro)
     var fProy = document.getElementById('fProy');
     fProy.innerHTML = '<option value="">Todos</option>';
     for (var j = 0; j < actRoots.length; j++) {
@@ -242,25 +260,30 @@ async function cargarTodo() {
         fProy.innerHTML += '<option value="' + pid + '">' + (actIdx[pid].nombre || pid) + '</option>';
     }
 
-    // Selector de actividades (para filtro y modal)
-    var fAct = document.getElementById('fAct');
-    var mAct = document.getElementById('mAct');
-    fAct.innerHTML = '<option value="">Todas</option>';
-    mAct.innerHTML = '';
-    var hojas = [];
-    for (var aid in actIdx) {
-        var a = actIdx[aid];
-        if (!a.parentId) continue;
-        if (childrenOf[aid]) continue;
-        var tipo = a.tipo || '';
-        if (tipo === 'chequeo-inventario' || tipo === 'categoria-chequeo' || tipo === 'item-chequeo' || tipo === 'faltante-inventario') continue;
-        hojas.push({ id: aid, nombre: a.nombre, proy: raizDe(aid) });
+    // Selector de proyectos (modal)
+    var mProy = document.getElementById('mProy');
+    mProy.innerHTML = '<option value="">Elegí un proyecto...</option>';
+    for (var k = 0; k < actRoots.length; k++) {
+        var pid2 = actRoots[k];
+        mProy.innerHTML += '<option value="' + pid2 + '">' + (actIdx[pid2].nombre || pid2) + '</option>';
     }
-    hojas.sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
-    for (var k = 0; k < hojas.length; k++) {
-        var ruta = rutaDeTexto(hojas[k].id);
-        fAct.innerHTML += '<option value="' + hojas[k].id + '">' + hojas[k].nombre + '</option>';
-        mAct.innerHTML += '<option value="' + hojas[k].id + '">' + hojas[k].nombre + (ruta ? ' (' + ruta + ')' : '') + '</option>';
+    // También agregar huérfanas
+    if (hojasPorProyecto['__sin'] && hojasPorProyecto['__sin'].length > 0) {
+        mProy.innerHTML += '<option value="__sin">⚠️ Sin proyecto</option>';
+    }
+
+    // Selector de actividades (filtro)
+    var fAct = document.getElementById('fAct');
+    fAct.innerHTML = '<option value="">Todas</option>';
+    var todasHojas = [];
+    for (var hp in hojasPorProyecto) {
+        for (var h = 0; h < hojasPorProyecto[hp].length; h++) {
+            todasHojas.push(hojasPorProyecto[hp][h]);
+        }
+    }
+    todasHojas.sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
+    for (var th = 0; th < todasHojas.length; th++) {
+        fAct.innerHTML += '<option value="' + todasHojas[th].id + '">' + todasHojas[th].nombre + '</option>';
     }
 
     // Sesiones
@@ -282,7 +305,6 @@ async function cargarSesiones() {
         console.warn('Error /sesiones/:', e.message);
     }
 
-    // Subcolecciones viejas
     try {
         var cgSnap = await db.collectionGroup('sesiones').get();
         cgSnap.forEach(function(d) {
@@ -308,16 +330,6 @@ async function cargarSesiones() {
 // ── Helpers ──────────────────────────────────────────────────
 function esc(s) { return CVC.escapeHtml ? CVC.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s); }
 function fmtHM(horas) { var h = Math.floor(horas), m = Math.round((horas - h) * 60); return h === 0 ? m + 'm' : h + 'h ' + m + 'm'; }
-function fmtDT(ts) {
-    if (!ts) return '—';
-    var d = ts.toDate ? ts.toDate() : new Date(ts);
-    if (isNaN(d.getTime())) return '—';
-    var dia = String(d.getDate()); if (dia.length < 2) dia = '0' + dia;
-    var mes = String(d.getMonth() + 1); if (mes.length < 2) mes = '0' + mes;
-    var h = String(d.getHours()); if (h.length < 2) h = '0' + h;
-    var m = String(d.getMinutes()); if (m.length < 2) m = '0' + m;
-    return dia + '/' + mes + ' ' + h + ':' + m;
-}
 function fmtDMY(ts) {
     if (!ts) return '—';
     var d = ts.toDate ? ts.toDate() : new Date(ts);
@@ -373,11 +385,9 @@ function sesionesFiltradas() {
     return out;
 }
 
-// ── Aplicar filtros ─────────────────────────────────────────
 function aplicarFiltros() {
     var filtradas = sesionesFiltradas();
 
-    // Totales
     var totalH = 0, enC = 0, pau = 0;
     for (var i = 0; i < filtradas.length; i++) {
         totalH += filtradas[i].horas || 0;
@@ -399,7 +409,6 @@ function renderArbol(filtradas) {
     var fAct = document.getElementById('fAct').value;
     var el = document.getElementById('gsArbol');
 
-    // Si hay filtro de actividad, mostrar solo esa
     if (fAct) {
         var hrs = 0;
         for (var i = 0; i < filtradas.length; i++) hrs += filtradas[i].horas || 0;
@@ -407,7 +416,6 @@ function renderArbol(filtradas) {
         return;
     }
 
-    // Agrupar por proyecto
     var sesPorProy = {};
     var sinProy = [];
 
@@ -447,7 +455,6 @@ function renderArbol(filtradas) {
         html += '</div>';
         if (abiertos['__sin']) {
             html += '<div class="gs-children">';
-            // Agrupar por actividad
             var porAct = {};
             for (var sj = 0; sj < sinProy.length; sj++) {
                 var aid = sinProy[sj].actividadId || '__unk';
@@ -484,7 +491,6 @@ function nodoProyecto(proyId, sesiones, horas) {
 
     if (ab) {
         html += '<div class="gs-children">';
-        // Agrupar por ruta intermedia
         var cats = {}, directas = [];
         for (var i = 0; i < sesiones.length; i++) {
             var aid = sesiones[i].actividadId;
@@ -511,7 +517,6 @@ function nodoProyecto(proyId, sesiones, horas) {
             html += nodoCategoria(cid, cats[cid], hrsC);
         }
 
-        // Agrupar directas por actividad
         var porAct = {};
         for (var d = 0; d < directas.length; d++) {
             var aid2 = directas[d].actividadId;
@@ -617,6 +622,23 @@ window.toggleAbierto = function(id) {
     aplicarFiltros();
 };
 
+// ── Selector en cascada ──────────────────────────────────────
+window.filtrarActividadesPorProyecto = function() {
+    var proyId = document.getElementById('mProy').value;
+    var mAct = document.getElementById('mAct');
+    
+    if (!proyId) {
+        mAct.innerHTML = '<option value="">Primero elegí un proyecto</option>';
+        return;
+    }
+
+    var hojas = hojasPorProyecto[proyId] || [];
+    mAct.innerHTML = '<option value="">Elegí una actividad...</option>';
+    for (var i = 0; i < hojas.length; i++) {
+        mAct.innerHTML += '<option value="' + hojas[i].id + '">' + hojas[i].nombre + '</option>';
+    }
+};
+
 // ── Modal ────────────────────────────────────────────────────
 function cerrarModal() { document.getElementById('gsModal').style.display = 'none'; }
 
@@ -645,6 +667,8 @@ function calcHoras() {
 window.mostrarFormManual = function() {
     document.getElementById('mId').value = '';
     document.getElementById('gsModalTitulo').textContent = 'Nuevo registro manual';
+    document.getElementById('mProy').value = '';
+    document.getElementById('mAct').innerHTML = '<option value="">Primero elegí un proyecto</option>';
     document.getElementById('mFecha').value = new Date().toISOString().split('T')[0];
     document.getElementById('mInicio').value = '';
     document.getElementById('mFin').value = '';
@@ -661,7 +685,15 @@ window.editarSesion = async function(sesionId) {
     document.getElementById('mId').value = sesionId;
     document.getElementById('gsModalTitulo').textContent = 'Editar registro';
 
-    if (s.actividadId) document.getElementById('mAct').value = s.actividadId;
+    // Preseleccionar proyecto y actividad
+    if (s.actividadId) {
+        var rz = raizDe(s.actividadId);
+        if (rz) {
+            document.getElementById('mProy').value = rz;
+            filtrarActividadesPorProyecto();
+        }
+        document.getElementById('mAct').value = s.actividadId;
+    }
     if (s.uid) document.getElementById('mUsr').value = s.uid;
     document.getElementById('mNotas').value = s.notas || '';
 
@@ -684,16 +716,17 @@ window.guardarSesion = async function() {
     var fecha = document.getElementById('mFecha').value;
     var ini = document.getElementById('mInicio').value;
     var fin = document.getElementById('mFin').value;
+    var actId = document.getElementById('mAct').value;
 
     if (!fecha || !ini || !fin) { alert('Completá fecha, inicio y fin.'); return; }
+    if (!actId) { alert('Elegí un proyecto y una actividad.'); return; }
 
     var dIni = new Date(fecha + 'T' + ini + ':00');
     var dFin = new Date(fecha + 'T' + fin + ':00');
     if (dFin <= dIni) dFin.setDate(dFin.getDate() + 1);
     var horas = Math.max(0, (dFin - dIni) / 3600000);
 
-    var actId = document.getElementById('mAct').value;
-    var actNombre = document.getElementById('mAct').options[document.getElementById('mAct').selectedIndex].text.split(' (')[0];
+    var actNombre = document.getElementById('mAct').options[document.getElementById('mAct').selectedIndex].text;
     var usrId = document.getElementById('mUsr').value;
     var usrNombre = document.getElementById('mUsr').options[document.getElementById('mUsr').selectedIndex].text;
 
