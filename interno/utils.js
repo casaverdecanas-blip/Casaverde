@@ -1,6 +1,10 @@
 // ============================================================
-//  utils.js — Casa Verde Canas  v4.41
+//  utils.js — Casa Verde Canas  v4.42
 //  Funciones compartidas · /interno/
+//
+//  CAMBIOS v4.42 (Gestor de Sesiones):
+//  - [NUEVO] gestion-sesiones.html agregado al menú Operaciones
+//    (admin) y al catálogo de permisos (colaborador).
 //
 //  CAMBIOS v4.41 (Listón ADMIN):
 //  - [NUEVO] Listón visual "barrera de tren" (rayas amarillas y negras)
@@ -227,8 +231,9 @@ const NAV_ADMIN_ITEMS = [
         group: 'Operaciones',
         icon:  'checklist',
         items: [
-            { href: 'temporada.html',      icon: 'wb_sunny',             label: 'Temporada'          },
-            { href: 'horas-stats.html',    icon: 'schedule',             label: 'Análisis de horas'  }
+            { href: 'temporada.html',         icon: 'wb_sunny',  label: 'Temporada'              },
+            { href: 'horas-stats.html',       icon: 'schedule',  label: 'Análisis de horas'      },
+            { href: 'gestion-sesiones.html',  icon: 'schedule',  label: 'Gestor de sesiones'     }
         ]
     },
 
@@ -285,10 +290,11 @@ var _userDataActual = null;
 var ALWAYS_ALLOWED = ['actividades', 'gastos-mantenimiento', 'notificaciones', 'manual-sistema'];
 var CATALOGO_PERMISOS = [
     { grupo: 'Operación', icon: 'checklist', items: [
-        { href: 'calendario.html',     icon: 'calendar_month',       label: 'Calendario' },
-        { href: 'temporada.html',      icon: 'wb_sunny',             label: 'Temporada' },
-        { href: 'horas-stats.html',    icon: 'schedule',             label: 'Análisis de horas' },
-        { href: 'comunicacion.html',   icon: 'forum',                label: 'Comunicación' }
+        { href: 'calendario.html',        icon: 'calendar_month',  label: 'Calendario' },
+        { href: 'temporada.html',         icon: 'wb_sunny',        label: 'Temporada' },
+        { href: 'horas-stats.html',       icon: 'schedule',        label: 'Análisis de horas' },
+        { href: 'gestion-sesiones.html',  icon: 'schedule',        label: 'Gestor de sesiones' },
+        { href: 'comunicacion.html',      icon: 'forum',           label: 'Comunicación' }
     ]},
     { grupo: 'Reservas y clientes', icon: 'event', items: [
         { href: 'reservas.html',     icon: 'event',         label: 'Reservas' },
@@ -360,9 +366,6 @@ function puede(seccion, rol, permisos) {
 
 
 // ── AUXILIARES DE INTERFAZ (BADGES) ──────────────────────────────────────────
-// Firma dual:
-//   badgeEstado(estado)         ← moderno (lo que usan las páginas)
-//   badgeEstado(tipo, estado)   ← legacy v4.2 (compatibilidad)
 function badgeEstado(a, b) {
     const key = (b !== undefined && b !== null) ? b : a;
     const e = ESTADOS_RESERVA[key] || ESTADOS_TAREA[key] || { label: key, cssClass: 'badge-neutral' };
@@ -376,10 +379,6 @@ function badgePrioridad(prioridad) {
 
 
 // ── LISTÓN ADMIN (v4.41) ─────────────────────────────────────────────────────
-// Listón fijo estilo "barrera de tren" (rayas amarillas y negras en diagonal)
-// pegado al borde superior de la pantalla, visible SOLO cuando la sesión
-// activa es de un admin. Incluye un rótulo "ADMIN" colgante a la derecha.
-// Lo llama verificarAuth() automáticamente: ninguna página necesita cambios.
 function _mostrarListonAdmin() {
     if (document.getElementById('cvcListonAdmin')) return;
 
@@ -418,15 +417,10 @@ function _mostrarListonAdmin() {
 
 
 // ── SEGURIDAD Y AUTENTICACIÓN ────────────────────────────────────────────────
-// CORREGIDO v4.3: retorna Promise<{user, userData}> — patrón moderno.
-// Uso en las páginas:
-//   const { user, userData } = await CVC.verificarAuth(['admin','user']);
 function verificarAuth(rolesPermitidos) {
     const roles = Array.isArray(rolesPermitidos) ? rolesPermitidos : [rolesPermitidos];
     return new Promise(function(resolve, reject) {
 
-        // Timeout de seguridad: si Firebase no responde en 15s, rechazar
-        // para que la página pueda mostrar un error en vez de quedar colgada.
         const timer = setTimeout(function() {
             reject(new Error('Firebase no responde (timeout). Verificá tu conexión.'));
         }, 15000);
@@ -453,7 +447,6 @@ function verificarAuth(rolesPermitidos) {
                     const userData = userDoc.data();
                     _userDataActual = userData;
 
-                    // Solo bloquea si activo === false explícitamente
                     if (userData.activo === false) {
                         auth.signOut().then(function() {
                             window.location.href = 'index.html';
@@ -463,13 +456,6 @@ function verificarAuth(rolesPermitidos) {
                         return;
                     }
 
-                    // ── Control de acceso ──
-                    // El admin entra a TODO. Un colaborador entra si:
-                    //   - es una página del mínimo permitido (ALWAYS_ALLOWED), o
-                    //   - el admin le dio el permiso granular de esta página, o
-                    //   - la página permite explícitamente su rol (verificarAuth([...,'user'])).
-                    // El permiso granular manda por encima del rol fijo de la página,
-                    // así una página marcada solo-admin se abre si el admin la habilitó.
                     if (userData.rol !== 'admin') {
                         var _pag = (window.location.pathname.split('/').pop() || '').replace('.html', '');
                         var _ps = userData.permisos || [];
@@ -481,8 +467,6 @@ function verificarAuth(rolesPermitidos) {
                         if (!_permitido) { window.location.href = 'actividades.html'; return; }
                     }
 
-                    // Listón visual de admin (v4.41): rayas amarillas/negras
-                    // arriba de todo, para distinguir la sesión a simple vista.
                     if (userData.rol === 'admin') {
                         _mostrarListonAdmin();
                     }
@@ -507,18 +491,6 @@ function cerrarSesion() {
 
 
 // ── MOTOR DE PRECIOS Y DISPONIBILIDAD ────────────────────────────────────────
-//
-//  calcularPrecio(cabana, checkIn, checkOut, adultos, ninos)
-//
-//  Cálculo 100% LOCAL — no toca la red. Usa las tarifas del documento de la
-//  cabaña (cabanas/{id}.tarifas): precioBase, precioExtraPersona,
-//  precioLimpieza e intervalos por temporada. Devuelve SIEMPRE un objeto
-//  completo { noches, subtotal, limpieza, total } con números válidos,
-//  aunque la cabaña no tenga tarifas configuradas (en ese caso: ceros).
-//
-//  Firma esperada por presupuestos.html, calendario.html y reservas.html:
-//    var r = CVC.calcularPrecio(cabanaObj, 'YYYY-MM-DD', 'YYYY-MM-DD', 2, 1);
-//
 function calcularPrecio(cabana, checkIn, checkOut, adultos, ninos) {
     const vacio = { noches: 0, subtotal: 0, limpieza: 0, total: 0 };
     if (!cabana || !checkIn || !checkOut || checkOut <= checkIn) return vacio;
@@ -548,13 +520,6 @@ function calcularPrecio(cabana, checkIn, checkOut, adultos, ninos) {
     return { noches: noches, subtotal: subtotal, limpieza: limpieza, total: subtotal + limpieza };
 }
 
-//  verificarDisponibilidadCabana(cabaId, checkIn, checkOut, editandoId?)
-//
-//  Consulta de red (Firestore) — devuelve una PROMESA que resuelve a
-//  { disponible: boolean, conflicto: objeto|null }. Solo bloquean los
-//  estados de ESTADOS_BLOQUEANTES. Si estamos editando una reserva,
-//  pasarle su id en editandoId para excluirla del chequeo.
-//
 async function verificarDisponibilidadCabana(cabaId, checkIn, checkOut, editandoId) {
     const checkInDate  = new Date(checkIn  + 'T12:00:00');
     const checkOutDate = new Date(checkOut + 'T12:00:00');
@@ -573,7 +538,6 @@ async function verificarDisponibilidadCabana(cabaId, checkIn, checkOut, editando
         const rIn  = r.checkIn.toDate  ? r.checkIn.toDate()  : new Date(r.checkIn);
         const rOut = r.checkOut.toDate ? r.checkOut.toDate() : new Date(r.checkOut);
 
-        // Hay solapamiento si: nuevaEntrada < existenteSalida Y nuevaSalida > existenteEntrada
         if (checkInDate < rOut && checkOutDate > rIn) {
             return {
                 disponible: false,
@@ -591,7 +555,6 @@ async function verificarDisponibilidadCabana(cabaId, checkIn, checkOut, editando
     return { disponible: true, conflicto: null };
 }
 
-// Texto amigable cuando hay conflicto de fechas
 function mensajeConflicto(conflicto) {
     if (!conflicto) return '⚠️ Fechas no disponibles — ya existe una reserva en ese rango.';
     const etiqueta = (ESTADOS_RESERVA[conflicto.estado] && ESTADOS_RESERVA[conflicto.estado].label) || conflicto.estado;
@@ -605,12 +568,6 @@ function mensajeConflicto(conflicto) {
 
 // ── GESTIÓN AUTOMÁTICA DE LIMPIEZA ───────────────────────────────────────────
 function crearActividadLimpieza(reservaId, reservaData, creadorUid) {
-    // Por reserva se mantienen DOS tareas (ahora en la colección 'actividades',
-    // dentro del proyecto Limpiezas → categoría por cabaña):
-    //  • limp-<id>  LIMPIEZA de ingreso → ventana [salida del anterior, check-in]; rojo desde 2 días antes.
-    //  • ctrl-<id>  CONTROL de salida   → habilitado desde el check-out, con info del que sale.
-    // Al guardar una reserva también se recalcula la ventana de la limpieza del SIGUIENTE huésped
-    // de esa cabaña (porque esta reserva pasa a ser su "salida anterior").
     var aFecha = function(v) {
         if (!v) return null;
         var d = v.toDate ? v.toDate() : new Date(v);
@@ -622,7 +579,7 @@ function crearActividadLimpieza(reservaId, reservaData, creadorUid) {
 
     var caba = reservaData.caba;
     if (caba === undefined || caba === null) return;
-    var parentCat = 'limpiezas-cab-' + caba;   // categoría (por cabaña) dentro del proyecto Limpiezas
+    var parentCat = 'limpiezas-cab-' + caba;
 
     Promise.all([
         db.collection('cabanas').doc(String(caba)).get(),
@@ -644,7 +601,6 @@ function crearActividadLimpieza(reservaId, reservaData, creadorUid) {
             reservas.push({ id: reservaId, data: reservaData, ci: aFecha(reservaData.checkIn), co: aFecha(reservaData.checkOut) });
         }
 
-        // Salida más tardía que sea <= ese check-in (la "reserva anterior").
         var predecesorDe = function(targetId, ciDate) {
             if (!ciDate) return null;
             var mejor = null;
@@ -658,7 +614,6 @@ function crearActividadLimpieza(reservaId, reservaData, creadorUid) {
             return mejor;
         };
 
-        // Campos de la tarea de limpieza (ingreso) para una reserva dada.
         var camposLimpieza = function(item) {
             var rd = item.data;
             var ci = item.ci;
@@ -723,7 +678,6 @@ function crearActividadLimpieza(reservaId, reservaData, creadorUid) {
             };
         };
 
-        // Upsert que NO pisa el estado de una tarea ya existente.
         var upsert = function(docRef, base, soloCrear) {
             return docRef.get().then(function(snap) {
                 if (snap.exists) return docRef.update(base);
@@ -737,7 +691,6 @@ function crearActividadLimpieza(reservaId, reservaData, creadorUid) {
 
         var col = db.collection('actividades');
 
-        // Contenedores: proyecto "Limpiezas" → categoría por cabaña. Se crean si faltan.
         var ahora = firebase.firestore.FieldValue.serverTimestamp();
         var contenedor = function (titulo, pId, rId, color, cab) {
             var o = {
@@ -755,13 +708,6 @@ function crearActividadLimpieza(reservaId, reservaData, creadorUid) {
             return ref.get().then(function (s) { if (!s.exists) return ref.set(meta); });
         };
 
-        // Genera, una sola vez (idempotente: no regenera si ya existe), el contenedor "Chequeo de
-        // inventario" de una limpieza (entrada o salida), organizado en árbol:
-        //   chequeo → categoría (Cocina, Ropa blanca, …) → ítem (con cantidad).
-        // Cada ítem lleva cantidadSugerida (de cabanas.inventarioActual si ya hay foto real, sino
-        // de la lista base), cantidadConfirmada:null hasta validarlo, y chequeoId para que la
-        // consolidación pueda encontrar todos los ítems del chequeo sin importar la categoría.
-        // Lectura defensiva de campos de la lista base: cantidadBase|cantidad, categoria|cat.
         var slugCat = function (s) {
             return String(s || 'general').toLowerCase()
                 .replace(/[áàâã]/g, 'a').replace(/[éèê]/g, 'e').replace(/[íì]/g, 'i')
@@ -782,7 +728,6 @@ function crearActividadLimpieza(reservaId, reservaData, creadorUid) {
                 var jobsItems = [refChk.set(metaChk)];
                 var lista = fuenteItems || [];
 
-                // Agrupar por categoría preservando el orden de aparición.
                 var cats = [], porCat = {};
                 for (var n = 0; n < lista.length; n++) {
                     var itf = lista[n];
@@ -828,21 +773,14 @@ function crearActividadLimpieza(reservaId, reservaData, creadorUid) {
         .then(function () {
             var jobs = [];
 
-            // 1) Limpieza de la reserva actual.
             var cl = camposLimpieza(actual);
             if (cl) jobs.push(upsert(col.doc('limp-' + actual.id), cl.base, cl.soloCrear));
 
-            // 1b) Chequeo de inventario de ENTRADA, como hijo de la limpieza. Se genera una sola vez
-            //     (idempotente); la fuente es la foto real más reciente de la cabaña si existe, sino la
-            //     lista base. El chequeo de SALIDA se genera recién cuando se completa este de entrada
-            //     (ver CVC.actValidarItemChequeo en actividades-core.js), porque hasta entonces no se
-            //     sabe qué quedó realmente confirmado.
             if (cl) {
                 var fuenteInv = (cData.inventarioActual && cData.inventarioActual.length) ? cData.inventarioActual : (cData.checklistInventario || []);
                 jobs.push(crearChequeoInventario('chk-limp-' + actual.id, 'limp-' + actual.id, 'Chequeo de inventario \u2014 entrada', 'entrada', fuenteInv));
             }
 
-            // 2) Control de salida de la reserva actual.
             if (actual.co) {
                 var rd        = actual.data;
                 var personasC = rd.huespedes || ((rd.adultos || 0) + (rd.ninos || 0)) || '—';
@@ -878,7 +816,6 @@ function crearActividadLimpieza(reservaId, reservaData, creadorUid) {
                 }, { estado: 'pendiente', prioridad: 'verde', hecho: false, orden: 1, creadoEn: firebase.firestore.FieldValue.serverTimestamp(), creadoPor: creadorUid || null, creadoNombre: 'Sistema (reservas)' }));
             }
 
-            // 3) Recalcular la ventana de la limpieza del SIGUIENTE huésped (solo si ya tiene su tarea).
             if (actual.co) {
                 var follower = null;
                 for (var j = 0; j < reservas.length; j++) {
@@ -908,10 +845,8 @@ function crearActividadLimpieza(reservaId, reservaData, creadorUid) {
     });
 }
 
-// Al anular/eliminar una reserva: borra sus tareas y recalcula la ventana del huésped siguiente.
 function alAnularReserva(reservaId) {
     var col = db.collection('actividades');
-    // Borra categorías e ítems de un chequeo (todos llevan el campo chequeoId).
     var borrarDeChequeo = function (chequeoId) {
         return col.where('chequeoId', '==', chequeoId).get().then(function (snap) {
             var b = db.batch();
@@ -919,9 +854,6 @@ function alAnularReserva(reservaId) {
             return snap.size ? b.commit() : null;
         }).catch(function () {});
     };
-    // Los chequeos de inventario (entrada/salida) cuelgan de limp-/ctrl-; se borra su árbol
-    // completo antes de borrar la limpieza/control en sí. 'Faltantes o daños' de la cabaña
-    // NO se toca: refleja faltantes reales que pueden seguir vigentes aunque se anule la reserva.
     return borrarDeChequeo('chk-limp-' + reservaId)
     .then(function () { return borrarDeChequeo('chk-ctrl-' + reservaId); })
     .then(function () { return col.doc('chk-limp-' + reservaId).delete().catch(function () {}); })
@@ -955,13 +887,6 @@ function alAnularReserva(reservaId) {
 
 
 // ── SINCRONIZAR DISPONIBILIDAD PÚBLICA ───────────────────────────────────────
-//
-//  Actualiza la colección `disponibilidad` que lee el sitio público.
-//  Solo bloquean las reservas CONFIRMADAS y AIRBNB_ACTIVA; los estados
-//  libres (anulada, finalizada, cancelada, pendiente) borran el documento.
-//  Llamar SIEMPRE al crear, confirmar, anular o finalizar una reserva:
-//    CVC.sincronizarDisponibilidad(reservaId, reservaData)
-//
 async function sincronizarDisponibilidad(reservaId, reservaData) {
     if (!reservaId || !reservaData) return { procesados: 0, nuevos: 0 };
     try {
@@ -990,9 +915,6 @@ async function sincronizarDisponibilidad(reservaId, reservaData) {
     }
 }
 
-// PENDIENTE v4.3: la sincronización real con Google Calendar se restaurará
-// en el próximo paso. Por ahora retorna un resultado informativo para que
-// el botón del dashboard muestre un aviso claro en vez de fallar.
 function sincronizarDesdeGCal(apiKey, cabanas) {
     console.log('sincronizarDesdeGCal: función pendiente de restaurar en esta versión puente.');
     return Promise.resolve({
@@ -1004,36 +926,18 @@ function sincronizarDesdeGCal(apiKey, cabanas) {
 
 
 // ── FLUJO OPERATIVO DE TAREAS — Cronómetros y sesiones (v4.4) ───────────────
-//
-//  Modelo de datos:
-//  tareas/{id}                → estado, monto, recurrencia, fechaInicio,
-//                               sesionesActivas: [{ uid, nombre, inicio }]
-//  tareas/{id}/sesiones/{sid} → { uid, nombre, inicio, fin, invalidada? }
-//  historial_tareas           → un registro por cada finalización/verificación
-//  honorarios                 → un doc 'pendiente' por colaborador con monto
-//
-//  NOTA Firestore: serverTimestamp() NO está permitido dentro de arrays,
-//  por eso sesionesActivas usa Timestamp.now() (hora del dispositivo).
-
-function _tsAhora() {
-    return firebase.firestore.Timestamp.now();
-}
-
+function _tsAhora() { return firebase.firestore.Timestamp.now(); }
 function _aDateSeguro(v) {
     if (!v) return null;
     const d = v.toDate ? v.toDate() : new Date(v);
     return isNaN(d.getTime()) ? null : d;
 }
-
 function _sumarDiasISO(dias) {
     const f = new Date();
     f.setDate(f.getDate() + dias);
     return f.toISOString().split('T')[0];
 }
 
-// Iniciar / Unirme a una tarea.
-//   iniciarTarea(id, {uid, nombre})  ← moderno: abre sesión con cronómetro
-//   iniciarTarea(id)                 ← legacy: solo cambia estado
 async function iniciarTarea(tareaId, user) {
     if (!user || !user.uid) {
         return db.collection('tareas').doc(tareaId).update({ estado: 'en_curso' });
@@ -1046,7 +950,7 @@ async function iniciarTarea(tareaId, user) {
 
     const activas = (t.sesionesActivas || []).slice();
     if (activas.some(function(s) { return s.uid === user.uid; })) {
-        return; // ya tiene una sesión abierta — no duplicar
+        return;
     }
 
     const ahora = _tsAhora();
@@ -1066,9 +970,6 @@ async function iniciarTarea(tareaId, user) {
     });
 }
 
-// Pausar mi participación en una tarea.
-//   pausarTarea(id, {uid, nombre})  ← moderno: cierra MI sesión
-//   pausarTarea(id)                 ← legacy: pausa total
 async function pausarTarea(tareaId, user) {
     const ref = db.collection('tareas').doc(tareaId);
 
@@ -1078,7 +979,6 @@ async function pausarTarea(tareaId, user) {
 
     const ahora = _tsAhora();
 
-    // Cerrar mi sesión abierta en la subcolección
     const sesSnap = await ref.collection('sesiones').get();
     const batch = db.batch();
     let huboCierre = false;
@@ -1092,7 +992,6 @@ async function pausarTarea(tareaId, user) {
     });
     if (huboCierre) await batch.commit();
 
-    // Quitarme del array de activos
     const snap = await ref.get();
     if (!snap.exists) return;
     const t = snap.data();
@@ -1106,14 +1005,10 @@ async function pausarTarea(tareaId, user) {
     });
 }
 
-// Cierra el ciclo de la tarea: si es recurrente la reprograma,
-// si no, la marca finalizada. Limpia sesiones y sesionesActivas.
 async function _cerrarCicloTarea(ref, t, sesDocs) {
     await cargarTemporada();
     const ciclo = cicloEfectivoTarea(t);
 
-    // Limpiar la subcolección de sesiones para que el próximo ciclo
-    // arranque en cero (el historial ya quedó en historial_tareas)
     if (sesDocs && sesDocs.length) {
         const batch = db.batch();
         sesDocs.forEach(function(d) { batch.delete(d.ref); });
@@ -1135,11 +1030,6 @@ async function _cerrarCicloTarea(ref, t, sesDocs) {
     }
 }
 
-// Finalizar tarea con cálculo de honorarios proporcionales.
-// Retorna el array de colaboradores: [{ uid, nombre, horas, montoRecibido }]
-// — formato que espera tareas.html.
-// Si la tarea no tiene sesiones (huérfana de versiones anteriores),
-// se finaliza igual con colaboradores = [] — autosanado.
 async function finalizarTarea(tareaId, user) {
     user = user || {};
     const ref  = db.collection('tareas').doc(tareaId);
@@ -1149,7 +1039,6 @@ async function finalizarTarea(tareaId, user) {
 
     const ahora = _tsAhora();
 
-    // 1. Leer sesiones y cerrar las que quedaron abiertas
     const sesSnap = await ref.collection('sesiones').get();
     const batchCierre = db.batch();
     let huboAbiertas = false;
@@ -1162,7 +1051,6 @@ async function finalizarTarea(tareaId, user) {
     });
     if (huboAbiertas) await batchCierre.commit();
 
-    // 2. Calcular horas por colaborador (solo sesiones válidas)
     const porUid = {};
     sesSnap.docs.forEach(function(d) {
         const s = d.data();
@@ -1179,7 +1067,6 @@ async function finalizarTarea(tareaId, user) {
     const totalHoras = lista.reduce(function(sum, c) { return sum + c.horas; }, 0);
     const montoTarea = t.monto || 0;
 
-    // 3. Reparto proporcional al tiempo trabajado
     const colaboradores = lista.map(function(c) {
         const proporcion = totalHoras > 0 ? (c.horas / totalHoras) : 0;
         return {
@@ -1191,7 +1078,6 @@ async function finalizarTarea(tareaId, user) {
     });
     const montoAsignado = colaboradores.reduce(function(s, c) { return s + c.montoRecibido; }, 0);
 
-    // 4. Precio de limpieza cobrado al cliente (best effort, no bloquea)
     let costoLimpiezaBRL = 0;
     if (t.reservaId) {
         try {
@@ -1200,7 +1086,6 @@ async function finalizarTarea(tareaId, user) {
         } catch (e) { /* sin bloqueo */ }
     }
 
-    // 5. Registro en historial_tareas (alimenta limpieza-stats)
     await db.collection('historial_tareas').add({
         tareaId:          tareaId,
         nombre:           t.nombre || '',
@@ -1216,7 +1101,6 @@ async function finalizarTarea(tareaId, user) {
         finalizadoPor:    user.uid || null
     });
 
-    // 6. Crear honorarios pendientes (los ve pagos.html → Honorarios)
     for (let i = 0; i < colaboradores.length; i++) {
         const c = colaboradores[i];
         if (c.montoRecibido <= 0) continue;
@@ -1232,10 +1116,8 @@ async function finalizarTarea(tareaId, user) {
         });
     }
 
-    // 7. Reprogramar (si es recurrente) o finalizar
     await _cerrarCicloTarea(ref, t, sesSnap.docs);
 
-    // 8. Si la tarea está vinculada a un pendiente, marcarlo realizado
     if (t.pendienteId) {
         try {
             await db.collection('pendientes').doc(t.pendienteId).update({
@@ -1250,9 +1132,6 @@ async function finalizarTarea(tareaId, user) {
     return colaboradores;
 }
 
-// Verificar tarea ("OK / No era necesaria").
-//   verificarTarea(id, {uid, nombre}, nota)  ← moderno: registra en historial
-//   verificarTarea(id, true/false, notas)    ← legacy: solo cambia estado
 async function verificarTarea(tareaId, b, nota) {
     if (typeof b === 'boolean') {
         return db.collection('tareas').doc(tareaId).update({
@@ -1286,7 +1165,6 @@ async function verificarTarea(tareaId, b, nota) {
 
     await _cerrarCicloTarea(ref, t, sesSnap.docs);
 
-    // Si está vinculada a un pendiente, marcarlo realizado también
     if (t.pendienteId) {
         try {
             await db.collection('pendientes').doc(t.pendienteId).update({
@@ -1299,15 +1177,8 @@ async function verificarTarea(tareaId, b, nota) {
     }
 }
 
-// Firma dual:
-//   urgenciaTarea(tareaObjeto)        ← moderno: retorna { color, label }
-//                                       color: 'rojo' | 'amarillo' | 'verde' | 'gris'
-//   urgenciaTarea(id, esUrgente)      ← legacy v4.2: actualiza prioridad en DB
+
 // ── TEMPORADAS (v4.25) ────────────────────────────────────────────────────────
-//  Control central de temporada (alta/media/baja). Afecta la FRECUENCIA con que las
-//  tareas recurrentes se resaltan/recuerdan, sin borrarlas: en temporada baja el ciclo
-//  se estira (factor mayor) y la tarea satura menos. config/temporada:
-//    { modo:'auto'|'manual', actual, rangos:[{desde'MM-DD',hasta'MM-DD',temporada}], factores:{alta,media,baja} }
 var _temporadaCfg = null;
 var _temporadaActual = null;
 
@@ -1319,7 +1190,7 @@ function _mmdd(d) {
 function _enRangoMMDD(mmdd, desde, hasta) {
     if (!desde || !hasta) return false;
     if (desde <= hasta) return mmdd >= desde && mmdd <= hasta;
-    return mmdd >= desde || mmdd <= hasta; // cruza el fin de año
+    return mmdd >= desde || mmdd <= hasta;
 }
 function calcularTemporada(cfg, fecha) {
     fecha = fecha || new Date();
@@ -1360,8 +1231,6 @@ function factorTemporada(temporada) {
     f = parseFloat(f);
     return (!isNaN(f) && f > 0) ? f : 1;
 }
-// Ciclo efectivo (en días) de una tarea para la temporada dada. Prioriza override por
-// tarea (recurrenciaTemporada), si no aplica el factor global sobre la recurrencia base.
 function cicloEfectivoTarea(t, temporada) {
     temporada = temporada || temporadaActual();
     var rt = t.recurrenciaTemporada;
@@ -1375,21 +1244,18 @@ function cicloEfectivoTarea(t, temporada) {
 }
 
 function urgenciaTarea(t, esUrgente) {
-    // Modo legacy: primer argumento es un id (string)
     if (typeof t === 'string') {
         return db.collection('tareas').doc(t).update({
             prioridad: esUrgente ? 'alta' : 'media'
         });
     }
 
-    // Modo moderno: cálculo de urgencia para dashboard / listados
     if (!t || !t.fechaInicio) return { color: 'gris', label: 'Sin fecha' };
 
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
     const f = new Date(String(t.fechaInicio).slice(0, 10) + 'T00:00:00');
     if (isNaN(f.getTime())) return { color: 'gris', label: 'Sin fecha' };
 
-    // Limpieza de ingreso: rojo desde 2 días antes del check-in (ventana corta = urgente).
     if (t.fechaCheckIn) {
         const ciD = new Date(String(t.fechaCheckIn).slice(0, 10) + 'T00:00:00');
         if (!isNaN(ciD.getTime())) {
@@ -1406,13 +1272,11 @@ function urgenciaTarea(t, esUrgente) {
     if (dias < 0)  return { color: 'verde',    label: 'En ' + Math.abs(dias) + 'd' };
     if (dias === 0) return { color: 'amarillo', label: 'Hoy' };
 
-    // Con recurrencia definida: rojo si superó el ciclo
     if (ciclo > 0) {
         if (dias > ciclo) return { color: 'rojo', label: 'Atraso ' + dias + 'd' };
         return { color: 'amarillo', label: 'Hace ' + dias + 'd' };
     }
 
-    // Sin recurrencia: rojo a partir de 7 días de atraso
     if (dias > 7) return { color: 'rojo', label: 'Atraso ' + dias + 'd' };
     return { color: 'amarillo', label: 'Hace ' + dias + 'd' };
 }
@@ -1448,7 +1312,6 @@ const _BTG_REGLAS = [
     { cat: 'Transferencias propias',  labels: ['transferencia propia', 'entre cuentas'] }
 ];
 
-// Retorna { cat, etiqueta } — formato que espera herramientas-btg.html
 function inferirCategoria(concepto) {
     if (!concepto) return { cat: '', etiqueta: '' };
     const txt = String(concepto).toLowerCase();
@@ -1463,7 +1326,6 @@ function inferirCategoria(concepto) {
     return { cat: '', etiqueta: '' };
 }
 
-// fingerprint(fecha, monto, descripcion) o fingerprint(objetoMovimiento)
 function fingerprintMovimiento(a, b, c) {
     let f, m, d;
     if (typeof a === 'object' && a !== null) {
@@ -1480,9 +1342,6 @@ function fingerprintMovimiento(a, b, c) {
     return 'fp_' + Math.abs(hash);
 }
 
-// Concilia movimientos parseados contra los ya existentes en Firestore.
-// Retorna los mismos movimientos con estado: 'nuevo' | 'duplicado' | 'posible_duplicado'
-// — formato que espera herramientas-btg.html
 async function conciliarMovimientos(movsParseados, cuentaId) {
     const snap = await db.collection('movimientos')
         .where('cuentaId', '==', cuentaId)
@@ -1509,9 +1368,6 @@ async function conciliarMovimientos(movsParseados, cuentaId) {
     });
 }
 
-// Importa los movimientos seleccionados a la colección 'movimientos'.
-// opts = { cuentaId, moneda, importadoPor }
-// Retorna { importados, saltados } — formato que espera herramientas-btg.html
 async function importarMovimientosConfirmados(seleccionados, opts) {
     opts = opts || {};
     let importados = 0;
@@ -1549,7 +1405,6 @@ async function importarMovimientosConfirmados(seleccionados, opts) {
     return { importados: importados, saltados: saltados };
 }
 
-// Stubs legacy — mantenidos para no romper destructuraciones antiguas
 function matchMovimientoBancario() { return null; }
 function conciliarContraRegistros() { return Promise.resolve(); }
 function guardarConciliacion() { return Promise.resolve(); }
@@ -1557,27 +1412,6 @@ function cargarConfigConciliacion() { return Promise.resolve({}); }
 
 
 // ── BADGES DE NAVEGACIÓN (v4.38) ─────────────────────────────────────────────
-//
-//  Superíndices en el menú superior que marcan lo que requiere atención.
-//  Reemplazan las alertas del dashboard retirado. Cuatro fuentes:
-//
-//    actividades   ROJO  — actividades en semáforo rojo (hojas trabajables)
-//    reservas      ROJO  — reservas con estado 'pendiente' (sin confirmar)
-//    comunicacion  AZUL  — hilos visibles con mensajes sin leer
-//    honorarios    ROJO  — honorarios pendientes hace más de 14 días
-//
-//  Los rojos son ESTADO (desaparecen al resolverse, no al verlos).
-//  El azul es NOVEDAD (usa comunicaciones_lecturas, se apaga al leer).
-//
-//  El cálculo corre una vez al cargar cualquier página y se cachea en
-//  sessionStorage con TTL de 5 minutos, para no disparar queries en
-//  cada navegación. Al entrar a una página que ES fuente de badges se
-//  invalida el cache: la próxima navegación recalcula con lo resuelto.
-//
-//  El semáforo de actividades es el de actividades-core.js (fuente
-//  única de verdad). Si la página no lo cargó, se inyecta el script
-//  dinámicamente; si la carga falla, hay un respaldo simplificado.
-//
 var BADGES_NAV_FUENTES = {
     'actividades.html':  'actividades',
     'reservas.html':     'reservas',
@@ -1611,8 +1445,6 @@ function _badgeBorrarCache() {
     try { sessionStorage.removeItem(BADGES_CACHE_KEY); } catch (e) { /* no bloquea */ }
 }
 
-// Semáforo de respaldo si actividades-core.js no se pudo cargar.
-// Réplica mínima de las reglas rojas de actSemaforo (sin factor de temporada).
 function _badgeSemaforoSimple(t) {
     var hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -1632,7 +1464,6 @@ function _badgeSemaforoSimple(t) {
     return 'otro';
 }
 
-// Garantiza que CVC.actSemaforo esté disponible (carga actividades-core.js si falta).
 function _badgeAsegurarActCore() {
     return new Promise(function(resolve) {
         if (window.CVC && typeof window.CVC.actSemaforo === 'function') { resolve(true); return; }
@@ -1646,8 +1477,6 @@ function _badgeAsegurarActCore() {
     });
 }
 
-// Actividades en rojo: solo hojas trabajables (descarta proyectos, categorías
-// y nodos de chequeo de inventario), respetando la visibilidad del colaborador.
 function _badgeContarActividades(uid, rol) {
     return _badgeAsegurarActCore().then(function(tieneCore) {
         var pTemp = Promise.resolve();
@@ -1667,8 +1496,8 @@ function _badgeContarActividades(uid, rol) {
             });
             var n = 0;
             docs.forEach(function(a) {
-                if (!a.parentId) return;                    // proyecto raíz
-                if (padres[a.id]) return;                   // tiene hijos: categoría/contenedor
+                if (!a.parentId) return;
+                if (padres[a.id]) return;
                 if (a.tipo === 'chequeo-inventario' || a.tipo === 'categoria-chequeo' || a.tipo === 'item-chequeo') return;
                 if (a.hecho === true || a.estado === 'finalizada') return;
                 if (rol !== 'admin') {
@@ -1700,8 +1529,6 @@ function _badgeContarReservas() {
         .catch(function() { return 0; });
 }
 
-// Hilos visibles con actividad posterior a la última lectura del usuario.
-// Excluye archivadas. Misma visibilidad por audiencia que comunicacion.html.
 function _badgeContarComunicacion(uid, rol) {
     return Promise.all([
         db.collection('comunicaciones').get(),
@@ -1720,7 +1547,6 @@ function _badgeContarComunicacion(uid, rol) {
                 if (aud === 'todos' || aud === 'solo_colaboradores') visible = true;
                 else if (aud === 'un_usuario') visible = (c.destinatarioUid === uid || c.creadoPor === uid);
                 else if (aud === 'solo_admin') visible = (c.creadoPor === uid);
-                // 'entre_admins': nunca visible para colaborador
             }
             if (!visible) return;
             var ult = (c.ultimaActividad && c.ultimaActividad.toMillis) ? c.ultimaActividad.toMillis() : 0;
@@ -1746,7 +1572,6 @@ function _badgeContarHonorarios(uid, rol) {
         .catch(function() { return 0; });
 }
 
-// Pinta los superíndices en los items del nav y suma en los triggers de grupo.
 function _pintarBadgesNav(counts) {
     try {
         counts = counts || {};
@@ -1787,12 +1612,9 @@ function _pintarBadgesNav(counts) {
                 sup.classList.remove('show');
             }
         }
-    } catch (e) { /* pintar badges nunca rompe la página */ }
+    } catch (e) { /* no bloquea */ }
 }
 
-// Punto de entrada: lo llama renderNav al final. Espera la sesión,
-// resuelve el rol, dispara el lazy-cron del resumen diario (que antes
-// vivía en dashboard.html) y calcula o lee del cache los contadores.
 function _initBadgesNav(paginaActiva) {
     if (_badgesIniciado) return;
     _badgesIniciado = true;
@@ -1840,7 +1662,6 @@ function _initBadgesNav(paginaActiva) {
     });
 }
 
-// Fuerza el recálculo inmediato (p. ej. tras confirmar una reserva).
 function refrescarBadgesNav() {
     _badgeBorrarCache();
     _badgesIniciado = false;
@@ -1894,14 +1715,12 @@ function renderNav(paginaActiva, rol) {
     _initBadgesNav(paginaActiva);
 }
 
-// Botón flotante para registrar un gasto rápido (carga básica, igual que colaboradores).
-// Aparece en todas las páginas internas; el destino es gastos-mantenimiento.html.
 function inyectarBotonGasto(paginaActiva) {
     try {
         if (document.getElementById('cvcGastoFab')) return;
         var pag = paginaActiva || (window.location.pathname.split('/').pop() || '');
-        if (String(pag).indexOf('actividades') === -1) return; // el botón flotante de Gasto vive en la página de inicio (actividades, v4.38)
-        if (String(pag).indexOf('gastos-mantenimiento') !== -1) return; // ya estás en la carga
+        if (String(pag).indexOf('actividades') === -1) return;
+        if (String(pag).indexOf('gastos-mantenimiento') !== -1) return;
         var a = document.createElement('a');
         a.id = 'cvcGastoFab';
         a.href = 'gastos-mantenimiento.html';
@@ -1938,8 +1757,6 @@ function toggleNavDrop(e, id) {
     if (!dropEl) return;
 
     var yaAbierto = dropEl.classList.contains('open');
-
-    // Cerrar todos los dropdowns abiertos (devuelve el panel a su lugar)
     document.querySelectorAll('.nav-dropdown.open').forEach(_cerrarUnDrop);
 
     if (yaAbierto) return;
@@ -1950,8 +1767,6 @@ function toggleNavDrop(e, id) {
 
     var rect = trigger.getBoundingClientRect();
 
-    // Colgar el panel del body: asi 'fixed' no lo recorta un overflow del nav
-    // ni lo descoloca un ancestro con transform (era el bug en tablet/iPad).
     panel.setAttribute('data-drop', id);
     document.body.appendChild(panel);
     panel.style.position = 'fixed';
@@ -1962,7 +1777,6 @@ function toggleNavDrop(e, id) {
 
     dropEl.classList.add('open');
 
-    // Si se sale por la derecha de la pantalla, alinear al borde del trigger
     var pr = panel.getBoundingClientRect();
     if (pr.right > window.innerWidth - 8) {
         var nl = rect.right - pr.width;
@@ -1976,13 +1790,8 @@ function _cerrarDropdowns() {
 
 window.toggleNavDrop = toggleNavDrop;
 
-// ============================================================
-//  COMPROBANTES (Cloudinary, unsigned)  — restaurado en v4.10
-//  Subida de imágenes/PDF de comprobantes y apertura para verlos.
-//  cloud: dnwfu8ffn · preset sin firma: preset-comprobantes
-// ============================================================
-// Comprime una imagen antes de subirla (comprobantes legibles pero livianos).
-// Solo imágenes; PDF u otros pasan sin tocar. Ante cualquier error, sube el original.
+
+// ── COMPROBANTES (Cloudinary) ─────────────────────────────────────────────────
 function _comprimirImagen(file, maxPx, quality) {
     return new Promise(function (resolve) {
         if (!file || !file.type || file.type.indexOf('image/') !== 0) { resolve(file); return; }
@@ -2036,8 +1845,6 @@ function abrirComprobante(url) {
 
 window.abrirComprobante = abrirComprobante;
 
-// Menú "Cámara / Galería" para cargar una foto. Llama onPick(file).
-// Usa inputs reales (uno con capture, otro sin) por compatibilidad con Safari viejo.
 function elegirFuenteFoto(onPick) {
     var ov = document.createElement('div');
     ov.setAttribute('style', 'position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:4000;display:flex;align-items:flex-end;justify-content:center;');
@@ -2088,14 +1895,11 @@ function elegirFuenteFoto(onPick) {
 
 window.elegirFuenteFoto = elegirFuenteFoto;
 
-// ============================================================
-//  NOTIFICACIONES (email + WhatsApp)
-// ============================================================
+
+// ── NOTIFICACIONES ────────────────────────────────────────────────────────────
 var NETLIFY_BASE = 'https://serene-scone-76bd4e.netlify.app/.netlify/functions';
 var _ultimoWhatsApp = {};
 
-// WhatsApp vía la Netlify Function (CallMeBot). Gratis = ~1 por minuto POR número:
-// el guard es por destinatario, así avisar a personas distintas no se bloquea entre sí.
 function enviarWhatsApp(text, to) {
     var clave = to || '_default';
     var ahora = Date.now();
@@ -2111,8 +1915,6 @@ function enviarWhatsApp(text, to) {
       .catch(function (e) { return { ok: false, error: e.message }; });
 }
 
-// Email vía EmailJS (credenciales públicas por diseño; dominio en whitelist).
-// Variables del template: enviar_a, nombre_remitente, asunto, mensaje (acepta HTML).
 var EMAILJS = { serviceId: 'Mailcasaverde', templateId: 'template_txtqg87', publicKey: 'v9IeaS5cXuzPAKCXh' };
 function enviarMail(asunto, mensaje, paraEmail, remitente) {
     if (!paraEmail) return Promise.resolve({ ok: false, error: 'El usuario no tiene email cargado.' });
@@ -2132,15 +1934,8 @@ function enviarMail(asunto, mensaje, paraEmail, remitente) {
     }).catch(function (e) { return { ok: false, error: e.message }; });
 }
 
-// ---- Resumen diario por email -------------------------------
-// Cada cambio importante se registra en resumenes/{YYYY-MM-DD}.
-// Una vez por día (primer ingreso al sistema), se envía el resumen
-// del día anterior a todos los usuarios. EmailJS para email; el
-// WhatsApp queda para avisos instantáneos según preferencia.
 function _hoyISO() { return new Date().toISOString().slice(0, 10); }
 
-// Registra un evento para el resumen, con su AUDIENCIA (a quién le concierne).
-// para: 'todos' | 'admins' | 'colaboradores' | array de uids.
 function registrarEvento(tipo, texto, para) {
     try {
         var fecha = _hoyISO();
@@ -2153,7 +1948,6 @@ function registrarEvento(tipo, texto, para) {
     } catch (e) { return Promise.resolve(); }
 }
 
-// ¿Este evento le concierne a este usuario (uid + rol)?
 function _eventoAplica(ev, uid, rol) {
     var para = ev.para || 'todos';
     if (para === 'todos') return true;
@@ -2163,7 +1957,6 @@ function _eventoAplica(ev, uid, rol) {
     return false;
 }
 
-// Arma el resumen del día SOLO con los eventos que le conciernen a ese usuario.
 function construirResumen(fecha, uid, rol) {
     var LABEL = { reserva: 'Reservas', pago: 'Pagos', comunicacion: 'Mensajes', limpieza: 'Limpiezas / tareas', presupuesto: 'Presupuestos', gasto: 'Gastos' };
     return firebase.firestore().collection('resumenes').doc(fecha).get().then(function (d) {
@@ -2184,7 +1977,6 @@ function construirResumen(fecha, uid, rol) {
     });
 }
 
-// Lazy-cron: 1 vez por día (al cargar el dashboard). Cada usuario recibe SU resumen.
 function enviarResumenDiarioSiCorresponde() {
     var db = firebase.firestore();
     return db.collection('config').doc('notificaciones').get().then(function (doc) {
@@ -2197,7 +1989,7 @@ function enviarResumenDiarioSiCorresponde() {
                 var tareas = [];
                 snap.forEach(function (u) {
                     var x = u.data();
-                    if (x.activo === false) return;            // desactivado: no recibe
+                    if (x.activo === false) return;
                     if (!x.email) return;
                     if (x.notif && x.notif.canalEmail === false) return;
                     tareas.push(construirResumen(ayer, u.id, x.rol).then(function (res) {
@@ -2210,7 +2002,6 @@ function enviarResumenDiarioSiCorresponde() {
     }).catch(function () {});
 }
 
-// Envía el resumen de HOY (lo que le concierne a ese usuario) a un email, para probar.
 function enviarResumenPrueba(email, uid, rol) {
     return construirResumen(_hoyISO(), uid, rol).then(function (res) {
         if (!res) return enviarMail('Resumen Casa Verde (prueba)', '<p>Hoy todavía no hay novedades que te conciernan. El resumen real se arma con los cambios del día.</p>', email);
@@ -2218,17 +2009,12 @@ function enviarResumenPrueba(email, uid, rol) {
     });
 }
 
-// AVISO de un evento: lo registra para el resumen (según audiencia) y manda
-// WhatsApp instantáneo a quienes les concierne y lo tengan activado.
-// evento: 'comunicacion' | 'reserva' | 'pago' | ...
-// para: 'todos' | 'admins' | 'colaboradores' | array de uids
-// excluirUid: uid a NO avisar (típicamente el autor de la acción)
 function avisar(evento, asunto, texto, para, excluirUid) {
     registrarEvento(evento, texto, para);
     return firebase.firestore().collection('usuarios').get().then(function (snap) {
         snap.forEach(function (u) {
             var x = u.data(), uid = u.id;
-            if (x.activo === false) return;             // desactivado: no recibe
+            if (x.activo === false) return;
             if (excluirUid && uid === excluirUid) return;
             var aplica = (para === 'todos') ||
                 (para === 'admins' && x.rol === 'admin') ||
@@ -2244,17 +2030,11 @@ function avisar(evento, asunto, texto, para, excluirUid) {
     }).catch(function () {});
 }
 
-// Despachador: notifica a un usuario (uid) o a 'admins' según sus preferencias.
-// evento: 'reserva' | 'pago' | 'comunicacion' | 'limpieza' | 'presupuesto' ...
-// payload: { asunto, mensaje }
-// Preferencias en usuarios/{uid}.notif = { <evento>:bool, canalEmail:bool, canalWhatsapp:bool }.
-// Por defecto: eventos ON, email ON, WhatsApp OFF (hasta registrar el número).
 function notificar(destino, evento, payload) {
     payload = payload || {};
     function paraUsuario(uid, data) {
         var n = data.notif || {};
         if (n[evento] === false) return;
-        // El email se envía como resumen diario (no instantáneo). Acá solo WhatsApp.
         if (n.canalWhatsapp === true) {
             enviarWhatsApp(payload.mensaje || payload.asunto || '', uid);
         }
@@ -2302,11 +2082,7 @@ function formatFechaHora(timestamp) {
     return dd + '/' + mm + ' ' + hh + ':' + min + 'hs';
 }
 
-// Firma dual:
-//   formatHoras(horasDecimal)        ← moderno: formatHoras(3.5) → "3h 30m"
-//   formatHoras(tsInicio, tsFin)     ← legacy v4.2: diferencia entre timestamps
 function formatHoras(a, b) {
-    // Modo legacy: dos timestamps
     if (b !== undefined && b !== null) {
         if (!a) return '—';
         const t1 = a.toDate ? a.toDate() : new Date(a);
@@ -2320,7 +2096,6 @@ function formatHoras(a, b) {
         return hrsL + 'h ' + minsL + 'm';
     }
 
-    // Modo moderno: número decimal de horas
     const n = parseFloat(a);
     if (isNaN(n) || n < 0) return '—';
     const totMin = Math.round(n * 60);
@@ -2332,24 +2107,17 @@ function formatHoras(a, b) {
 }
 
 function colorCabana(num) {
-    const colores = {
-        1: '#2ec4b6',
-        2: '#e71d36',
-        3: '#ff9f1c'
-    };
+    const colores = { 1: '#2ec4b6', 2: '#e71d36', 3: '#ff9f1c' };
     return colores[num] || '#6c757d';
 }
 
 
-// ── ESTADOS DE UI (loading / empty / error / toast) ─────────────────────────
+// ── ESTADOS DE UI ─────────────────────────────────────────────────────────────
 function _resolverContainer(container) {
     if (!container) return null;
     return typeof container === 'string' ? document.querySelector(container) : container;
 }
 
-// Firma dual:
-//   showLoading(container, mensaje)  ← moderno: renderiza state-loading
-//   showLoading(true/false)          ← legacy: overlay global
 function showLoading(container, mensaje) {
     if (typeof container === 'boolean') {
         let spin = document.getElementById('appGlobalSpinner');
@@ -2415,15 +2183,8 @@ function showToast(mensaje, tipo) {
 
 
 // ── SISTEMA DE AYUDA CONTEXTUAL ──────────────────────────────────────────────
-//  Lee las células desde config/ayuda en Firestore.
-//  Las células están guardadas como campos PLANOS con notación de puntos:
-//  "celulas.reservas.pagina" → { titulo, resumen, contenido, paginas, boton }
-//
-//  Todas las funciones de ayuda fallan en silencio: si Firestore no
-//  responde o no hay células, la página sigue funcionando normal.
-
-var AYUDA_ITEMS   = {};   // células agrupadas por página: { 'reservas.html': [cel, ...] }
-var AYUDA_CELULAS = {};   // células por id: { 'reservas.pagina': cel }
+var AYUDA_ITEMS   = {};
+var AYUDA_CELULAS = {};
 var _ayudaPromise = null;
 
 function _cargarAyudaFirestore() {
@@ -2442,13 +2203,11 @@ function _cargarAyudaFirestore() {
                 });
             }
 
-            // Caso 1: campos planos "celulas.x.y"
             Object.keys(data).forEach(function(k) {
                 if (k.indexOf('celulas.') !== 0) return;
                 registrarCelula(k.slice(8), data[k]);
             });
 
-            // Caso 2 (defensa): mapa anidado celulas: { x: { y: {...} } }
             if (data.celulas && typeof data.celulas === 'object') {
                 Object.keys(data.celulas).forEach(function(grupo) {
                     const sub = data.celulas[grupo];
@@ -2546,10 +2305,6 @@ function initAyuda(paginaActual) {
         fab.onclick = function () { mostrarAyuda(paginaActual); };
         document.body.appendChild(fab);
 
-        // Las células se cargan en segundo plano; no condicionan si el botón se muestra
-        // (eso ya hac\u00eda que p\u00e1ginas sin c\u00e9lula todav\u00eda cargada se quedaran sin ning\u00fan
-        // acceso a ayuda). Si todav\u00eda no hay c\u00e9lulas para esta p\u00e1gina, mostrarAyuda() ahora
-        // muestra una descripci\u00f3n general en vez de un simple aviso de "no hay ayuda".
         _cargarAyudaFirestore();
     } catch (e) {
         console.warn('initAyuda:', e.message);
@@ -2590,16 +2345,10 @@ function cerrarAyuda() {
     if (overlay) overlay.style.display = 'none';
 }
 
-function cerrarCelula() {
-    cerrarAyuda();
-}
+function cerrarCelula() { cerrarAyuda(); }
 
 
 // ── COTIZACIONES UNIFICADAS (v4.18) ───────────────────────────────────────────
-//  Fuente única de tipos de cambio de MERCADO para todo el sistema.
-//  - config/cotizaciones : snapshot actual { base:'USD', rates:{USD,BRL,UYU,EUR,ARS}, fuente, actualizadoEn, actualizadoPor }
-//  - cotizaciones_historial/{YYYY-MM-DD} : serie por fecha (para validar operaciones viejas)
-//  NO confundir con config/tipos_cambio (FISCAL, lo fija la contadora, no se toca aquí).
 var _cotizCache = null;
 
 function cargarCotizaciones(forzar) {
@@ -2624,8 +2373,6 @@ function cargarCotizaciones(forzar) {
     });
 }
 
-// Convierte un monto entre monedas. rates = { CCY: unidades por 1 base(USD) }.
-// Si no se pasan rates usa la cache; si no hay tabla, devuelve el monto crudo (no rompe).
 function convertir(monto, desde, hacia, rates) {
     if (!monto) return 0;
     desde = String(desde || 'BRL').toUpperCase();
@@ -2636,7 +2383,6 @@ function convertir(monto, desde, hacia, rates) {
     return (monto / rates[desde]) * rates[hacia];
 }
 
-// Moneda efectiva de un registro (gasto/movimiento): usa .moneda; si no, mapea por país.
 function monedaDe(reg) {
     var m = String((reg && reg.moneda) || '').toUpperCase();
     if (m === 'BRL' || m === 'UYU' || m === 'USD' || m === 'EUR' || m === 'ARS') return m;
@@ -2654,7 +2400,6 @@ function diasDesdeCotizacion() {
     return Math.floor((Date.now() - _cotizCache.actualizadoEn.getTime()) / 86400000);
 }
 
-// Guarda un snapshot (manual u online) + un doc de historial del día. Actualiza la cache.
 function guardarCotizaciones(rates, fuente, autor) {
     var hoy = new Date();
     var mm = String(hoy.getMonth() + 1);
@@ -2682,7 +2427,6 @@ function guardarCotizaciones(rates, fuente, autor) {
     });
 }
 
-// Trae cotizaciones de mercado online (open.er-api.com, sin API key) y las guarda.
 function actualizarCotizacionesOnline(autor) {
     return fetch('https://open.er-api.com/v6/latest/USD').then(function(r) {
         return r.json();
@@ -2694,7 +2438,6 @@ function actualizarCotizacionesOnline(autor) {
     });
 }
 
-// (v4.20) Devuelve las rates que regían en una fecha (último historial <= fecha). Promesa.
 function cotizacionEnFecha(fecha) {
     return db.collection('cotizaciones_historial')
         .where('fecha', '<=', fecha).orderBy('fecha', 'desc').limit(1).get()
@@ -2705,14 +2448,12 @@ function cotizacionEnFecha(fecha) {
         }).catch(function() { return null; });
 }
 
-// Carga el historial de cotizaciones (ordenado por fecha desc) para validaciones en lote.
 function cargarHistorialCotizaciones(limite) {
     return db.collection('cotizaciones_historial').orderBy('fecha', 'desc').limit(limite || 365).get()
         .then(function(snap) { return snap.docs.map(function(d) { return d.data(); }); })
         .catch(function() { return []; });
 }
 
-// Dado un historial ya cargado (desc), devuelve el snapshot que regía en 'fecha' (último <= fecha).
 function cotizacionEnFechaLocal(historial, fecha) {
     if (!historial || !historial.length) return null;
     for (var i = 0; i < historial.length; i++) {
@@ -2721,8 +2462,6 @@ function cotizacionEnFechaLocal(historial, fecha) {
     return historial[historial.length - 1];
 }
 
-// Valida el cambio de una transferencia contra la cotización de mercado de su fecha.
-// ratesFecha = rates del snapshot histórico (de cotizacionEnFecha/Local). Devuelve dif %.
 function validarCambioTransferencia(t, ratesFecha) {
     if (!t || t.origenMoneda === t.destinoMoneda) return { aplica: false };
     var rateEfectivo = (t.montoOrigen ? (t.montoDestino / t.montoOrigen) : 0);
@@ -2732,17 +2471,8 @@ function validarCambioTransferencia(t, ratesFecha) {
 }
 
 
-//  Operación de dos patas: salida de una cuenta + entrada en otra, vinculadas.
-//  Unifica: transferencia, retiro, honorario propio y reintegro de gasto.
-//  Colección 'transferencias' (fuente de verdad). NO escribe en 'movimientos'
-//  (esos son el espejo del banco con saldoPost encadenado). Ajusta cuentas.saldoActual
-//  de forma atómica con increment. La conciliación (v4.20) cruza las patas con el banco.
-// ── CLASIFICACIÓN MASIVA (v4.24) ──────────────────────────────────────────────
-//  Aplica en lote actualizaciones de clasificación a gastos y movimientos.
-//  cambios = [{ col:'gastos'|'movimientos', id, data:{...campos...} }]
-//  Divide en tandas de 400 (límite de batch 500) y las confirma en orden.
+// ── CLASIFICACIÓN MASIVA ──────────────────────────────────────────────────────
 async function aplicarClasificacionMasiva(cambios) {
-    // Aplica los cambios en tandas de 400 (límite de batch de Firestore)
     for (var i = 0; i < cambios.length; i += 400) {
         var batch = db.batch();
         cambios.slice(i, i + 400).forEach(function(c) {
@@ -2751,10 +2481,6 @@ async function aplicarClasificacionMasiva(cambios) {
         await batch.commit();
     }
 
-    // ── Fase 1.2 (v4.35): materializar en el acto ─────────────────────────
-    // Si la página cargó finanzas-core.js, cada movimiento recién clasificado
-    // se convierte YA en su gasto/ingreso real — nunca más etiquetas huérfanas.
-    // Si FIN no está presente, se comporta exactamente como antes.
     try {
         if (window.FIN && FIN.materializarMovimiento) {
             var movCambios = cambios.filter(function(c) {
@@ -2776,9 +2502,9 @@ async function aplicarClasificacionMasiva(cambios) {
                         var doc = await db.collection('movimientos').doc(c.id).get();
                         if (!doc.exists) continue;
                         var d = doc.data();
-                        if (d.eventoId || d.gastoId || d.pagoId) continue;          // ya materializado
-                        if (!d.cuentaId) continue;                                   // sin cuenta no se puede
-                        if (/saldo\s*di[aá]rio/i.test(String(d.descripcion || ''))) continue;  // fantasma
+                        if (d.eventoId || d.gastoId || d.pagoId) continue;
+                        if (!d.cuentaId) continue;
+                        if (/saldo\s*di[aá]rio/i.test(String(d.descripcion || ''))) continue;
                         await FIN.materializarMovimiento(db, {
                             refId: c.id,
                             tipo: d.tipo === 'credito' ? 'ingreso' : 'egreso',
@@ -2788,7 +2514,7 @@ async function aplicarClasificacionMasiva(cambios) {
                             cuentaId: d.cuentaId
                         }, ctas[d.cuentaId] || {}, cats[c.data.categoriaId] || null, uid);
                         mat++;
-                    } catch(e2) { /* sigue con el resto */ }
+                    } catch(e2) { /* sigue */ }
                 }
                 if (mat) showToast('⚡ ' + mat + ' movimiento(s) materializados al flujo.', 'success');
             }
@@ -2841,7 +2567,6 @@ function crearTransferencia(t) {
     return batch.commit().then(function() { return ref.id; });
 }
 
-// Revierte los saldos y elimina la transferencia (recibe el doc completo con id).
 function eliminarTransferencia(t) {
     var batch = db.batch();
     if (t.origenCuentaId) {
@@ -2858,6 +2583,8 @@ function eliminarTransferencia(t) {
     return batch.commit();
 }
 
+
+// ── EXPORTAR ──────────────────────────────────────────────────────────────────
 window.CVC = {
     db, auth,
     ESTADOS_RESERVA, ESTADOS_TAREA, PRIORIDADES, CALENDAR_IDS, ESTADOS_BLOQUEANTES,
@@ -2869,7 +2596,7 @@ window.CVC = {
     verificarDisponibilidadCabana,
     mensajeConflicto,
     crearActividadLimpieza: crearActividadLimpieza,
-    crearTareaLimpieza: crearActividadLimpieza, // alias Fase 3 — sacar cuando reservas.html use el nombre nuevo
+    crearTareaLimpieza: crearActividadLimpieza,
     alAnularReserva,
     sincronizarDisponibilidad,
     sincronizarDesdeGCal,
