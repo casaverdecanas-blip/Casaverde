@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diagnóstico de Sesiones · Casa Verde Canas</title>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link rel="stylesheet" href="design-system.css">
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<style>
+  .diag-wrap { max-width: 1100px; margin: 0 auto; }
+  .diag-section { 
+    background: #fff; border: 1px solid #e7ece4; border-radius: 12px; 
+    padding: 16px; margin-bottom: 16px;
+  }
+  .diag-section h3 { margin: 0 0 12px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+  .diag-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .diag-table th { text-align: left; padding: 8px 10px; background: #f8faf7; color: #46583f; font-weight: 600; border-bottom: 2px solid #dfe6dd; }
+  .diag-table td { padding: 7px 10px; border-bottom: 1px solid #eef2ec; }
+  .diag-table tr:hover td { background: #fafcf9; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+  .badge-ok { background: #e6f5e6; color: #1f7a32; }
+  .badge-warn { background: #fdf4dd; color: #8a5d00; }
+  .badge-err { background: #fde8e8; color: #c0271f; }
+  .badge-info { background: #e7f0fd; color: #1f5fb0; }
+  .diag-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .diag-actions button { 
+    padding: 8px 16px; border-radius: 8px; border: 1px solid #dfe6dd; 
+    background: #fff; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  .diag-actions .btn-do { background: #2d5a27; color: #fff; border-color: #2d5a27; }
+  .diag-actions .btn-do:hover { background: #234a1f; }
+  .diag-actions .btn-danger { background: #c0271f; color: #fff; border-color: #c0271f; }
+  .diag-actions .btn-warn { background: #d97706; color: #fff; border-color: #d97706; }
+  .diag-log { 
+    background: #1a1a1a; color: #a0d8a0; font-family: monospace; font-size: 12px; 
+    padding: 12px; border-radius: 8px; max-height: 400px; overflow: auto; 
+    white-space: pre-wrap; line-height: 1.5; margin-top: 12px;
+  }
+  .diag-log .warn { color: #e0a800; }
+  .diag-log .err { color: #e06060; }
+  .diag-log .info { color: #60a0e0; }
+  .diag-log .ok { color: #60e060; }
+</style>
+</head>
+<body>
+
+<header class="admin-header">
+  <div class="admin-header__brand">
+    <span class="material-icons">biotech</span>
+    Diagnóstico y Migración de Sesiones
+  </div>
+  <div class="admin-header__actions">
+    <span id="userName">—</span>
+    <button class="btn-logout" onclick="CVC.cerrarSesion()">Salir</button>
+  </div>
+</header>
+
+<main class="admin-content">
+  <div class="diag-wrap">
+    
+    <div class="diag-section">
+      <h3><span class="material-icons">search</span> Estado actual de Firestore</h3>
+      <div id="resumen">Cargando...</div>
+    </div>
+
+    <div class="diag-section">
+      <h3><span class="material-icons">compare_arrows</span> Acciones de migración</h3>
+      <div class="diag-actions">
+        <button onclick="escanearTodo()" class="btn-do">🔍 Re-escanear todo</button>
+        <button onclick="migrarSesionesSubcoleccion()" class="btn-do">📦 Migrar subcolecciones → /sesiones/</button>
+        <button onclick="verificarDuplicados()" class="btn-do">🔎 Verificar duplicados</button>
+        <button onclick="limpiarSesionesActivas()" class="btn-do">🧹 Limpiar sesionesActivas huérfanas</button>
+      </div>
+      <div class="diag-actions" style="margin-top:6px">
+        <button onclick="analizarObsoletas()" class="btn-warn">⚠️ Analizar colecciones obsoletas</button>
+        <button onclick="verificarNombresTruncados()" class="btn-do">🔍 Verificar nombres truncados</button>
+      </div>
+      <div class="diag-log" id="log"></div>
+    </div>
+
+    <div class="diag-section" id="seccionObsoletas" style="display:none">
+      <h3><span class="material-icons">archive</span> Colecciones candidatas a eliminar</h3>
+      <div id="detalleObsoletas"></div>
+    </div>
+
+  </div>
+</main>
+
+<script type="module">
+
+var sesion = await CVC.verificarAuth(['admin']);
+var user = sesion.user;
+document.getElementById('userName').textContent = 'Admin';
+
+var db = CVC.db;
+var logEl = document.getElementById('log');
+
+function log(msg, tipo) {
+  var clase = tipo || '';
+  logEl.innerHTML += '<span class="' + clase + '">' + msg + '</span>\n';
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function logSep() {
+  log('━'.repeat(50), 'info');
+}
+
+// ── Nombres reales de colecciones en producción ───────────
+var COLECCIONES_PRODUCCION = [
+  'actividades', 'actividades_usual', 'cabanas', 'categorias', 'categorias_mov',
+  'clientes', 'comunicaciones', 'comunicaciones_l', 'config', 'cotizaciones_his',
+  'cuentas', 'destinos', 'disponibilidad', 'espacios_comunes', 'gastos',
+  'historial', 'historial_tareas', 'honorarios', 'informes_airbnb',
+  'movimientos', 'pagos', 'reservas', 'resumenes', 'usuarios'
+];
+
+var COLECCIONES_ESPERADAS = [
+  'presupuestos', 'proyecciones', 'transferencias', 'libro_visitas',
+  'mov_negocio', 'gastos_fijos', 'cierres', 'sesiones',
+  'tareas', 'pendientes', 'agenda'
+];
+
+var COLECCIONES_OBSOLETAS_CANDIDATAS = [
+  { col: 'tareas', motivo: 'Reemplazada por actividades (v4.28)' },
+  { col: 'pendientes', motivo: 'Reemplazada por actividades (v4.28)' },
+  { col: 'agenda', motivo: 'Reemplazada por actividades (v4.28)' },
+  { col: 'historial', motivo: 'Posible duplicado de historial_tareas — verificar contenido' },
+  { col: 'resumenes', motivo: 'No referenciada en el briefing ni en el código actual' },
+  { col: 'actividades_usual', motivo: 'Posible typo de actividades_usuario — verificar si el código escribe en esta o en actividades_usuario' }
+];
+
+// ── Escanear todas las colecciones ────────────────────────
+window.escanearTodo = async function() {
+  logEl.innerHTML = '';
+  log('🔍 INICIANDO ESCANEO COMPLETO...', 'info');
+  log('Colecciones en producción: ' + COLECCIONES_PRODUCCION.length, 'info');
+  log('Colecciones esperadas adicionales: ' + COLECCIONES_ESPERADAS.length, 'info');
+  logSep();
+
+  var todas = COLECCIONES_PRODUCCION.concat(COLECCIONES_ESPERADAS);
+  var resumen = {};
+  var totalDocs = 0;
+
+  for (var i = 0; i < todas.length; i++) {
+    var col = todas[i];
+    try {
+      var snap = await db.collection(col).limit(1000).get();
+      var n = snap.size;
+      totalDocs += n;
+      resumen[col] = n;
+
+      if (n > 0) {
+        log('📁 ' + col + ': ' + n + ' documentos', 'info');
+
+        // Detalle específico por colección
+        if (col === 'actividades') {
+          var conSesiones = 0, conSubsesiones = 0;
+          snap.forEach(function(d) {
+            var a = d.data();
+            if (a.sesionesActivas && a.sesionesActivas.length > 0) conSesiones++;
+          });
+          if (conSesiones > 0) log('   ↳ ' + conSesiones + ' actividades con campo sesionesActivas poblado', 'warn');
+
+          // Verificar si existe subcolección sesiones
+          try {
+            var primerDoc = snap.docs[0];
+            if (primerDoc) {
+              var subSnap = await db.collection('actividades').doc(primerDoc.id).collection('sesiones').limit(1).get();
+              if (subSnap.size > 0) {
+                // Contar todas
+                var totalSub = 0;
+                for (var s = 0; s < Math.min(snap.docs.length, 20); s++) {
+                  var ss = await db.collection('actividades').doc(snap.docs[s].id).collection('sesiones').get();
+                  totalSub += ss.size;
+                }
+                log('   ↳ ¡Subcolección actividades/{id}/sesiones EXISTE! (~' + totalSub + '+ sesiones detectadas)', 'warn');
+              }
+            }
+          } catch (e2) { /* no existe o sin permiso */ }
+        }
+
+        if (col === 'tareas') {
+          var conSub = 0;
+          try {
+            for (var t = 0; t < Math.min(snap.docs.length, 10); t++) {
+              var ss = await db.collection('tareas').doc(snap.docs[t].id).collection('sesiones').get();
+              if (ss.size > 0) conSub++;
+            }
+          } catch (e2) { }
+          if (conSub > 0) log('   ↳ ¡Subcolección tareas/{id}/sesiones EXISTE en ' + conSub + '/10 muestreadas!', 'warn');
+        }
+
+        if (col === 'historial') {
+          log('   ⚠️ Esta colección podría ser duplicado de historial_tareas', 'warn');
+          // Mostrar un doc de muestra
+          var hDoc = snap.docs[0].data();
+          log('   Muestra: ' + JSON.stringify(hDoc).slice(0, 200), 'info');
+        }
+
+        if (col === 'resumenes') {
+          log('   ⚠️ Colección no referenciada en el briefing', 'warn');
+          var rDoc = snap.docs[0].data();
+          log('   Muestra: ' + JSON.stringify(rDoc).slice(0, 200), 'info');
+        }
+
+        if (col === 'actividades_usual') {
+          log('   ⚠️ Posible typo de actividades_usuario', 'warn');
+          var aDoc = snap.docs[0];
+          log('   Doc ID: ' + aDoc.id + ' — Contenido: ' + JSON.stringify(aDoc.data()).slice(0, 200), 'info');
+        }
+
+        if (col === 'sesiones') {
+          var estados = {};
+          snap.forEach(function(d) {
+            var s = d.data();
+            var est = s.estado || 'sin_estado';
+            estados[est] = (estados[est] || 0) + 1;
+          });
+          var detalle = [];
+          for (var k in estados) detalle.push(k + ': ' + estados[k]);
+          log('   ↳ Estados: ' + detalle.join(', '), 'info');
+        }
+      }
+    } catch (e) {
+      resumen[col] = 'ERROR';
+      // Solo mostrar error si no es "falta de índice" (que es normal para colecciones vacías nuevas)
+      if (e.message && e.message.indexOf('Missing or insufficient permissions') === -1) {
+        log('📁 ' + col + ': ERROR — ' + e.message, 'err');
+      }
+    }
+  }
+
+  logSep();
+  log('✅ TOTAL: ' + totalDocs + ' documentos encontrados', 'info');
+  logSep();
+
+  // Buscar colecciones mov_personal_*
+  log('🔍 Buscando colecciones personales (mov_personal_*)...', 'info');
+  var posibles = ['mov_personal_mauro', 'mov_personal_florencia', 'mov_personal_esteban'];
+  for (var p = 0; p < posibles.length; p++) {
+    try {
+      var snap = await db.collection(posibles[p]).limit(1).get();
+      log('   ' + posibles[p] + ': ' + (snap.size > 0 ? 'EXISTE' : 'vacía'), 'info');
+    } catch (e) {
+      log('   ' + posibles[p] + ': no encontrada', 'warn');
+    }
+  }
+
+  // Mostrar resumen
+  var html = '<table class="diag-table"><tr><th>Colección</th><th>Docs</th><th>Estado</th></tr>';
+  for (var c in resumen) {
+    var val = resumen[c];
+    var badge = 'badge-ok';
+    if (val === 'ERROR') badge = 'badge-err';
+    else if (val === 0) badge = 'badge-warn';
+    html += '<tr><td>' + c + '</td><td>' + val + '</td><td><span class="badge ' + badge + '">' + (val === 'ERROR' ? 'ERROR' : (val > 0 ? 'Con datos' : 'Vacía')) + '</span></td></tr>';
+  }
+  html += '</table>';
+  document.getElementById('resumen').innerHTML = html;
+};
+
+// ── Verificar nombres truncados ───────────────────────────
+window.verificarNombresTruncados = async function() {
+  logEl.innerHTML = '';
+  log('🔍 VERIFICANDO NOMBRES TRUNCADOS...', 'info');
+  logSep();
+
+  var pares = [
+    { visible: 'comunicaciones_l', esperado: 'comunicaciones_lecturas', codigo: 'comunicaciones_lecturas' },
+    { visible: 'cotizaciones_his', esperado: 'cotizaciones_historial', codigo: 'cotizaciones_historial' },
+    { visible: 'actividades_usual', esperado: 'actividades_usuario', codigo: 'actividades_usuario' }
+  ];
+
+  for (var i = 0; i < pares.length; i++) {
+    var p = pares[i];
+    log('📁 Visible: ' + p.visible + ' — Esperado: ' + p.esperado, 'info');
+
+    var snapVis = await db.collection(p.visible).limit(1).get();
+    var docsVis = snapVis.size;
+
+    try {
+      var snapEsp = await db.collection(p.esperado).limit(1).get();
+      var docsEsp = snapEsp.size;
+
+      if (docsVis > 0 && docsEsp === 0) {
+        log('   ✅ Confirmado: ' + p.visible + ' ES ' + p.esperado + ' (nombre truncado en UI)', 'ok');
+        log('   ⚠️ El código escribe en ' + p.codigo + ' — verificar que coincida', 'warn');
+      } else if (docsVis > 0 && docsEsp > 0) {
+        log('   ⚠️ AMBAS colecciones existen — posible duplicación', 'warn');
+      } else if (docsVis === 0) {
+        log('   📭 ' + p.visible + ' está vacía', 'info');
+      }
+    } catch (e) {
+      log('   ' + p.esperado + ': no existe — ' + p.visible + ' es la colección real', 'info');
+    }
+
+    // Mostrar un doc de muestra de la colección visible
+    if (docsVis > 0) {
+      var doc = snapVis.docs[0];
+      log('   Muestra doc ID: ' + doc.id, 'info');
+      log('   Datos: ' + JSON.stringify(doc.data()).slice(0, 300), 'info');
+    }
+    logSep();
+  }
+};
+
+// ── Migrar subcolecciones → /sesiones/ ────────────────────
+window.migrarSesionesSubcoleccion = async function() {
+  logEl.innerHTML = '';
+  log('📦 MIGRANDO SUBSESIONES → /sesiones/', 'info');
+  log('Orígenes: tareas/{id}/sesiones y actividades/{id}/sesiones', 'info');
+  logSep();
+
+  var migradas = 0;
+  var errores = 0;
+  var yaExisten = 0;
+
+  // Primero verificar qué hay ya en /sesiones/
+  var snapExistente = await db.collection('sesiones').get();
+  var idsExistentes = {};
+  snapExistente.forEach(function(d) {
+    var s = d.data();
+    var key = s.actividadId + '|' + s.uid + '|' + (s.inicio ? s.inicio.toMillis() : 0);
+    idsExistentes[key] = true;
+  });
+  log('   /sesiones/ tiene ' + snapExistente.size + ' documentos actualmente', 'info');
+
+  // ── Migrar desde tareas/{id}/sesiones ──────────────────
+  logSep();
+  log('📁 Buscando en tareas...', 'info');
+  try {
+    var tareasSnap = await db.collection('tareas').get();
+    log('   tareas: ' + tareasSnap.size + ' documentos', 'info');
+
+    for (var i = 0; i < tareasSnap.docs.length; i++) {
+      var tareaDoc = tareasSnap.docs[i];
+      var tareaId = tareaDoc.id;
+      var tarea = tareaDoc.data();
+
+      try {
+        var sesSnap = await db.collection('tareas').doc(tareaId).collection('sesiones').get();
+        if (sesSnap.size === 0) continue;
+
+        log('   ↳ Tarea ' + tareaId + ': ' + sesSnap.size + ' sesiones', 'info');
+
+        for (var j = 0; j < sesSnap.docs.length; j++) {
+          var s = sesSnap.docs[j].data();
+          var inicio = s.inicio || firebase.firestore.Timestamp.now();
+          var key = tareaId + '|' + (s.uid || '') + '|' + (inicio.toMillis ? inicio.toMillis() : 0);
+
+          if (idsExistentes[key]) {
+            yaExisten++;
+            continue;
+          }
+
+          try {
+            await db.collection('sesiones').add({
+              actividadId: tareaId,
+              actividadNombre: tarea.nombre || tarea.titulo || '',
+              uid: s.uid || '',
+              nombre: s.nombre || '',
+              inicio: inicio,
+              fin: s.fin || null,
+              horas: s.horas || 0,
+              estado: s.fin ? (s.sinCronometro ? 'finalizada' : 'pausada') : 'en_curso',
+              tipo: s.sinCronometro ? 'manual' : 'cronometro',
+              creadoPor: s.uid || '',
+              creadoEn: inicio,
+              actualizadoEn: firebase.firestore.Timestamp.now(),
+              notas: '',
+              _migradoDe: 'tareas/' + tareaId + '/sesiones/' + sesSnap.docs[j].id
+            });
+            migradas++;
+            idsExistentes[key] = true;
+          } catch (e) {
+            log('   ❌ Error: ' + e.message, 'err');
+            errores++;
+          }
+        }
+      } catch (e) {
+        // Subcolección no existe o sin permisos — normal
+      }
+    }
+  } catch (e) {
+    log('❌ Error accediendo a tareas: ' + e.message, 'err');
+  }
+
+  // ── Migrar desde actividades/{id}/sesiones ──────────────
+  logSep();
+  log('📁 Buscando en actividades...', 'info');
+  try {
+    var actSnap = await db.collection('actividades').get();
+    log('   actividades: ' + actSnap.size + ' documentos', 'info');
+
+    var conSubcoleccion = 0;
+    for (var k = 0; k < actSnap.docs.length; k++) {
+      var actDoc = actSnap.docs[k];
+      var actId = actDoc.id;
+      var act = actDoc.data();
+
+      try {
+        var sesSnap2 = await db.collection('actividades').doc(actId).collection('sesiones').get();
+        if (sesSnap2.size === 0) continue;
+
+        conSubcoleccion++;
+        log('   ↳ Actividad ' + actId + ': ' + sesSnap2.size + ' sesiones', 'info');
+
+        for (var m = 0; m < sesSnap2.docs.length; m++) {
+          var s2 = sesSnap2.docs[m].data();
+          var inicio2 = s2.inicio || firebase.firestore.Timestamp.now();
+          var key2 = actId + '|' + (s2.uid || '') + '|' + (inicio2.toMillis ? inicio2.toMillis() : 0);
+
+          if (idsExistentes[key2]) {
+            yaExisten++;
+            continue;
+          }
+
+          try {
+            await db.collection('sesiones').add({
+              actividadId: actId,
+              actividadNombre: act.titulo || act.nombre || '',
+              uid: s2.uid || '',
+              nombre: s2.nombre || '',
+              inicio: inicio2,
+              fin: s2.fin || null,
+              horas: s2.horas || 0,
+              estado: s2.fin ? (s2.sinCronometro ? 'finalizada' : 'pausada') : 'en_curso',
+              tipo: s2.sinCronometro ? 'manual' : 'cronometro',
+              creadoPor: s2.uid || '',
+              creadoEn: inicio2,
+              actualizadoEn: firebase.firestore.Timestamp.now(),
+              notas: '',
+              _migradoDe: 'actividades/' + actId + '/sesiones/' + sesSnap2.docs[m].id
+            });
+            migradas++;
+            idsExistentes[key2] = true;
+          } catch (e) {
+            log('   ❌ Error: ' + e.message, 'err');
+            errores++;
+          }
+        }
+      } catch (e) {
+        // sin permisos o no existe
+      }
+    }
+    log('   ' + conSubcoleccion + ' actividades tenían subcolección sesiones', 'info');
+  } catch (e) {
+    log('❌ Error accediendo a actividades: ' + e.message, 'err');
+  }
+
+  logSep();
+  log('✅ MIGRACIÓN COMPLETADA', 'ok');
+  log('   Sesiones migradas: ' + migradas, 'ok');
+  log('   Ya existían (omitidas): ' + yaExisten, 'info');
+  log('   Errores: ' + errores, errores > 0 ? 'err' : 'info');
+  log('⚠️ Las sesiones originales NO fueron borradas. Verificá antes de eliminar.', 'warn');
+};
+
+// ── Verificar duplicados ──────────────────────────────────
+window.verificarDuplicados = async function() {
+  logEl.innerHTML = '';
+  log('🔎 VERIFICANDO DUPLICADOS en /sesiones/', 'info');
+  logSep();
+
+  try {
+    var snap = await db.collection('sesiones').get();
+    log('   Total documentos: ' + snap.size, 'info');
+
+    var porClave = {};
+    snap.forEach(function(d) {
+      var s = d.data();
+      var key = s.actividadId + '|' + s.uid + '|' + (s.inicio ? s.inicio.toMillis() : 0);
+      if (!porClave[key]) porClave[key] = [];
+      porClave[key].push({ id: d.id, data: s });
+    });
+
+    var duplicados = 0;
+    for (var k in porClave) {
+      if (porClave[k].length > 1) {
+        duplicados++;
+        log('⚠️ Duplicado: ' + k + ' (' + porClave[k].length + ' registros)', 'warn');
+        for (var i = 0; i < porClave[k].length; i++) {
+          var s = porClave[k][i];
+          log('   ' + s.id + ' — estado: ' + s.data.estado + ' — tipo: ' + (s.data.tipo || '?'), 'info');
+        }
+      }
+    }
+
+    if (duplicados === 0) {
+      log('✅ No se encontraron duplicados.', 'ok');
+    } else {
+      logSep();
+      log('⚠️ Se encontraron ' + duplicados + ' grupos con posibles duplicados.', 'warn');
+      log('Usá el Gestor de Sesiones (gestor-sesiones.html) para eliminar manualmente los que sobran.', 'info');
+    }
+  } catch (e) {
+    log('❌ Error: ' + e.message, 'err');
+  }
+};
+
+// ── Limpiar sesionesActivas huérfanas ─────────────────────
+window.limpiarSesionesActivas = async function() {
+  logEl.innerHTML = '';
+  log('🧹 LIMPIANDO campo sesionesActivas en actividades...', 'info');
+  log('Buscando actividades con sesionesActivas poblado pero sin sesión real activa.', 'info');
+  logSep();
+
+  try {
+    var snap = await db.collection('actividades').get();
+    var limpiadas = 0;
+    var batch = db.batch();
+    var count = 0;
+
+    for (var i = 0; i < snap.docs.length; i++) {
+      var doc = snap.docs[i];
+      var act = doc.data();
+
+      if (act.sesionesActivas && act.sesionesActivas.length > 0) {
+        // Verificar si hay sesiones reales activas en /sesiones/
+        var sesReal = await db.collection('sesiones')
+          .where('actividadId', '==', doc.id)
+          .where('estado', '==', 'en_curso')
+          .get();
+
+        if (sesReal.empty) {
+          // No hay sesiones reales activas — limpiar el campo
+          batch.update(doc.ref, {
+            sesionesActivas: [],
+            estado: act.hecho ? 'finalizada' : 'pendiente',
+            sesionActualId: null
+          });
+          limpiadas++;
+          count++;
+
+          if (count >= 400) {
+            await batch.commit();
+            batch = db.batch();
+            count = 0;
+            log('   Batch commit (' + limpiadas + ' limpiadas hasta ahora)', 'info');
+          }
+        } else {
+          log('   Actividad ' + doc.id + ': conserva ' + sesReal.size + ' sesión(es) real(es) activa(s)', 'info');
+        }
+      }
+    }
+
+    if (count > 0) {
+      await batch.commit();
+    }
+
+    logSep();
+    log('✅ LIMPIEZA COMPLETADA: ' + limpiadas + ' actividades limpiadas', 'ok');
+  } catch (e) {
+    log('❌ Error: ' + e.message, 'err');
+  }
+};
+
+// ── Analizar colecciones obsoletas ────────────────────────
+window.analizarObsoletas = async function() {
+  logEl.innerHTML = '';
+  log('⚠️ ANALIZANDO COLECCIONES CANDIDATAS A ELIMINAR...', 'info');
+  log('(Nada se borra — solo se analiza)', 'warn');
+  logSep();
+
+  var resultado = [];
+
+  for (var i = 0; i < COLECCIONES_OBSOLETAS_CANDIDATAS.length; i++) {
+    var c = COLECCIONES_OBSOLETAS_CANDIDATAS[i];
+    log('📁 ' + c.col + ': ' + c.motivo, 'info');
+
+    try {
+      var snap = await db.collection(c.col).get();
+      var n = snap.size;
+
+      if (n === 0) {
+        log('   ✅ Vacía — se puede eliminar sin riesgo', 'ok');
+        resultado.push({ col: c.col, docs: 0, accion: 'eliminar', motivo: c.motivo });
+      } else {
+        log('   ⚠️ TIENE ' + n + ' DOCUMENTOS — revisar antes de eliminar', 'warn');
+
+        // Mostrar muestra
+        if (n > 0) {
+          var doc = snap.docs[0];
+          log('   Muestra doc ID: ' + doc.id, 'info');
+          log('   Datos: ' + JSON.stringify(doc.data()).slice(0, 300), 'info');
+        }
+
+        // Verificar subcolecciones
+        var tieneSubcolecciones = false;
+        if (c.col === 'tareas') {
+          try {
+            for (var t = 0; t < Math.min(snap.docs.length, 5); t++) {
+              var ss = await db.collection('tareas').doc(snap.docs[t].id).collection('sesiones').get();
+              if (ss.size > 0) {
+                tieneSubcolecciones = true;
+                log('   ⚠️ Tiene subcolección sesiones con ' + ss.size + ' docs (en doc ' + snap.docs[t].id + ')', 'warn');
+              }
+            }
+          } catch (e2) { }
+        }
+
+        resultado.push({
+          col: c.col,
+          docs: n,
+          tieneSubcolecciones: tieneSubcolecciones,
+          accion: 'revisar',
+          motivo: c.motivo
+        });
+      }
+    } catch (e) {
+      log('   ❌ Error: ' + e.message, 'err');
+      resultado.push({ col: c.col, docs: 'ERROR', accion: 'error', motivo: c.motivo });
+    }
+    logSep();
+  }
+
+  // Mostrar tabla de resultados
+  var html = '<table class="diag-table"><tr><th>Colección</th><th>Docs</th><th>Subcol.</th><th>Acción</th><th>Motivo</th></tr>';
+  for (var j = 0; j < resultado.length; j++) {
+    var r = resultado[j];
+    var badgeAccion = r.accion === 'eliminar' ? 'badge-ok' : (r.accion === 'revisar' ? 'badge-warn' : 'badge-err');
+    html += '<tr>';
+    html += '<td><b>' + r.col + '</b></td>';
+    html += '<td>' + r.docs + '</td>';
+    html += '<td>' + (r.tieneSubcolecciones ? '⚠️ SÍ' : '—') + '</td>';
+    html += '<td><span class="badge ' + badgeAccion + '">' + r.accion + '</span></td>';
+    html += '<td style="font-size:12px;color:#66735f">' + r.motivo + '</td>';
+    html += '</tr>';
+  }
+  html += '</table>';
+
+  html += '<div class="muted-note" style="margin-top:12px">';
+  html += '<b>⚠️ Para eliminar una colección:</b> usá el botón de Firebase Console o la CLI.<br>';
+  html += '<b>📋 Eliminables sin riesgo:</b> las que tienen 0 docs.<br>';
+  html += '<b>🔍 Requieren revisión:</b> las que tienen documentos. Verificá que ninguna página activa las lea.';
+  html += '</div>';
+
+  document.getElementById('detalleObsoletas').innerHTML = html;
+  document.getElementById('seccionObsoletas').style.display = 'block';
+  log('✅ ANÁLISIS COMPLETADO — revisá la tabla arriba', 'ok');
+};
+
+// ── Auto-ejecutar al cargar ───────────────────────────────
+log('📋 Herramienta de diagnóstico lista.', 'info');
+log('Usá los botones en este orden:', 'info');
+log('  1. Re-escanear todo', 'info');
+log('  2. Verificar nombres truncados', 'info');
+log('  3. Migrar subcolecciones → /sesiones/', 'info');
+log('  4. Verificar duplicados', 'info');
+log('  5. Limpiar sesionesActivas huérfanas', 'info');
+log('  6. Analizar colecciones obsoletas', 'info');
+log('⚠️ NADA se borra automáticamente — todo requiere confirmación.', 'warn');
+logSep();
+await escanearTodo();
+
+</script>
+</body>
+</html>
