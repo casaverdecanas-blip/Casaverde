@@ -3,478 +3,882 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gestión de sesiones — Casa Verde Canas</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<title>Gestor de Sesiones · Casa Verde Canas</title>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 <link rel="stylesheet" href="design-system.css">
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script src="actividades-core.js"></script>
 <style>
-body { background: #f5f7f5; padding: 16px; font-family: system-ui, -apple-system, sans-serif; }
-.container { max-width: 900px; margin: 0 auto; }
-.card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-.card h2 { font-size: 1rem; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
-.btn { border: none; border-radius: 8px; padding: 8px 16px; font-size: .8rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
-.btn-primary { background: #2d5a27; color: #fff; }
-.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
-.btn-secondary { background: #e9ecef; color: #343a40; }
-.btn-danger { background: #c0271f; color: #fff; }
-.btn-warning { background: #d97706; color: #fff; }
-.btn-sm { padding: 4px 10px; font-size: .7rem; }
-.log-box { background: #1a1a1a; color: #e0e0e0; border-radius: 8px; padding: 12px; font-family: monospace; font-size: .78rem; max-height: 300px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin-top: 12px; }
-.log-box .ok { color: #4caf50; }
-.log-box .err { color: #f44336; }
-.log-box .warn { color: #ff9800; }
-.log-box .info { color: #64b5f6; }
-.log-box .highlight { color: #ffd700; font-weight: bold; }
-.hidden { display: none; }
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; }
-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
-th { text-align: left; color: #6c757d; font-weight: 600; padding: 6px 8px; border-bottom: 2px solid #e9ecef; white-space: nowrap; }
-td { padding: 6px 8px; border-bottom: 1px solid #f1f3f5; vertical-align: middle; }
-td .material-icons { font-size: 16px; vertical-align: middle; }
-.estado-abierta { color: #2d5a27; font-weight: 700; }
-.estado-cerrada { color: #6c757d; }
-.estado-huerfana { color: #c0271f; }
-.filtros { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; align-items: center; }
-.filtros select, .filtros input { border: 1px solid #ced4da; border-radius: 6px; padding: 5px 8px; font-size: .78rem; background: #fff; }
-.filtros label { font-size: .78rem; color: #495057; display: flex; align-items: center; gap: 4px; }
-.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; margin: 10px 0; }
-.stat-box { background: #f8f9fa; border-radius: 8px; padding: 8px; text-align: center; }
-.stat-box .num { font-size: 1.2rem; font-weight: 700; color: #212529; }
-.stat-box .lbl { font-size: .65rem; color: #6c757d; text-transform: uppercase; letter-spacing: .04em; }
+  .gs-wrap { max-width: 1100px; margin: 0 auto; }
+  .gs-fbar { 
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: end;
+    padding: 14px 16px; background: #f8faf7; border-radius: 12px; margin-bottom: 14px;
+  }
+  .gs-fg { display: flex; flex-direction: column; gap: 3px; }
+  .gs-fg label { font-size: 11.5px; color: #66735f; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+  .gs-fg select, .gs-fg input { 
+    padding: 7px 10px; border: 1px solid #dfe6dd; border-radius: 8px; font-size: 13px; 
+    background: #fff; min-width: 130px;
+  }
+  .gs-totbar { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .gs-totcard {
+    flex: 1; min-width: 100px; padding: 14px 16px; border-radius: 10px;
+    background: #fff; border: 1px solid #e7ece4; text-align: center;
+  }
+  .gs-totcard .num { font-size: 22px; font-weight: 700; color: #2d5a27; }
+  .gs-totcard .lbl { font-size: 11.5px; color: #66735f; margin-top: 2px; }
+
+  /* Árbol */
+  .gs-tree { border: 1px solid #e7ece4; border-radius: 12px; overflow: hidden; background: #fff; }
+  .gs-node { border-bottom: 1px solid #eef2ec; }
+  .gs-node:last-child { border-bottom: none; }
+  .gs-node-head { 
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px; 
+    cursor: pointer; transition: background 0.1s;
+  }
+  .gs-node-head:hover { background: #f7faf6; }
+  .gs-node-head.abierto { background: #f1f6f0; }
+  .gs-caret { 
+    width: 24px; color: #5a6a55; font-size: 20px; text-align: center; 
+    user-select: none; flex: 0 0 auto; line-height: 1;
+  }
+  .gs-caret.tiene { color: #2d5a27; }
+  .gs-icon { 
+    width: 32px; height: 32px; border-radius: 8px; 
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex: 0 0 auto;
+  }
+  .gs-icon.proyecto { background: #e8f0e4; color: #2d5a27; }
+  .gs-icon.categoria { background: #eef2ee; color: #5a6a55; }
+  .gs-icon.actividad { background: #f0f4ee; color: #46583f; }
+  .gs-node-info { flex: 1; min-width: 0; }
+  .gs-node-nombre { font-weight: 600; font-size: 13.5px; color: #2a3328; }
+  .gs-node-ruta { font-size: 11px; color: #889985; margin-top: 1px; }
+  .gs-node-horas { font-weight: 700; font-size: 15px; color: #2d5a27; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+  .gs-node-badge { font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 600; flex: 0 0 auto; }
+  .gs-node-badge.migrado { background: #fdf4dd; color: #8a5d00; }
+  .gs-node-badge.nuevo { background: #e6f5e6; color: #1f7a32; }
+  .gs-node-badge.manual { background: #f0e6f6; color: #6b21a8; }
+
+  /* Hijos */
+  .gs-children { 
+    margin-left: 20px; padding-left: 12px; 
+    border-left: 3px solid #aebeaa; 
+    background: rgba(45,90,39,0.02);
+  }
+  .gs-children .gs-children { background: rgba(45,90,39,0.04); }
+
+  /* Sesiones hoja */
+  .gs-sesiones { padding: 6px 14px 10px 52px; }
+  .gs-sesion { 
+    display: flex; align-items: center; gap: 10px; padding: 7px 10px;
+    border: 1px solid #eef2ec; border-radius: 8px; margin-bottom: 6px;
+    background: #fafcf9; flex-wrap: wrap; font-size: 13px;
+  }
+  .gs-sesion.en_curso { border-left: 4px solid #1f5fb0; background: #f0f6ff; }
+  .gs-sesion.pausada { border-left: 4px solid #d97706; background: #fffdf5; }
+  .gs-sesion.finalizada { border-left: 4px solid #16a34a; }
+  .gs-sesion .s-usr { font-weight: 600; color: #2a3328; min-width: 100px; }
+  .gs-sesion .s-horas { font-weight: 700; font-variant-numeric: tabular-nums; color: #2d5a27; }
+  .gs-sesion .s-fecha { font-size: 11px; color: #889985; }
+  .gs-sesion .s-estado { font-size: 11px; padding: 2px 7px; border-radius: 999px; font-weight: 600; }
+  .gs-sesion .s-acc { display: flex; gap: 4px; margin-left: auto; }
+  .gs-sesion .s-acc button {
+    background: none; border: 1px solid #dfe6dd; padding: 4px 8px;
+    border-radius: 6px; cursor: pointer; font-size: 12px; color: #5a6a55;
+  }
+  .gs-sesion .s-acc button:hover { background: #f0f4ee; }
+  .gs-sesion .s-acc .del { color: #c0271f; border-color: #fde8e8; }
+  .gs-sesion .s-acc .del:hover { background: #fde8e8; }
+
+  .gs-empty { text-align: center; color: #868e96; font-size: .85rem; padding: 24px 0; }
+  .gs-nota { font-size: 11px; color: #7a8a76; margin-top: 2px; }
+
+  /* Modal */
+  .gs-modal-over {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 60px 12px 12px 12px; z-index: 2000;
+  }
+  .gs-modal-box {
+    background: #fff; border-radius: 14px; padding: 20px;
+    width: 100%; max-width: 520px; max-height: calc(100vh - 90px); overflow: auto;
+  }
+  .gs-modal-box h3 { margin: 0 0 14px; font-size: 17px; }
+  .gs-modal-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .gs-form-row2 { display: flex; gap: 8px; }
+  .gs-form-row2 > div { flex: 1; }
 </style>
 </head>
 <body>
 
 <header class="admin-header">
   <div class="admin-header__brand">
-    <span class="material-icons">cottage</span>
-    Casa Verde Canas
+    <span class="material-icons">schedule</span>
+    Gestor de Sesiones
   </div>
   <div class="admin-header__actions">
     <div class="user-chip">
       <span class="material-icons">person</span>
       <span id="userName">—</span>
     </div>
-    <button class="btn-logout" onclick="CVC.cerrarSesion()">
-      <span class="material-icons">logout</span> Salir
-    </button>
+    <button class="btn-logout" onclick="CVC.cerrarSesion()">Salir</button>
   </div>
 </header>
 
-<nav id="appNav" class="admin-nav"></nav>
+<nav class="admin-nav" id="appNav"></nav>
 
-<main style="max-width:900px;margin:0 auto;padding:16px;">
-
-<div class="container">
-    <div class="card">
-        <h2><span class="material-icons" style="color:#c0271f;">delete_sweep</span> Gestión de sesiones</h2>
-        <p style="font-size:.85rem;color:#6c757d;margin:0 0 12px;">
-            Administra todas las sesiones de cronómetro. Puedes <b>cerrar</b> (poner fin) o <b>eliminar</b> sesiones mal registradas.
-            Solo visible para administradores.
-        </p>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-primary" onclick="cargarSesiones()">📋 Cargar sesiones</button>
-            <button class="btn btn-warning" onclick="cerrarTodasAbiertas()">⏹️ Cerrar todas las abiertas</button>
-            <button class="btn btn-danger" onclick="eliminarHuerfanas()">🗑️ Eliminar huérfanas</button>
-            <button class="btn btn-secondary" onclick="limpiarLog()">🗑️ Limpiar log</button>
-        </div>
+<main class="admin-content">
+  <div class="gs-wrap">
+    
+    <!-- Filtros -->
+    <div class="gs-fbar">
+      <div class="gs-fg">
+        <label>Usuario</label>
+        <select id="fUsuario" onchange="aplicarFiltros()">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="gs-fg">
+        <label>Proyecto</label>
+        <select id="fProyecto" onchange="aplicarFiltros()">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="gs-fg">
+        <label>Estado</label>
+        <select id="fEstado" onchange="aplicarFiltros()">
+          <option value="">Todos</option>
+          <option value="en_curso">En curso</option>
+          <option value="pausada">Pausada</option>
+          <option value="finalizada">Finalizada</option>
+        </select>
+      </div>
+      <div class="gs-fg">
+        <label>Desde</label>
+        <input type="date" id="fDesde" onchange="aplicarFiltros()">
+      </div>
+      <div class="gs-fg">
+        <label>Hasta</label>
+        <input type="date" id="fHasta" onchange="aplicarFiltros()">
+      </div>
+      <button class="btn btn-primary" onclick="mostrarFormManual()" style="height:35px;white-space:nowrap">
+        <span class="material-icons" style="font-size:17px;vertical-align:-3px">add</span>
+        Registro manual
+      </button>
     </div>
 
-    <div id="statsContainer" class="hidden">
-        <div class="card">
-            <h2><span class="material-icons">dashboard</span> Resumen</h2>
-            <div class="stats-grid" id="statsGrid"></div>
-        </div>
-    </div>
+    <!-- Totales -->
+    <div class="gs-totbar" id="gsTotales"></div>
 
-    <div class="card" id="tablaContainer" style="display:none;">
-        <h2><span class="material-icons">list</span> Sesiones</h2>
-        <div class="filtros">
-            <label>Filtrar:
-                <select id="filtroEstado" onchange="renderTabla()">
-                    <option value="todas">Todas</option>
-                    <option value="abiertas">Abiertas</option>
-                    <option value="cerradas">Cerradas</option>
-                    <option value="huerfanas">Huérfanas</option>
-                </select>
-            </label>
-            <label>Buscar:
-                <input type="text" id="filtroBuscar" placeholder="Usuario o actividad..." oninput="renderTabla()">
-            </label>
-            <label>
-                <input type="checkbox" id="filtroSoloMauro" onchange="renderTabla()"> Solo Mauro
-            </label>
-            <span style="font-size:.7rem;color:#6c757d;margin-left:auto;" id="contadorSesiones">0 sesiones</span>
-        </div>
-        <div class="table-wrap" id="tablaSesiones"></div>
-    </div>
+    <!-- Árbol de sesiones -->
+    <div class="gs-tree" id="gsArbol"></div>
 
-    <div class="card">
-        <h2><span class="material-icons">receipt_long</span> Log</h2>
-        <div id="logBox" class="log-box">Esperando acción...</div>
-    </div>
-
-    <div class="card" style="background:#fef9e7;border-color:#f0c674;">
-        <p style="font-size:.8rem;color:#7a6a2a;margin:0;">
-            ⚠️ <b>Eliminar</b> una sesión la borra permanentemente. <b>Cerrar</b> solo agrega un timestamp de fin.
-            Las sesiones huérfanas son aquellas cuya actividad padre ya no existe.
-        </p>
-    </div>
-</div>
-
+  </div>
 </main>
 
-<!-- Firebase 8.10.1 -->
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-<script src="utils.js"></script>
+<!-- Modal crear/editar sesión -->
+<div id="gsModal" style="display:none" class="gs-modal-over">
+  <div class="gs-modal-box">
+    <h3 id="gsModalTitulo">Registrar sesión</h3>
+    
+    <input type="hidden" id="mId">
+    
+    <div class="form-group">
+      <label class="form-label">Actividad</label>
+      <select id="mActividad" class="form-control"></select>
+    </div>
+    
+    <div class="form-group">
+      <label class="form-label">Usuario</label>
+      <select id="mUsuario" class="form-control"></select>
+    </div>
+    
+    <div class="gs-form-row2">
+      <div>
+        <label class="form-label">Inicio</label>
+        <input type="datetime-local" id="mInicio" class="form-control" onchange="calcHoras()">
+      </div>
+      <div>
+        <label class="form-label">Fin</label>
+        <input type="datetime-local" id="mFin" class="form-control" onchange="calcHoras()">
+      </div>
+    </div>
+    
+    <div class="form-group" style="margin-top:8px">
+      <label class="form-label">Horas calculadas</label>
+      <input type="text" id="mHoras" class="form-control" readonly style="font-weight:700;color:#2d5a27">
+    </div>
+    
+    <div class="form-group">
+      <label class="form-label">Notas (opcional)</label>
+      <input type="text" id="mNotas" class="form-control" placeholder="Ej: Arreglé la cerradura...">
+    </div>
+    
+    <div class="gs-modal-foot">
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btnGuardar" onclick="guardarSesion()">Guardar</button>
+    </div>
+  </div>
+</div>
 
-<script>
-// ============================================================
-//  GESTIÓN DE SESIONES — v1.1 (corregido)
-//  Admin: ver, cerrar, eliminar sesiones
-// ============================================================
+<script type="module">
 
-var ESTADO = {
-    db: null,
-    uid: null,
-    esAdmin: false,
-    sesiones: [],
-    actividades: {},
-    usuarios: {},
-    cargando: false
-};
+// ── Auth ────────────────────────────────────────────────────
+var sesion   = await CVC.verificarAuth(['admin', 'user']);
+var user     = sesion.user;
+var userData = sesion.userData;
+var esAdmin  = userData.rol === 'admin';
+var uid      = user.uid;
 
-function log(msg, tipo) {
-    tipo = tipo || 'info';
-    var box = document.getElementById('logBox');
-    var cls = '';
-    if (tipo === 'ok') cls = 'ok';
-    else if (tipo === 'err') cls = 'err';
-    else if (tipo === 'warn') cls = 'warn';
-    else if (tipo === 'info') cls = 'info';
-    else if (tipo === 'highlight') cls = 'highlight';
-    box.innerHTML += '<div class="' + cls + '">' + msg + '</div>';
-    box.scrollTop = box.scrollHeight;
-}
+document.getElementById('userName').textContent = userData.nombre || user.email;
+CVC.renderNav('gestor-sesiones.html');
+if (typeof CVC.initAyuda === 'function') CVC.initAyuda('gestor-sesiones.html');
 
-function limpiarLog() {
-    document.getElementById('logBox').innerHTML = '';
-}
+var db = CVC.db;
 
-function setStats(stats) {
-    var container = document.getElementById('statsContainer');
-    container.classList.remove('hidden');
-    var grid = document.getElementById('statsGrid');
-    var html = '';
-    for (var key in stats) {
-        html += '<div class="stat-box"><div class="num">' + stats[key] + '</div><div class="lbl">' + key + '</div></div>';
-    }
-    grid.innerHTML = html;
-}
+// ── Estado ──────────────────────────────────────────────────
+var todasSesiones = [];
+var actIdx = {};        // actividadId -> { nombre, parentId, tipo, titulo }
+var actRoots = [];      // proyectos raíz (sin parentId, tipoRaiz='proyecto')
+var childrenOf = {};    // parentId -> [actividad]
+var usuarios = [];
+var abiertos = {};      // nodoId -> true
 
-function fechaDesdeTimestamp(ts) {
-    if (!ts) return '—';
-    var d = ts.toDate ? ts.toDate() : new Date(ts);
-    if (isNaN(d.getTime())) return '—';
-    return d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear() + ' ' +
-           String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-}
+// ── Carga inicial ──────────────────────────────────────────
+async function cargarTodo() {
+    // Usuarios
+    var uSnap = await db.collection('usuarios').get();
+    usuarios = [];
+    uSnap.forEach(function(d) {
+        var u = d.data();
+        if (u.activo === false) return;
+        usuarios.push({ uid: d.id, nombre: u.nombre || u.email || d.id });
+    });
 
-function nombreUsuario(uid) {
-    if (!uid) return '—';
-    if (ESTADO.usuarios[uid]) return ESTADO.usuarios[uid];
-    for (var i = 0; i < ESTADO.sesiones.length; i++) {
-        if (ESTADO.sesiones[i].uid === uid && ESTADO.sesiones[i].nombre) {
-            ESTADO.usuarios[uid] = ESTADO.sesiones[i].nombre;
-            return ESTADO.sesiones[i].nombre;
+    var fUsr = document.getElementById('fUsuario');
+    var mUsr = document.getElementById('mUsuario');
+    fUsr.innerHTML = '<option value="">Todos</option>';
+    mUsr.innerHTML = '';
+    for (var i = 0; i < usuarios.length; i++) {
+        var u = usuarios[i];
+        if (esAdmin || u.uid === uid) {
+            fUsr.innerHTML += '<option value="' + u.uid + '">' + u.nombre + '</option>';
+        }
+        if (esAdmin || u.uid === uid) {
+            mUsr.innerHTML += '<option value="' + u.uid + '"' + (u.uid === uid ? ' selected' : '') + '>' + u.nombre + '</option>';
         }
     }
-    return uid.slice(0, 8) + '…';
-}
+    if (!esAdmin) {
+        fUsr.value = uid;
+        fUsr.disabled = true;
+        mUsr.value = uid;
+        mUsr.disabled = true;
+    }
 
-function nombreActividad(id) {
-    if (!id) return '—';
-    if (ESTADO.actividades[id]) return ESTADO.actividades[id];
-    return '⚠️ ' + id.slice(0, 8) + '…';
+    // Actividades (árbol completo)
+    var aSnap = await db.collection('actividades').get();
+    actIdx = {};
+    childrenOf = {};
+    actRoots = [];
+
+    aSnap.forEach(function(d) {
+        var a = d.data();
+        a.id = d.id;
+        actIdx[d.id] = {
+            nombre: a.nombre || a.titulo || '',
+            titulo: a.titulo || a.nombre || '',
+            parentId: a.parentId || null,
+            tipo: a.tipo || '',
+            tipoRaiz: a.tipoRaiz || '',
+            color: a.color || ''
+        };
+        var p = a.parentId || '';
+        if (!childrenOf[p]) childrenOf[p] = [];
+        childrenOf[p].push(a);
+    });
+
+    // Proyectos raíz
+    for (var id in actIdx) {
+        if (!actIdx[id].parentId && actIdx[id].tipoRaiz === 'proyecto') {
+            actRoots.push(id);
+        }
+    }
+    actRoots.sort(function(a, b) {
+        return (actIdx[a].nombre || '').localeCompare(actIdx[b].nombre || '');
+    });
+
+    // Selector de proyectos
+    var fProy = document.getElementById('fProyecto');
+    fProy.innerHTML = '<option value="">Todos</option>';
+    for (var j = 0; j < actRoots.length; j++) {
+        var pid = actRoots[j];
+        fProy.innerHTML += '<option value="' + pid + '">' + (actIdx[pid].nombre || pid) + '</option>';
+    }
+
+    // Actividades para el modal (solo hojas trabajables)
+    var mAct = document.getElementById('mActividad');
+    mAct.innerHTML = '';
+    var hojas = [];
+    for (var aid in actIdx) {
+        var a = actIdx[aid];
+        if (!a.parentId) continue; // no proyectos raíz
+        if (childrenOf[aid]) continue; // no contenedores
+        var tipo = a.tipo || '';
+        if (tipo === 'chequeo-inventario' || tipo === 'categoria-chequeo' || tipo === 'item-chequeo' || tipo === 'faltante-inventario') continue;
+        hojas.push({ id: aid, nombre: a.nombre });
+    }
+    hojas.sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
+    for (var k = 0; k < hojas.length; k++) {
+        mAct.innerHTML += '<option value="' + hojas[k].id + '">' + hojas[k].nombre + '</option>';
+    }
+
+    // Sesiones
+    await cargarSesiones();
+    aplicarFiltros();
 }
 
 async function cargarSesiones() {
-    if (ESTADO.cargando) return;
-    ESTADO.cargando = true;
-
-    var btn = document.querySelector('.btn-primary');
-    btn.disabled = true;
-    btn.textContent = '⏳ Cargando...';
-
-    log('═══════════════════════════════════════════════════', 'info');
-    log('📋 CARGANDO SESIONES', 'highlight');
-    log('═══════════════════════════════════════════════════', 'info');
-
+    todasSesiones = [];
     try {
-        var r = await CVC.verificarAuth(['admin']);
-        ESTADO.db = CVC.db;
-        ESTADO.uid = r.user.uid;
-        ESTADO.esAdmin = r.userData.rol === 'admin';
-
-        document.getElementById('userName').textContent = r.userData.nombre || r.user.email || 'Admin';
-        CVC.renderNav('gestion-sesiones.html', r.userData.rol);
-
-        if (!ESTADO.esAdmin) {
-            log('❌ Solo administradores pueden usar esta herramienta.', 'err');
-            btn.disabled = false;
-            btn.textContent = '📋 Cargar sesiones';
-            ESTADO.cargando = false;
-            return;
-        }
-
-        // Cargar todas las actividades
-        var actSnap = await ESTADO.db.collection('actividades').get();
-        ESTADO.actividades = {};
-        actSnap.forEach(function(d) {
-            var a = d.data();
-            ESTADO.actividades[d.id] = a.nombre || a.titulo || '(sin nombre)';
-        });
-        log('📁 Actividades cargadas: ' + Object.keys(ESTADO.actividades).length, 'ok');
-
-        // Cargar todas las sesiones (collectionGroup)
-        var sesSnap = await ESTADO.db.collectionGroup('sesiones').get();
-        ESTADO.sesiones = [];
-
-        var stats = {
-            'Total': 0,
-            'Abiertas': 0,
-            'Cerradas': 0,
-            'Huérfanas': 0
-        };
-
-        sesSnap.forEach(function(d) {
+        var snap = await db.collection('sesiones').orderBy('inicio', 'desc').get();
+        snap.forEach(function(d) {
             var s = d.data();
-            var actId = d.ref.parent.parent.id;
-            var esAbierta = (s.fin === null || s.fin === undefined);
-            var esHuerfana = !ESTADO.actividades[actId];
-
-            var sesion = {
-                id: d.id,
-                ref: d.ref,
-                actId: actId,
-                uid: s.uid || null,
-                nombre: s.nombre || '(sin nombre)',
-                inicio: s.inicio || null,
-                fin: s.fin || null,
-                abierta: esAbierta,
-                huerfana: esHuerfana,
-                alcance: s.alcance || '—',
-                creadoPor: s.creadoPor || '—',
-                data: s
-            };
-
-            ESTADO.sesiones.push(sesion);
-            stats['Total']++;
-
-            if (esHuerfana) stats['Huérfanas']++;
-            else if (esAbierta) stats['Abiertas']++;
-            else stats['Cerradas']++;
+            s.id = d.id;
+            s._esNueva = true;
+            todasSesiones.push(s);
         });
-
-        // Ordenar: abiertas primero, luego por fecha
-        ESTADO.sesiones.sort(function(a, b) {
-            if (a.abierta && !b.abierta) return -1;
-            if (!a.abierta && b.abierta) return 1;
-            var ia = a.inicio ? (a.inicio.toMillis ? a.inicio.toMillis() : new Date(a.inicio).getTime()) : 0;
-            var ib = b.inicio ? (b.inicio.toMillis ? b.inicio.toMillis() : new Date(b.inicio).getTime()) : 0;
-            return ib - ia;
-        });
-
-        setStats(stats);
-        document.getElementById('tablaContainer').style.display = 'block';
-        renderTabla();
-
-        log('✅ Cargadas ' + ESTADO.sesiones.length + ' sesiones', 'ok');
-        log('   📌 Abiertas: ' + stats['Abiertas'], 'info');
-        log('   📌 Cerradas: ' + stats['Cerradas'], 'info');
-        log('   📌 Huérfanas: ' + stats['Huérfanas'], stats['Huérfanas'] > 0 ? 'warn' : 'ok');
-
     } catch (e) {
-        log('❌ Error: ' + e.message, 'err');
+        console.warn('Error cargando /sesiones/:', e.message);
     }
 
-    btn.disabled = false;
-    btn.textContent = '📋 Cargar sesiones';
-    ESTADO.cargando = false;
+    // También leer subcolecciones viejas (si quedan)
+    try {
+        var cgSnap = await db.collectionGroup('sesiones').get();
+        cgSnap.forEach(function(d) {
+            var s = d.data();
+            var ref = d.ref;
+            var parent = ref.parent;
+            var grandParent = parent ? parent.parent : null;
+            var actId = grandParent ? grandParent.id : null;
+            if (!actId) return;
+            s.id = d.id;
+            s.actividadId = actId;
+            s.actividadNombre = s.actividadNombre || '';
+            s._esNueva = false;
+            // Ver si ya existe en todasSesiones
+            var dup = todasSesiones.some(function(x) {
+                return x.actividadId === actId && x.uid === s.uid && 
+                       x.inicio && s.inicio && 
+                       Math.abs((x.inicio.toMillis() - s.inicio.toMillis())) < 1000;
+            });
+            if (!dup) todasSesiones.push(s);
+        });
+    } catch (e) { /* silencioso */ }
 }
 
-function renderTabla() {
-    var filtro = document.getElementById('filtroEstado').value;
-    var buscar = document.getElementById('filtroBuscar').value.toLowerCase();
-    var soloMauro = document.getElementById('filtroSoloMauro').checked;
+// ── Ruta de una actividad ───────────────────────────────────
+function rutaDe(actId) {
+    var partes = [];
+    var cur = actId;
+    var guard = 0;
+    while (cur && actIdx[cur] && guard < 20) {
+        partes.unshift(actIdx[cur].nombre || cur);
+        cur = actIdx[cur].parentId || null;
+        guard++;
+    }
+    return partes.join(' › ');
+}
 
-    var filtradas = ESTADO.sesiones.filter(function(s) {
-        if (filtro === 'abiertas' && !s.abierta) return false;
-        if (filtro === 'cerradas' && s.abierta) return false;
-        if (filtro === 'huerfanas' && !s.huerfana) return false;
+// ── Encontrar proyecto raíz ─────────────────────────────────
+function raizDe(actId) {
+    var cur = actId;
+    var guard = 0;
+    while (cur && actIdx[cur] && actIdx[cur].parentId && guard < 20) {
+        cur = actIdx[cur].parentId;
+        guard++;
+    }
+    return cur || null;
+}
 
-        if (soloMauro && s.uid !== 'hftkmTlB55V9AdwawMOlKvMtOf43') return false;
+// ── Filtros ─────────────────────────────────────────────────
+function sesionesFiltradas() {
+    var out = [];
+    var fUid = document.getElementById('fUsuario').value;
+    var fProy = document.getElementById('fProyecto').value;
+    var fEst = document.getElementById('fEstado').value;
+    var fDesde = document.getElementById('fDesde').value;
+    var fHasta = document.getElementById('fHasta').value;
 
-        if (buscar) {
-            var actNom = ESTADO.actividades[s.actId] || '';
-            var nombre = (s.nombre || '').toLowerCase();
-            var uid = (s.uid || '').toLowerCase();
-            var act = actNom.toLowerCase();
-            if (nombre.indexOf(buscar) === -1 &&
-                uid.indexOf(buscar) === -1 &&
-                act.indexOf(buscar) === -1) return false;
+    for (var i = 0; i < todasSesiones.length; i++) {
+        var s = todasSesiones[i];
+
+        if (fUid && s.uid !== fUid) continue;
+        if (fEst && s.estado !== fEst) continue;
+
+        if (fProy) {
+            var rz = raizDe(s.actividadId);
+            if (rz !== fProy) continue;
         }
-        return true;
+
+        if (fDesde || fHasta) {
+            var iniMs = s.inicio ? (s.inicio.toMillis ? s.inicio.toMillis() : s.inicio) : 0;
+            if (fDesde) {
+                var dMs = new Date(fDesde + 'T00:00:00').getTime();
+                if (iniMs < dMs) continue;
+            }
+            if (fHasta) {
+                var hMs = new Date(fHasta + 'T23:59:59').getTime();
+                if (iniMs > hMs) continue;
+            }
+        }
+
+        out.push(s);
+    }
+
+    // Ordenar por inicio descendente
+    out.sort(function(a, b) {
+        var am = a.inicio ? (a.inicio.toMillis ? a.inicio.toMillis() : a.inicio) : 0;
+        var bm = b.inicio ? (b.inicio.toMillis ? b.inicio.toMillis() : b.inicio) : 0;
+        return bm - am;
     });
 
-    document.getElementById('contadorSesiones').textContent = filtradas.length + ' sesiones';
+    return out;
+}
 
-    var html = '<table><thead><tr>' +
-        '<th>Actividad</th>' +
-        '<th>Usuario</th>' +
-        '<th>Inicio</th>' +
-        '<th>Fin</th>' +
-        '<th>Estado</th>' +
-        '<th>Acciones</th>' +
-        '</tr></thead><tbody>';
+// ── Agrupar sesiones por actividad ──────────────────────────
+function sesionesAgrupadas() {
+    var filtradas = sesionesFiltradas();
+    var map = {};
+    for (var i = 0; i < filtradas.length; i++) {
+        var s = filtradas[i];
+        var aid = s.actividadId || '__sin_actividad';
+        if (!map[aid]) map[aid] = [];
+        map[aid].push(s);
+    }
+    return map;
+}
 
-    if (filtradas.length === 0) {
-        html += '<tr><td colspan="6" style="text-align:center;color:#6c757d;padding:20px;">No hay sesiones que coincidan con los filtros</td></tr>';
-    } else {
-        for (var i = 0; i < filtradas.length; i++) {
-            var s = filtradas[i];
-            var actNom = s.huerfana ? '<span class="estado-huerfana">⚠️ ' + s.actId.slice(0, 8) + '…</span>' : (ESTADO.actividades[s.actId] || '(sin nombre)');
-            var estado = s.abierta ? '<span class="estado-abierta">▶ Abierta</span>' : '<span class="estado-cerrada">⏹ Cerrada</span>';
-            if (s.huerfana) estado = '<span class="estado-huerfana">⚠️ Huérfana</span>';
+// ── Aplicar filtros y renderizar ────────────────────────────
+function aplicarFiltros() {
+    var agrupadas = sesionesAgrupadas();
+    var filtradas = sesionesFiltradas();
 
-            var tieneDenorm = (s.alcance !== '—' && s.alcance !== undefined && s.alcance !== null);
+    // Totales
+    var totalHoras = 0, enCurso = 0, pausadas = 0;
+    for (var i = 0; i < filtradas.length; i++) {
+        totalHoras += filtradas[i].horas || 0;
+        if (filtradas[i].estado === 'en_curso') enCurso++;
+        if (filtradas[i].estado === 'pausada') pausadas++;
+    }
 
-            html += '<tr>' +
-                '<td>' + actNom + (tieneDenorm ? '' : ' <span style="color:#d97706;font-size:.65rem;">⚠️</span>') + '</td>' +
-                '<td>' + nombreUsuario(s.uid) + '</td>' +
-                '<td style="font-size:.7rem;">' + fechaDesdeTimestamp(s.inicio) + '</td>' +
-                '<td style="font-size:.7rem;">' + (s.abierta ? '—' : fechaDesdeTimestamp(s.fin)) + '</td>' +
-                '<td>' + estado + '</td>' +
-                '<td>' +
-                (s.abierta ? '<button class="btn btn-warning btn-sm" onclick="cerrarSesion(\'' + s.actId + '\', \'' + s.id + '\')">⏹ Cerrar</button> ' : '') +
-                '<button class="btn btn-danger btn-sm" onclick="eliminarSesion(\'' + s.actId + '\', \'' + s.id + '\')">🗑️ Eliminar</button>' +
-                '</td>' +
-                '</tr>';
+    document.getElementById('gsTotales').innerHTML =
+        '<div class="gs-totcard"><div class="num">' + filtradas.length + '</div><div class="lbl">Sesiones</div></div>' +
+        '<div class="gs-totcard"><div class="num">' + fmtHM(totalHoras) + '</div><div class="lbl">Total horas</div></div>' +
+        '<div class="gs-totcard"><div class="num">' + enCurso + '</div><div class="lbl">En curso</div></div>' +
+        '<div class="gs-totcard"><div class="num">' + pausadas + '</div><div class="lbl">Pausadas</div></div>';
+
+    renderArbol(agrupadas);
+}
+
+// ── Render árbol ────────────────────────────────────────────
+function renderArbol(agrupadas) {
+    var fProy = document.getElementById('fProyecto').value;
+    var el = document.getElementById('gsArbol');
+
+    // Si hay un proyecto seleccionado, mostrar solo ese
+    var raicesAMostrar = fProy ? [fProy] : actRoots;
+
+    // Agrupar sesiones por proyecto
+    var sesPorProy = {};
+    var sinProy = [];
+
+    for (var aid in agrupadas) {
+        var rz = raizDe(aid);
+        if (rz && raicesAMostrar.indexOf(rz) >= 0) {
+            if (!sesPorProy[rz]) sesPorProy[rz] = {};
+            sesPorProy[rz][aid] = agrupadas[aid];
+        } else if (!rz) {
+            sinProy.push({ aid: aid, sesiones: agrupadas[aid] });
         }
     }
 
-    html += '</tbody></table>';
-    document.getElementById('tablaSesiones').innerHTML = html;
-}
+    var html = '';
 
-// ── CORREGIDO: usar ruta completa actividades/{actId}/sesiones/{id} ──
-async function cerrarSesion(actId, id) {
-    if (!confirm('¿Cerrar esta sesión (poner fin)?')) return;
+    // Proyectos
+    for (var r = 0; r < raicesAMostrar.length; r++) {
+        var rid = raicesAMostrar[r];
+        var sesDeProy = sesPorProy[rid] || {};
 
-    try {
-        var ref = ESTADO.db.collection('actividades').doc(actId).collection('sesiones').doc(id);
-        await ref.update({
-            fin: firebase.firestore.Timestamp.now()
-        });
-        log('✅ Sesión ' + id.slice(0, 8) + ' cerrada', 'ok');
-        await cargarSesiones();
-    } catch (e) {
-        log('❌ Error al cerrar sesión: ' + e.message, 'err');
-    }
-}
-
-// ── CORREGIDO: usar ruta completa actividades/{actId}/sesiones/{id} ──
-async function eliminarSesion(actId, id) {
-    if (!confirm('¿ELIMINAR esta sesión permanentemente? Esta acción no se puede deshacer.')) return;
-    if (!confirm('¿Estás seguro? La sesión se borrará de la base de datos.')) return;
-
-    try {
-        var ref = ESTADO.db.collection('actividades').doc(actId).collection('sesiones').doc(id);
-        await ref.delete();
-        log('🗑️ Sesión ' + id.slice(0, 8) + ' eliminada', 'ok');
-        await cargarSesiones();
-    } catch (e) {
-        log('❌ Error al eliminar sesión: ' + e.message, 'err');
-    }
-}
-
-async function cerrarTodasAbiertas() {
-    var abiertas = ESTADO.sesiones.filter(function(s) { return s.abierta && !s.huerfana; });
-    if (abiertas.length === 0) {
-        log('ℹ️ No hay sesiones abiertas para cerrar.', 'info');
-        return;
-    }
-
-    if (!confirm('Cerrar ' + abiertas.length + ' sesiones abiertas?')) return;
-
-    var batch = ESTADO.db.batch();
-    var count = 0;
-    var ahora = firebase.firestore.Timestamp.now();
-
-    for (var i = 0; i < abiertas.length; i++) {
-        try {
-            var ref = ESTADO.db.collection('actividades').doc(abiertas[i].actId).collection('sesiones').doc(abiertas[i].id);
-            batch.update(ref, { fin: ahora });
-            count++;
-            if (count % 400 === 0) {
-                await batch.commit();
-                batch = ESTADO.db.batch();
+        // Calcular horas del proyecto
+        var hrsProy = 0, nSesProy = 0;
+        for (var aid2 in sesDeProy) {
+            for (var s = 0; s < sesDeProy[aid2].length; s++) {
+                hrsProy += sesDeProy[aid2][s].horas || 0;
+                nSesProy++;
             }
-        } catch (e) {
-            log('⚠️ No se pudo cerrar sesión ' + abiertas[i].id.slice(0, 8) + ': ' + e.message, 'warn');
         }
+
+        if (nSesProy === 0) continue;
+
+        html += nodoProyecto(rid, hrsProy, nSesProy, sesDeProy, 0);
     }
 
-    if (count % 400 !== 0) {
-        await batch.commit();
+    // Actividades sin proyecto (huérfanas o eliminadas)
+    if (sinProy.length > 0) {
+        var hrsSin = 0, nSin = 0;
+        for (var si = 0; si < sinProy.length; si++) {
+            for (var sj = 0; sj < sinProy[si].sesiones.length; sj++) {
+                hrsSin += sinProy[si].sesiones[sj].horas || 0;
+                nSin++;
+            }
+        }
+        html += '<div class="gs-node">';
+        html += '<div class="gs-node-head" onclick="toggleAbierto(\'__sin_proyecto\')">';
+        html += '<span class="gs-caret tiene">' + (abiertos['__sin_proyecto'] ? '▾' : '▸') + '</span>';
+        html += '<span class="gs-icon proyecto" style="background:#fde8e8;color:#c0271f;">⚠️</span>';
+        html += '<span class="gs-node-info"><span class="gs-node-nombre">Sin proyecto / actividades eliminadas</span></span>';
+        html += '<span class="gs-node-horas">' + fmtHM(hrsSin) + '</span>';
+        html += '<span class="gs-node-badge" style="background:#fde8e8;color:#c0271f;">' + nSin + ' sesiones</span>';
+        html += '</div>';
+
+        if (abiertos['__sin_proyecto']) {
+            html += '<div class="gs-children">';
+            for (var sk = 0; sk < sinProy.length; sk++) {
+                html += nodoActividadHuerfana(sinProy[sk].aid, sinProy[sk].sesiones);
+            }
+            html += '</div>';
+        }
+        html += '</div>';
     }
 
-    log('✅ Cerradas ' + count + ' sesiones abiertas', 'ok');
-    await cargarSesiones();
+    if (!html) {
+        html = '<div class="gs-empty">No hay sesiones con los filtros seleccionados.</div>';
+    }
+
+    el.innerHTML = html;
 }
 
-async function eliminarHuerfanas() {
-    var huerfanas = ESTADO.sesiones.filter(function(s) { return s.huerfana; });
-    if (huerfanas.length === 0) {
-        log('ℹ️ No hay sesiones huérfanas para eliminar.', 'info');
+function nodoProyecto(proyId, horas, nSesiones, sesPorAct, nivel) {
+    var proy = actIdx[proyId];
+    var nombre = proy ? (proy.nombre || proyId) : proyId;
+    var abierto = !!abiertos[proyId];
+
+    var html = '<div class="gs-node">';
+    html += '<div class="gs-node-head' + (abierto ? ' abierto' : '') + '" onclick="toggleAbierto(\'' + proyId + '\')">';
+    html += '<span class="gs-caret tiene">' + (abierto ? '▾' : '▸') + '</span>';
+    html += '<span class="gs-icon proyecto">📁</span>';
+    html += '<span class="gs-node-info"><span class="gs-node-nombre">' + esc(nombre) + '</span></span>';
+    html += '<span class="gs-node-horas">' + fmtHM(horas) + '</span>';
+    html += '<span class="gs-node-badge migrado">' + nSesiones + ' sesiones</span>';
+    html += '</div>';
+
+    if (abierto) {
+        html += '<div class="gs-children">';
+
+        // Agrupar por ruta intermedia (categorías)
+        var cats = {};
+        var directas = [];
+
+        for (var aid in sesPorAct) {
+            var path = [];
+            var cur = aid;
+            var g = 0;
+            while (cur && actIdx[cur] && g < 20) {
+                if (cur === proyId) break;
+                path.unshift(cur);
+                cur = actIdx[cur].parentId || null;
+                g++;
+            }
+
+            if (path.length > 1) {
+                var catId = path[0];
+                if (!cats[catId]) cats[catId] = {};
+                cats[catId][aid] = sesPorAct[aid];
+            } else {
+                directas.push({ aid: aid, sesiones: sesPorAct[aid] });
+            }
+        }
+
+        // Renderizar categorías
+        for (var cid in cats) {
+            var hrsCat = 0, nCat = 0;
+            for (var caid in cats[cid]) {
+                for (var cs = 0; cs < cats[cid][caid].length; cs++) {
+                    hrsCat += cats[cid][caid][cs].horas || 0;
+                    nCat++;
+                }
+            }
+            html += nodoCategoria(cid, hrsCat, nCat, cats[cid], nivel + 1);
+        }
+
+        // Actividades directas
+        for (var d = 0; d < directas.length; d++) {
+            html += nodoActividad(directas[d].aid, directas[d].sesiones, nivel + 1);
+        }
+
+        html += '</div>';
+    }
+
+    html += '</div>';
+    return html;
+}
+
+function nodoCategoria(catId, horas, nSesiones, sesPorAct, nivel) {
+    var cat = actIdx[catId];
+    var nombre = cat ? (cat.nombre || catId) : catId;
+    var abierto = !!abiertos[catId];
+
+    var html = '<div class="gs-node">';
+    html += '<div class="gs-node-head' + (abierto ? ' abierto' : '') + '" onclick="toggleAbierto(\'' + catId + '\')">';
+    html += '<span class="gs-caret tiene">' + (abierto ? '▾' : '▸') + '</span>';
+    html += '<span class="gs-icon categoria">📂</span>';
+    html += '<span class="gs-node-info"><span class="gs-node-nombre">' + esc(nombre) + '</span></span>';
+    html += '<span class="gs-node-horas">' + fmtHM(horas) + '</span>';
+    html += '</div>';
+
+    if (abierto) {
+        html += '<div class="gs-children">';
+        for (var aid in sesPorAct) {
+            html += nodoActividad(aid, sesPorAct[aid], nivel + 1);
+        }
+        html += '</div>';
+    }
+
+    html += '</div>';
+    return html;
+}
+
+function nodoActividad(actId, sesiones, nivel) {
+    var act = actIdx[actId];
+    var nombre = act ? (act.nombre || actId) : (sesiones[0] ? (sesiones[0].actividadNombre || actId) : actId);
+    var eliminada = !act;
+    var abierto = !!abiertos['act-' + actId];
+
+    var hrsAct = 0;
+    for (var i = 0; i < sesiones.length; i++) {
+        hrsAct += sesiones[i].horas || 0;
+    }
+
+    var html = '<div class="gs-node">';
+    html += '<div class="gs-node-head' + (abierto ? ' abierto' : '') + '" onclick="toggleAbierto(\'act-' + actId + '\')">';
+    html += '<span class="gs-caret tiene">' + (abierto ? '▾' : '▸') + '</span>';
+    html += '<span class="gs-icon actividad">' + (eliminada ? '❓' : '📋') + '</span>';
+    html += '<span class="gs-node-info">';
+    html += '<span class="gs-node-nombre' + (eliminada ? '" style="color:#c0271f' : '') + '">' + esc(nombre) + (eliminada ? ' (eliminada)' : '') + '</span>';
+    if (act) {
+        html += '<span class="gs-node-ruta">' + esc(rutaDe(actId)) + '</span>';
+    }
+    html += '</span>';
+    html += '<span class="gs-node-horas">' + fmtHM(hrsAct) + '</span>';
+    html += '<span class="gs-node-badge" style="background:#eef2ee;color:#5a6a55;">' + sesiones.length + ' ses.</span>';
+    html += '</div>';
+
+    if (abierto) {
+        html += '<div class="gs-sesiones">';
+        for (var j = 0; j < sesiones.length; j++) {
+            var s = sesiones[j];
+            var ini = s.inicio ? (s.inicio.toDate ? s.inicio.toDate() : new Date(s.inicio)) : null;
+            var fin = s.fin ? (s.fin.toDate ? s.fin.toDate() : new Date(s.fin)) : null;
+            var claseEst = s.estado || 'finalizada';
+            var labelEst = s.estado === 'en_curso' ? '▶ En curso' : (s.estado === 'pausada' ? '⏸ Pausada' : '✓ Finalizada');
+            var origen = s._migradoDe ? 'migrado' : (s._esNueva ? 'nuevo' : '');
+            var tipoBadge = s.tipo === 'manual' ? 'manual' : '';
+
+            html += '<div class="gs-sesion ' + claseEst + '">';
+            html += '<span class="s-usr">' + esc(s.nombre || s.uid || '—') + '</span>';
+            html += '<span class="s-horas">' + fmtHM(s.horas || 0) + '</span>';
+            if (ini) html += '<span class="s-fecha">' + fmtDT(ini) + (fin ? ' → ' + fmtDT(fin) : '') + '</span>';
+            html += '<span class="s-estado" style="background:' + (claseEst === 'en_curso' ? '#d4edda' : (claseEst === 'pausada' ? '#cce5ff' : '#eef2ee')) + ';color:' + (claseEst === 'en_curso' ? '#155724' : (claseEst === 'pausada' ? '#004085' : '#5a6a55')) + '">' + labelEst + '</span>';
+            if (origen) html += '<span class="gs-node-badge migrado">📦 migrado</span>';
+            if (tipoBadge) html += '<span class="gs-node-badge manual">📝 manual</span>';
+            if (s.notas) html += '<span style="font-size:11px;color:#889985;font-style:italic;">' + esc(s.notas) + '</span>';
+            html += '<span class="s-acc">';
+            html += '<button onclick="editarSesion(\'' + s.id + '\', ' + (s._esNueva ? 'true' : 'false') + ')">✏️</button>';
+            html += '<button class="del" onclick="eliminarSesion(\'' + s.id + '\', ' + (s._esNueva ? 'true' : 'false') + ')">🗑️</button>';
+            html += '</span>';
+            html += '</div>';
+        }
+        html += '</div>';
+    }
+
+    html += '</div>';
+    return html;
+}
+
+function nodoActividadHuerfana(actId, sesiones) {
+    // Para actividades sin proyecto — misma estructura que nodoActividad
+    return nodoActividad(actId, sesiones, 0);
+}
+
+// ── Helpers ──────────────────────────────────────────────────
+function esc(s) { return CVC.escapeHtml ? CVC.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s); }
+
+function fmtHM(horas) {
+    var h = Math.floor(horas);
+    var m = Math.round((horas - h) * 60);
+    if (h === 0) return m + 'm';
+    return h + 'h ' + m + 'm';
+}
+
+function fmtDT(d) {
+    if (!d || isNaN(d.getTime())) return '—';
+    var dia = String(d.getDate()); if (dia.length < 2) dia = '0' + dia;
+    var mes = String(d.getMonth() + 1); if (mes.length < 2) mes = '0' + mes;
+    var h = String(d.getHours()); if (h.length < 2) h = '0' + h;
+    var m = String(d.getMinutes()); if (m.length < 2) m = '0' + m;
+    return dia + '/' + mes + ' ' + h + ':' + m;
+}
+
+// ── Toggle abierto ───────────────────────────────────────────
+window.toggleAbierto = function(id) {
+    abiertos[id] = !abiertos[id];
+    aplicarFiltros();
+};
+
+// ── CRUD ─────────────────────────────────────────────────────
+function cerrarModal() {
+    document.getElementById('gsModal').style.display = 'none';
+}
+
+function calcHoras() {
+    var ini = document.getElementById('mInicio').value;
+    var fin = document.getElementById('mFin').value;
+    if (ini && fin) {
+        var diff = (new Date(fin) - new Date(ini)) / 3600000;
+        if (diff >= 0) {
+            document.getElementById('mHoras').value = fmtHM(diff);
+        } else {
+            document.getElementById('mHoras').value = '(fin anterior a inicio)';
+        }
+    }
+}
+
+window.mostrarFormManual = function() {
+    document.getElementById('mId').value = '';
+    document.getElementById('gsModalTitulo').textContent = 'Nuevo registro manual';
+    document.getElementById('mInicio').value = '';
+    document.getElementById('mFin').value = '';
+    document.getElementById('mHoras').value = '';
+    document.getElementById('mNotas').value = '';
+    document.getElementById('gsModal').style.display = 'flex';
+};
+
+window.editarSesion = async function(sesionId, esNueva) {
+    var snap;
+    if (esNueva) {
+        snap = await db.collection('sesiones').doc(sesionId).get();
+    } else {
+        // Buscar en subcolección — intentar encontrar
+        try {
+            var cgSnap = await db.collectionGroup('sesiones').get();
+            for (var i = 0; i < cgSnap.docs.length; i++) {
+                if (cgSnap.docs[i].id === sesionId) {
+                    snap = cgSnap.docs[i];
+                    break;
+                }
+            }
+        } catch(e) {}
+    }
+
+    if (!snap || !snap.exists) {
+        alert('Sesión no encontrada.');
         return;
     }
 
-    if (!confirm('Eliminar ' + huerfanas.length + ' sesiones huérfanas (actividad no existe)?')) return;
-    if (!confirm('¿Estás seguro? Esta acción no se puede deshacer.')) return;
+    var s = snap.data();
+    document.getElementById('mId').value = sesionId;
+    document.getElementById('gsModalTitulo').textContent = 'Editar sesión';
+    document.getElementById('mActividad').value = s.actividadId || '';
+    document.getElementById('mUsuario').value = s.uid || '';
+    document.getElementById('mNotas').value = s.notas || '';
 
-    var batch = ESTADO.db.batch();
-    var count = 0;
-
-    for (var i = 0; i < huerfanas.length; i++) {
-        try {
-            // Para huérfanas, intentar por collectionGroup (no tenemos actId válida)
-            var ref = ESTADO.db.collectionGroup('sesiones').doc(huerfanas[i].id);
-            await ref.delete();
-            count++;
-        } catch (e) {
-            log('⚠️ No se pudo eliminar sesión ' + huerfanas[i].id.slice(0, 8) + ': ' + e.message, 'warn');
-        }
+    if (s.inicio) {
+        var ini = s.inicio.toDate ? s.inicio.toDate() : new Date(s.inicio);
+        document.getElementById('mInicio').value = ini.toISOString().slice(0, 16);
+    } else {
+        document.getElementById('mInicio').value = '';
+    }
+    if (s.fin) {
+        var fin = s.fin.toDate ? s.fin.toDate() : new Date(s.fin);
+        document.getElementById('mFin').value = fin.toISOString().slice(0, 16);
+    } else {
+        document.getElementById('mFin').value = '';
     }
 
-    log('🗑️ Eliminadas ' + count + ' sesiones huérfanas', 'ok');
-    await cargarSesiones();
-}
+    calcHoras();
+    document.getElementById('gsModal').style.display = 'flex';
+};
 
-// Exponer funciones globales
-window.cargarSesiones = cargarSesiones;
-window.renderTabla = renderTabla;
-window.cerrarSesion = cerrarSesion;
-window.eliminarSesion = eliminarSesion;
-window.cerrarTodasAbiertas = cerrarTodasAbiertas;
-window.eliminarHuerfanas = eliminarHuerfanas;
-window.limpiarLog = limpiarLog;
+window.guardarSesion = async function() {
+    var sesionId = document.getElementById('mId').value;
+    var inicioVal = document.getElementById('mInicio').value;
+    var finVal = document.getElementById('mFin').value;
 
-// Inicialización
-document.addEventListener('DOMContentLoaded', function() {
-    log('📱 Gestión de sesiones cargada. Presioná "Cargar sesiones" para comenzar.', 'info');
-});
+    if (!inicioVal || !finVal) {
+        alert('Completá inicio y fin.');
+        return;
+    }
+
+    var inicio = firebase.firestore.Timestamp.fromDate(new Date(inicioVal));
+    var fin = firebase.firestore.Timestamp.fromDate(new Date(finVal));
+    var horas = Math.max(0, (fin.toMillis() - inicio.toMillis()) / 3600000);
+
+    var actSel = document.getElementById('mActividad');
+    var actNombre = actSel.options[actSel.selectedIndex].text;
+    var usrSel = document.getElementById('mUsuario');
+    var usrNombre = usrSel.options[usrSel.selectedIndex].text;
+
+    var datos = {
+        actividadId: actSel.value,
+        actividadNombre: actNombre,
+        uid: usrSel.value,
+        nombre: usrNombre,
+        inicio: inicio,
+        fin: fin,
+        horas: Math.round(horas * 100) / 100,
+        notas: document.getElementById('mNotas').value,
+        estado: 'finalizada',
+        tipo: 'manual',
+        actualizadoEn: firebase.firestore.Timestamp.now()
+    };
+
+    try {
+        if (sesionId) {
+            await db.collection('sesiones').doc(sesionId).update(datos);
+        } else {
+            await db.collection('sesiones').add(Object.assign({}, datos, {
+                creadoPor: uid,
+                creadoEn: firebase.firestore.Timestamp.now()
+            }));
+        }
+        cerrarModal();
+        await cargarSesiones();
+        aplicarFiltros();
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+};
+
+window.eliminarSesion = async function(sesionId, esNueva) {
+    if (!confirm('¿Eliminar esta sesión permanentemente?')) return;
+    if (!confirm('¿Estás seguro?')) return;
+    try {
+        await db.collection('sesiones').doc(sesionId).delete();
+        await cargarSesiones();
+        aplicarFiltros();
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+};
+
+// ── Init ────────────────────────────────────────────────────
+window.aplicarFiltros = aplicarFiltros;
+await cargarTodo();
+
 </script>
 </body>
 </html>
