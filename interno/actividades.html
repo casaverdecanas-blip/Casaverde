@@ -139,7 +139,7 @@
 
 </main>
 
-<!-- ══ MODALES (sin cambios) ════════════════════════════════ -->
+<!-- ══ MODALES ════════════════════════════════════════════ -->
 <div class="modal-cv" id="modalItem">
   <div class="box">
     <h3 id="modalItemTitulo">Nueva actividad</h3>
@@ -323,6 +323,7 @@ var proveedoresDefault = ['Supermercado', 'Ferretería', 'Farmacia', 'Vivero', '
 var proveedores = proveedoresDefault.slice();
 var _cronoCache = null;
 var _cronoCacheTime = 0;
+var _cronoInicioMs = 0; // Timestamp real del inicio de MI sesión activa (CORRECCIÓN)
 
 // ── Helpers ────────────────────────────────────────────────
 function esc(s) { return (CVC.escapeHtml ? CVC.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s)); }
@@ -674,23 +675,36 @@ function setSup(idEl, n) {
 
 // ── Cronómetro vivo ────────────────────────────────────────
 function inicioCrono(it) {
-  // Buscar MI sesión en sesionesActivas
+  // Si tengo un inicio real guardado de MI sesión activa, usarlo
+  if (_cronoInicioMs > 0) {
+    if (it.id === (_cronoCache ? _cronoCache.id : null)) {
+      return _cronoInicioMs;
+    }
+  }
+
+  // Fallback: buscar en sesionesActivas MI sesión
   var ses = it.sesionesActivas || [];
   for (var i = 0; i < ses.length; i++) {
     if (ses[i].uid === uid) {
       var t = (ses[i].inicio && ses[i].inicio.toMillis) ? ses[i].inicio.toMillis() : 
               (ses[i].inicio ? new Date(ses[i].inicio).getTime() : 0);
-      if (t) return t;
+      if (t) {
+        _cronoInicioMs = t;
+        return t;
+      }
     }
   }
-  // Si no encuentra la mía, usar la más vieja
+
+  // Último recurso: la más vieja
   var minTs = 0;
   for (var i = 0; i < ses.length; i++) {
     var t = (ses[i].inicio && ses[i].inicio.toMillis) ? ses[i].inicio.toMillis() : 
             (ses[i].inicio ? new Date(ses[i].inicio).getTime() : 0);
     if (t && (!minTs || t < minTs)) minTs = t;
   }
-  return minTs || Date.now();
+
+  _cronoInicioMs = minTs || Date.now();
+  return _cronoInicioMs;
 }
 
 function fmtCrono(ms) {
@@ -709,25 +723,31 @@ function tickCronos() {
 }
 setInterval(tickCronos, 1000);
 
-// ── Mi cronómetro corriendo (CORREGIDO — consulta Firestore) ─
+// ── Mi cronómetro corriendo (CORREGIDO — guarda inicio real) ─
 async function miCronoCorriendo() {
   var ahora = Date.now();
 
-  // Cache de 2 segundos para no saturar Firestore
   if (_cronoCacheTime && (ahora - _cronoCacheTime) < 2000) {
     return _cronoCache;
   }
 
-  // BUSCAR SESIÓN ACTIVA REAL en /sesiones/ (CORRECCIÓN)
+  // BUSCAR SESIÓN ACTIVA REAL en /sesiones/
   if (CVC.actObtenerSesionActiva) {
     try {
       var sesionActiva = await CVC.actObtenerSesionActiva(uid);
       if (sesionActiva && sesionActiva.actividadId) {
-        // Si la actividad existe en el índice local, usarla
+        // GUARDAR el inicio real
+        if (sesionActiva.inicio && sesionActiva.inicio.toMillis) {
+          _cronoInicioMs = sesionActiva.inicio.toMillis();
+        } else if (sesionActiva.inicio) {
+          _cronoInicioMs = new Date(sesionActiva.inicio).getTime();
+        } else {
+          _cronoInicioMs = ahora;
+        }
+
         if (byId[sesionActiva.actividadId]) {
           _cronoCache = byId[sesionActiva.actividadId];
         } else {
-          // Actividad no visible para este usuario, pero la sesión existe en Firestore
           _cronoCache = {
             id: sesionActiva.actividadId,
             titulo: sesionActiva.actividadNombre || '(actividad no visible)',
@@ -741,18 +761,19 @@ async function miCronoCorriendo() {
         _cronoCacheTime = ahora;
         return _cronoCache;
       }
-    } catch (e) {
-      // Fallback al método viejo
-    }
+    } catch (e) { }
   }
 
-  // Fallback: buscar en sesionesActivas de cada actividad
+  // Fallback
   for (var i = 0; i < items.length; i++) {
     var ses = items[i].sesionesActivas || [];
     for (var j = 0; j < ses.length; j++) {
       if (ses[j].uid === uid) {
         _cronoCache = items[i];
         _cronoCacheTime = ahora;
+        if (ses[j].inicio && ses[j].inicio.toMillis) {
+          _cronoInicioMs = ses[j].inicio.toMillis();
+        }
         return items[i];
       }
     }
@@ -760,6 +781,7 @@ async function miCronoCorriendo() {
 
   _cronoCache = null;
   _cronoCacheTime = ahora;
+  _cronoInicioMs = 0;
   return null;
 }
 
@@ -956,18 +978,14 @@ function nodoHTML(it, nivel) {
     if (it.detalle) h += '<div class="act-desc">' + esc(it.detalle) + '</div>';
     h += '<div class="act-acc">';
     if (puedeCronometrar(it) && !it.hecho) {
-      // CORRECCIÓN: Verificar si MI sesión está activa (no solo el estado de la actividad)
+      // CORRECCIÓN: Verificar si MI sesión está activa
       var miSesionActiva = false;
       if (it.estado === 'en_curso') {
         var ses = it.sesionesActivas || [];
         for (var s = 0; s < ses.length; s++) {
-          if (ses[s].uid === uid) {
-            miSesionActiva = true;
-            break;
-          }
+          if (ses[s].uid === uid) { miSesionActiva = true; break; }
         }
       }
-      // También verificar si hay sesión activa en /sesiones/ aunque la actividad no lo refleje
       if (!miSesionActiva && _cronoCache && _cronoCache.id === it.id) {
         miSesionActiva = true;
       }
@@ -1091,6 +1109,7 @@ window.toggleHecho = async function (id) {
       var resultado = await CVC.actFinalizar(id, { uid: uid, nombre: miNombre }, true);
       toast('Finalizada con tiempo registrado — ' + fmtHorasHM(resultado.horas), 'success');
       _cronoCacheTime = 0;
+      _cronoInicioMs = 0;
       await cargar();
       return;
     }
@@ -1099,6 +1118,7 @@ window.toggleHecho = async function (id) {
       await CVC.actTildar(id, { uid: uid, nombre: miNombre });
       toast(esRecurrente(it) ? 'Tarea recurrente realizada (sin reloj) y reprogramada' : 'Realizada (sin reloj)', 'success');
       _cronoCacheTime = 0;
+      _cronoInicioMs = 0;
       await cargar();
       return;
     }
@@ -1398,6 +1418,7 @@ window.cronoIniciar = async function (id) {
     await CVC.actIniciar(id, { uid: uid, nombre: miNombre });
     toast('▶ Cronómetro iniciado', 'success');
     _cronoCacheTime = 0;
+    _cronoInicioMs = 0;
     await cargar();
   } catch (e) {
     if (e.message && e.message.indexOf('Ya tienes otro cronómetro') !== -1) {
@@ -1414,6 +1435,7 @@ window.cronoPausar = async function (id) {
     var resultado = await CVC.actPausar(id, { uid: uid, nombre: miNombre });
     toast('⏸ Pausado — ' + fmtHorasHM(resultado.horas) + ' registradas', 'info');
     _cronoCacheTime = 0;
+    _cronoInicioMs = 0;
     await cargar();
   } catch (e) {
     toast('No se pudo pausar: ' + e.message, 'error');
@@ -1427,6 +1449,7 @@ window.cronoFinalizar = async function (id) {
     var resultado = await CVC.actFinalizar(id, { uid: uid, nombre: miNombre }, true);
     toast('✅ Finalizado — ' + fmtHorasHM(resultado.horas) + ' registradas', 'success');
     _cronoCacheTime = 0;
+    _cronoInicioMs = 0;
     await cargar();
   } catch (e) {
     toast('No se pudo finalizar: ' + e.message, 'error');
