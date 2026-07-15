@@ -139,7 +139,7 @@
 
 </main>
 
-<!-- ══ MODAL: crear / editar actividad ════════════════════════════ -->
+<!-- ══ MODALES (sin cambios) ════════════════════════════════ -->
 <div class="modal-cv" id="modalItem">
   <div class="box">
     <h3 id="modalItemTitulo">Nueva actividad</h3>
@@ -196,16 +196,13 @@
     <div class="form-group" id="bloqueCompra" style="display:none">
       <label class="form-label">Proveedor (dónde se consigue)</label>
       <select id="itCategoria" class="form-control"></select>
-      <div style="font-size:11.5px;color:#7a8a76;margin-top:2px">La lista de compras se agrupa por proveedor. El admin edita la lista desde la pestaña Compras.</div>
     </div>
 
     <div class="form-group" id="bloqueMonto" style="margin-top:10px">
       <label class="form-label">Honorario al completarla (R$)</label>
       <input type="number" id="itMonto" class="form-control" value="0" min="0" step="10">
-      <div style="font-size:11.5px;color:#7a8a76;margin-top:2px">0 = sin honorario. Toda actividad se puede cronometrar; si hay honorario, se reparte por horas entre quienes la cronometren.</div>
     </div>
 
-    <!-- Frecuencia: cualquier actividad (no proyectos) -->
     <div id="bloqueRutina" style="display:none">
       <div class="form-row2" style="display:flex;gap:8px;margin-top:10px">
         <div style="flex:1">
@@ -217,10 +214,8 @@
           <input type="number" id="itTiempoEst" class="form-control" value="0" min="0">
         </div>
       </div>
-      <div style="font-size:11.5px;color:#7a8a76;margin-top:2px">0 = no se repite. Si ponés un número, la actividad es recurrente: al completarla se reprograma sola al próximo ciclo (el factor de temporada se aplica solo).</div>
     </div>
 
-    <!-- Bloque solo para items raíz (proyecto/suelto/rutina) -->
     <div id="bloqueRaiz">
       <div class="form-group" id="bloqueColor" style="margin-top:10px;display:none">
         <label class="form-label">Color del proyecto</label>
@@ -250,7 +245,6 @@
   </div>
 </div>
 
-<!-- ══ MODAL: historial de realizaciones (admin) ═══════════════════ -->
 <div class="modal-cv" id="modalHist">
   <div class="box">
     <h3 id="histTitulo">Historial</h3>
@@ -261,7 +255,6 @@
   </div>
 </div>
 
-<!-- ══ MODAL: reportar / observación al admin (con foto) ═══════════ -->
 <div class="modal-cv" id="modalReporte">
   <div class="box">
     <h3><span class="material-icons" style="vertical-align:-5px;color:#b8860b">campaign</span> Reportar al administrador</h3>
@@ -281,7 +274,6 @@
   </div>
 </div>
 
-<!-- ══ MODAL: proveedores de compras (admin) ═══════════════════════ -->
 <div class="modal-cv" id="modalProveedores">
   <div class="box">
     <h3><span class="material-icons" style="vertical-align:-5px">storefront</span> Proveedores de compras</h3>
@@ -431,7 +423,6 @@ async function cargarHoras() {
     });
   } catch (e) { }
 
-  // Sesiones del nuevo sistema unificado
   try {
     var sgSnap = await db.collection('sesiones').get();
     var ahoraMs = Date.now();
@@ -683,13 +674,21 @@ function setSup(idEl, n) {
 
 // ── Cronómetro vivo ────────────────────────────────────────
 function inicioCrono(it) {
+  // Buscar MI sesión en sesionesActivas
   var ses = it.sesionesActivas || [];
+  for (var i = 0; i < ses.length; i++) {
+    if (ses[i].uid === uid) {
+      var t = (ses[i].inicio && ses[i].inicio.toMillis) ? ses[i].inicio.toMillis() : 
+              (ses[i].inicio ? new Date(ses[i].inicio).getTime() : 0);
+      if (t) return t;
+    }
+  }
+  // Si no encuentra la mía, usar la más vieja
   var minTs = 0;
   for (var i = 0; i < ses.length; i++) {
-    var t = (ses[i].inicio && ses[i].inicio.toMillis) ? ses[i].inicio.toMillis() : 0;
-    if (!t) continue;
-    if (ses[i].uid === uid) return t;
-    if (!minTs || t < minTs) minTs = t;
+    var t = (ses[i].inicio && ses[i].inicio.toMillis) ? ses[i].inicio.toMillis() : 
+            (ses[i].inicio ? new Date(ses[i].inicio).getTime() : 0);
+    if (t && (!minTs || t < minTs)) minTs = t;
   }
   return minTs || Date.now();
 }
@@ -710,24 +709,41 @@ function tickCronos() {
 }
 setInterval(tickCronos, 1000);
 
-// ── Mi cronómetro corriendo (con cache) ────────────────────
+// ── Mi cronómetro corriendo (CORREGIDO — consulta Firestore) ─
 async function miCronoCorriendo() {
   var ahora = Date.now();
 
+  // Cache de 2 segundos para no saturar Firestore
   if (_cronoCacheTime && (ahora - _cronoCacheTime) < 2000) {
     return _cronoCache;
   }
 
-  // Buscar usando el nuevo sistema unificado de sesiones
+  // BUSCAR SESIÓN ACTIVA REAL en /sesiones/ (CORRECCIÓN)
   if (CVC.actObtenerSesionActiva) {
     try {
       var sesionActiva = await CVC.actObtenerSesionActiva(uid);
-      if (sesionActiva && sesionActiva.actividadId && byId[sesionActiva.actividadId]) {
-        _cronoCache = byId[sesionActiva.actividadId];
+      if (sesionActiva && sesionActiva.actividadId) {
+        // Si la actividad existe en el índice local, usarla
+        if (byId[sesionActiva.actividadId]) {
+          _cronoCache = byId[sesionActiva.actividadId];
+        } else {
+          // Actividad no visible para este usuario, pero la sesión existe en Firestore
+          _cronoCache = {
+            id: sesionActiva.actividadId,
+            titulo: sesionActiva.actividadNombre || '(actividad no visible)',
+            sesionesActivas: [{
+              uid: uid,
+              nombre: sesionActiva.nombre || '',
+              inicio: sesionActiva.inicio
+            }]
+          };
+        }
         _cronoCacheTime = ahora;
         return _cronoCache;
       }
-    } catch (e) { /* fallback al método viejo */ }
+    } catch (e) {
+      // Fallback al método viejo
+    }
   }
 
   // Fallback: buscar en sesionesActivas de cada actividad
@@ -940,12 +956,27 @@ function nodoHTML(it, nivel) {
     if (it.detalle) h += '<div class="act-desc">' + esc(it.detalle) + '</div>';
     h += '<div class="act-acc">';
     if (puedeCronometrar(it) && !it.hecho) {
+      // CORRECCIÓN: Verificar si MI sesión está activa (no solo el estado de la actividad)
+      var miSesionActiva = false;
       if (it.estado === 'en_curso') {
+        var ses = it.sesionesActivas || [];
+        for (var s = 0; s < ses.length; s++) {
+          if (ses[s].uid === uid) {
+            miSesionActiva = true;
+            break;
+          }
+        }
+      }
+      // También verificar si hay sesión activa en /sesiones/ aunque la actividad no lo refleje
+      if (!miSesionActiva && _cronoCache && _cronoCache.id === it.id) {
+        miSesionActiva = true;
+      }
+
+      if (miSesionActiva) {
         h += '<span class="crono-live"><span class="material-icons" style="font-size:17px">timer</span><span class="crono-tiempo" data-ini="' + inicioCrono(it) + '">0:00:00</span></span>';
         h += '<button class="act-ico" title="Pausar" onclick="cronoPausar(\'' + it.id + '\')"><span class="material-icons" style="color:#b8860b">pause</span></button>';
         h += '<button class="act-ico" title="Finalizar y registrar" onclick="cronoFinalizar(\'' + it.id + '\')"><span class="material-icons" style="color:#1f7a32">stop</span></button>';
       } else {
-        // Botón iniciar simplificado — la verificación de sesión activa la hace el core
         h += '<button class="btn-play" onclick="cronoIniciar(\'' + it.id + '\')">';
         h += '<span class="material-icons">play_arrow</span> Iniciar</button>';
       }
@@ -1358,7 +1389,7 @@ window.borrarItem = async function (id) {
   } catch (e) { toast('No se pudo borrar: ' + e.message, 'error'); }
 };
 
-// ── Cronómetro (SISTEMA UNIFICADO v5.0) ────────────────────
+// ── Cronómetro ──────────────────────────────────────────────
 window.cronoIniciar = async function (id) {
   if (!CVC.actIniciar) { toast('Falta actividades-core.js', 'error'); return; }
 
@@ -1371,8 +1402,6 @@ window.cronoIniciar = async function (id) {
   } catch (e) {
     if (e.message && e.message.indexOf('Ya tienes otro cronómetro') !== -1) {
       toast('⚠️ ' + e.message, 'warning');
-    } else if (e.message && e.message.indexOf('permission') !== -1) {
-      toast('No tienes permiso para iniciar esta actividad.', 'error');
     } else {
       toast('No se pudo iniciar: ' + e.message, 'error');
     }
@@ -1387,11 +1416,7 @@ window.cronoPausar = async function (id) {
     _cronoCacheTime = 0;
     await cargar();
   } catch (e) {
-    if (e.message && e.message.indexOf('permission') !== -1) {
-      toast('No tienes permiso para pausar esta sesión.', 'error');
-    } else {
-      toast('No se pudo pausar: ' + e.message, 'error');
-    }
+    toast('No se pudo pausar: ' + e.message, 'error');
   }
 };
 
@@ -1404,11 +1429,7 @@ window.cronoFinalizar = async function (id) {
     _cronoCacheTime = 0;
     await cargar();
   } catch (e) {
-    if (e.message && e.message.indexOf('permission') !== -1) {
-      toast('No tienes permiso para finalizar esta sesión.', 'error');
-    } else {
-      toast('No se pudo finalizar: ' + e.message, 'error');
-    }
+    toast('No se pudo finalizar: ' + e.message, 'error');
   }
 };
 
