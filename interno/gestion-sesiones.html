@@ -19,9 +19,9 @@
   }
   .gs-fg { display: flex; flex-direction: column; gap: 2px; }
   .gs-fg label { font-size: 11px; color: #66735f; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
-  .gs-fg select, .gs-fg input { 
+  .gs-fg select { 
     padding: 6px 8px; border: 1px solid #dfe6dd; border-radius: 7px; font-size: 12.5px; 
-    background: #fff; min-width: 110px;
+    background: #fff; min-width: 130px;
   }
   .gs-totbar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
   .gs-totcard {
@@ -126,7 +126,7 @@
 </main>
 
 <!-- MODAL -->
-<div id="gsModal" class="gs-modal-over" onclick="if(event.target===this)cerrarModal()">
+<div id="gsModal" class="gs-modal-over" onclick="if(event.target===this)window.cerrarModal()">
   <div class="gs-modal-box">
     <h3 id="gsModalTitulo">Nuevo registro manual</h3>
     <input type="hidden" id="mId">
@@ -172,11 +172,11 @@ var db = CVC.db;
 // ── Estado ──────────────────────────────────────────────────
 var todasSesiones = [];
 var actIdx = {};        // actividadId -> {nombre, parentId, tipo, tipoRaiz}
-var childrenOf = {};    // parentId -> [objeto actividad plana]  (MISMO que actividades.html)
+var childrenOf = {};    // parentId -> [objeto actividad plana con .id]
 var actRoots = [];      // IDs de proyectos raíz
 var usuarios = [];
 var abiertos = {};
-var hojasPorProyecto = {};  // proyId -> [{id, nombre, ruta}]
+var actividadesPorProyecto = {};  // proyId -> [{id, nombre, ruta}]  TODAS las actividades
 
 // ── Helpers ──────────────────────────────────────────────────
 function esc(s) { return CVC.escapeHtml ? CVC.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s); }
@@ -188,8 +188,12 @@ function fmtDMY(ts) {
     return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
 }
 function raizDe(actId) {
+    if (!actId || !actIdx[actId]) return null;
     var cur = actId, guard = 0;
-    while (cur && actIdx[cur] && actIdx[cur].parentId && guard < 20) { cur = actIdx[cur].parentId; guard++; }
+    while (cur && actIdx[cur] && actIdx[cur].parentId && guard < 20) { 
+        cur = actIdx[cur].parentId; 
+        guard++;
+    }
     return cur || null;
 }
 function rutaDeTexto(actId) {
@@ -224,16 +228,16 @@ async function cargarTodo() {
     }
     if (!esAdmin) { fUsr.value = uid; fUsr.disabled = true; mUsr.value = uid; mUsr.disabled = true; }
 
-    // Actividades — MISMA LÓGICA QUE actividades.html
+    // Actividades — IDÉNTICO a actividades.html
     var aSnap = await db.collection('actividades').get();
     actIdx = {};
     childrenOf = {};
     actRoots = [];
-    hojasPorProyecto = {};
+    actividadesPorProyecto = {};
 
     aSnap.forEach(function(d) {
         var a = d.data();
-        a.id = d.id;  // importante: el objeto tiene .id
+        a.id = d.id;
         actIdx[d.id] = {
             nombre: a.nombre || a.titulo || '',
             parentId: a.parentId || null,
@@ -242,10 +246,10 @@ async function cargarTodo() {
         };
         var p = a.parentId || '';
         if (!childrenOf[p]) childrenOf[p] = [];
-        childrenOf[p].push(a);  // MISMO que actividades.html: el objeto plano con .id
+        childrenOf[p].push(a);
     });
 
-    // Proyectos raíz (sin parentId, tipoRaiz='proyecto')
+    // Proyectos raíz
     for (var id in actIdx) {
         if (!actIdx[id].parentId && actIdx[id].tipoRaiz === 'proyecto') {
             actRoots.push(id);
@@ -253,10 +257,10 @@ async function cargarTodo() {
     }
     actRoots.sort(function(a, b) { return (actIdx[a].nombre || '').localeCompare(actIdx[b].nombre || ''); });
 
-    // RECOLECTAR hojas cronometrables — función corregida
+    // RECOLECTAR TODAS LAS ACTIVIDADES (no solo hojas) de cada proyecto
     var TIPOS_NO_CRONO = ['chequeo-inventario', 'categoria-chequeo', 'item-chequeo', 'faltante-inventario'];
     
-    function recolectarHojas(nodoId, visitados) {
+    function recolectarTodas(nodoId, visitados) {
         visitados = visitados || {};
         if (visitados[nodoId]) return [];
         visitados[nodoId] = true;
@@ -269,21 +273,21 @@ async function cargarTodo() {
             var hid = hijo.id;
             var tipo = hijo.tipo || '';
             
+            // Saltar nodos de chequeo
             if (TIPOS_NO_CRONO.indexOf(tipo) !== -1) continue;
             
-            var tieneHijos = !!childrenOf[hid] && childrenOf[hid].length > 0;
+            // Agregar este nodo (tenga o no hijos)
+            resultado.push({
+                id: hid,
+                nombre: hijo.nombre || hijo.titulo || hid,
+                ruta: rutaDeTexto(hid),
+                tieneHijos: !!childrenOf[hid] && childrenOf[hid].length > 0
+            });
             
-            if (tieneHijos) {
-                var sub = recolectarHojas(hid, visitados);
-                for (var s = 0; s < sub.length; s++) {
-                    resultado.push(sub[s]);
-                }
-            } else {
-                resultado.push({
-                    id: hid,
-                    nombre: hijo.nombre || hijo.titulo || hid,
-                    ruta: rutaDeTexto(hid)
-                });
+            // Seguir recorriendo hijos
+            var sub = recolectarTodas(hid, visitados);
+            for (var s = 0; s < sub.length; s++) {
+                resultado.push(sub[s]);
             }
         }
         
@@ -292,8 +296,14 @@ async function cargarTodo() {
 
     for (var p = 0; p < actRoots.length; p++) {
         var pid = actRoots[p];
-        hojasPorProyecto[pid] = recolectarHojas(pid);
-        hojasPorProyecto[pid].sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
+        var todas = recolectarTodas(pid);
+        // Ordenar: primero las que no tienen hijos (hojas), luego por nombre
+        todas.sort(function(a, b) {
+            if (a.tieneHijos && !b.tieneHijos) return 1;
+            if (!a.tieneHijos && b.tieneHijos) return -1;
+            return a.nombre.localeCompare(b.nombre);
+        });
+        actividadesPorProyecto[pid] = todas;
     }
 
     // Huérfanas
@@ -301,21 +311,20 @@ async function cargarTodo() {
     for (var aid in actIdx) {
         var a = actIdx[aid];
         if (!a.parentId) continue;
-        if (childrenOf[aid] && childrenOf[aid].length > 0) continue;
         var tipo = a.tipo || '';
         if (TIPOS_NO_CRONO.indexOf(tipo) !== -1) continue;
         var rz = raizDe(aid);
         if (!rz) {
-            huerfanas.push({ id: aid, nombre: a.nombre, ruta: '' });
+            huerfanas.push({ id: aid, nombre: a.nombre, ruta: '', tieneHijos: false });
         }
     }
     if (huerfanas.length > 0) {
-        hojasPorProyecto['__sin'] = huerfanas;
+        actividadesPorProyecto['__sin'] = huerfanas;
     }
 
     // Selector de proyectos (filtro)
     var fProy = document.getElementById('fProy');
-    fProy.innerHTML = '<option value="">Todos</option>';
+    fProy.innerHTML = '<option value="">Todos los proyectos</option>';
     for (var j = 0; j < actRoots.length; j++) {
         var pid2 = actRoots[j];
         fProy.innerHTML += '<option value="' + pid2 + '">' + (actIdx[pid2].nombre || pid2) + '</option>';
@@ -328,7 +337,7 @@ async function cargarTodo() {
         var pid3 = actRoots[k];
         mProy.innerHTML += '<option value="' + pid3 + '">' + (actIdx[pid3].nombre || pid3) + '</option>';
     }
-    if (hojasPorProyecto['__sin'] && hojasPorProyecto['__sin'].length > 0) {
+    if (actividadesPorProyecto['__sin'] && actividadesPorProyecto['__sin'].length > 0) {
         mProy.innerHTML += '<option value="__sin">⚠️ Sin proyecto</option>';
     }
 
@@ -344,7 +353,6 @@ async function cargarSesiones() {
         snap.forEach(function(d) {
             var s = d.data();
             s.id = d.id;
-            s._esNueva = true;
             todasSesiones.push(s);
         });
     } catch (e) { console.warn('Error /sesiones/:', e.message); }
@@ -362,7 +370,6 @@ async function cargarSesiones() {
             s.id = d.id;
             s.actividadId = actId;
             s.actividadNombre = s.actividadNombre || '';
-            s._esNueva = false;
             var dup = todasSesiones.some(function(x) {
                 return x.actividadId === actId && x.uid === s.uid &&
                        x.inicio && s.inicio && Math.abs((x.inicio.toMillis() - s.inicio.toMillis())) < 1000;
@@ -372,7 +379,7 @@ async function cargarSesiones() {
     } catch (e) {}
 }
 
-// ── Filtros (simplificado: solo usuario y proyecto) ─────────
+// ── Filtros ─────────────────────────────────────────────────
 function sesionesFiltradas() {
     var fUsr = document.getElementById('fUsr').value;
     var fProy = document.getElementById('fProy').value;
@@ -381,7 +388,13 @@ function sesionesFiltradas() {
     for (var i = 0; i < todasSesiones.length; i++) {
         var s = todasSesiones[i];
         if (fUsr && s.uid !== fUsr) continue;
-        if (fProy) { var rz = raizDe(s.actividadId); if (rz !== fProy) continue; }
+        
+        if (fProy) {
+            var rz = raizDe(s.actividadId);
+            // Si la actividad no tiene raíz (huérfana), no mostrarla cuando hay filtro de proyecto
+            if (!rz || rz !== fProy) continue;
+        }
+        
         out.push(s);
     }
 
@@ -413,6 +426,7 @@ function renderArbol(filtradas) {
     var fProy = document.getElementById('fProy').value;
     var el = document.getElementById('gsArbol');
 
+    // Si hay filtro de proyecto, mostrar solo ese proyecto con sus sesiones
     var sesPorProy = {};
     var sinProy = [];
 
@@ -427,49 +441,73 @@ function renderArbol(filtradas) {
         }
     }
 
-    var raices = fProy ? [fProy] : actRoots;
     var html = '';
 
-    for (var r = 0; r < raices.length; r++) {
-        var rid = raices[r];
-        var ses = sesPorProy[rid] || [];
-        if (ses.length === 0) continue;
-        var hrs = 0;
-        for (var s = 0; s < ses.length; s++) hrs += ses[s].horas || 0;
-        html += nodoProyecto(rid, ses, hrs);
+    if (fProy) {
+        // Mostrar solo el proyecto seleccionado
+        var ses = sesPorProy[fProy] || [];
+        if (ses.length > 0 || sinProy.length > 0) {
+            var hrs = 0;
+            for (var s = 0; s < ses.length; s++) hrs += ses[s].horas || 0;
+            if (ses.length > 0) html += nodoProyecto(fProy, ses, hrs);
+        }
+        // También mostrar huérfanas si las hay (pertenecen a este proyecto por descarte)
+        if (sinProy.length > 0) {
+            var hrsSin = 0;
+            for (var si = 0; si < sinProy.length; si++) hrsSin += sinProy[si].horas || 0;
+            html += nodoSinProyecto(sinProy, hrsSin);
+        }
+        if (!html) html = '<div class="gs-empty">No hay sesiones en este proyecto.</div>';
+    } else {
+        // Mostrar todos los proyectos
+        for (var r = 0; r < actRoots.length; r++) {
+            var rid = actRoots[r];
+            var ses = sesPorProy[rid] || [];
+            if (ses.length === 0) continue;
+            var hrs = 0;
+            for (var s = 0; s < ses.length; s++) hrs += ses[s].horas || 0;
+            html += nodoProyecto(rid, ses, hrs);
+        }
+
+        if (sinProy.length > 0) {
+            var hrsSin = 0;
+            for (var si = 0; si < sinProy.length; si++) hrsSin += sinProy[si].horas || 0;
+            html += nodoSinProyecto(sinProy, hrsSin);
+        }
+
+        if (!html) html = '<div class="gs-empty">No hay sesiones registradas.</div>';
     }
 
-    if (sinProy.length > 0) {
-        var hrsSin = 0;
-        for (var si = 0; si < sinProy.length; si++) hrsSin += sinProy[si].horas || 0;
-        html += '<div class="gs-node">';
-        html += '<div class="gs-nhead" onclick="toggleAbierto(\'__sin\')">';
-        html += '<span class="gs-caret has">' + (abiertos['__sin'] ? '▾' : '▸') + '</span>';
-        html += '<span class="gs-nicon">⚠️</span>';
-        html += '<span class="gs-ninfo"><span class="gs-nname" style="color:#c0271f;">Sin proyecto / eliminadas</span></span>';
-        html += '<span class="gs-nhrs">' + fmtHM(hrsSin) + '</span>';
-        html += '<span class="gs-nbadge" style="background:#fde8e8;color:#c0271f;">' + sinProy.length + ' ses.</span>';
-        html += '</div>';
-        if (abiertos['__sin']) {
-            html += '<div class="gs-children">';
-            var porAct = {};
-            for (var sj = 0; sj < sinProy.length; sj++) {
-                var aid = sinProy[sj].actividadId || '__unk';
-                if (!porAct[aid]) porAct[aid] = [];
-                porAct[aid].push(sinProy[sj]);
-            }
-            for (var ak in porAct) {
-                var hrsA = 0;
-                for (var sa = 0; sa < porAct[ak].length; sa++) hrsA += porAct[ak][sa].horas || 0;
-                html += nodoActividad(ak, porAct[ak], hrsA, false);
-            }
-            html += '</div>';
+    el.innerHTML = html;
+}
+
+function nodoSinProyecto(sesiones, horas) {
+    var html = '<div class="gs-node">';
+    html += '<div class="gs-nhead" onclick="toggleAbierto(\'__sin\')">';
+    html += '<span class="gs-caret has">' + (abiertos['__sin'] ? '▾' : '▸') + '</span>';
+    html += '<span class="gs-nicon">⚠️</span>';
+    html += '<span class="gs-ninfo"><span class="gs-nname" style="color:#c0271f;">Sin proyecto / eliminadas</span></span>';
+    html += '<span class="gs-nhrs">' + fmtHM(horas) + '</span>';
+    html += '<span class="gs-nbadge" style="background:#fde8e8;color:#c0271f;">' + sesiones.length + ' ses.</span>';
+    html += '</div>';
+
+    if (abiertos['__sin']) {
+        html += '<div class="gs-children">';
+        var porAct = {};
+        for (var i = 0; i < sesiones.length; i++) {
+            var aid = sesiones[i].actividadId || '__unk';
+            if (!porAct[aid]) porAct[aid] = [];
+            porAct[aid].push(sesiones[i]);
+        }
+        for (var ak in porAct) {
+            var hrsA = 0;
+            for (var sa = 0; sa < porAct[ak].length; sa++) hrsA += porAct[ak][sa].horas || 0;
+            html += nodoActividad(ak, porAct[ak], hrsA, false);
         }
         html += '</div>';
     }
-
-    if (!html) html = '<div class="gs-empty">No hay sesiones registradas.</div>';
-    el.innerHTML = html;
+    html += '</div>';
+    return html;
 }
 
 function nodoProyecto(proyId, sesiones, horas) {
@@ -488,7 +526,8 @@ function nodoProyecto(proyId, sesiones, horas) {
 
     if (ab) {
         html += '<div class="gs-children">';
-        var cats = {}, directas = [];
+        // Agrupar sesiones por el primer hijo del path
+        var grupos = {};
         for (var i = 0; i < sesiones.length; i++) {
             var aid = sesiones[i].actividadId;
             var path = [];
@@ -499,31 +538,23 @@ function nodoProyecto(proyId, sesiones, horas) {
                 cur = actIdx[cur].parentId || null;
                 g++;
             }
-            if (path.length > 1) {
-                var catId = path[0];
-                if (!cats[catId]) cats[catId] = [];
-                cats[catId].push(sesiones[i]);
+            var key = path.length > 0 ? path[0] : aid;
+            if (!grupos[key]) grupos[key] = [];
+            grupos[key].push(sesiones[i]);
+        }
+
+        for (var key in grupos) {
+            var hrsG = 0;
+            for (var gi = 0; gi < grupos[key].length; gi++) hrsG += grupos[key][gi].horas || 0;
+            
+            // Si el key es una actividad hoja (no tiene hijos en actIdx)
+            var esCategoria = childrenOf[key] && childrenOf[key].length > 0;
+            
+            if (esCategoria) {
+                html += nodoCategoria(key, grupos[key], hrsG);
             } else {
-                directas.push(sesiones[i]);
+                html += nodoActividad(key, grupos[key], hrsG, false);
             }
-        }
-
-        for (var cid in cats) {
-            var hrsC = 0;
-            for (var ci = 0; ci < cats[cid].length; ci++) hrsC += cats[cid][ci].horas || 0;
-            html += nodoCategoria(cid, cats[cid], hrsC);
-        }
-
-        var porAct = {};
-        for (var d = 0; d < directas.length; d++) {
-            var aid2 = directas[d].actividadId;
-            if (!porAct[aid2]) porAct[aid2] = [];
-            porAct[aid2].push(directas[d]);
-        }
-        for (var ak in porAct) {
-            var hrsA = 0;
-            for (var sa = 0; sa < porAct[ak].length; sa++) hrsA += porAct[ak][sa].horas || 0;
-            html += nodoActividad(ak, porAct[ak], hrsA, false);
         }
         html += '</div>';
     }
@@ -575,7 +606,9 @@ function nodoActividad(actId, sesiones, horas, abiertoForzado) {
     html += '<span class="gs-nicon">' + (eliminada ? '❓' : '📋') + '</span>';
     html += '<span class="gs-ninfo">';
     html += '<span class="gs-nname' + (eliminada ? '" style="color:#c0271f' : '') + '">' + esc(nombre) + (eliminada ? ' (eliminada)' : '') + '</span>';
-    html += '<span class="gs-nruta">' + esc(rutaDeTexto(actId)) + '</span>';
+    if (act) {
+        html += '<span class="gs-nruta">' + esc(rutaDeTexto(actId)) + '</span>';
+    }
     html += '</span>';
     html += '<span class="gs-nhrs">' + fmtHM(horas) + '</span>';
     html += '<span class="gs-nbadge" style="background:#eef2ee;color:#5a6a55;">' + sesiones.length + ' ses.</span>';
@@ -619,7 +652,7 @@ window.toggleAbierto = function(id) {
     aplicarFiltros();
 };
 
-// ── Selector en cascada ──────────────────────────────────────
+// ── Selector en cascada (CORREGIDO) ─────────────────────────
 window.filtrarActividadesPorProyecto = function() {
     var proyId = document.getElementById('mProy').value;
     var mAct = document.getElementById('mAct');
@@ -629,16 +662,18 @@ window.filtrarActividadesPorProyecto = function() {
         return;
     }
 
-    var hojas = hojasPorProyecto[proyId] || [];
-    if (hojas.length === 0) {
+    var actividades = actividadesPorProyecto[proyId] || [];
+    if (actividades.length === 0) {
         mAct.innerHTML = '<option value="">Sin actividades en este proyecto</option>';
         return;
     }
 
     mAct.innerHTML = '<option value="">Elegí una actividad...</option>';
-    for (var i = 0; i < hojas.length; i++) {
-        var ruta = hojas[i].ruta ? ' (' + hojas[i].ruta + ')' : '';
-        mAct.innerHTML += '<option value="' + hojas[i].id + '">' + hojas[i].nombre + ruta + '</option>';
+    for (var i = 0; i < actividades.length; i++) {
+        var a = actividades[i];
+        var prefijo = a.tieneHijos ? '📂 ' : '📋 ';
+        var ruta = a.ruta ? ' (' + a.ruta + ')' : '';
+        mAct.innerHTML += '<option value="' + a.id + '">' + prefijo + a.nombre + ruta + '</option>';
     }
 };
 
@@ -730,7 +765,9 @@ window.guardarSesion = async function() {
     if (dFin <= dIni) dFin.setDate(dFin.getDate() + 1);
     var horas = Math.max(0, (dFin - dIni) / 3600000);
 
-    var actNombre = document.getElementById('mAct').options[document.getElementById('mAct').selectedIndex].text.split(' (')[0];
+    var actNombre = document.getElementById('mAct').options[document.getElementById('mAct').selectedIndex].text;
+    // Quitar prefijo y ruta
+    actNombre = actNombre.replace(/^[📂📋]\s*/, '').split(' (')[0];
     var usrId = document.getElementById('mUsr').value;
     var usrNombre = document.getElementById('mUsr').options[document.getElementById('mUsr').selectedIndex].text;
 
