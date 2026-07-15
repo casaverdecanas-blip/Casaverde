@@ -393,37 +393,13 @@ async function cargar() {
   }
 }
 
-// ── Horas trabajadas ────────────────────────────────────────
+// ── Horas trabajadas (SOLO /sesiones/) ─────────────────────
 var horasIdx = {};
 var _agg = {};
 var desglose = {};
 
 async function cargarHoras() {
   horasIdx = {};
-  try {
-    var hsSnap = await db.collection('historial_tareas').get();
-    hsSnap.forEach(function (d) {
-      var h = d.data() || {};
-      if (!h.tareaId) return;
-      var reg = horasIdx[h.tareaId] || (horasIdx[h.tareaId] = { horas: 0, ult: 0, lineas: [] });
-      var ts = (h.finalizadoEn && h.finalizadoEn.toMillis) ? h.finalizadoEn.toMillis() : 0;
-      if (ts > reg.ult) reg.ult = ts;
-      var cols = h.colaboradores || [];
-      var sumo = false;
-      for (var i = 0; i < cols.length; i++) {
-        var c = cols[i];
-        if ((c.horas || 0) <= 0) continue;
-        reg.horas += c.horas;
-        reg.lineas.push({ ts: ts, nombre: c.nombre || '', horas: c.horas, sesion: '' });
-        sumo = true;
-      }
-      if (!sumo && (h.totalHoras || 0) > 0) {
-        reg.horas += h.totalHoras;
-        reg.lineas.push({ ts: ts, nombre: h.finalizadoNombre || '', horas: h.totalHoras, sesion: '' });
-      }
-    });
-  } catch (e) { }
-
   try {
     var sgSnap = await db.collection('sesiones').get();
     var ahoraMs = Date.now();
@@ -1570,34 +1546,29 @@ window.guardarProveedores = async function () {
   } catch (e) { toast('No se pudo guardar: ' + e.message, 'error'); }
 };
 
-// ── Historial ────────────────────────────────────────────────
+// ── Historial (SOLO /sesiones/) ─────────────────────────────
 window.verHistorial = async function (id) {
   var it = byId[id];
   document.getElementById('histTitulo').textContent = 'Historial · ' + ((it && it.titulo) ? it.titulo : '');
   document.getElementById('histBody').innerHTML = '<div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>';
   abrirModal('modalHist');
   try {
-    var snap = await db.collection('historial_tareas').where('tareaId', '==', id).get();
+    var snap = await db.collection('sesiones').where('actividadId', '==', id).orderBy('inicio', 'desc').get();
     var regs = [];
-    snap.forEach(function (d) { regs.push(d.data()); });
-    regs.sort(function (a, b) {
-      var fa = (a.finalizadoEn && a.finalizadoEn.toMillis) ? a.finalizadoEn.toMillis() : 0;
-      var fb = (b.finalizadoEn && b.finalizadoEn.toMillis) ? b.finalizadoEn.toMillis() : 0;
-      return fb - fa;
-    });
-    if (!regs.length) { document.getElementById('histBody').innerHTML = '<div class="muted-note">Todavía no hay realizaciones registradas.</div>'; return; }
-    var conReloj = regs.filter(function (r) { return r.conCronometro; }).length;
-    var sinReloj = regs.length - conReloj;
-    var h = '<div class="muted-note">' + regs.length + ' realización(es) · ' + conReloj + ' con reloj · ' + sinReloj + ' sin reloj</div>';
+    snap.forEach(function (d) { regs.push(Object.assign({ id: d.id }, d.data())); });
+    if (!regs.length) { document.getElementById('histBody').innerHTML = '<div class="muted-note">Todavía no hay registros de tiempo en esta actividad.</div>'; return; }
+    var conCrono = regs.filter(function (r) { return r.tipo === 'cronometro'; }).length;
+    var manuales = regs.length - conCrono;
+    var totalH = 0; for (var i = 0; i < regs.length; i++) totalH += regs[i].horas || 0;
+    var h = '<div class="muted-note">' + regs.length + ' registro(s) · ' + fmtHorasHM(totalH) + ' · ⏱ ' + conCrono + ' · 📝 ' + manuales + '</div>';
     h += '<div class="act-list">';
     for (var i = 0; i < regs.length; i++) {
       var r = regs[i];
-      var quienes = (r.colaboradores || []).map(function (c) { return (c.nombre || '') + (c.horas ? (' (' + c.horas + 'h)') : ''); }).filter(Boolean).join(', ');
-      if (!quienes) quienes = r.finalizadoNombre || '—';
-      var crono = r.conCronometro ? '⏱ con reloj' : '✋ sin reloj';
+      var ini = r.inicio ? new Date(r.inicio.toMillis()) : null;
+      var fin = r.fin ? new Date(r.fin.toMillis()) : null;
       h += '<div class="act-row" style="flex-direction:column;align-items:flex-start;gap:2px">';
-      h += '<div style="font-weight:600;font-size:13.5px">' + esc(fmtTs(r.finalizadoEn)) + ' · ' + crono + (r.totalHoras ? (' · ' + r.totalHoras + 'h') : '') + '</div>';
-      h += '<div style="font-size:13px;color:#46583f">' + esc(quienes) + '</div>';
+      h += '<div style="font-weight:600;font-size:13.5px">' + esc(fmtTs(r.inicio)) + ' · ' + (r.tipo === 'cronometro' ? '⏱ cronómetro' : '📝 manual') + ' · ' + fmtHorasHM(r.horas || 0) + '</div>';
+      h += '<div style="font-size:13px;color:#46583f">' + esc(r.nombre || '—') + (r.notas ? ' — ' + esc(r.notas) : '') + (r._migradoDe ? ' 📦' : '') + '</div>';
       h += '</div>';
     }
     h += '</div>';
