@@ -36,6 +36,7 @@
   .diag-actions .btn-danger { background: #c0271f; color: #fff; border-color: #c0271f; }
   .diag-actions .btn-warn { background: #d97706; color: #fff; border-color: #d97706; }
   .diag-actions .btn-info { background: #1f5fb0; color: #fff; border-color: #1f5fb0; }
+  .diag-actions .btn-fix { background: #16a34a; color: #fff; border-color: #16a34a; }
   .diag-log { 
     background: #1a1a1a; color: #a0d8a0; font-family: monospace; font-size: 12px; 
     padding: 12px; border-radius: 8px; max-height: 400px; overflow: auto; 
@@ -73,29 +74,28 @@
       <h3><span class="material-icons">compare_arrows</span> Acciones</h3>
       
       <div style="font-size:12px;color:#66735f;margin-bottom:8px">
-        <b>Paso 1:</b> Diagnóstico · 
-        <b>Paso 2:</b> Analizar historial_tareas · 
-        <b>Paso 3:</b> Comparar historial vs historial_tareas · 
-        <b>Paso 4:</b> Buscar subcolecciones · 
-        <b>Paso 5:</b> Migrar · 
-        <b>Paso 6:</b> Verificar · 
-        <b>Paso 7:</b> Limpiar
+        <b>Diagnóstico:</b> 1·2·3 · 
+        <b>Migrar:</b> 4·5 · 
+        <b>Corregir:</b> 6 · 
+        <b>Verificar:</b> 7 · 
+        <b>Limpiar:</b> 8·9
       </div>
 
       <div class="diag-actions">
-        <button onclick="escanearTodo()" class="btn-do">🔍 Re-escanear todo</button>
-        <button onclick="analizarHistorialTareas()" class="btn-do">🔬 Analizar historial_tareas</button>
-        <button onclick="compararHistorialYHistorialTareas()" class="btn-warn">🔬 Comparar historial vs historial_tareas</button>
-        <button onclick="buscarSubcoleccionesSesiones()" class="btn-info">🔍 Buscar subcolecciones sesiones</button>
+        <button onclick="escanearTodo()" class="btn-do">🔍 1. Re-escanear todo</button>
+        <button onclick="analizarHistorialTareas()" class="btn-do">🔬 2. Analizar historial_tareas</button>
+        <button onclick="compararHistorialYHistorialTareas()" class="btn-warn">🔬 3. Comparar historial vs historial_tareas</button>
+        <button onclick="buscarSubcoleccionesSesiones()" class="btn-info">🔍 4. Buscar subcolecciones sesiones</button>
       </div>
       <div class="diag-actions" style="margin-top:4px">
-        <button onclick="migrarHistorialASesiones()" class="btn-warn">📦 Migrar historial_tareas → /sesiones/</button>
-        <button onclick="migrarHistorialSimpleASesiones()" class="btn-warn">📦 Migrar historial (simple) → /sesiones/</button>
-        <button onclick="verificarMigracion()" class="btn-do">✅ Verificar migración</button>
+        <button onclick="migrarHistorialASesiones()" class="btn-warn">📦 5. Migrar historial_tareas → /sesiones/</button>
+        <button onclick="migrarHistorialSimpleASesiones()" class="btn-warn">📦 5b. Migrar historial (simple) → /sesiones/</button>
+        <button onclick="corregirEstadoSesiones()" class="btn-fix">🔧 6. Corregir estado: pausada → finalizada</button>
       </div>
       <div class="diag-actions" style="margin-top:4px">
-        <button onclick="limpiarSesionesActivas()" class="btn-do">🧹 Limpiar sesionesActivas</button>
-        <button onclick="analizarObsoletas()" class="btn-warn">⚠️ Analizar obsoletas</button>
+        <button onclick="verificarMigracion()" class="btn-do">✅ 7. Verificar migración</button>
+        <button onclick="limpiarSesionesActivas()" class="btn-do">🧹 8. Limpiar sesionesActivas</button>
+        <button onclick="analizarObsoletas()" class="btn-warn">⚠️ 9. Analizar obsoletas</button>
       </div>
       <div class="diag-log" id="log"></div>
     </div>
@@ -140,7 +140,7 @@ var COLECCIONES_OBSOLETAS = [
   { col: 'resumenes', motivo: 'Log diario de eventos — posiblemente obsoleto' }
 ];
 
-// ── ESCANEAR TODO ─────────────────────────────────────────
+// ── 1. ESCANEAR TODO ──────────────────────────────────────
 window.escanearTodo = async function() {
   logEl.innerHTML = '';
   log('🔍 ESCANEANDO ' + COLECCIONES_TODAS.length + ' COLECCIONES...', 'info');
@@ -183,21 +183,17 @@ window.escanearTodo = async function() {
 
         if (col === 'sesiones') {
           var estados = {};
+          var migradas = 0, nuevas = 0;
           snap.forEach(function(d) {
             var s = d.data();
             var est = s.estado || 'sin_estado';
             estados[est] = (estados[est] || 0) + 1;
+            if (s._migradoDe) migradas++; else nuevas++;
           });
           var det2 = [];
           for (var ek in estados) det2.push(ek + ': ' + estados[ek]);
           log('   ↳ Estados: ' + det2.join(', '), 'info');
-
-          // Contar migrados vs nuevos
-          var migrados = 0, nuevos = 0;
-          snap.forEach(function(d) {
-            if (d.data()._migradoDe) migrados++; else nuevos++;
-          });
-          log('   ↳ Migrados: ' + migrados + ' | Nuevos: ' + nuevos, 'info');
+          log('   ↳ Migradas: ' + migradas + ' | Nuevas: ' + nuevas, 'info');
         }
       }
     } catch (e) {
@@ -223,7 +219,7 @@ window.escanearTodo = async function() {
   document.getElementById('resumen').innerHTML = html;
 };
 
-// ── ANALIZAR historial_tareas A FONDO ─────────────────────
+// ── 2. ANALIZAR historial_tareas ──────────────────────────
 window.analizarHistorialTareas = async function() {
   logEl.innerHTML = '';
   log('🔬 ANALIZANDO historial_tareas...', 'info');
@@ -321,7 +317,7 @@ window.analizarHistorialTareas = async function() {
   }
 };
 
-// ── COMPARAR historial vs historial_tareas ─────────────────
+// ── 3. COMPARAR historial vs historial_tareas ──────────────
 window.compararHistorialYHistorialTareas = async function() {
   logEl.innerHTML = '';
   log('🔬 COMPARANDO historial (83 docs) vs historial_tareas (59 docs)...', 'info');
@@ -335,10 +331,8 @@ window.compararHistorialYHistorialTareas = async function() {
     log('historial_tareas: ' + htSnap.size + ' docs', 'info');
     logSep();
 
-    // Ver estructura de historial
     log('📋 ESTRUCTURA DE historial:', 'hl');
     var tiposHist = {};
-    var muestrasPorEstructura = {};
 
     hSnap.forEach(function(d) {
       var h = d.data();
@@ -358,9 +352,8 @@ window.compararHistorialYHistorialTareas = async function() {
       logSep();
     }
 
-    // Ver si historial tiene datos de tiempo
     var conHoras = 0, conTimestamp = 0, conUsuario = 0, conTarea = 0;
-    var conInicio = 0, conFin = 0, conDuracion = 0;
+    var conInicio = 0, conFin = 0;
 
     hSnap.forEach(function(d) {
       var h = d.data();
@@ -370,7 +363,6 @@ window.compararHistorialYHistorialTareas = async function() {
       if (h.tareaId || h.actividadId) conTarea++;
       if (h.inicio) conInicio++;
       if (h.fin) conFin++;
-      if (h.duracion) conDuracion++;
     });
 
     log('📊 DATOS DE TIEMPO EN historial:', 'hl');
@@ -380,40 +372,17 @@ window.compararHistorialYHistorialTareas = async function() {
     log('   Con tarea/actividad: ' + conTarea + '/' + hSnap.size, 'info');
     log('   Con inicio explícito: ' + conInicio, conInicio > 0 ? 'warn' : 'info');
     log('   Con fin explícito: ' + conFin, conFin > 0 ? 'warn' : 'info');
-    log('   Con duración: ' + conDuracion, conDuracion > 0 ? 'warn' : 'info');
     logSep();
 
     if (conHoras === 0 && conInicio === 0 && conFin === 0) {
-      log('⚠️ historial NO tiene datos de tiempo (horas, inicio, fin).', 'warn');
-      log('   → Es un LOG DE ACCIONES: registra "quién hizo qué y cuándo".', 'info');
-      log('   → NO es migrable a /sesiones/ (sin datos de duración).', 'info');
+      log('⚠️ historial NO tiene datos de tiempo.', 'warn');
+      log('   → Es un LOG DE ACCIONES (quién hizo qué y cuándo).', 'info');
+      log('   → NO es migrable a /sesiones/.', 'info');
     } else if (conHoras > 0 || (conInicio > 0 && conFin > 0)) {
-      log('✅ historial TIENE datos de tiempo — ¡hay que migrar!', 'ok');
-      log('   → Usá el botón "Migrar historial (simple) → /sesiones/"', 'info');
+      log('✅ historial TIENE datos de tiempo — ¡migrable!', 'ok');
     }
 
-    // Comparar tareaIds entre ambas colecciones
-    var idsHT = {};
-    htSnap.forEach(function(d) { idsHT[d.data().tareaId] = true; });
-    var idsH = {};
-    hSnap.forEach(function(d) { 
-      var h = d.data();
-      var tid = h.tareaId || h.actividadId;
-      if (tid) idsH[tid] = true;
-    });
-
-    var soloEnH = 0;
-    for (var idh in idsH) { if (!idsHT[idh]) soloEnH++; }
-    var soloEnHT = 0;
-    for (var idht in idsHT) { if (!idsH[idht]) soloEnHT++; }
-
-    log('📊 COMPARACIÓN DE tareaIds:', 'hl');
-    log('   tareaIds únicos en historial: ' + Object.keys(idsH).length, 'info');
-    log('   tareaIds únicos en historial_tareas: ' + Object.keys(idsHT).length, 'info');
-    log('   Solo en historial (no en historial_tareas): ' + soloEnH, soloEnH > 0 ? 'warn' : 'ok');
-    log('   Solo en historial_tareas (no en historial): ' + soloEnHT, 'info');
     logSep();
-
     log('✅ COMPARACIÓN COMPLETADA', 'ok');
 
   } catch (e) {
@@ -421,7 +390,7 @@ window.compararHistorialYHistorialTareas = async function() {
   }
 };
 
-// ── BUSCAR SUBSESIONES ────────────────────────────────────
+// ── 4. BUSCAR SUBSESIONES ─────────────────────────────────
 window.buscarSubcoleccionesSesiones = async function() {
   logEl.innerHTML = '';
   log('🔍 BUSCANDO SUBSESIONES (subcolecciones "sesiones")...', 'info');
@@ -430,7 +399,6 @@ window.buscarSubcoleccionesSesiones = async function() {
 
   var totalSub = 0;
 
-  // En actividades
   try {
     var aSnap = await db.collection('actividades').get();
     log('📁 actividades: ' + aSnap.size + ' docs', 'info');
@@ -442,7 +410,6 @@ window.buscarSubcoleccionesSesiones = async function() {
           conSub++;
           totalSub += sSnap.size;
           log('   ↳ ' + aSnap.docs[i].id + ': ' + sSnap.size + ' sesiones', 'warn');
-          // Mostrar estructura de una sesión
           var s0 = sSnap.docs[0].data();
           log('      Campos: ' + Object.keys(s0).sort().join(', '), 'info');
         }
@@ -453,7 +420,6 @@ window.buscarSubcoleccionesSesiones = async function() {
 
   logSep();
 
-  // En tareas
   try {
     var tSnap = await db.collection('tareas').get();
     log('📁 tareas: ' + tSnap.size + ' docs', 'info');
@@ -478,13 +444,12 @@ window.buscarSubcoleccionesSesiones = async function() {
   log('✅ TOTAL subsessiones encontradas: ' + totalSub, totalSub > 0 ? 'warn' : 'ok');
   if (totalSub > 0) {
     log('⚠️ Hay sesiones sin migrar en subcolecciones.', 'warn');
-    log('   Ejecutá "Migrar subcolecciones → /sesiones/" para migrarlas.', 'info');
   } else {
     log('✅ No hay sesiones sin migrar.', 'ok');
   }
 };
 
-// ── MIGRAR historial_tareas → /sesiones/ ──────────────────
+// ── 5. MIGRAR historial_tareas → /sesiones/ ───────────────
 window.migrarHistorialASesiones = async function() {
   logEl.innerHTML = '';
   log('📦 MIGRANDO historial_tareas → /sesiones/', 'info');
@@ -600,7 +565,7 @@ window.migrarHistorialASesiones = async function() {
   }
 };
 
-// ── MIGRAR historial (simple) → /sesiones/ ────────────────
+// ── 5b. MIGRAR historial (simple) → /sesiones/ ────────────
 window.migrarHistorialSimpleASesiones = async function() {
   logEl.innerHTML = '';
   log('📦 MIGRANDO historial (83 docs) → /sesiones/', 'info');
@@ -676,14 +641,60 @@ window.migrarHistorialSimpleASesiones = async function() {
     log('   Errores: ' + errores, errores > 0 ? 'err' : 'info');
     logSep();
     log('⚠️ Estas sesiones tienen horas=0 porque historial no guarda duración.', 'warn');
-    log('⚠️ Son útiles para trazabilidad, no para estadísticas de tiempo.', 'info');
 
   } catch (e) {
     log('❌ Error general: ' + e.message, 'err');
   }
 };
 
-// ── VERIFICAR MIGRACIÓN ───────────────────────────────────
+// ── 6. CORREGIR ESTADO DE SESIONES ────────────────────────
+window.corregirEstadoSesiones = async function() {
+  logEl.innerHTML = '';
+  log('🔧 CORRIGIENDO ESTADO DE SESIONES...', 'info');
+  log('Busca sesiones con estado "pausada" que tienen fecha de fin.', 'info');
+  log('Las que tienen fin deberían ser "finalizada".', 'info');
+  logSep();
+
+  try {
+    var snap = await db.collection('sesiones').where('estado', '==', 'pausada').get();
+    log('Sesiones en estado "pausada": ' + snap.size, 'info');
+
+    if (snap.size === 0) {
+      log('✅ No hay sesiones para corregir.', 'ok');
+      return;
+    }
+
+    var corregidas = 0;
+    var sinFin = 0;
+
+    for (var i = 0; i < snap.docs.length; i++) {
+      var d = snap.docs[i];
+      var s = d.data();
+      if (s.fin) {
+        await d.ref.update({ 
+          estado: 'finalizada',
+          actualizadoEn: firebase.firestore.Timestamp.now()
+        });
+        corregidas++;
+      } else {
+        sinFin++;
+      }
+    }
+
+    logSep();
+    log('✅ CORRECCIÓN COMPLETADA', 'ok');
+    log('   Corregidas (pausada → finalizada): ' + corregidas, 'ok');
+    log('   Sin fecha de fin (se mantienen como pausada): ' + sinFin, 'info');
+    logSep();
+    log('⚠️ Refrescá horas-stats.html y gestion-sesiones.html para ver los cambios.', 'info');
+    log('⚠️ Si corregiste 0, es porque ya están todas finalizadas.', 'info');
+
+  } catch (e) {
+    log('❌ Error: ' + e.message, 'err');
+  }
+};
+
+// ── 7. VERIFICAR MIGRACIÓN ────────────────────────────────
 window.verificarMigracion = async function() {
   logEl.innerHTML = '';
   log('✅ VERIFICANDO MIGRACIÓN...', 'info');
@@ -743,7 +754,7 @@ window.verificarMigracion = async function() {
   }
 };
 
-// ── LIMPIAR sesionesActivas ───────────────────────────────
+// ── 8. LIMPIAR sesionesActivas ────────────────────────────
 window.limpiarSesionesActivas = async function() {
   logEl.innerHTML = '';
   log('🧹 Limpiando campo sesionesActivas en actividades...', 'info');
@@ -767,7 +778,7 @@ window.limpiarSesionesActivas = async function() {
   log('✅ ' + limpio + ' actividades limpiadas.', 'ok');
 };
 
-// ── ANALIZAR OBSOLETAS ────────────────────────────────────
+// ── 9. ANALIZAR OBSOLETAS ─────────────────────────────────
 window.analizarObsoletas = async function() {
   logEl.innerHTML = '';
   log('⚠️ Analizando colecciones candidatas a eliminar...', 'info');
@@ -793,11 +804,11 @@ window.analizarObsoletas = async function() {
 log('📋 Herramienta lista.', 'info');
 log('Orden sugerido:', 'info');
 log('  1. Re-escanear todo', 'info');
-log('  2. Analizar historial_tareas (ver estructura)', 'info');
+log('  2. Analizar historial_tareas', 'info');
 log('  3. Comparar historial vs historial_tareas', 'info');
 log('  4. Buscar subcolecciones sesiones', 'info');
 log('  5. Migrar historial_tareas → /sesiones/', 'info');
-log('  6. Migrar historial (simple) → /sesiones/ (si tiene datos)', 'info');
+log('  6. Corregir estado: pausada → finalizada', 'info');
 log('  7. Verificar migración', 'info');
 log('  8. Limpiar sesionesActivas', 'info');
 log('  9. Analizar obsoletas', 'info');
