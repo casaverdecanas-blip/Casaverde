@@ -35,6 +35,7 @@
   .diag-actions .btn-do:hover { background: #234a1f; }
   .diag-actions .btn-danger { background: #c0271f; color: #fff; border-color: #c0271f; }
   .diag-actions .btn-warn { background: #d97706; color: #fff; border-color: #d97706; }
+  .diag-actions .btn-info { background: #1f5fb0; color: #fff; border-color: #1f5fb0; }
   .diag-log { 
     background: #1a1a1a; color: #a0d8a0; font-family: monospace; font-size: 12px; 
     padding: 12px; border-radius: 8px; max-height: 400px; overflow: auto; 
@@ -74,15 +75,22 @@
       <div style="font-size:12px;color:#66735f;margin-bottom:8px">
         <b>Paso 1:</b> Diagnóstico · 
         <b>Paso 2:</b> Analizar historial_tareas · 
-        <b>Paso 3:</b> Migrar historial_tareas → /sesiones/ · 
-        <b>Paso 4:</b> Verificar · 
-        <b>Paso 5:</b> Limpiar
+        <b>Paso 3:</b> Comparar historial vs historial_tareas · 
+        <b>Paso 4:</b> Buscar subcolecciones · 
+        <b>Paso 5:</b> Migrar · 
+        <b>Paso 6:</b> Verificar · 
+        <b>Paso 7:</b> Limpiar
       </div>
 
       <div class="diag-actions">
         <button onclick="escanearTodo()" class="btn-do">🔍 Re-escanear todo</button>
         <button onclick="analizarHistorialTareas()" class="btn-do">🔬 Analizar historial_tareas</button>
+        <button onclick="compararHistorialYHistorialTareas()" class="btn-warn">🔬 Comparar historial vs historial_tareas</button>
+        <button onclick="buscarSubcoleccionesSesiones()" class="btn-info">🔍 Buscar subcolecciones sesiones</button>
+      </div>
+      <div class="diag-actions" style="margin-top:4px">
         <button onclick="migrarHistorialASesiones()" class="btn-warn">📦 Migrar historial_tareas → /sesiones/</button>
+        <button onclick="migrarHistorialSimpleASesiones()" class="btn-warn">📦 Migrar historial (simple) → /sesiones/</button>
         <button onclick="verificarMigracion()" class="btn-do">✅ Verificar migración</button>
       </div>
       <div class="diag-actions" style="margin-top:4px">
@@ -183,6 +191,13 @@ window.escanearTodo = async function() {
           var det2 = [];
           for (var ek in estados) det2.push(ek + ': ' + estados[ek]);
           log('   ↳ Estados: ' + det2.join(', '), 'info');
+
+          // Contar migrados vs nuevos
+          var migrados = 0, nuevos = 0;
+          snap.forEach(function(d) {
+            if (d.data()._migradoDe) migrados++; else nuevos++;
+          });
+          log('   ↳ Migrados: ' + migrados + ' | Nuevos: ' + nuevos, 'info');
         }
       }
     } catch (e) {
@@ -212,7 +227,6 @@ window.escanearTodo = async function() {
 window.analizarHistorialTareas = async function() {
   logEl.innerHTML = '';
   log('🔬 ANALIZANDO historial_tareas...', 'info');
-  log('Objetivo: entender la estructura exacta para migrar sin perder datos.', 'info');
   logSep();
 
   try {
@@ -220,11 +234,9 @@ window.analizarHistorialTareas = async function() {
     log('Total: ' + snap.size + ' documentos', 'info');
     logSep();
 
-    // Agrupaciones
     var porTipo = {};
     var porTipoCrono = {};
     var porUsuario = {};
-    var porCabana = {};
     var totalHoras = 0;
     var totalMonto = 0;
     var todosCampos = {};
@@ -232,39 +244,26 @@ window.analizarHistorialTareas = async function() {
 
     snap.forEach(function(d) {
       var h = d.data();
-
-      // Tipo de registro
       var tipo = h.tipoRegistro || 'sin_tipo';
       porTipo[tipo] = (porTipo[tipo] || 0) + 1;
 
-      // Con/sin cronómetro
       var cronoKey = h.conCronometro ? 'con_crono' : 'sin_crono';
       if (!porTipoCrono[tipo]) porTipoCrono[tipo] = {};
       porTipoCrono[tipo][cronoKey] = (porTipoCrono[tipo][cronoKey] || 0) + 1;
 
-      // Usuario
-      var uid = h.finalizadoPor || 'anonimo';
-      var nombre = h.finalizadoNombre || '';
-      var keyUsr = nombre || uid;
-      if (!porUsuario[keyUsr]) porUsuario[keyUsr] = { count: 0, uid: uid };
+      var uidU = h.finalizadoPor || 'anonimo';
+      var nombreU = h.finalizadoNombre || '';
+      var keyUsr = nombreU || uidU;
+      if (!porUsuario[keyUsr]) porUsuario[keyUsr] = { count: 0, uid: uidU };
       porUsuario[keyUsr].count++;
 
-      // Cabaña
-      var cab = h.cabana;
-      if (cab !== null && cab !== undefined) {
-        porCabana[cab] = (porCabana[cab] || 0) + 1;
-      }
-
-      // Totales
       totalHoras += h.totalHoras || 0;
       totalMonto += h.monto || 0;
 
-      // Muestra por tipo (primer doc de cada tipo)
       if (!muestrasPorTipo[tipo]) {
         muestrasPorTipo[tipo] = { id: d.id, data: h };
       }
 
-      // Recolectar todos los campos
       for (var k in h) {
         if (!todosCampos[k]) {
           var val = h[k];
@@ -277,8 +276,6 @@ window.analizarHistorialTareas = async function() {
       }
     });
 
-    // ── Mostrar análisis ──────────────────────────────────
-
     log('📊 POR TIPO DE REGISTRO:', 'hl');
     var tipos = Object.keys(porTipo).sort();
     for (var i = 0; i < tipos.length; i++) {
@@ -288,15 +285,14 @@ window.analizarHistorialTareas = async function() {
     }
     logSep();
 
-    log('🔑 CAMPOS DETECTADOS en historial_tareas:', 'hl');
+    log('🔑 CAMPOS DETECTADOS:', 'hl');
     var camposOrdenados = Object.keys(todosCampos).sort();
     for (var c = 0; c < camposOrdenados.length; c++) {
-      var campo = camposOrdenados[c];
-      log('   ' + campo + ': ' + todosCampos[campo], 'info');
+      log('   ' + camposOrdenados[c] + ': ' + todosCampos[camposOrdenados[c]], 'info');
     }
     logSep();
 
-    log('📋 MUESTRAS POR TIPO (primer documento):', 'hl');
+    log('📋 MUESTRAS POR TIPO:', 'hl');
     for (var j = 0; j < tipos.length; j++) {
       var tipo = tipos[j];
       var muestra = muestrasPorTipo[tipo];
@@ -313,35 +309,178 @@ window.analizarHistorialTareas = async function() {
     }
     logSep();
 
-    if (Object.keys(porCabana).length > 0) {
-      log('🏠 POR CABAÑA:', 'hl');
-      for (var cab in porCabana) {
-        log('   ' + cab + ': ' + porCabana[cab] + ' registros', 'info');
-      }
-      logSep();
-    }
-
     log('💰 TOTALES:', 'ok');
     log('   Horas totales: ' + Math.round(totalHoras * 100) / 100 + 'h', 'ok');
     log('   Monto total: R$ ' + Math.round(totalMonto * 100) / 100, 'ok');
     logSep();
 
-    log('📐 MAPEO PARA MIGRACIÓN A /sesiones/:', 'hl');
-    log('   historial_tareas.tareaId        → sesiones.actividadId', 'info');
-    log('   historial_tareas.nombre          → sesiones.actividadNombre', 'info');
-    log('   historial_tareas.finalizadoPor   → sesiones.uid', 'info');
-    log('   historial_tareas.finalizadoNombre→ sesiones.nombre', 'info');
-    log('   historial_tareas.totalHoras      → sesiones.horas', 'info');
-    log('   historial_tareas.finalizadoEn    → sesiones.inicio (aprox.)', 'info');
-    log('   historial_tareas.conCronometro   → sesiones.tipo', 'info');
-    log('   historial_tareas.tipoRegistro    → define sesiones.estado', 'info');
-    log('   ⚠️ No tiene inicio exacto → se calcula: fin - horas', 'warn');
-    log('   ⚠️ colaboradores[] → se crea una sesión POR colaborador', 'warn');
-    logSep();
-    log('✅ ANÁLISIS COMPLETADO — listo para migrar', 'ok');
+    log('✅ ANÁLISIS COMPLETADO', 'ok');
 
   } catch (e) {
     log('❌ Error: ' + e.message, 'err');
+  }
+};
+
+// ── COMPARAR historial vs historial_tareas ─────────────────
+window.compararHistorialYHistorialTareas = async function() {
+  logEl.innerHTML = '';
+  log('🔬 COMPARANDO historial (83 docs) vs historial_tareas (59 docs)...', 'info');
+  logSep();
+
+  try {
+    var hSnap = await db.collection('historial').get();
+    var htSnap = await db.collection('historial_tareas').get();
+
+    log('historial: ' + hSnap.size + ' docs', 'info');
+    log('historial_tareas: ' + htSnap.size + ' docs', 'info');
+    logSep();
+
+    // Ver estructura de historial
+    log('📋 ESTRUCTURA DE historial:', 'hl');
+    var tiposHist = {};
+    var muestrasPorEstructura = {};
+
+    hSnap.forEach(function(d) {
+      var h = d.data();
+      var campos = Object.keys(h).sort().join(', ');
+      if (!tiposHist[campos]) tiposHist[campos] = { count: 0, muestra: null };
+      tiposHist[campos].count++;
+      if (!tiposHist[campos].muestra) {
+        tiposHist[campos].muestra = { id: d.id, data: h };
+      }
+    });
+
+    for (var k in tiposHist) {
+      log('   Estructura [' + tiposHist[k].count + ' docs]: ' + k, 'info');
+      if (tiposHist[k].muestra) {
+        log('   Muestra: ' + JSON.stringify(tiposHist[k].muestra.data).slice(0, 400), 'info');
+      }
+      logSep();
+    }
+
+    // Ver si historial tiene datos de tiempo
+    var conHoras = 0, conTimestamp = 0, conUsuario = 0, conTarea = 0;
+    var conInicio = 0, conFin = 0, conDuracion = 0;
+
+    hSnap.forEach(function(d) {
+      var h = d.data();
+      if (h.horas || h.totalHoras || h.duracion) conHoras++;
+      if (h.timestamp || h.inicio || h.fin || h.finalizadoEn || h.fecha) conTimestamp++;
+      if (h.usuarioId || h.uid || h.finalizadoPor) conUsuario++;
+      if (h.tareaId || h.actividadId) conTarea++;
+      if (h.inicio) conInicio++;
+      if (h.fin) conFin++;
+      if (h.duracion) conDuracion++;
+    });
+
+    log('📊 DATOS DE TIEMPO EN historial:', 'hl');
+    log('   Con horas/duración: ' + conHoras + '/' + hSnap.size, conHoras > 0 ? 'warn' : 'info');
+    log('   Con timestamp/fecha: ' + conTimestamp + '/' + hSnap.size, 'info');
+    log('   Con usuario: ' + conUsuario + '/' + hSnap.size, 'info');
+    log('   Con tarea/actividad: ' + conTarea + '/' + hSnap.size, 'info');
+    log('   Con inicio explícito: ' + conInicio, conInicio > 0 ? 'warn' : 'info');
+    log('   Con fin explícito: ' + conFin, conFin > 0 ? 'warn' : 'info');
+    log('   Con duración: ' + conDuracion, conDuracion > 0 ? 'warn' : 'info');
+    logSep();
+
+    if (conHoras === 0 && conInicio === 0 && conFin === 0) {
+      log('⚠️ historial NO tiene datos de tiempo (horas, inicio, fin).', 'warn');
+      log('   → Es un LOG DE ACCIONES: registra "quién hizo qué y cuándo".', 'info');
+      log('   → NO es migrable a /sesiones/ (sin datos de duración).', 'info');
+    } else if (conHoras > 0 || (conInicio > 0 && conFin > 0)) {
+      log('✅ historial TIENE datos de tiempo — ¡hay que migrar!', 'ok');
+      log('   → Usá el botón "Migrar historial (simple) → /sesiones/"', 'info');
+    }
+
+    // Comparar tareaIds entre ambas colecciones
+    var idsHT = {};
+    htSnap.forEach(function(d) { idsHT[d.data().tareaId] = true; });
+    var idsH = {};
+    hSnap.forEach(function(d) { 
+      var h = d.data();
+      var tid = h.tareaId || h.actividadId;
+      if (tid) idsH[tid] = true;
+    });
+
+    var soloEnH = 0;
+    for (var idh in idsH) { if (!idsHT[idh]) soloEnH++; }
+    var soloEnHT = 0;
+    for (var idht in idsHT) { if (!idsH[idht]) soloEnHT++; }
+
+    log('📊 COMPARACIÓN DE tareaIds:', 'hl');
+    log('   tareaIds únicos en historial: ' + Object.keys(idsH).length, 'info');
+    log('   tareaIds únicos en historial_tareas: ' + Object.keys(idsHT).length, 'info');
+    log('   Solo en historial (no en historial_tareas): ' + soloEnH, soloEnH > 0 ? 'warn' : 'ok');
+    log('   Solo en historial_tareas (no en historial): ' + soloEnHT, 'info');
+    logSep();
+
+    log('✅ COMPARACIÓN COMPLETADA', 'ok');
+
+  } catch (e) {
+    log('❌ Error: ' + e.message, 'err');
+  }
+};
+
+// ── BUSCAR SUBSESIONES ────────────────────────────────────
+window.buscarSubcoleccionesSesiones = async function() {
+  logEl.innerHTML = '';
+  log('🔍 BUSCANDO SUBSESIONES (subcolecciones "sesiones")...', 'info');
+  log('Busca en: actividades/{id}/sesiones y tareas/{id}/sesiones', 'info');
+  logSep();
+
+  var totalSub = 0;
+
+  // En actividades
+  try {
+    var aSnap = await db.collection('actividades').get();
+    log('📁 actividades: ' + aSnap.size + ' docs', 'info');
+    var conSub = 0;
+    for (var i = 0; i < aSnap.docs.length; i++) {
+      try {
+        var sSnap = await db.collection('actividades').doc(aSnap.docs[i].id).collection('sesiones').get();
+        if (sSnap.size > 0) {
+          conSub++;
+          totalSub += sSnap.size;
+          log('   ↳ ' + aSnap.docs[i].id + ': ' + sSnap.size + ' sesiones', 'warn');
+          // Mostrar estructura de una sesión
+          var s0 = sSnap.docs[0].data();
+          log('      Campos: ' + Object.keys(s0).sort().join(', '), 'info');
+        }
+      } catch(e) {}
+    }
+    log('   ' + conSub + ' actividades con subcolección sesiones (' + totalSub + ' total)', conSub > 0 ? 'warn' : 'ok');
+  } catch(e) { log('❌ Error: ' + e.message, 'err'); }
+
+  logSep();
+
+  // En tareas
+  try {
+    var tSnap = await db.collection('tareas').get();
+    log('📁 tareas: ' + tSnap.size + ' docs', 'info');
+    var conSubT = 0, totalSubT = 0;
+    for (var j = 0; j < tSnap.docs.length; j++) {
+      try {
+        var sSnapT = await db.collection('tareas').doc(tSnap.docs[j].id).collection('sesiones').get();
+        if (sSnapT.size > 0) {
+          conSubT++;
+          totalSubT += sSnapT.size;
+          log('   ↳ ' + tSnap.docs[j].id + ': ' + sSnapT.size + ' sesiones', 'warn');
+          var s1 = sSnapT.docs[0].data();
+          log('      Campos: ' + Object.keys(s1).sort().join(', '), 'info');
+        }
+      } catch(e) {}
+    }
+    log('   ' + conSubT + ' tareas con subcolección sesiones (' + totalSubT + ' total)', conSubT > 0 ? 'warn' : 'ok');
+    totalSub += totalSubT;
+  } catch(e) { log('📁 tareas: vacía o sin acceso', 'info'); }
+
+  logSep();
+  log('✅ TOTAL subsessiones encontradas: ' + totalSub, totalSub > 0 ? 'warn' : 'ok');
+  if (totalSub > 0) {
+    log('⚠️ Hay sesiones sin migrar en subcolecciones.', 'warn');
+    log('   Ejecutá "Migrar subcolecciones → /sesiones/" para migrarlas.', 'info');
+  } else {
+    log('✅ No hay sesiones sin migrar.', 'ok');
   }
 };
 
@@ -358,7 +497,6 @@ window.migrarHistorialASesiones = async function() {
     log('Total a procesar: ' + snap.size + ' documentos', 'info');
     logSep();
 
-    // Ver qué hay ya en /sesiones/
     var existentesSnap = await db.collection('sesiones').get();
     var existentes = {};
     existentesSnap.forEach(function(d) {
@@ -379,10 +517,8 @@ window.migrarHistorialASesiones = async function() {
       var doc = snap.docs[i];
       var h = doc.data();
 
-      // Determinar colaboradores
       var colaboradores = h.colaboradores || [];
       if (colaboradores.length === 0) {
-        // Sin colaboradores explícitos → usar finalizadoPor
         colaboradores = [{
           uid: h.finalizadoPor || '',
           nombre: h.finalizadoNombre || '',
@@ -394,16 +530,14 @@ window.migrarHistorialASesiones = async function() {
         conColaboradores++;
       }
 
-      // Crear una sesión por cada colaborador
       for (var j = 0; j < colaboradores.length; j++) {
         var col = colaboradores[j];
         var uidCol = col.uid || h.finalizadoPor || '';
         var nombreCol = col.nombre || h.finalizadoNombre || '';
         var horasCol = col.horas || 0;
 
-        if (!uidCol) continue; // Sin UID no se puede migrar
+        if (!uidCol) continue;
 
-        // Calcular inicio aproximado: finalizadoEn - horas
         var fin = h.finalizadoEn || firebase.firestore.Timestamp.now();
         var finMs = fin.toMillis ? fin.toMillis() : Date.now();
         var inicioMs = finMs - (horasCol * 3600000);
@@ -445,7 +579,6 @@ window.migrarHistorialASesiones = async function() {
         }
       }
 
-      // Progreso cada 10 docs
       if ((i + 1) % 10 === 0) {
         log('   Procesados: ' + (i + 1) + '/' + snap.size + ' — Creadas: ' + creadas, 'info');
       }
@@ -461,7 +594,89 @@ window.migrarHistorialASesiones = async function() {
     log('   Errores: ' + errores, errores > 0 ? 'err' : 'info');
     logSep();
     log('⚠️ historial_tareas NO fue modificado.', 'warn');
-    log('⚠️ Las sesiones migradas tienen campo _migradoDe para trazabilidad.', 'info');
+
+  } catch (e) {
+    log('❌ Error general: ' + e.message, 'err');
+  }
+};
+
+// ── MIGRAR historial (simple) → /sesiones/ ────────────────
+window.migrarHistorialSimpleASesiones = async function() {
+  logEl.innerHTML = '';
+  log('📦 MIGRANDO historial (83 docs) → /sesiones/', 'info');
+  log('Esta colección tiene estructura simple: {usuarioId, tareaId, timestamp}', 'info');
+  log('Se crea una sesión por registro con horas=0 (sin dato de duración).', 'warn');
+  logSep();
+
+  try {
+    var snap = await db.collection('historial').get();
+    log('Total a procesar: ' + snap.size + ' documentos', 'info');
+    logSep();
+
+    var existentesSnap = await db.collection('sesiones').get();
+    var existentes = {};
+    existentesSnap.forEach(function(d) {
+      var s = d.data();
+      var key = s.actividadId + '|' + s.uid + '|' + (s.inicio ? s.inicio.toMillis() : 0);
+      existentes[key] = true;
+    });
+
+    var creadas = 0;
+    var omitidas = 0;
+    var errores = 0;
+
+    for (var i = 0; i < snap.docs.length; i++) {
+      var doc = snap.docs[i];
+      var h = doc.data();
+
+      var uidCol = h.usuarioId || '';
+      var tareaId = h.tareaId || '';
+      var ts = h.timestamp || firebase.firestore.Timestamp.now();
+      var tsMs = ts.toMillis ? ts.toMillis() : Date.now();
+
+      if (!uidCol || !tareaId) continue;
+
+      var key = tareaId + '|' + uidCol + '|' + tsMs;
+
+      if (existentes[key]) {
+        omitidas++;
+        continue;
+      }
+
+      try {
+        await db.collection('sesiones').add({
+          actividadId: tareaId,
+          actividadNombre: '(registro histórico)',
+          uid: uidCol,
+          nombre: '',
+          inicio: ts,
+          fin: ts,
+          horas: 0,
+          estado: 'finalizada',
+          tipo: 'manual',
+          creadoPor: uidCol,
+          creadoEn: ts,
+          actualizadoEn: firebase.firestore.Timestamp.now(),
+          notas: 'Migrado de historial (sin datos de duración)',
+          _migradoDe: 'historial/' + doc.id
+        });
+        creadas++;
+        existentes[key] = true;
+      } catch (e) {
+        errores++;
+        if (errores <= 5) log('   ❌ Error: ' + e.message, 'err');
+      }
+    }
+
+    logSep();
+    log('✅ MIGRACIÓN COMPLETADA', 'ok');
+    log('   Documentos procesados: ' + snap.size, 'info');
+    log('   Sesiones creadas: ' + creadas, 'ok');
+    log('   Omitidas (ya existían): ' + omitidas, 'info');
+    log('   Errores: ' + errores, errores > 0 ? 'err' : 'info');
+    logSep();
+    log('⚠️ Estas sesiones tienen horas=0 porque historial no guarda duración.', 'warn');
+    log('⚠️ Son útiles para trazabilidad, no para estadísticas de tiempo.', 'info');
 
   } catch (e) {
     log('❌ Error general: ' + e.message, 'err');
@@ -476,9 +691,11 @@ window.verificarMigracion = async function() {
 
   try {
     var htSnap = await db.collection('historial_tareas').get();
+    var hSnap = await db.collection('historial').get();
     var sesSnap = await db.collection('sesiones').get();
 
     log('   historial_tareas: ' + htSnap.size + ' docs', 'info');
+    log('   historial: ' + hSnap.size + ' docs', 'info');
     log('   /sesiones/: ' + sesSnap.size + ' docs', 'info');
     logSep();
 
@@ -487,19 +704,11 @@ window.verificarMigracion = async function() {
       return;
     }
 
-    // Verificar por tipo
-    var porTipo = {};
-    var horasHT = 0, horasSes = 0;
     var porEstado = {};
-
-    htSnap.forEach(function(d) {
-      var h = d.data();
-      horasHT += h.totalHoras || 0;
-      var cols = h.colaboradores || [];
-      if (cols.length === 0) {
-        horasHT += 0; // ya sumado con totalHoras
-      }
-    });
+    var porTipo = {};
+    var horasSes = 0;
+    var migradas = 0;
+    var nuevas = 0;
 
     sesSnap.forEach(function(d) {
       var s = d.data();
@@ -508,6 +717,7 @@ window.verificarMigracion = async function() {
       porEstado[est] = (porEstado[est] || 0) + 1;
       var tipo = s.tipo || 'sin_tipo';
       porTipo[tipo] = (porTipo[tipo] || 0) + 1;
+      if (s._migradoDe) migradas++; else nuevas++;
     });
 
     log('📊 /sesiones/ POR ESTADO:', 'hl');
@@ -518,25 +728,14 @@ window.verificarMigracion = async function() {
     for (var t in porTipo) log('   ' + t + ': ' + porTipo[t], 'info');
     logSep();
 
-    log('💰 COMPARACIÓN DE HORAS:', 'hl');
-    log('   historial_tareas: ' + Math.round(horasHT * 100) / 100 + 'h', 'info');
-    log('   /sesiones/: ' + Math.round(horasSes * 100) / 100 + 'h', 'info');
-    log('   Diferencia: ' + Math.round(Math.abs(horasHT - horasSes) * 100) / 100 + 'h', 
-        Math.abs(horasHT - horasSes) < 0.5 ? 'ok' : 'warn');
+    log('📊 /sesiones/ POR ORIGEN:', 'hl');
+    log('   Migradas: ' + migradas, 'info');
+    log('   Nuevas (sistema actual): ' + nuevas, 'info');
     logSep();
 
-    // Mostrar algunas sesiones migradas
-    log('📋 MUESTRAS DE SESIONES MIGRADAS:', 'hl');
-    var count = 0;
-    sesSnap.forEach(function(d) {
-      if (count >= 5) return;
-      var s = d.data();
-      if (s._migradoDe) {
-        count++;
-        log('   [' + (s._tipoOriginal || '?') + '] ' + (s.actividadNombre || 'sin nombre') + ' — ' + (s.nombre || '?') + ' — ' + Math.round((s.horas||0)*100)/100 + 'h', 'info');
-      }
-    });
+    log('💰 TOTAL HORAS en /sesiones/: ' + Math.round(horasSes * 100) / 100 + 'h', 'ok');
     logSep();
+
     log('✅ VERIFICACIÓN COMPLETADA', 'ok');
 
   } catch (e) {
@@ -595,10 +794,13 @@ log('📋 Herramienta lista.', 'info');
 log('Orden sugerido:', 'info');
 log('  1. Re-escanear todo', 'info');
 log('  2. Analizar historial_tareas (ver estructura)', 'info');
-log('  3. Migrar historial_tareas → /sesiones/', 'info');
-log('  4. Verificar migración (comparar horas)', 'info');
-log('  5. Limpiar sesionesActivas', 'info');
-log('  6. Analizar obsoletas', 'info');
+log('  3. Comparar historial vs historial_tareas', 'info');
+log('  4. Buscar subcolecciones sesiones', 'info');
+log('  5. Migrar historial_tareas → /sesiones/', 'info');
+log('  6. Migrar historial (simple) → /sesiones/ (si tiene datos)', 'info');
+log('  7. Verificar migración', 'info');
+log('  8. Limpiar sesionesActivas', 'info');
+log('  9. Analizar obsoletas', 'info');
 log('⚠️ NADA se borra automáticamente.', 'warn');
 logSep();
 await escanearTodo();
