@@ -1,11 +1,7 @@
 // =========================================================
 //  actividades-core.js — Casa Verde Canas
-//  Motor de cronómetro + honorario para la colección 'actividades'.
-//
-//  v4.44 — CONTROL DE CRONÓMETRO ÚNICO:
-//   - Impide que un usuario tenga más de un cronómetro corriendo
-//   - Verifica en collectionGroup antes de iniciar
-//   - Sincronización de sesionesActivas con subcolección
+//  Motor de actividades + Sesiones unificadas v5.0
+//  Julio 2026
 // =========================================================
 (function () {
     var CVC = window.CVC;
@@ -102,284 +98,312 @@
         return _porPrioridad(t.prioridad);
     }
 
-    // ── Sincronizar sesionesActivas ──────────────────────────
-    async function _sincronizarSesionesActivas(actId, ref) {
+    // ── ════════════════════════════════════════════════════════
+    //  SISTEMA UNIFICADO DE SESIONES v5.0
+    //  Colección raíz: /sesiones/{id}
+    // ════════════════════════════════════════════════════════════
+
+    /**
+     * Verificar si el usuario tiene una sesión activa (en_curso)
+     * en CUALQUIER actividad
+     */
+    async function _usuarioTieneSesionActiva(uid) {
         try {
-            var snap = await ref.get();
-            if (!snap.exists) return null;
-
-            var sesSnap = await ref.collection('sesiones').get();
-            var activasReales = [];
-            var ahora = tsAhora();
-
-            sesSnap.forEach(function(d) {
-                var s = d.data();
-                if (s.fin === null || s.fin === undefined) {
-                    activasReales.push({
-                        uid: s.uid,
-                        nombre: s.nombre || '',
-                        inicio: s.inicio || ahora
-                    });
-                }
-            });
-
-            var t = snap.data();
-            var activasActuales = t.sesionesActivas || [];
-            var cambio = activasActuales.length !== activasReales.length;
-
-            if (!cambio) {
-                for (var i = 0; i < activasActuales.length; i++) {
-                    var a = activasActuales[i];
-                    var encontrada = activasReales.some(function(r) {
-                        return r.uid === a.uid && r.inicio && a.inicio &&
-                               r.inicio.toMillis && a.inicio.toMillis &&
-                               Math.abs(r.inicio.toMillis() - a.inicio.toMillis()) < 1000;
-                    });
-                    if (!encontrada) { cambio = true; break; }
-                }
-            }
-
-            if (cambio) {
-                await ref.update({
-                    sesionesActivas: activasReales,
-                    estado: activasReales.length ? 'en_curso' : 'pendiente'
-                });
-                return activasReales;
-            }
-            return activasActuales;
-        } catch (e) {
-            console.warn('Error sincronizando sesiones:', e.message);
-            return null;
-        }
-    }
-
-    // ── Verificar si el usuario tiene OTRO cronómetro ────────
-    async function _usuarioTieneCronoActivo(uid, actIdExcluir) {
-        try {
-            var sesSnap = await db.collectionGroup('sesiones')
+            var snap = await db.collection('sesiones')
                 .where('uid', '==', uid)
-                .where('fin', '==', null)
+                .where('estado', '==', 'en_curso')
+                .limit(1)
                 .get();
-
-            for (var doc of sesSnap.docs) {
-                var actId = doc.ref.parent.parent.id;
-                if (actId !== actIdExcluir) {
-                    return true;
-                }
-            }
-            return false;
+            return !snap.empty;
         } catch (e) {
             return false;
         }
     }
 
-    // ── ▶ Iniciar mi sesión de cronómetro ───────────────────
+    /**
+     * Iniciar una sesión de trabajo
+     * Crea UN registro en /sesiones/
+     * Verifica que el usuario no tenga otra sesión activa
+     */
     async function actIniciar(actId, user) {
         if (!user || !user.uid) {
-            return db.collection('actividades').doc(actId).update({ estado: 'en_curso' });
+            throw new Error('Usuario no identificado');
         }
 
-        // Verificar si ya tiene otro cronómetro
-        var yaTieneOtro = await _usuarioTieneCronoActivo(user.uid, actId);
-        if (yaTieneOtro) {
+        // Verificar si ya tiene una sesión activa en cualquier actividad
+        var yaTiene = await _usuarioTieneSesionActiva(user.uid);
+        if (yaTiene) {
             throw new Error('Ya tienes otro cronómetro corriendo. Finalízalo o pausalo antes de iniciar este.');
         }
 
-        var ref = db.collection('actividades').doc(actId);
-        var snap = await ref.get();
-        if (!snap.exists) throw new Error('La actividad no existe.');
-        var t = snap.data();
-
-        var activas = await _sincronizarSesionesActivas(actId, ref);
-        if (activas && activas.some(function (s) { return s.uid === user.uid; })) {
-            return;
-        }
+        // Obtener datos de la actividad
+        var actRef = db.collection('actividades').doc(actId);
+        var actSnap = await actRef.get();
+        if (!actSnap.exists) throw new Error('La actividad no existe.');
+        var actData = actSnap.data();
 
         var ahora = tsAhora();
 
-        await ref.collection('sesiones').add({
+        // Crear sesión en la colección raíz
+        var sesionRef = await db.collection('sesiones').add({
+            actividadId: actId,
+            actividadNombre: actData.titulo || actData.nombre || '',
             uid: user.uid,
             nombre: user.nombre || '',
             inicio: ahora,
             fin: null,
-            alcance: t.alcance || 'personal',
-            creadoPor: t.creadoPor || null,
-            competencias: t.competencias || []
+            horas: 0,
+            estado: 'en_curso',
+            tipo: 'cronometro',
+            creadoPor: user.uid,
+            creadoEn: ahora,
+            actualizadoEn: ahora
         });
 
-        var nuevasActivas = activas || [];
-        nuevasActivas.push({ uid: user.uid, nombre: user.nombre || '', inicio: ahora });
-        await ref.update({ estado: 'en_curso', sesionesActivas: nuevasActivas });
+        // Actualizar actividad
+        await actRef.update({
+            estado: 'en_curso',
+            sesionActualId: sesionRef.id
+        });
+
+        return sesionRef.id;
     }
 
-    // ── ⏸ Pausar mi sesión ──────────────────────────────────
+    /**
+     * Pausar sesión: cierra el bloque actual pero permite continuar después
+     * Mismo tipo de registro que finalizar — solo cambia estado:'pausada'
+     */
     async function actPausar(actId, user) {
-        var ref = db.collection('actividades').doc(actId);
         if (!user || !user.uid) {
-            return ref.update({ estado: 'pendiente', sesionesActivas: [] });
+            throw new Error('Usuario no identificado');
         }
 
         var ahora = tsAhora();
-        var snap = await ref.get();
-        if (!snap.exists) return;
 
-        var sesSnap = await ref.collection('sesiones')
+        // Buscar sesión activa del usuario en esta actividad
+        var snap = await db.collection('sesiones')
             .where('uid', '==', user.uid)
+            .where('estado', '==', 'en_curso')
+            .where('actividadId', '==', actId)
+            .limit(1)
             .get();
 
-        var miSesion = null;
-        sesSnap.forEach(function(d) {
-            var s = d.data();
-            if (s.fin === null || s.fin === undefined) {
-                miSesion = { ref: d.ref, data: s };
-            }
+        if (snap.empty) {
+            throw new Error('No hay sesión activa para pausar');
+        }
+
+        var doc = snap.docs[0];
+        var data = doc.data();
+        var inicioMs = data.inicio.toMillis();
+        var horas = (ahora.toMillis() - inicioMs) / 3600000;
+
+        await doc.ref.update({
+            fin: ahora,
+            horas: Math.round(horas * 100) / 100,
+            estado: 'pausada',
+            actualizadoEn: ahora
         });
 
-        if (miSesion) {
-            await miSesion.ref.update({ fin: ahora });
-        }
+        // Actualizar actividad
+        var actRef = db.collection('actividades').doc(actId);
+        await actRef.update({
+            estado: 'pendiente',
+            sesionActualId: null
+        });
 
-        await _sincronizarSesionesActivas(actId, ref);
-    }
-
-    // ── Cierre de ciclo ──────────────────────────────────────
-    async function cerrarCiclo(ref, t, sesDocs, user, conCrono) {
-        try { await actCargarTemporada(); } catch (e) { }
-        var ciclo = actCiclo(t);
-
-        if (sesDocs && sesDocs.length) {
-            var batch = db.batch();
-            sesDocs.forEach(function (d) { batch.delete(d.ref); });
-            await batch.commit();
-        }
-
-        var meta = {
-            ultimaRealizacion: sumarDiasISO(0),
-            ultimaRealizacionPor: (user && user.nombre) ? user.nombre : '',
-            ultimaRealizacionConCrono: !!conCrono
+        return {
+            sesionId: doc.id,
+            horas: Math.round(horas * 100) / 100
         };
-
-        if (ciclo > 0) {
-            await ref.update(Object.assign({
-                estado: 'pendiente',
-                fechaInicio: sumarDiasISO(ciclo),
-                sesionesActivas: [],
-                hecho: false,
-                hechoPor: null,
-                hechoEn: null
-            }, meta));
-        } else {
-            await ref.update(Object.assign({
-                estado: 'finalizada',
-                sesionesActivas: [],
-                hecho: true,
-                hechoPor: (user && user.uid) ? user.uid : null,
-                hechoEn: serverTs(),
-                finalizadoEn: serverTs()
-            }, meta));
-        }
     }
 
-    // ── ⏹ Finalizar ──────────────────────────────────────────
-    async function actFinalizar(actId, user) {
-        user = user || {};
-        var ref = db.collection('actividades').doc(actId);
-        var snap = await ref.get();
-        if (!snap.exists) throw new Error('La actividad no existe.');
-        var t = snap.data();
+    /**
+     * Reanudar una sesión pausada (o iniciar nueva si no hay)
+     */
+    async function actReanudar(actId, user) {
+        if (!user || !user.uid) {
+            throw new Error('Usuario no identificado');
+        }
+
+        // Verificar que no tenga otra sesión activa
+        var yaTiene = await _usuarioTieneSesionActiva(user.uid);
+        if (yaTiene) {
+            throw new Error('Ya tienes una sesión activa en otra actividad');
+        }
+
+        // Buscar última sesión pausada de esta actividad
+        var snap = await db.collection('sesiones')
+            .where('uid', '==', user.uid)
+            .where('estado', '==', 'pausada')
+            .where('actividadId', '==', actId)
+            .orderBy('actualizadoEn', 'desc')
+            .limit(1)
+            .get();
+
         var ahora = tsAhora();
 
-        var sesSnap = await ref.collection('sesiones').get();
+        if (!snap.empty) {
+            // Reactivar sesión existente
+            var doc = snap.docs[0];
+            await doc.ref.update({
+                fin: null,
+                estado: 'en_curso',
+                actualizadoEn: ahora
+            });
 
-        var batchCierre = db.batch();
-        var huboAbiertas = false;
-        sesSnap.docs.forEach(function (d) {
-            var s = d.data();
-            if (s.fin === null || s.fin === undefined) {
-                batchCierre.update(d.ref, { fin: ahora });
-                huboAbiertas = true;
-            }
-        });
-        if (huboAbiertas) await batchCierre.commit();
+            // Actualizar actividad
+            var actRef = db.collection('actividades').doc(actId);
+            await actRef.update({
+                estado: 'en_curso',
+                sesionActualId: doc.id
+            });
 
-        var sesSnap2 = await ref.collection('sesiones').get();
+            return doc.id;
+        } else {
+            // No hay sesión pausada — iniciar nueva
+            return await actIniciar(actId, user);
+        }
+    }
 
-        var porUid = {};
-        sesSnap2.docs.forEach(function (d) {
-            var s = d.data();
-            if (s.invalidada) return;
-            var ini = aDateSeguro(s.inicio);
-            var fin = aDateSeguro(s.fin) || aDateSeguro(ahora);
-            if (!ini || !fin) return;
-            var horas = Math.max(0, (fin - ini) / 3600000);
-            if (!porUid[s.uid]) porUid[s.uid] = { uid: s.uid, nombre: s.nombre || '', horas: 0 };
-            porUid[s.uid].horas += horas;
-        });
-
-        var lista = Object.keys(porUid).map(function (k) { return porUid[k]; });
-        var totalHoras = lista.reduce(function (sum, c) { return sum + c.horas; }, 0);
-        var montoTarea = t.monto || 0;
-
-        var colaboradores = lista.map(function (c) {
-            var proporcion = totalHoras > 0 ? (c.horas / totalHoras) : 0;
-            return {
-                uid: c.uid,
-                nombre: c.nombre,
-                horas: Math.round(c.horas * 100) / 100,
-                montoRecibido: Math.round(montoTarea * proporcion * 100) / 100
-            };
-        });
-        var montoAsignado = colaboradores.reduce(function (s, c) { return s + c.montoRecibido; }, 0);
-
-        var costoLimpiezaBRL = 0;
-        if (t.reservaId) {
-            try { var rSnap = await db.collection('reservas').doc(t.reservaId).get(); if (rSnap.exists) costoLimpiezaBRL = rSnap.data().costoLimpiezaBRL || 0; } catch (e) { }
+    /**
+     * Finalizar sesión: cierra definitivamente (estado:'finalizada')
+     * Si cerrarActividad=true → marca la actividad como hecha
+     */
+    async function actFinalizar(actId, user, cerrarActividad) {
+        if (!user || !user.uid) {
+            throw new Error('Usuario no identificado');
         }
 
-        await db.collection('historial_tareas').add({
-            tareaId: actId,
-            nombre: nombreDe(t),
-            tipo: t.tipo || 'general',
-            cabana: (t.cabana !== undefined && t.cabana !== null) ? t.cabana : null,
-            tipoRegistro: 'finalizada',
-            conCronometro: true,
-            totalHoras: Math.round(totalHoras * 100) / 100,
-            monto: Math.round(montoAsignado * 100) / 100,
-            costoLimpiezaBRL: costoLimpiezaBRL,
-            colaboradores: colaboradores,
-            finalizadoEn: serverTs(),
-            finalizadoNombre: user.nombre || '',
-            finalizadoPor: user.uid || null
+        cerrarActividad = (cerrarActividad !== false); // default true
+
+        var ahora = tsAhora();
+
+        // Buscar sesión activa o pausada más reciente
+        var snap = await db.collection('sesiones')
+            .where('uid', '==', user.uid)
+            .where('actividadId', '==', actId)
+            .where('estado', 'in', ['en_curso', 'pausada'])
+            .orderBy('actualizadoEn', 'desc')
+            .limit(1)
+            .get();
+
+        if (snap.empty) {
+            throw new Error('No hay sesión para finalizar');
+        }
+
+        var doc = snap.docs[0];
+        var data = doc.data();
+
+        // Calcular horas
+        var horas = data.horas || 0;
+        if (data.estado === 'en_curso') {
+            var inicioMs = data.inicio.toMillis();
+            horas = (ahora.toMillis() - inicioMs) / 3600000;
+        }
+
+        // Actualizar sesión
+        await doc.ref.update({
+            fin: ahora,
+            horas: Math.round(horas * 100) / 100,
+            estado: 'finalizada',
+            actualizadoEn: ahora,
+            finalizadoPor: user.uid,
+            finalizadoNombre: user.nombre || ''
         });
 
-        for (var i = 0; i < colaboradores.length; i++) {
-            var c = colaboradores[i];
-            if (c.montoRecibido <= 0) continue;
-            await db.collection('honorarios').add({
-                uid: c.uid,
-                nombre: c.nombre,
+        // Actualizar actividad
+        var actRef = db.collection('actividades').doc(actId);
+        var actSnap = await actRef.get();
+        var actData = actSnap.data();
+
+        if (cerrarActividad) {
+            // Cerrar ciclo de la actividad
+            try { await actCargarTemporada(); } catch (e) { }
+            var ciclo = actCiclo(actData);
+
+            var updBase = {
+                estado: 'finalizada',
+                sesionActualId: null,
+                hecho: true,
+                hechoPor: user.uid,
+                hechoEn: ahora,
+                ultimaRealizacion: sumarDiasISO(0),
+                ultimaRealizacionPor: user.nombre || '',
+                ultimaRealizacionConCrono: true
+            };
+
+            if (ciclo > 0) {
+                // Recurrente: reprogramar
+                await actRef.update(Object.assign({}, updBase, {
+                    estado: 'pendiente',
+                    fechaInicio: sumarDiasISO(ciclo),
+                    hecho: false,
+                    hechoPor: null,
+                    hechoEn: null
+                }));
+            } else {
+                await actRef.update(updBase);
+            }
+
+            // Registrar en historial_tareas
+            var montoTarea = actData.monto || 0;
+            var costoLimpiezaBRL = 0;
+            if (actData.reservaId) {
+                try { var rSnap = await db.collection('reservas').doc(actData.reservaId).get(); if (rSnap.exists) costoLimpiezaBRL = rSnap.data().costoLimpiezaBRL || 0; } catch (e) { }
+            }
+
+            await db.collection('historial_tareas').add({
                 tareaId: actId,
-                concepto: nombreDe(t) || 'Actividad',
-                horas: c.horas,
-                monto: c.montoRecibido,
+                nombre: nombreDe(actData),
+                tipo: actData.tipo || 'general',
+                cabana: (actData.cabana !== undefined && actData.cabana !== null) ? actData.cabana : null,
+                tipoRegistro: 'finalizada',
+                conCronometro: true,
+                totalHoras: Math.round(horas * 100) / 100,
+                monto: montoTarea,
+                costoLimpiezaBRL: costoLimpiezaBRL,
+                colaboradores: [{ uid: user.uid, nombre: user.nombre || '', horas: Math.round(horas * 100) / 100, montoRecibido: montoTarea }],
+                finalizadoEn: serverTs(),
+                finalizadoNombre: user.nombre || '',
+                finalizadoPor: user.uid
+            });
+
+            // Honorario si corresponde
+            if (montoTarea > 0) {
+                await db.collection('honorarios').add({
+                    uid: user.uid,
+                    nombre: user.nombre || '',
+                    tareaId: actId,
+                    concepto: nombreDe(actData) || 'Actividad',
+                    horas: Math.round(horas * 100) / 100,
+                    monto: montoTarea,
+                    estado: 'pendiente',
+                    creadoEn: serverTs()
+                });
+            }
+        } else {
+            // Solo pausar sin cerrar actividad
+            await actRef.update({
                 estado: 'pendiente',
-                creadoEn: serverTs()
+                sesionActualId: null
             });
         }
 
-        await cerrarCiclo(ref, t, sesSnap2.docs, user, true);
-        return colaboradores;
+        return {
+            sesionId: doc.id,
+            horas: Math.round(horas * 100) / 100
+        };
     }
 
-    // ── Tildar ───────────────────────────────────────────────
+    /**
+     * Tildar (realizar sin cronómetro)
+     */
     async function actTildar(actId, user) {
         user = user || {};
         var ref = db.collection('actividades').doc(actId);
         var snap = await ref.get();
         if (!snap.exists) throw new Error('La actividad no existe.');
         var t = snap.data();
-
-        await _sincronizarSesionesActivas(actId, ref);
 
         await db.collection('historial_tareas').add({
             tareaId: actId,
@@ -397,19 +421,165 @@
             finalizadoPor: user.uid || null
         });
 
-        await cerrarCiclo(ref, t, [], user, false);
-    }
+        try { await actCargarTemporada(); } catch (e) { }
+        var ciclo = actCiclo(t);
 
-    // ── Sincronizar sesiones (pública) ──────────────────────
-    async function actSincronizarSesiones(actId) {
-        var ref = db.collection('actividades').doc(actId);
-        var snap = await ref.get();
-        if (!snap.exists) return;
-        return await _sincronizarSesionesActivas(actId, ref);
+        if (ciclo > 0) {
+            await ref.update({
+                estado: 'pendiente',
+                fechaInicio: sumarDiasISO(ciclo),
+                hecho: false,
+                hechoPor: null,
+                hechoEn: null,
+                ultimaRealizacion: sumarDiasISO(0),
+                ultimaRealizacionPor: user.nombre || '',
+                ultimaRealizacionConCrono: false
+            });
+        } else {
+            await ref.update({
+                estado: 'finalizada',
+                hecho: true,
+                hechoPor: user.uid || null,
+                hechoEn: serverTs(),
+                ultimaRealizacion: sumarDiasISO(0),
+                ultimaRealizacionPor: user.nombre || '',
+                ultimaRealizacionConCrono: false
+            });
+        }
     }
 
     // ── ════════════════════════════════════════════════════════
-    //  CHEQUEO DE INVENTARIO (restaurado completo)
+    //  API DE CONSULTA DE SESIONES (para el gestor)
+    // ════════════════════════════════════════════════════════════
+
+    /**
+     * Obtener sesiones con filtros
+     * filtros: { uid, actividadId, estado, fechaDesde, fechaHasta, limite }
+     */
+    async function actObtenerSesiones(filtros) {
+        filtros = filtros || {};
+        var query = db.collection('sesiones');
+
+        // Aplicar filtros uno por uno (sin where+orderBy compuesto)
+        var tieneFiltros = false;
+
+        if (filtros.uid) {
+            query = query.where('uid', '==', filtros.uid);
+            tieneFiltros = true;
+        }
+        if (filtros.actividadId) {
+            query = query.where('actividadId', '==', filtros.actividadId);
+            tieneFiltros = true;
+        }
+        if (filtros.estado) {
+            query = query.where('estado', '==', filtros.estado);
+            tieneFiltros = true;
+        }
+
+        // Ordenar
+        query = query.orderBy('inicio', 'desc');
+
+        if (filtros.limite) {
+            query = query.limit(filtros.limite);
+        }
+
+        var snap = await query.get();
+        var sesiones = [];
+        snap.forEach(function(doc) {
+            var s = doc.data();
+            s.id = doc.id;
+
+            // Filtrar por fecha en JS (evita índices compuestos)
+            if (filtros.fechaDesde) {
+                var desde = filtros.fechaDesde.toMillis ? filtros.fechaDesde.toMillis() : filtros.fechaDesde;
+                var ini = (s.inicio && s.inicio.toMillis) ? s.inicio.toMillis() : 0;
+                if (ini < desde) return;
+            }
+            if (filtros.fechaHasta) {
+                var hasta = filtros.fechaHasta.toMillis ? filtros.fechaHasta.toMillis() : filtros.fechaHasta;
+                var ini2 = (s.inicio && s.inicio.toMillis) ? s.inicio.toMillis() : 0;
+                if (ini2 > hasta) return;
+            }
+
+            sesiones.push(s);
+        });
+
+        return sesiones;
+    }
+
+    /**
+     * Obtener la sesión activa de un usuario (si existe)
+     */
+    async function actObtenerSesionActiva(uid) {
+        var snap = await db.collection('sesiones')
+            .where('uid', '==', uid)
+            .where('estado', '==', 'en_curso')
+            .limit(1)
+            .get();
+
+        if (snap.empty) return null;
+        var doc = snap.docs[0];
+        var s = doc.data();
+        s.id = doc.id;
+        return s;
+    }
+
+    /**
+     * Actualizar una sesión (admin o dueño)
+     */
+    async function actActualizarSesion(sesionId, datos) {
+        datos.actualizadoEn = serverTs();
+        await db.collection('sesiones').doc(sesionId).update(datos);
+    }
+
+    /**
+     * Eliminar una sesión (admin o dueño)
+     */
+    async function actEliminarSesion(sesionId) {
+        await db.collection('sesiones').doc(sesionId).delete();
+    }
+
+    /**
+     * Registrar sesión manualmente
+     */
+    async function actRegistrarManual(actividadId, user, horas, notas, fechaInicio) {
+        if (!user || !user.uid) {
+            throw new Error('Usuario no identificado');
+        }
+
+        var actSnap = await db.collection('actividades').doc(actividadId).get();
+        if (!actSnap.exists) throw new Error('La actividad no existe');
+        var actData = actSnap.data();
+
+        var ahora = tsAhora();
+        var inicio;
+        if (fechaInicio) {
+            inicio = firebase.firestore.Timestamp.fromDate(new Date(fechaInicio));
+        } else {
+            inicio = firebase.firestore.Timestamp.fromDate(new Date(ahora.toMillis() - (horas * 3600000)));
+        }
+
+        var fin = firebase.firestore.Timestamp.fromDate(new Date(inicio.toMillis() + (horas * 3600000)));
+
+        await db.collection('sesiones').add({
+            actividadId: actividadId,
+            actividadNombre: actData.titulo || actData.nombre || '',
+            uid: user.uid,
+            nombre: user.nombre || '',
+            inicio: inicio,
+            fin: fin,
+            horas: horas,
+            estado: 'finalizada',
+            tipo: 'manual',
+            creadoPor: user.uid,
+            creadoEn: ahora,
+            actualizadoEn: ahora,
+            notas: notas || ''
+        });
+    }
+
+    // ── ════════════════════════════════════════════════════════
+    //  CHEQUEO DE INVENTARIO (sin cambios)
     // ════════════════════════════════════════════════════════════
 
     function _faltanteONota(cantSugerida, cantConfirmada, nota) {
@@ -430,7 +600,7 @@
         if (pSnap.exists) padre = pSnap.data();
         var ref = db.collection('actividades').doc();
         await ref.set({
-            titulo: itemNombre + (nota ? ' \u2014 ' + nota : ''),
+            titulo: itemNombre + (nota ? ' — ' + nota : ''),
             nombre: itemNombre,
             detalle: '',
             tipo: 'faltante-inventario',
@@ -460,222 +630,234 @@
         });
     }
 
-    function _slugCat(s) {
-        return String(s || 'general').toLowerCase()
-            .replace(/[áàâã]/g, 'a').replace(/[éèê]/g, 'e').replace(/[íì]/g, 'i')
-            .replace(/[óòôõ]/g, 'o').replace(/[úù]/g, 'u').replace(/ñ/g, 'n')
-            .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'general';
+    async function actValidarItemChequeo(itemId, cantidad, nota, user) {
+        var itemRef = db.collection('actividades').doc(itemId);
+        var itemSnap = await itemRef.get();
+        if (!itemSnap.exists) throw new Error('Ítem no encontrado');
+        var item = itemSnap.data();
+
+        var sugerida = item.cantidadSugerida || 0;
+        var faltante = _faltanteONota(sugerida, cantidad, nota);
+
+        await itemRef.update({
+            cantidadConfirmada: cantidad,
+            notaChequeo: nota || '',
+            hecho: !faltante,
+            hechoPor: faltante ? null : (user && user.uid) || null,
+            hechoEn: faltante ? null : serverTs()
+        });
+
+        // Si hay faltante, registrar
+        if (faltante) {
+            var cabana = item.cabana;
+            if (cabana) {
+                await actRegistrarFaltante(cabana, item.itemNombre || item.titulo, 'check-out', item.reservaId, nota, user);
+            }
+        }
+
+        // Consolidar chequeo (verificar si todos los ítems están validados)
+        if (item.chequeoId) {
+            await _consolidarChequeo(item.chequeoId, user);
+        }
+
+        return { faltante: faltante };
     }
 
-    async function actCrearChequeoSalida(reservaId, cabana, itemsConfirmados, user) {
+    async function _consolidarChequeo(chequeoId, user) {
+        var snap = await db.collection('actividades').where('chequeoId', '==', chequeoId).get();
+        if (snap.empty) return;
+
+        var todosValidados = true;
+        snap.forEach(function(d) {
+            var it = d.data();
+            if (it.cantidadConfirmada === null || it.cantidadConfirmada === undefined) {
+                todosValidados = false;
+            }
+        });
+
+        if (todosValidados) {
+            // Marcar el contenedor como hecho
+            var chkRef = db.collection('actividades').doc(chequeoId);
+            var chkSnap = await chkRef.get();
+            if (chkSnap.exists) {
+                await chkRef.update({
+                    hecho: true,
+                    hechoPor: (user && user.uid) || null,
+                    hechoEn: serverTs()
+                });
+
+                // Si es chequeo de entrada, generar el de salida
+                var chk = chkSnap.data();
+                if (chk.tipoChequeo === 'entrada' && chk.reservaId) {
+                    await _generarChequeoSalida(chk.reservaId, chk.cabana, user);
+                }
+
+                // Si es chequeo de salida, actualizar inventario de la cabaña
+                if (chk.tipoChequeo === 'salida' && chk.cabana) {
+                    await _actualizarInventarioCabana(chk.cabana, chequeoId);
+                }
+            }
+        }
+    }
+
+    async function _generarChequeoSalida(reservaId, cabana, user) {
         var chequeoId = 'chk-ctrl-' + reservaId;
         var refChk = db.collection('actividades').doc(chequeoId);
         var s = await refChk.get();
-        if (s.exists) return;
-        var padreSnap = await db.collection('actividades').doc('ctrl-' + reservaId).get();
-        if (!padreSnap.exists) return;
-        var uidC = (user && user.uid) || null, nomC = (user && user.nombre) || '';
+
+        if (s.exists) return; // Ya existe
+
+        // Obtener ítems confirmados del chequeo de entrada
+        var entradaId = 'chk-limp-' + reservaId;
+        var itemsSnap = await db.collection('actividades').where('chequeoId', '==', entradaId).get();
+
+        // Crear contenedor de chequeo de salida
         await refChk.set({
-            titulo: 'Chequeo de inventario \u2014 salida',
-            nombre: 'Chequeo de inventario \u2014 salida',
-            detalle: '',
+            titulo: 'Chequeo de salida - Reserva ' + reservaId,
             tipo: 'chequeo-inventario',
             tipoChequeo: 'salida',
-            tipoRaiz: 'proyecto',
-            color: '',
+            cabana: cabana,
+            reservaId: reservaId,
             parentId: 'ctrl-' + reservaId,
             raizId: 'proj-limpiezas',
-            orden: 0,
+            tipoRaiz: 'proyecto',
             alcance: 'equipo',
             competencias: [],
             cronometrable: false,
-            estado: 'pendiente',
-            prioridad: 'gris',
             monto: 0,
             recurrencia: 0,
             esCompra: false,
+            estado: 'pendiente',
+            prioridad: 'verde',
             hecho: false,
-            cabana: cabana,
-            reservaId: reservaId,
-            creadoPor: uidC,
-            creadoNombre: nomC,
-            creadoEn: serverTs()
+            hechoPor: null,
+            hechoEn: null,
+            orden: Date.now(),
+            creadoPor: (user && user.uid) || null,
+            creadoNombre: (user && user.nombre) || '',
+            creadoEn: serverTs(),
+            sesionesActivas: []
         });
-        var lista = itemsConfirmados || [];
-        var cats = [], porCat = {};
-        for (var n = 0; n < lista.length; n++) {
-            var it = lista[n];
-            var catNom = it.categoria || 'General';
-            if (!porCat[catNom]) { porCat[catNom] = []; cats.push(catNom); }
-            porCat[catNom].push(it);
-        }
-        for (var c = 0; c < cats.length; c++) {
-            var catId = 'cat-' + chequeoId + '-' + _slugCat(cats[c]);
-            await db.collection('actividades').doc(catId).set({
-                titulo: cats[c],
-                nombre: cats[c],
-                detalle: '',
+
+        // Crear categorías e ítems basados en el chequeo de entrada
+        var categorias = {};
+        itemsSnap.forEach(function(d) {
+            var it = d.data();
+            var cat = it.itemCategoria || 'general';
+            if (!categorias[cat]) categorias[cat] = [];
+            categorias[cat].push(it);
+        });
+
+        var cats = Object.keys(categorias);
+        for (var i = 0; i < cats.length; i++) {
+            var catNombre = cats[i];
+            var catId = 'cat-chk-ctrl-' + reservaId + '-' + catNombre.replace(/[^a-z0-9]/g, '-');
+            var catRef = db.collection('actividades').doc(catId);
+
+            await catRef.set({
+                titulo: catNombre,
                 tipo: 'categoria-chequeo',
-                tipoChequeo: 'salida',
                 chequeoId: chequeoId,
-                tipoRaiz: 'proyecto',
-                color: '',
+                cabana: cabana,
+                reservaId: reservaId,
                 parentId: chequeoId,
                 raizId: 'proj-limpiezas',
-                orden: c,
+                tipoRaiz: 'proyecto',
                 alcance: 'equipo',
                 competencias: [],
                 cronometrable: false,
-                estado: 'pendiente',
-                prioridad: 'gris',
                 monto: 0,
                 recurrencia: 0,
                 esCompra: false,
+                estado: 'pendiente',
+                prioridad: 'verde',
                 hecho: false,
-                cabana: cabana,
-                reservaId: reservaId,
-                creadoPor: uidC,
-                creadoNombre: nomC,
+                hechoPor: null,
+                hechoEn: null,
+                orden: i,
+                creadoPor: (user && user.uid) || null,
+                creadoNombre: (user && user.nombre) || '',
                 creadoEn: serverTs()
             });
-            var itemsCat = porCat[cats[c]];
-            for (var m = 0; m < itemsCat.length; m++) {
-                var it2 = itemsCat[m];
-                await db.collection('actividades').doc('item-' + catId + '-' + m).set({
-                    titulo: it2.nombre,
-                    nombre: it2.nombre,
-                    detalle: '',
+
+            var items = categorias[catNombre];
+            for (var j = 0; j < items.length; j++) {
+                var it = items[j];
+                var itemId = 'item-ctrl-' + reservaId + '-' + catNombre.replace(/[^a-z0-9]/g, '-') + '-' + j;
+                await db.collection('actividades').doc(itemId).set({
+                    titulo: it.itemNombre || it.titulo,
                     tipo: 'item-chequeo',
-                    tipoChequeo: 'salida',
-                    itemNombre: it2.nombre,
-                    itemCategoria: cats[c],
                     chequeoId: chequeoId,
-                    cantidadSugerida: it2.cantidad != null ? it2.cantidad : 0,
+                    itemNombre: it.itemNombre || it.titulo,
+                    itemCategoria: catNombre,
+                    cantidadSugerida: it.cantidadConfirmada || it.cantidadSugerida || 0,
                     cantidadConfirmada: null,
-                    tipoRaiz: 'proyecto',
-                    color: '',
+                    notaChequeo: '',
+                    cabana: cabana,
+                    reservaId: reservaId,
                     parentId: catId,
                     raizId: 'proj-limpiezas',
-                    orden: m,
+                    tipoRaiz: 'proyecto',
                     alcance: 'equipo',
                     competencias: [],
                     cronometrable: false,
-                    estado: 'pendiente',
-                    prioridad: 'gris',
                     monto: 0,
                     recurrencia: 0,
                     esCompra: false,
+                    estado: 'pendiente',
+                    prioridad: 'verde',
                     hecho: false,
-                    cabana: cabana,
-                    reservaId: reservaId,
-                    creadoPor: uidC,
-                    creadoNombre: nomC,
+                    hechoPor: null,
+                    hechoEn: null,
+                    orden: j,
+                    creadoPor: (user && user.uid) || null,
+                    creadoNombre: (user && user.nombre) || '',
                     creadoEn: serverTs()
                 });
             }
         }
     }
 
-    async function actConsolidarChequeo(chequeoId, user) {
-        var chkSnap = await db.collection('actividades').doc(chequeoId).get();
-        if (!chkSnap.exists) return;
-        var chk = chkSnap.data();
-        var todoSnap = await db.collection('actividades').where('chequeoId', '==', chequeoId).get();
-        var items = [], faltantes = [];
-        todoSnap.forEach(function (d) {
-            var h = d.data();
-            if (h.tipo !== 'item-chequeo') return;
-            items.push({
-                nombre: h.itemNombre,
-                categoria: h.itemCategoria,
-                cantidad: h.cantidadConfirmada || 0
-            });
-            var falta = (h.cantidadSugerida || 0) - (h.cantidadConfirmada || 0);
-            if (falta > 0) faltantes.push({ nombre: h.itemNombre, falta: falta });
+    async function _actualizarInventarioCabana(cabana, chequeoId) {
+        var itemsSnap = await db.collection('actividades').where('chequeoId', '==', chequeoId).get();
+        var inventarioItems = [];
+        itemsSnap.forEach(function(d) {
+            var it = d.data();
+            if (it.tipo === 'item-chequeo') {
+                inventarioItems.push({
+                    nombre: it.itemNombre || it.titulo,
+                    categoria: it.itemCategoria || 'general',
+                    cantidad: it.cantidadConfirmada || 0
+                });
+            }
         });
-        var fecha = serverTs();
-        var porUid = (user && user.uid) || null, porNombre = (user && user.nombre) || '';
 
-        if (chk.tipoChequeo === 'entrada') {
-            await db.collection('reservas').doc(chk.reservaId).update({
-                inventarioEntrada: { items: items, fecha: fecha, porUid: porUid, porNombre: porNombre }
+        if (inventarioItems.length > 0) {
+            await db.collection('cabanas').doc(cabana).update({
+                inventarioActual: inventarioItems
             });
-            await db.collection('cabanas').doc(String(chk.cabana)).set({ inventarioActual: items }, { merge: true });
-            await actCrearChequeoSalida(chk.reservaId, chk.cabana, items, user);
-        } else {
-            await db.collection('reservas').doc(chk.reservaId).update({
-                inventarioSalida: {
-                    items: items,
-                    faltantes: faltantes,
-                    fecha: fecha,
-                    porUid: porUid,
-                    porNombre: porNombre
-                }
-            });
-            await db.collection('cabanas').doc(String(chk.cabana)).set({ inventarioActual: items }, { merge: true });
         }
-        await db.collection('actividades').doc(chequeoId).update({
-            hecho: true,
-            hechoPor: porUid,
-            hechoEn: tsAhora()
-        });
     }
 
-    async function actValidarItemChequeo(itemId, cantidadConfirmada, nota, user) {
-        var ref = db.collection('actividades').doc(itemId);
-        var snap = await ref.get();
-        if (!snap.exists) throw new Error('El \u00edtem no existe.');
-        var item = snap.data();
-        await ref.update({
-            cantidadConfirmada: cantidadConfirmada,
-            hecho: true,
-            hechoPor: (user && user.uid) || null,
-            hechoEn: tsAhora(),
-            notaChequeo: nota || ''
-        });
-        if (_faltanteONota(item.cantidadSugerida, cantidadConfirmada, nota)) {
-            await actRegistrarFaltante(
-                item.cabana,
-                item.itemNombre,
-                (item.tipoChequeo === 'entrada' ? 'check-in' : 'check-out'),
-                item.reservaId,
-                nota,
-                user
-            );
-        }
-        var todoSnap = await db.collection('actividades').where('chequeoId', '==', item.chequeoId).get();
-        var todosListos = true;
-        var itemsPorCat = {};
-        todoSnap.forEach(function (d) {
-            var h = d.data();
-            if (h.tipo !== 'item-chequeo') return;
-            var hecho = (d.id === itemId) ? true : !!h.hecho;
-            if (!hecho) todosListos = false;
-            var pc = itemsPorCat[h.parentId] || { total: 0, hechos: 0 };
-            pc.total++;
-            if (hecho) pc.hechos++;
-            itemsPorCat[h.parentId] = pc;
-        });
-        var pcActual = itemsPorCat[item.parentId];
-        if (pcActual && pcActual.hechos === pcActual.total) {
-            await db.collection('actividades').doc(item.parentId).update({
-                hecho: true,
-                hechoPor: (user && user.uid) || null,
-                hechoEn: tsAhora()
-            }).catch(function () {});
-        }
-        if (todosListos) await actConsolidarChequeo(item.chequeoId, user);
-    }
+    // ── Exportar API pública ─────────────────────────────────
+    CVC.actCargarTemporada = actCargarTemporada;
+    CVC.actSemaforo = actSemaforo;
+    CVC.actCiclo = actCiclo;
 
-    // ── Enganche a CVC ──────────────────────────────────────
+    // Sesiones (nuevo)
     CVC.actIniciar = actIniciar;
     CVC.actPausar = actPausar;
+    CVC.actReanudar = actReanudar;
     CVC.actFinalizar = actFinalizar;
     CVC.actTildar = actTildar;
-    CVC.actCiclo = actCiclo;
-    CVC.actSemaforo = actSemaforo;
-    CVC.actCargarTemporada = actCargarTemporada;
+    CVC.actObtenerSesiones = actObtenerSesiones;
+    CVC.actObtenerSesionActiva = actObtenerSesionActiva;
+    CVC.actActualizarSesion = actActualizarSesion;
+    CVC.actEliminarSesion = actEliminarSesion;
+    CVC.actRegistrarManual = actRegistrarManual;
+
+    // Inventario
     CVC.actValidarItemChequeo = actValidarItemChequeo;
-    CVC.actSincronizarSesiones = actSincronizarSesiones;
     CVC.actRegistrarFaltante = actRegistrarFaltante;
+
 })();
