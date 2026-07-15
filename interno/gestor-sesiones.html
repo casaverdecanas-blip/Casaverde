@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestor de Sesiones · Casa Verde Canas</title>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link rel="stylesheet" href="design-system.css">
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script src="actividades-core.js"></script>
+<style>
+  .sesiones-wrap { max-width: 1100px; margin: 0 auto; }
+  .fbar { 
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: end;
+    padding: 14px 16px; background: #f8faf7; border-radius: 12px; margin-bottom: 14px;
+  }
+  .fg { display: flex; flex-direction: column; gap: 3px; }
+  .fg label { font-size: 11.5px; color: #66735f; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+  .fg select, .fg input { 
+    padding: 7px 10px; border: 1px solid #dfe6dd; border-radius: 8px; font-size: 13px; 
+    background: #fff; min-width: 130px;
+  }
+  .tot-bar { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .tot-card {
+    flex: 1; min-width: 100px; padding: 14px 16px; border-radius: 10px;
+    background: #fff; border: 1px solid #e7ece4; text-align: center;
+  }
+  .tot-card .num { font-size: 22px; font-weight: 700; color: #2d5a27; }
+  .tot-card .lbl { font-size: 11.5px; color: #66735f; margin-top: 2px; }
+  .s-card {
+    background: #fff; border: 1px solid #e7ece4; border-radius: 10px;
+    padding: 12px 16px; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    transition: box-shadow 0.15s;
+  }
+  .s-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .s-card.en_curso { border-left: 4px solid #1f5fb0; background: #f0f6ff; }
+  .s-card.pausada { border-left: 4px solid #d97706; background: #fffdf5; }
+  .s-card.finalizada { border-left: 4px solid #16a34a; }
+  .s-card.manual { border-left-style: dashed; }
+  .s-avt {
+    width: 38px; height: 38px; border-radius: 50%; background: #e8f0e4;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; color: #2d5a27; flex-shrink: 0; font-size: 15px;
+  }
+  .s-info { flex: 1; min-width: 160px; }
+  .s-act { font-weight: 600; font-size: 13.5px; color: #2a3328; }
+  .s-usr { font-size: 12px; color: #66735f; }
+  .s-fechas { font-size: 11px; color: #889985; }
+  .s-horas { font-weight: 700; font-size: 15px; color: #2d5a27; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .s-acc { display: flex; gap: 4px; flex-shrink: 0; }
+  .s-acc button {
+    background: none; border: 1px solid #dfe6dd; padding: 5px 9px;
+    border-radius: 6px; cursor: pointer; font-size: 13px; color: #5a6a55;
+  }
+  .s-acc button:hover { background: #f0f4ee; }
+  .s-acc .del { color: #c0271f; border-color: #fde8e8; }
+  .s-acc .del:hover { background: #fde8e8; }
+  .s-notas { font-size: 11.5px; color: #889985; font-style: italic; }
+  .modal-over {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 60px 12px 12px 12px; z-index: 2000;
+  }
+  .modal-box {
+    background: #fff; border-radius: 14px; padding: 20px;
+    width: 100%; max-width: 520px; max-height: calc(100vh - 90px); overflow: auto;
+  }
+  .modal-box h3 { margin: 0 0 14px; font-size: 17px; }
+  .form-row2 { display: flex; gap: 8px; }
+  .form-row2 > div { flex: 1; }
+  .modal-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<header class="admin-header">
+  <div class="admin-header__brand">
+    <span class="material-icons">schedule</span>
+    Gestor de Sesiones
+  </div>
+  <div class="admin-header__actions">
+    <div class="user-chip">
+      <span class="material-icons">person</span>
+      <span id="userName">—</span>
+    </div>
+    <button class="btn-logout" onclick="CVC.cerrarSesion()">
+      <span class="material-icons">logout</span> Salir
+    </button>
+  </div>
+</header>
+
+<nav class="admin-nav" id="appNav"></nav>
+
+<main class="admin-content">
+  <div class="sesiones-wrap">
+    
+    <!-- Filtros -->
+    <div class="fbar">
+      <div class="fg">
+        <label>Usuario</label>
+        <select id="fUsuario" onchange="aplicarFiltros()">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Actividad</label>
+        <select id="fActividad" onchange="aplicarFiltros()">
+          <option value="">Todas</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Estado</label>
+        <select id="fEstado" onchange="aplicarFiltros()">
+          <option value="">Todos</option>
+          <option value="en_curso">En curso</option>
+          <option value="pausada">Pausada</option>
+          <option value="finalizada">Finalizada</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Desde</label>
+        <input type="date" id="fDesde" onchange="aplicarFiltros()">
+      </div>
+      <div class="fg">
+        <label>Hasta</label>
+        <input type="date" id="fHasta" onchange="aplicarFiltros()">
+      </div>
+      <button class="btn btn-primary" onclick="mostrarFormManual()" style="height:35px;white-space:nowrap">
+        <span class="material-icons" style="font-size:17px;vertical-align:-3px">add</span>
+        Registro manual
+      </button>
+    </div>
+
+    <!-- Totales -->
+    <div class="tot-bar" id="totBar"></div>
+
+    <!-- Lista -->
+    <div id="listaSesiones"></div>
+
+  </div>
+</main>
+
+<!-- Modal crear/editar sesión -->
+<div id="modalSesion" style="display:none" class="modal-over">
+  <div class="modal-box">
+    <h3 id="modalTitulo">Registrar sesión</h3>
+    
+    <input type="hidden" id="mId">
+    
+    <div class="form-group">
+      <label class="form-label">Actividad</label>
+      <select id="mActividad" class="form-control"></select>
+    </div>
+    
+    <div class="form-group">
+      <label class="form-label">Usuario</label>
+      <select id="mUsuario" class="form-control"></select>
+    </div>
+    
+    <div class="form-row2">
+      <div>
+        <label class="form-label">Inicio</label>
+        <input type="datetime-local" id="mInicio" class="form-control" onchange="calcHoras()">
+      </div>
+      <div>
+        <label class="form-label">Fin</label>
+        <input type="datetime-local" id="mFin" class="form-control" onchange="calcHoras()">
+      </div>
+    </div>
+    
+    <div class="form-group" style="margin-top:8px">
+      <label class="form-label">Horas calculadas</label>
+      <input type="text" id="mHoras" class="form-control" readonly style="font-weight:700;color:#2d5a27">
+    </div>
+    
+    <div class="form-group">
+      <label class="form-label">Notas (opcional)</label>
+      <input type="text" id="mNotas" class="form-control" placeholder="Ej: Arreglé la cerradura...">
+    </div>
+    
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btnGuardar" onclick="guardarSesion()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+
+// ── Auth ────────────────────────────────────────────────────
+var sesion   = await CVC.verificarAuth(['admin', 'user']);
+var user     = sesion.user;
+var userData = sesion.userData;
+var esAdmin  = userData.rol === 'admin';
+var uid      = user.uid;
+
+document.getElementById('userName').textContent = userData.nombre || user.email;
+CVC.renderNav('gestor-sesiones.html');
+if (typeof CVC.initAyuda === 'function') CVC.initAyuda('gestor-sesiones.html');
+
+var db = CVC.db;
+var usuarios = [];
+var actividades = [];
+
+// ── Carga inicial ──────────────────────────────────────────
+async function cargarCatalogos() {
+    // Usuarios
+    var uSnap = await db.collection('usuarios').get();
+    usuarios = [];
+    uSnap.forEach(function(d) {
+        var u = d.data();
+        if (u.activo === false) return;
+        usuarios.push({ uid: d.id, nombre: u.nombre || u.email || d.id });
+    });
+
+    var fUsr = document.getElementById('fUsuario');
+    var mUsr = document.getElementById('mUsuario');
+    fUsr.innerHTML = '<option value="">Todos</option>';
+    mUsr.innerHTML = '';
+
+    for (var i = 0; i < usuarios.length; i++) {
+        var u = usuarios[i];
+        if (esAdmin || u.uid === uid) {
+            fUsr.innerHTML += '<option value="' + u.uid + '">' + u.nombre + '</option>';
+        }
+        if (esAdmin || u.uid === uid) {
+            mUsr.innerHTML += '<option value="' + u.uid + '"' + (u.uid === uid ? ' selected' : '') + '>' + u.nombre + '</option>';
+        }
+    }
+
+    if (!esAdmin) {
+        fUsr.value = uid;
+        fUsr.disabled = true;
+        mUsr.value = uid;
+        mUsr.disabled = true;
+    }
+
+    // Actividades
+    var aSnap = await db.collection('actividades').get();
+    actividades = [];
+    aSnap.forEach(function(d) {
+        var a = d.data();
+        actividades.push({ id: d.id, titulo: a.titulo || a.nombre || d.id });
+    });
+    actividades.sort(function(a, b) { return a.titulo.localeCompare(b.titulo); });
+
+    var fAct = document.getElementById('fActividad');
+    var mAct = document.getElementById('mActividad');
+    fAct.innerHTML = '<option value="">Todas</option>';
+    mAct.innerHTML = '';
+
+    for (var j = 0; j < actividades.length; j++) {
+        var a = actividades[j];
+        fAct.innerHTML += '<option value="' + a.id + '">' + a.titulo + '</option>';
+        mAct.innerHTML += '<option value="' + a.id + '">' + a.titulo + '</option>';
+    }
+}
+
+// ── Filtros y render ────────────────────────────────────────
+async function aplicarFiltros() {
+    var filtros = {};
+
+    var fUid = document.getElementById('fUsuario').value;
+    if (fUid) filtros.uid = fUid;
+
+    var fAct = document.getElementById('fActividad').value;
+    if (fAct) filtros.actividadId = fAct;
+
+    var fEst = document.getElementById('fEstado').value;
+    if (fEst) filtros.estado = fEst;
+
+    var fDes = document.getElementById('fDesde').value;
+    if (fDes) filtros.fechaDesde = firebase.firestore.Timestamp.fromDate(new Date(fDes + 'T00:00:00'));
+
+    var fHas = document.getElementById('fHasta').value;
+    if (fHas) {
+        var h = new Date(fHas + 'T23:59:59');
+        filtros.fechaHasta = firebase.firestore.Timestamp.fromDate(h);
+    }
+
+    filtros.limite = 200;
+
+    var sesiones = await CVC.actObtenerSesiones(filtros);
+    renderSesiones(sesiones);
+}
+
+function fmtHM(horas) {
+    var h = Math.floor(horas);
+    var m = Math.round((horas - h) * 60);
+    if (h === 0) return m + 'm';
+    return h + 'h ' + m + 'm';
+}
+
+function fmtDT(ts) {
+    if (!ts || !ts.toDate) return '—';
+    var d = ts.toDate();
+    var dia = String(d.getDate()); if (dia.length < 2) dia = '0' + dia;
+    var mes = String(d.getMonth() + 1); if (mes.length < 2) mes = '0' + mes;
+    var h = String(d.getHours()); if (h.length < 2) h = '0' + h;
+    var m = String(d.getMinutes()); if (m.length < 2) m = '0' + m;
+    return dia + '/' + mes + ' ' + h + ':' + m;
+}
+
+function renderSesiones(sesiones) {
+    var totalHoras = 0;
+    var enCurso = 0;
+    var pausadas = 0;
+
+    var html = '';
+
+    for (var i = 0; i < sesiones.length; i++) {
+        var s = sesiones[i];
+        totalHoras += s.horas || 0;
+        if (s.estado === 'en_curso') enCurso++;
+        if (s.estado === 'pausada') pausadas++;
+
+        var inicial = (s.nombre || 'U').charAt(0).toUpperCase();
+        var claseEstado = s.estado + (s.tipo === 'manual' ? ' manual' : '');
+        var tipoIcon = s.tipo === 'manual' ? ' 📝 Manual' : ' ⏱ Cronómetro';
+
+        html += '<div class="s-card ' + claseEstado + '">';
+        html += '<div class="s-avt">' + inicial + '</div>';
+        html += '<div class="s-info">';
+        html += '<div class="s-act">' + (s.actividadNombre || 'Sin nombre') + '</div>';
+        html += '<div class="s-usr">' + (s.nombre || 'Usuario') + tipoIcon + '</div>';
+        html += '<div class="s-fechas">Inicio: ' + fmtDT(s.inicio);
+        if (s.fin) html += ' · Fin: ' + fmtDT(s.fin);
+        html += '</div>';
+        if (s.notas) html += '<div class="s-notas">' + s.notas + '</div>';
+        html += '</div>';
+        html += '<div class="s-horas">' + fmtHM(s.horas || 0) + '</div>';
+        html += '<div class="s-acc">';
+        html += '<button onclick="editarSesion(\'' + s.id + '\')" title="Editar">✏️</button>';
+        html += '<button class="del" onclick="eliminarSesion(\'' + s.id + '\')" title="Eliminar">🗑️</button>';
+        html += '</div>';
+        html += '</div>';
+    }
+
+    document.getElementById('listaSesiones').innerHTML = html || 
+        '<div class="muted-note" style="padding:16px">No hay sesiones con los filtros seleccionados.</div>';
+
+    document.getElementById('totBar').innerHTML =
+        '<div class="tot-card"><div class="num">' + sesiones.length + '</div><div class="lbl">Sesiones</div></div>' +
+        '<div class="tot-card"><div class="num">' + fmtHM(totalHoras) + '</div><div class="lbl">Total horas</div></div>' +
+        '<div class="tot-card"><div class="num">' + enCurso + '</div><div class="lbl">En curso</div></div>' +
+        '<div class="tot-card"><div class="num">' + pausadas + '</div><div class="lbl">Pausadas</div></div>';
+}
+
+// ── CRUD ────────────────────────────────────────────────────
+function cerrarModal() {
+    document.getElementById('modalSesion').style.display = 'none';
+}
+
+function calcHoras() {
+    var ini = document.getElementById('mInicio').value;
+    var fin = document.getElementById('mFin').value;
+    if (ini && fin) {
+        var diff = (new Date(fin) - new Date(ini)) / 3600000;
+        if (diff >= 0) {
+            document.getElementById('mHoras').value = fmtHM(diff);
+        } else {
+            document.getElementById('mHoras').value = '(fin anterior a inicio)';
+        }
+    }
+}
+
+window.mostrarFormManual = function() {
+    document.getElementById('mId').value = '';
+    document.getElementById('modalTitulo').textContent = 'Nuevo registro manual';
+    document.getElementById('mInicio').value = '';
+    document.getElementById('mFin').value = '';
+    document.getElementById('mHoras').value = '';
+    document.getElementById('mNotas').value = '';
+    document.getElementById('modalSesion').style.display = 'flex';
+};
+
+window.editarSesion = async function(sesionId) {
+    var snap = await db.collection('sesiones').doc(sesionId).get();
+    if (!snap.exists) return;
+
+    var s = snap.data();
+    document.getElementById('mId').value = sesionId;
+    document.getElementById('modalTitulo').textContent = 'Editar sesión';
+    document.getElementById('mActividad').value = s.actividadId || '';
+    document.getElementById('mUsuario').value = s.uid || '';
+    document.getElementById('mNotas').value = s.notas || '';
+
+    if (s.inicio) {
+        var ini = s.inicio.toDate();
+        document.getElementById('mInicio').value = ini.toISOString().slice(0, 16);
+    } else {
+        document.getElementById('mInicio').value = '';
+    }
+    if (s.fin) {
+        var fin = s.fin.toDate();
+        document.getElementById('mFin').value = fin.toISOString().slice(0, 16);
+    } else {
+        document.getElementById('mFin').value = '';
+    }
+
+    calcHoras();
+    document.getElementById('modalSesion').style.display = 'flex';
+};
+
+window.guardarSesion = async function() {
+    var sesionId = document.getElementById('mId').value;
+    var inicioVal = document.getElementById('mInicio').value;
+    var finVal = document.getElementById('mFin').value;
+
+    if (!inicioVal || !finVal) {
+        alert('Completá inicio y fin.');
+        return;
+    }
+
+    var inicio = firebase.firestore.Timestamp.fromDate(new Date(inicioVal));
+    var fin = firebase.firestore.Timestamp.fromDate(new Date(finVal));
+    var horas = Math.max(0, (fin.toMillis() - inicio.toMillis()) / 3600000);
+
+    var datos = {
+        actividadId: document.getElementById('mActividad').value,
+        uid: document.getElementById('mUsuario').value,
+        inicio: inicio,
+        fin: fin,
+        horas: Math.round(horas * 100) / 100,
+        notas: document.getElementById('mNotas').value,
+        estado: 'finalizada',
+        tipo: 'manual'
+    };
+
+    // Obtener nombre de actividad y usuario
+    var actSel = document.getElementById('mActividad');
+    var actNombre = actSel.options[actSel.selectedIndex].text;
+    datos.actividadNombre = actNombre;
+
+    var usrSel = document.getElementById('mUsuario');
+    var usrNombre = usrSel.options[usrSel.selectedIndex].text;
+    datos.nombre = usrNombre;
+
+    try {
+        if (sesionId) {
+            await CVC.actActualizarSesion(sesionId, datos);
+        } else {
+            // Crear nueva
+            await db.collection('sesiones').add(Object.assign({}, datos, {
+                creadoPor: uid,
+                creadoEn: firebase.firestore.Timestamp.now(),
+                actualizadoEn: firebase.firestore.Timestamp.now()
+            }));
+        }
+        cerrarModal();
+        aplicarFiltros();
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+};
+
+window.eliminarSesion = async function(sesionId) {
+    if (!confirm('¿Eliminar esta sesión permanentemente?')) return;
+    try {
+        await CVC.actEliminarSesion(sesionId);
+        aplicarFiltros();
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+};
+
+// ── Init ────────────────────────────────────────────────────
+window.aplicarFiltros = aplicarFiltros;
+await cargarCatalogos();
+await aplicarFiltros();
+
+</script>
+</body>
+</html>
