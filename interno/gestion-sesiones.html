@@ -76,17 +76,18 @@
 
   .gs-empty { text-align: center; color: #868e96; font-size: .85rem; padding: 24px 0; }
 
-  /* MODAL corregido */
+  /* MODAL — corregido para mobile */
   .gs-modal-over {
     position: fixed; inset: 0; background: rgba(0,0,0,0.45);
-    display: none; align-items: center; justify-content: center;
-    z-index: 2000; padding: 16px;
+    display: none; z-index: 2000;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
   }
-  .gs-modal-over.show { display: flex; }
+  .gs-modal-over.show { display: block; }
   .gs-modal-box {
     background: #fff; border-radius: 14px; padding: 20px;
-    width: 100%; max-width: 500px; max-height: 85vh; overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    width: 92%; max-width: 500px; margin: 40px auto 20px auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    max-height: none;
   }
   .gs-modal-box h3 { margin: 0 0 14px; font-size: 17px; }
   .gs-modal-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
@@ -130,8 +131,8 @@
   </div>
 </main>
 
-<!-- MODAL corregido -->
-<div id="gsModal" class="gs-modal-over">
+<!-- MODAL -->
+<div id="gsModal" class="gs-modal-over" onclick="if(event.target===this)cerrarModal()">
   <div class="gs-modal-box">
     <h3 id="gsModalTitulo">Nuevo registro manual</h3>
     <input type="hidden" id="mId">
@@ -154,7 +155,7 @@
     <div class="form-group"><label class="form-label">Notas (opcional)</label><input type="text" id="mNotas" class="form-control" placeholder="Detalle de lo hecho..."></div>
     
     <div class="gs-modal-foot">
-      <button class="btn btn-secondary" type="button" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-secondary" type="button" id="btnCancelarModal">Cancelar</button>
       <button class="btn btn-primary" id="btnGuardar" onclick="guardarSesion()">Guardar</button>
     </div>
   </div>
@@ -181,7 +182,31 @@ var childrenOf = {};
 var actRoots = [];
 var usuarios = [];
 var abiertos = {};
-var hojasPorProyecto = {};  // proyId -> [{id, nombre, ruta}]
+var hojasPorProyecto = {};
+
+// ── Helpers ──────────────────────────────────────────────────
+function esc(s) { return CVC.escapeHtml ? CVC.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s); }
+function fmtHM(horas) { var h = Math.floor(horas), m = Math.round((horas - h) * 60); return h === 0 ? m + 'm' : h + 'h ' + m + 'm'; }
+function fmtDMY(ts) {
+    if (!ts) return '—';
+    var d = ts.toDate ? ts.toDate() : new Date(ts);
+    if (isNaN(d.getTime())) return '—';
+    return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+}
+function raizDe(actId) {
+    var cur = actId, guard = 0;
+    while (cur && actIdx[cur] && actIdx[cur].parentId && guard < 20) { cur = actIdx[cur].parentId; guard++; }
+    return cur || null;
+}
+function rutaDeTexto(actId) {
+    var partes = [], cur = actId, guard = 0;
+    while (cur && actIdx[cur] && guard < 15) {
+        partes.unshift(actIdx[cur].nombre || cur);
+        cur = actIdx[cur].parentId || null;
+        guard++;
+    }
+    return partes.join(' › ');
+}
 
 // ── Carga ───────────────────────────────────────────────────
 async function cargarTodo() {
@@ -223,74 +248,71 @@ async function cargarTodo() {
         };
         var p = a.parentId || '';
         if (!childrenOf[p]) childrenOf[p] = [];
-        childrenOf[p].push(a);
+        childrenOf[p].push({ id: d.id, nombre: a.nombre || a.titulo || '', tipo: a.tipo || '' });
     });
 
     // Proyectos raíz
     for (var id in actIdx) {
         if (!actIdx[id].parentId && actIdx[id].tipoRaiz === 'proyecto') {
             actRoots.push(id);
-            hojasPorProyecto[id] = [];
         }
     }
     actRoots.sort(function(a, b) { return (actIdx[a].nombre || '').localeCompare(actIdx[b].nombre || ''); });
 
-    // RECOLECTAR TODAS LAS ACTIVIDADES CRONOMETRABLES por proyecto (CORRECCIÓN)
-    // Recorrer recursivamente los hijos de cada proyecto
-    function recolectarHojas(proyId) {
-        var resultado = [];
-        var pila = [proyId];
-        var visto = {};
+    // RECOLECTAR hojas cronometrables por proyecto
+    var TIPOS_NO_CRONO = ['chequeo-inventario', 'categoria-chequeo', 'item-chequeo', 'faltante-inventario'];
+    
+    function recolectarHojasRecursivo(nodoId, visitados) {
+        visitados = visitados || {};
+        if (visitados[nodoId]) return [];
+        visitados[nodoId] = true;
         
-        while (pila.length > 0) {
-            var actual = pila.shift();
-            if (visto[actual]) continue;
-            visto[actual] = true;
+        var hijos = childrenOf[nodoId] || [];
+        var resultado = [];
+        
+        for (var i = 0; i < hijos.length; i++) {
+            var hijo = hijos[i];
+            var hid = hijo.id;
+            var tipo = hijo.tipo || '';
+            var esChequeo = TIPOS_NO_CRONO.indexOf(tipo) !== -1;
             
-            var hijos = childrenOf[actual] || [];
-            for (var h = 0; h < hijos.length; h++) {
-                var hijo = hijos[h];
-                var hid = hijo.id;
-                var tipo = hijo.tipo || '';
-                
-                // Si no es chequeo y no tiene más hijos, es una hoja cronometrable
-                var esChequeo = (tipo === 'chequeo-inventario' || tipo === 'categoria-chequeo' || tipo === 'item-chequeo' || tipo === 'faltante-inventario');
-                
-                if (!esChequeo) {
-                    var tieneHijos = childrenOf[hid] && childrenOf[hid].length > 0;
-                    if (!tieneHijos) {
-                        // Es hoja — agregar
-                        resultado.push({
-                            id: hid,
-                            nombre: hijo.nombre || hijo.titulo || hid,
-                            ruta: rutaDeTexto(hid)
-                        });
-                    } else {
-                        // Tiene hijos — seguir recorriendo
-                        pila.push(hid);
-                    }
+            if (esChequeo) continue;
+            
+            var tieneHijos = !!childrenOf[hid] && childrenOf[hid].length > 0;
+            
+            if (tieneHijos) {
+                // Seguir recorriendo
+                var sub = recolectarHojasRecursivo(hid, visitados);
+                for (var s = 0; s < sub.length; s++) {
+                    resultado.push(sub[s]);
                 }
+            } else {
+                // Es hoja — agregar
+                resultado.push({
+                    id: hid,
+                    nombre: hijo.nombre || hid,
+                    ruta: rutaDeTexto(hid)
+                });
             }
         }
         
-        // Ordenar por nombre
-        resultado.sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
         return resultado;
     }
 
     for (var p = 0; p < actRoots.length; p++) {
         var pid = actRoots[p];
-        hojasPorProyecto[pid] = recolectarHojas(pid);
+        hojasPorProyecto[pid] = recolectarHojasRecursivo(pid);
+        hojasPorProyecto[pid].sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
     }
 
-    // Huérfanas (sin proyecto)
+    // Huérfanas
     var huerfanas = [];
     for (var aid in actIdx) {
         var a = actIdx[aid];
         if (!a.parentId) continue;
-        if (childrenOf[aid]) continue;
+        if (childrenOf[aid] && childrenOf[aid].length > 0) continue;
         var tipo = a.tipo || '';
-        if (tipo === 'chequeo-inventario' || tipo === 'categoria-chequeo' || tipo === 'item-chequeo' || tipo === 'faltante-inventario') continue;
+        if (TIPOS_NO_CRONO.indexOf(tipo) !== -1) continue;
         var rz = raizDe(aid);
         if (!rz) {
             huerfanas.push({ id: aid, nombre: a.nombre, ruta: '' });
@@ -348,9 +370,7 @@ async function cargarSesiones() {
             s._esNueva = true;
             todasSesiones.push(s);
         });
-    } catch (e) {
-        console.warn('Error /sesiones/:', e.message);
-    }
+    } catch (e) { console.warn('Error /sesiones/:', e.message); }
 
     try {
         var cgSnap = await db.collectionGroup('sesiones').get();
@@ -372,30 +392,6 @@ async function cargarSesiones() {
             if (!dup) todasSesiones.push(s);
         });
     } catch (e) {}
-}
-
-// ── Helpers ──────────────────────────────────────────────────
-function esc(s) { return CVC.escapeHtml ? CVC.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s); }
-function fmtHM(horas) { var h = Math.floor(horas), m = Math.round((horas - h) * 60); return h === 0 ? m + 'm' : h + 'h ' + m + 'm'; }
-function fmtDMY(ts) {
-    if (!ts) return '—';
-    var d = ts.toDate ? ts.toDate() : new Date(ts);
-    if (isNaN(d.getTime())) return '—';
-    return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
-}
-function raizDe(actId) {
-    var cur = actId, guard = 0;
-    while (cur && actIdx[cur] && actIdx[cur].parentId && guard < 20) { cur = actIdx[cur].parentId; guard++; }
-    return cur || null;
-}
-function rutaDeTexto(actId) {
-    var partes = [], cur = actId, guard = 0;
-    while (cur && actIdx[cur] && guard < 15) {
-        partes.unshift(actIdx[cur].nombre || cur);
-        cur = actIdx[cur].parentId || null;
-        guard++;
-    }
-    return partes.join(' › ');
 }
 
 // ── Filtros ─────────────────────────────────────────────────
@@ -669,7 +665,7 @@ window.toggleAbierto = function(id) {
     aplicarFiltros();
 };
 
-// ── Selector en cascada (CORREGIDO — muestra todas las hojas) ─
+// ── Selector en cascada ──────────────────────────────────────
 window.filtrarActividadesPorProyecto = function() {
     var proyId = document.getElementById('mProy').value;
     var mAct = document.getElementById('mAct');
@@ -693,9 +689,15 @@ window.filtrarActividadesPorProyecto = function() {
 };
 
 // ── Modal ────────────────────────────────────────────────────
-function cerrarModal() {
+// CORRECCIÓN 1: Función global para cerrar
+window.cerrarModal = function() {
     document.getElementById('gsModal').classList.remove('show');
-}
+};
+
+// CORRECCIÓN 2: Listener en el botón Cancelar (por las dudas)
+document.getElementById('btnCancelarModal').addEventListener('click', function() {
+    document.getElementById('gsModal').classList.remove('show');
+});
 
 function actualizarInicioFin() {
     var fecha = document.getElementById('mFecha').value;
@@ -744,7 +746,7 @@ window.editarSesion = async function(sesionId) {
         var rz = raizDe(s.actividadId);
         if (rz) {
             document.getElementById('mProy').value = rz;
-            filtrarActividadesPorProyecto();
+            window.filtrarActividadesPorProyecto();
         }
         document.getElementById('mAct').value = s.actividadId;
     }
@@ -807,7 +809,7 @@ window.guardarSesion = async function() {
                 creadoEn: firebase.firestore.Timestamp.now()
             }));
         }
-        cerrarModal();
+        window.cerrarModal();
         await cargarSesiones();
         aplicarFiltros();
     } catch (e) { alert('Error: ' + e.message); }
