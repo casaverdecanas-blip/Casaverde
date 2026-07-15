@@ -1,7 +1,11 @@
 // =========================================================
 //  actividades-core.js — Casa Verde Canas
-//  Motor de actividades + Sesiones unificadas v5.0
+//  Motor de actividades + Sesiones unificadas v5.1
 //  Julio 2026
+//
+//  PRINCIPIO: Play→Pausa y Play→Stop generan el MISMO
+//  registro en /sesiones/. La diferencia es solo el campo
+//  'estado'. Las horas se acumulan igual.
 // =========================================================
 (function () {
     var CVC = window.CVC;
@@ -99,8 +103,11 @@
     }
 
     // ── ════════════════════════════════════════════════════════
-    //  SISTEMA UNIFICADO DE SESIONES v5.0
+    //  SISTEMA UNIFICADO DE SESIONES v5.1
     //  Colección raíz: /sesiones/{id}
+    //  PRINCIPIO: pausa y stop generan el mismo tipo de registro.
+    //  La diferencia es solo el campo 'estado'. Las horas se
+    //  acumulan igual en ambos casos.
     // ════════════════════════════════════════════════════════════
 
     /**
@@ -172,6 +179,7 @@
     /**
      * Pausar sesión: cierra el bloque actual pero permite continuar después
      * Mismo tipo de registro que finalizar — solo cambia estado:'pausada'
+     * Las horas trabajadas quedan registradas.
      */
     async function actPausar(actId, user) {
         if (!user || !user.uid) {
@@ -268,6 +276,7 @@
     /**
      * Finalizar sesión: cierra definitivamente (estado:'finalizada')
      * Si cerrarActividad=true → marca la actividad como hecha
+     * Si es recurrente → reprograma la próxima ocurrencia
      */
     async function actFinalizar(actId, user, cerrarActividad) {
         if (!user || !user.uid) {
@@ -345,7 +354,7 @@
                 await actRef.update(updBase);
             }
 
-            // Registrar en historial_tareas
+            // Registrar en historial_tareas (compatibilidad con horas-stats)
             var montoTarea = actData.monto || 0;
             var costoLimpiezaBRL = 0;
             if (actData.reservaId) {
@@ -460,23 +469,17 @@
         filtros = filtros || {};
         var query = db.collection('sesiones');
 
-        // Aplicar filtros uno por uno (sin where+orderBy compuesto)
-        var tieneFiltros = false;
-
         if (filtros.uid) {
             query = query.where('uid', '==', filtros.uid);
-            tieneFiltros = true;
         }
         if (filtros.actividadId) {
             query = query.where('actividadId', '==', filtros.actividadId);
-            tieneFiltros = true;
         }
         if (filtros.estado) {
             query = query.where('estado', '==', filtros.estado);
-            tieneFiltros = true;
         }
 
-        // Ordenar
+        // Ordenar por inicio descendente
         query = query.orderBy('inicio', 'desc');
 
         if (filtros.limite) {
@@ -541,29 +544,25 @@
 
     /**
      * Registrar sesión manualmente
+     * AHORA acepta inicio y fin como Timestamp (v5.1)
      */
-    async function actRegistrarManual(actividadId, user, horas, notas, fechaInicio) {
+    async function actRegistrarManual(actividadId, user, inicio, fin, horas, notas) {
         if (!user || !user.uid) {
             throw new Error('Usuario no identificado');
         }
 
         var actSnap = await db.collection('actividades').doc(actividadId).get();
-        if (!actSnap.exists) throw new Error('La actividad no existe');
-        var actData = actSnap.data();
-
-        var ahora = tsAhora();
-        var inicio;
-        if (fechaInicio) {
-            inicio = firebase.firestore.Timestamp.fromDate(new Date(fechaInicio));
-        } else {
-            inicio = firebase.firestore.Timestamp.fromDate(new Date(ahora.toMillis() - (horas * 3600000)));
+        var actNombre = '';
+        if (actSnap.exists) {
+            var actData = actSnap.data();
+            actNombre = actData.titulo || actData.nombre || '';
         }
 
-        var fin = firebase.firestore.Timestamp.fromDate(new Date(inicio.toMillis() + (horas * 3600000)));
+        var ahora = tsAhora();
 
         await db.collection('sesiones').add({
             actividadId: actividadId,
-            actividadNombre: actData.titulo || actData.nombre || '',
+            actividadNombre: actNombre,
             uid: user.uid,
             nombre: user.nombre || '',
             inicio: inicio,
@@ -844,7 +843,7 @@
     CVC.actSemaforo = actSemaforo;
     CVC.actCiclo = actCiclo;
 
-    // Sesiones (nuevo)
+    // Sesiones
     CVC.actIniciar = actIniciar;
     CVC.actPausar = actPausar;
     CVC.actReanudar = actReanudar;
