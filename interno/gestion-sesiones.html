@@ -76,17 +76,20 @@
 
   .gs-empty { text-align: center; color: #868e96; font-size: .85rem; padding: 24px 0; }
 
-  .gs-modal {
+  /* MODAL corregido */
+  .gs-modal-over {
     position: fixed; inset: 0; background: rgba(0,0,0,0.45);
-    display: flex; align-items: flex-start; justify-content: center;
-    padding: 50px 10px 10px 10px; z-index: 2000;
+    display: none; align-items: center; justify-content: center;
+    z-index: 2000; padding: 16px;
   }
-  .gs-mbox {
-    background: #fff; border-radius: 14px; padding: 18px;
-    width: 100%; max-width: 500px; max-height: calc(100vh - 70px); overflow: auto;
+  .gs-modal-over.show { display: flex; }
+  .gs-modal-box {
+    background: #fff; border-radius: 14px; padding: 20px;
+    width: 100%; max-width: 500px; max-height: 85vh; overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
   }
-  .gs-mbox h3 { margin: 0 0 12px; font-size: 16px; }
-  .gs-mfoot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+  .gs-modal-box h3 { margin: 0 0 14px; font-size: 17px; }
+  .gs-modal-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
   .gs-frow { display: flex; gap: 8px; }
   .gs-frow > div { flex: 1; }
 </style>
@@ -127,9 +130,9 @@
   </div>
 </main>
 
-<!-- Modal -->
-<div id="gsModal" style="display:none" class="gs-modal">
-  <div class="gs-mbox">
+<!-- MODAL corregido -->
+<div id="gsModal" class="gs-modal-over">
+  <div class="gs-modal-box">
     <h3 id="gsModalTitulo">Nuevo registro manual</h3>
     <input type="hidden" id="mId">
     
@@ -150,8 +153,8 @@
     
     <div class="form-group"><label class="form-label">Notas (opcional)</label><input type="text" id="mNotas" class="form-control" placeholder="Detalle de lo hecho..."></div>
     
-    <div class="gs-mfoot">
-      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+    <div class="gs-modal-foot">
+      <button class="btn btn-secondary" type="button" onclick="cerrarModal()">Cancelar</button>
       <button class="btn btn-primary" id="btnGuardar" onclick="guardarSesion()">Guardar</button>
     </div>
   </div>
@@ -178,7 +181,7 @@ var childrenOf = {};
 var actRoots = [];
 var usuarios = [];
 var abiertos = {};
-var hojasPorProyecto = {};  // proyId -> [{id, nombre}]
+var hojasPorProyecto = {};  // proyId -> [{id, nombre, ruta}]
 
 // ── Carga ───────────────────────────────────────────────────
 async function cargarTodo() {
@@ -232,7 +235,56 @@ async function cargarTodo() {
     }
     actRoots.sort(function(a, b) { return (actIdx[a].nombre || '').localeCompare(actIdx[b].nombre || ''); });
 
-    // Hojas por proyecto (para el selector en cascada)
+    // RECOLECTAR TODAS LAS ACTIVIDADES CRONOMETRABLES por proyecto (CORRECCIÓN)
+    // Recorrer recursivamente los hijos de cada proyecto
+    function recolectarHojas(proyId) {
+        var resultado = [];
+        var pila = [proyId];
+        var visto = {};
+        
+        while (pila.length > 0) {
+            var actual = pila.shift();
+            if (visto[actual]) continue;
+            visto[actual] = true;
+            
+            var hijos = childrenOf[actual] || [];
+            for (var h = 0; h < hijos.length; h++) {
+                var hijo = hijos[h];
+                var hid = hijo.id;
+                var tipo = hijo.tipo || '';
+                
+                // Si no es chequeo y no tiene más hijos, es una hoja cronometrable
+                var esChequeo = (tipo === 'chequeo-inventario' || tipo === 'categoria-chequeo' || tipo === 'item-chequeo' || tipo === 'faltante-inventario');
+                
+                if (!esChequeo) {
+                    var tieneHijos = childrenOf[hid] && childrenOf[hid].length > 0;
+                    if (!tieneHijos) {
+                        // Es hoja — agregar
+                        resultado.push({
+                            id: hid,
+                            nombre: hijo.nombre || hijo.titulo || hid,
+                            ruta: rutaDeTexto(hid)
+                        });
+                    } else {
+                        // Tiene hijos — seguir recorriendo
+                        pila.push(hid);
+                    }
+                }
+            }
+        }
+        
+        // Ordenar por nombre
+        resultado.sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
+        return resultado;
+    }
+
+    for (var p = 0; p < actRoots.length; p++) {
+        var pid = actRoots[p];
+        hojasPorProyecto[pid] = recolectarHojas(pid);
+    }
+
+    // Huérfanas (sin proyecto)
+    var huerfanas = [];
     for (var aid in actIdx) {
         var a = actIdx[aid];
         if (!a.parentId) continue;
@@ -240,34 +292,29 @@ async function cargarTodo() {
         var tipo = a.tipo || '';
         if (tipo === 'chequeo-inventario' || tipo === 'categoria-chequeo' || tipo === 'item-chequeo' || tipo === 'faltante-inventario') continue;
         var rz = raizDe(aid);
-        if (rz && hojasPorProyecto[rz]) {
-            hojasPorProyecto[rz].push({ id: aid, nombre: a.nombre });
-        } else if (!rz) {
-            if (!hojasPorProyecto['__sin']) hojasPorProyecto['__sin'] = [];
-            hojasPorProyecto['__sin'].push({ id: aid, nombre: a.nombre });
+        if (!rz) {
+            huerfanas.push({ id: aid, nombre: a.nombre, ruta: '' });
         }
     }
-    // Ordenar hojas
-    for (var pk in hojasPorProyecto) {
-        hojasPorProyecto[pk].sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
+    if (huerfanas.length > 0) {
+        hojasPorProyecto['__sin'] = huerfanas;
     }
 
     // Selector de proyectos (filtro)
     var fProy = document.getElementById('fProy');
     fProy.innerHTML = '<option value="">Todos</option>';
     for (var j = 0; j < actRoots.length; j++) {
-        var pid = actRoots[j];
-        fProy.innerHTML += '<option value="' + pid + '">' + (actIdx[pid].nombre || pid) + '</option>';
+        var pid2 = actRoots[j];
+        fProy.innerHTML += '<option value="' + pid2 + '">' + (actIdx[pid2].nombre || pid2) + '</option>';
     }
 
     // Selector de proyectos (modal)
     var mProy = document.getElementById('mProy');
     mProy.innerHTML = '<option value="">Elegí un proyecto...</option>';
     for (var k = 0; k < actRoots.length; k++) {
-        var pid2 = actRoots[k];
-        mProy.innerHTML += '<option value="' + pid2 + '">' + (actIdx[pid2].nombre || pid2) + '</option>';
+        var pid3 = actRoots[k];
+        mProy.innerHTML += '<option value="' + pid3 + '">' + (actIdx[pid3].nombre || pid3) + '</option>';
     }
-    // También agregar huérfanas
     if (hojasPorProyecto['__sin'] && hojasPorProyecto['__sin'].length > 0) {
         mProy.innerHTML += '<option value="__sin">⚠️ Sin proyecto</option>';
     }
@@ -622,7 +669,7 @@ window.toggleAbierto = function(id) {
     aplicarFiltros();
 };
 
-// ── Selector en cascada ──────────────────────────────────────
+// ── Selector en cascada (CORREGIDO — muestra todas las hojas) ─
 window.filtrarActividadesPorProyecto = function() {
     var proyId = document.getElementById('mProy').value;
     var mAct = document.getElementById('mAct');
@@ -633,14 +680,22 @@ window.filtrarActividadesPorProyecto = function() {
     }
 
     var hojas = hojasPorProyecto[proyId] || [];
+    if (hojas.length === 0) {
+        mAct.innerHTML = '<option value="">Sin actividades en este proyecto</option>';
+        return;
+    }
+
     mAct.innerHTML = '<option value="">Elegí una actividad...</option>';
     for (var i = 0; i < hojas.length; i++) {
-        mAct.innerHTML += '<option value="' + hojas[i].id + '">' + hojas[i].nombre + '</option>';
+        var ruta = hojas[i].ruta ? ' (' + hojas[i].ruta + ')' : '';
+        mAct.innerHTML += '<option value="' + hojas[i].id + '">' + hojas[i].nombre + ruta + '</option>';
     }
 };
 
 // ── Modal ────────────────────────────────────────────────────
-function cerrarModal() { document.getElementById('gsModal').style.display = 'none'; }
+function cerrarModal() {
+    document.getElementById('gsModal').classList.remove('show');
+}
 
 function actualizarInicioFin() {
     var fecha = document.getElementById('mFecha').value;
@@ -674,7 +729,7 @@ window.mostrarFormManual = function() {
     document.getElementById('mFin').value = '';
     document.getElementById('mHoras').value = '';
     document.getElementById('mNotas').value = '';
-    document.getElementById('gsModal').style.display = 'flex';
+    document.getElementById('gsModal').classList.add('show');
 };
 
 window.editarSesion = async function(sesionId) {
@@ -685,7 +740,6 @@ window.editarSesion = async function(sesionId) {
     document.getElementById('mId').value = sesionId;
     document.getElementById('gsModalTitulo').textContent = 'Editar registro';
 
-    // Preseleccionar proyecto y actividad
     if (s.actividadId) {
         var rz = raizDe(s.actividadId);
         if (rz) {
@@ -708,7 +762,7 @@ window.editarSesion = async function(sesionId) {
     }
 
     calcHoras();
-    document.getElementById('gsModal').style.display = 'flex';
+    document.getElementById('gsModal').classList.add('show');
 };
 
 window.guardarSesion = async function() {
@@ -726,7 +780,7 @@ window.guardarSesion = async function() {
     if (dFin <= dIni) dFin.setDate(dFin.getDate() + 1);
     var horas = Math.max(0, (dFin - dIni) / 3600000);
 
-    var actNombre = document.getElementById('mAct').options[document.getElementById('mAct').selectedIndex].text;
+    var actNombre = document.getElementById('mAct').options[document.getElementById('mAct').selectedIndex].text.split(' (')[0];
     var usrId = document.getElementById('mUsr').value;
     var usrNombre = document.getElementById('mUsr').options[document.getElementById('mUsr').selectedIndex].text;
 
