@@ -76,7 +76,6 @@
 
   .gs-empty { text-align: center; color: #868e96; font-size: .85rem; padding: 24px 0; }
 
-  /* MODAL — corregido para mobile */
   .gs-modal-over {
     position: fixed; inset: 0; background: rgba(0,0,0,0.45);
     display: none; z-index: 2000;
@@ -87,7 +86,6 @@
     background: #fff; border-radius: 14px; padding: 20px;
     width: 92%; max-width: 500px; margin: 40px auto 20px auto;
     box-shadow: 0 8px 32px rgba(0,0,0,0.25);
-    max-height: none;
   }
   .gs-modal-box h3 { margin: 0 0 14px; font-size: 17px; }
   .gs-modal-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
@@ -116,10 +114,6 @@
     <div class="gs-fbar">
       <div class="gs-fg"><label>Usuario</label><select id="fUsr" onchange="aplicarFiltros()"><option value="">Todos</option></select></div>
       <div class="gs-fg"><label>Proyecto</label><select id="fProy" onchange="aplicarFiltros()"><option value="">Todos</option></select></div>
-      <div class="gs-fg"><label>Actividad</label><select id="fAct" onchange="aplicarFiltros()"><option value="">Todas</option></select></div>
-      <div class="gs-fg"><label>Estado</label><select id="fEst" onchange="aplicarFiltros()"><option value="">Todos</option><option value="en_curso">En curso</option><option value="pausada">Pausada</option><option value="finalizada">Finalizada</option></select></div>
-      <div class="gs-fg"><label>Desde</label><input type="date" id="fDesde" onchange="aplicarFiltros()"></div>
-      <div class="gs-fg"><label>Hasta</label><input type="date" id="fHasta" onchange="aplicarFiltros()"></div>
       <button class="btn btn-primary" onclick="mostrarFormManual()" style="height:33px;white-space:nowrap;font-size:12px;">
         <span class="material-icons" style="font-size:16px;vertical-align:-3px">add</span> Nuevo registro
       </button>
@@ -155,7 +149,7 @@
     <div class="form-group"><label class="form-label">Notas (opcional)</label><input type="text" id="mNotas" class="form-control" placeholder="Detalle de lo hecho..."></div>
     
     <div class="gs-modal-foot">
-      <button class="btn btn-secondary" type="button" id="btnCancelarModal">Cancelar</button>
+      <button class="btn btn-secondary" type="button" onclick="window.cerrarModal()">Cancelar</button>
       <button class="btn btn-primary" id="btnGuardar" onclick="guardarSesion()">Guardar</button>
     </div>
   </div>
@@ -177,12 +171,12 @@ var db = CVC.db;
 
 // ── Estado ──────────────────────────────────────────────────
 var todasSesiones = [];
-var actIdx = {};
-var childrenOf = {};
-var actRoots = [];
+var actIdx = {};        // actividadId -> {nombre, parentId, tipo, tipoRaiz}
+var childrenOf = {};    // parentId -> [objeto actividad plana]  (MISMO que actividades.html)
+var actRoots = [];      // IDs de proyectos raíz
 var usuarios = [];
 var abiertos = {};
-var hojasPorProyecto = {};
+var hojasPorProyecto = {};  // proyId -> [{id, nombre, ruta}]
 
 // ── Helpers ──────────────────────────────────────────────────
 function esc(s) { return CVC.escapeHtml ? CVC.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s); }
@@ -230,7 +224,7 @@ async function cargarTodo() {
     }
     if (!esAdmin) { fUsr.value = uid; fUsr.disabled = true; mUsr.value = uid; mUsr.disabled = true; }
 
-    // Actividades
+    // Actividades — MISMA LÓGICA QUE actividades.html
     var aSnap = await db.collection('actividades').get();
     actIdx = {};
     childrenOf = {};
@@ -239,7 +233,7 @@ async function cargarTodo() {
 
     aSnap.forEach(function(d) {
         var a = d.data();
-        a.id = d.id;
+        a.id = d.id;  // importante: el objeto tiene .id
         actIdx[d.id] = {
             nombre: a.nombre || a.titulo || '',
             parentId: a.parentId || null,
@@ -248,10 +242,10 @@ async function cargarTodo() {
         };
         var p = a.parentId || '';
         if (!childrenOf[p]) childrenOf[p] = [];
-        childrenOf[p].push({ id: d.id, nombre: a.nombre || a.titulo || '', tipo: a.tipo || '' });
+        childrenOf[p].push(a);  // MISMO que actividades.html: el objeto plano con .id
     });
 
-    // Proyectos raíz
+    // Proyectos raíz (sin parentId, tipoRaiz='proyecto')
     for (var id in actIdx) {
         if (!actIdx[id].parentId && actIdx[id].tipoRaiz === 'proyecto') {
             actRoots.push(id);
@@ -259,10 +253,10 @@ async function cargarTodo() {
     }
     actRoots.sort(function(a, b) { return (actIdx[a].nombre || '').localeCompare(actIdx[b].nombre || ''); });
 
-    // RECOLECTAR hojas cronometrables por proyecto
+    // RECOLECTAR hojas cronometrables — función corregida
     var TIPOS_NO_CRONO = ['chequeo-inventario', 'categoria-chequeo', 'item-chequeo', 'faltante-inventario'];
     
-    function recolectarHojasRecursivo(nodoId, visitados) {
+    function recolectarHojas(nodoId, visitados) {
         visitados = visitados || {};
         if (visitados[nodoId]) return [];
         visitados[nodoId] = true;
@@ -274,23 +268,20 @@ async function cargarTodo() {
             var hijo = hijos[i];
             var hid = hijo.id;
             var tipo = hijo.tipo || '';
-            var esChequeo = TIPOS_NO_CRONO.indexOf(tipo) !== -1;
             
-            if (esChequeo) continue;
+            if (TIPOS_NO_CRONO.indexOf(tipo) !== -1) continue;
             
             var tieneHijos = !!childrenOf[hid] && childrenOf[hid].length > 0;
             
             if (tieneHijos) {
-                // Seguir recorriendo
-                var sub = recolectarHojasRecursivo(hid, visitados);
+                var sub = recolectarHojas(hid, visitados);
                 for (var s = 0; s < sub.length; s++) {
                     resultado.push(sub[s]);
                 }
             } else {
-                // Es hoja — agregar
                 resultado.push({
                     id: hid,
-                    nombre: hijo.nombre || hid,
+                    nombre: hijo.nombre || hijo.titulo || hid,
                     ruta: rutaDeTexto(hid)
                 });
             }
@@ -301,7 +292,7 @@ async function cargarTodo() {
 
     for (var p = 0; p < actRoots.length; p++) {
         var pid = actRoots[p];
-        hojasPorProyecto[pid] = recolectarHojasRecursivo(pid);
+        hojasPorProyecto[pid] = recolectarHojas(pid);
         hojasPorProyecto[pid].sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
     }
 
@@ -341,20 +332,6 @@ async function cargarTodo() {
         mProy.innerHTML += '<option value="__sin">⚠️ Sin proyecto</option>';
     }
 
-    // Selector de actividades (filtro)
-    var fAct = document.getElementById('fAct');
-    fAct.innerHTML = '<option value="">Todas</option>';
-    var todasHojas = [];
-    for (var hp in hojasPorProyecto) {
-        for (var h = 0; h < hojasPorProyecto[hp].length; h++) {
-            todasHojas.push(hojasPorProyecto[hp][h]);
-        }
-    }
-    todasHojas.sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
-    for (var th = 0; th < todasHojas.length; th++) {
-        fAct.innerHTML += '<option value="' + todasHojas[th].id + '">' + todasHojas[th].nombre + '</option>';
-    }
-
     // Sesiones
     await cargarSesiones();
     aplicarFiltros();
@@ -372,6 +349,7 @@ async function cargarSesiones() {
         });
     } catch (e) { console.warn('Error /sesiones/:', e.message); }
 
+    // Subcolecciones viejas
     try {
         var cgSnap = await db.collectionGroup('sesiones').get();
         cgSnap.forEach(function(d) {
@@ -394,28 +372,16 @@ async function cargarSesiones() {
     } catch (e) {}
 }
 
-// ── Filtros ─────────────────────────────────────────────────
+// ── Filtros (simplificado: solo usuario y proyecto) ─────────
 function sesionesFiltradas() {
     var fUsr = document.getElementById('fUsr').value;
     var fProy = document.getElementById('fProy').value;
-    var fAct = document.getElementById('fAct').value;
-    var fEst = document.getElementById('fEst').value;
-    var fDesde = document.getElementById('fDesde').value;
-    var fHasta = document.getElementById('fHasta').value;
 
     var out = [];
     for (var i = 0; i < todasSesiones.length; i++) {
         var s = todasSesiones[i];
         if (fUsr && s.uid !== fUsr) continue;
-        if (fAct && s.actividadId !== fAct) continue;
-        if (fEst && s.estado !== fEst) continue;
         if (fProy) { var rz = raizDe(s.actividadId); if (rz !== fProy) continue; }
-
-        if (fDesde || fHasta) {
-            var iniMs = s.inicio ? (s.inicio.toMillis ? s.inicio.toMillis() : s.inicio) : 0;
-            if (fDesde) { var dMs = new Date(fDesde + 'T00:00:00').getTime(); if (iniMs < dMs) continue; }
-            if (fHasta) { var hMs = new Date(fHasta + 'T23:59:59').getTime(); if (iniMs > hMs) continue; }
-        }
         out.push(s);
     }
 
@@ -431,17 +397,13 @@ function sesionesFiltradas() {
 function aplicarFiltros() {
     var filtradas = sesionesFiltradas();
 
-    var totalH = 0, enC = 0, pau = 0;
+    var totalH = 0;
     for (var i = 0; i < filtradas.length; i++) {
         totalH += filtradas[i].horas || 0;
-        if (filtradas[i].estado === 'en_curso') enC++;
-        if (filtradas[i].estado === 'pausada') pau++;
     }
     document.getElementById('gsTotales').innerHTML =
         '<div class="gs-totcard"><div class="num">' + filtradas.length + '</div><div class="lbl">Sesiones</div></div>' +
-        '<div class="gs-totcard"><div class="num">' + fmtHM(totalH) + '</div><div class="lbl">Total horas</div></div>' +
-        '<div class="gs-totcard"><div class="num">' + enC + '</div><div class="lbl">En curso</div></div>' +
-        '<div class="gs-totcard"><div class="num">' + pau + '</div><div class="lbl">Pausadas</div></div>';
+        '<div class="gs-totcard"><div class="num">' + fmtHM(totalH) + '</div><div class="lbl">Total horas</div></div>';
 
     renderArbol(filtradas);
 }
@@ -449,15 +411,7 @@ function aplicarFiltros() {
 // ── Render árbol ────────────────────────────────────────────
 function renderArbol(filtradas) {
     var fProy = document.getElementById('fProy').value;
-    var fAct = document.getElementById('fAct').value;
     var el = document.getElementById('gsArbol');
-
-    if (fAct) {
-        var hrs = 0;
-        for (var i = 0; i < filtradas.length; i++) hrs += filtradas[i].horas || 0;
-        el.innerHTML = nodoActividad(fAct, filtradas, hrs, true);
-        return;
-    }
 
     var sesPorProy = {};
     var sinProy = [];
@@ -514,7 +468,7 @@ function renderArbol(filtradas) {
         html += '</div>';
     }
 
-    if (!html) html = '<div class="gs-empty">No hay sesiones con los filtros seleccionados.</div>';
+    if (!html) html = '<div class="gs-empty">No hay sesiones registradas.</div>';
     el.innerHTML = html;
 }
 
@@ -689,15 +643,9 @@ window.filtrarActividadesPorProyecto = function() {
 };
 
 // ── Modal ────────────────────────────────────────────────────
-// CORRECCIÓN 1: Función global para cerrar
 window.cerrarModal = function() {
     document.getElementById('gsModal').classList.remove('show');
 };
-
-// CORRECCIÓN 2: Listener en el botón Cancelar (por las dudas)
-document.getElementById('btnCancelarModal').addEventListener('click', function() {
-    document.getElementById('gsModal').classList.remove('show');
-});
 
 function actualizarInicioFin() {
     var fecha = document.getElementById('mFecha').value;
