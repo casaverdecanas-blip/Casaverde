@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Actividades · Casa Verde Canas</title>
-<link rel="stylesheet" href="design-system.css">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link rel="stylesheet" href="design-system.css">
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -632,9 +632,12 @@ function colorDeRaiz(it) {
   while (cur && cur.parentId && byId[cur.parentId] && guard < 15) { cur = byId[cur.parentId]; guard++; }
   return (cur && cur.color) ? cur.color : '#2d5a27';
 }
-var _TIPOS_SIN_CRONO = ['chequeo-inventario', 'categoria-chequeo', 'item-chequeo', 'faltante-inventario'];
+// v5.2 — Regla única: TODAS las actividades pueden marcar reloj,
+// desde el tronco (proyecto) hasta cada rama y hoja. Solo quedan
+// afuera los renglones estructurales del chequeo de inventario
+// (categorías e ítems), que se validan con su propio flujo.
+var _TIPOS_SIN_CRONO = ['categoria-chequeo', 'item-chequeo'];
 function puedeCronometrar(it) {
-  if (!it.parentId) return false;
   return _TIPOS_SIN_CRONO.indexOf(it.tipo || '') === -1;
 }
 function debeRegistrarTilde(it) {
@@ -968,8 +971,7 @@ function nodoHTML(it, nivel) {
 
       if (miSesionActiva) {
         h += '<span class="crono-live"><span class="material-icons" style="font-size:17px">timer</span><span class="crono-tiempo" data-ini="' + inicioCrono(it) + '">0:00:00</span></span>';
-        h += '<button class="act-ico" title="Pausar" onclick="cronoPausar(\'' + it.id + '\')"><span class="material-icons" style="color:#b8860b">pause</span></button>';
-        h += '<button class="act-ico" title="Finalizar y registrar" onclick="cronoFinalizar(\'' + it.id + '\')"><span class="material-icons" style="color:#1f7a32">stop</span></button>';
+        h += '<button class="act-ico" title="Frenar y registrar" onclick="cronoFinalizar(\'' + it.id + '\')"><span class="material-icons" style="color:#1f7a32">stop</span></button>';
       } else {
         h += '<button class="btn-play" onclick="cronoIniciar(\'' + it.id + '\')">';
         h += '<span class="material-icons">play_arrow</span> Iniciar</button>';
@@ -1405,25 +1407,24 @@ window.cronoIniciar = async function (id) {
   }
 };
 
-window.cronoPausar = async function (id) {
-  if (!CVC.actPausar) { toast('Falta actividades-core.js', 'error'); return; }
-  try {
-    var resultado = await CVC.actPausar(id, { uid: uid, nombre: miNombre });
-    toast('⏸ Pausado — ' + fmtHorasHM(resultado.horas) + ' registradas', 'info');
-    _cronoCacheTime = 0;
-    _cronoInicioMs = 0;
-    await cargar();
-  } catch (e) {
-    toast('No se pudo pausar: ' + e.message, 'error');
-  }
-};
-
 window.cronoFinalizar = async function (id) {
   if (!CVC.actFinalizar) { toast('Falta actividades-core.js', 'error'); return; }
-  if (!confirm('¿Finalizar y registrar el tiempo trabajado?')) return;
+  var it = byId[id];
+  var terminada = true;
+  if (it && esRecurrente(it)) {
+    // En recurrentes el tiempo se registra SIEMPRE; solo se pregunta
+    // si el ciclo quedó terminado (reprogramar) o sigue pendiente.
+    terminada = confirm('El tiempo trabajado se registra ahora.\n\n¿La actividad quedó TERMINADA por este ciclo?\n\nAceptar = sí, terminada (se reprograma)\nCancelar = todavía no (queda pendiente, con el tiempo ya registrado)');
+  } else {
+    if (!confirm('¿Finalizar y registrar el tiempo trabajado?')) return;
+  }
   try {
-    var resultado = await CVC.actFinalizar(id, { uid: uid, nombre: miNombre }, true);
-    toast('✅ Finalizado — ' + fmtHorasHM(resultado.horas) + ' registradas', 'success');
+    var resultado = await CVC.actFinalizar(id, { uid: uid, nombre: miNombre }, terminada);
+    if (terminada) {
+      toast('✅ Finalizado — ' + fmtHorasHM(resultado.horas) + ' registradas', 'success');
+    } else {
+      toast('⏹ ' + fmtHorasHM(resultado.horas) + ' registradas — la actividad sigue pendiente', 'info');
+    }
     _cronoCacheTime = 0;
     _cronoInicioMs = 0;
     await cargar();
@@ -1553,9 +1554,14 @@ window.verHistorial = async function (id) {
   document.getElementById('histBody').innerHTML = '<div class="state-loading"><div class="spinner"></div><span>Cargando...</span></div>';
   abrirModal('modalHist');
   try {
-    var snap = await db.collection('sesiones').where('actividadId', '==', id).orderBy('inicio', 'desc').get();
+    var snap = await db.collection('sesiones').where('actividadId', '==', id).get();
     var regs = [];
     snap.forEach(function (d) { regs.push(Object.assign({ id: d.id }, d.data())); });
+    regs.sort(function (a, b) {
+      var am = (a.inicio && a.inicio.toMillis) ? a.inicio.toMillis() : 0;
+      var bm = (b.inicio && b.inicio.toMillis) ? b.inicio.toMillis() : 0;
+      return bm - am;
+    });
     if (!regs.length) { document.getElementById('histBody').innerHTML = '<div class="muted-note">Todavía no hay registros de tiempo en esta actividad.</div>'; return; }
     var conCrono = regs.filter(function (r) { return r.tipo === 'cronometro'; }).length;
     var manuales = regs.length - conCrono;
@@ -1567,7 +1573,7 @@ window.verHistorial = async function (id) {
       var ini = r.inicio ? new Date(r.inicio.toMillis()) : null;
       var fin = r.fin ? new Date(r.fin.toMillis()) : null;
       h += '<div class="act-row" style="flex-direction:column;align-items:flex-start;gap:2px">';
-      h += '<div style="font-weight:600;font-size:13.5px">' + esc(fmtTs(r.inicio)) + ' · ' + (r.tipo === 'cronometro' ? '⏱ cronómetro' : '📝 manual') + ' · ' + fmtHorasHM(r.horas || 0) + '</div>';
+      h += '<div style="font-weight:600;font-size:13.5px">' + esc(fmtTs(r.inicio)) + ' · ' + (r.tipo === 'cronometro' ? '⏱ cronómetro' : (r.tipo === 'tilde' ? '✔ tilde (sin reloj)' : '📝 manual')) + ' · ' + fmtHorasHM(r.horas || 0) + '</div>';
       h += '<div style="font-size:13px;color:#46583f">' + esc(r.nombre || '—') + (r.notas ? ' — ' + esc(r.notas) : '') + (r._migradoDe ? ' 📦' : '') + '</div>';
       h += '</div>';
     }

@@ -1,11 +1,23 @@
 // =========================================================
 //  actividades-core.js — Casa Verde Canas
-//  Motor de actividades + Sesiones unificadas v5.1
+//  Motor de actividades + Sesiones unificadas v5.2
 //  Julio 2026
 //
-//  PRINCIPIO: Play→Pausa y Play→Stop generan el MISMO
-//  registro en /sesiones/. La diferencia es solo el campo
-//  'estado'. Las horas se acumulan igual.
+//  PRINCIPIO v5.2: solo existe Play y Stop. No hay pausa.
+//  Cada sesion es un bloque cerrado de trabajo en /sesiones/
+//  con estado 'en_curso' o 'finalizada'. Al dar Stop en una
+//  recurrente se pregunta si la actividad quedo terminada:
+//  el tiempo se registra igual en ambos casos.
+//
+//  FUENTE UNICA: /sesiones/ para tiempo, /honorarios/ para
+//  dinero a cobrar. historial_tareas queda ABANDONADA (solo
+//  lectura de archivo, nunca se escribe).
+//
+//  HONORARIOS PROPORCIONALES: al cerrar el ciclo de una
+//  actividad con monto > 0, el monto se reparte entre quienes
+//  registraron sesiones finalizadas desde el cierre anterior,
+//  en proporcion a sus horas. La actividad guarda
+//  ultimoCierreEn para delimitar cada ciclo.
 // =========================================================
 (function () {
     var CVC = window.CVC;
@@ -103,11 +115,9 @@
     }
 
     // ── ════════════════════════════════════════════════════════
-    //  SISTEMA UNIFICADO DE SESIONES v5.1
+    //  SISTEMA UNIFICADO DE SESIONES v5.2 (solo Play / Stop)
     //  Colección raíz: /sesiones/{id}
-    //  PRINCIPIO: pausa y stop generan el mismo tipo de registro.
-    //  La diferencia es solo el campo 'estado'. Las horas se
-    //  acumulan igual en ambos casos.
+    //  Estados posibles: 'en_curso' | 'finalizada'
     // ════════════════════════════════════════════════════════════
 
     /**
@@ -128,22 +138,20 @@
     }
 
     /**
-     * Iniciar una sesión de trabajo
-     * Crea UN registro en /sesiones/
-     * Verifica que el usuario no tenga otra sesión activa
+     * Iniciar una sesión de trabajo (Play)
+     * Crea UN registro en /sesiones/ con estado 'en_curso'.
+     * Verifica que el usuario no tenga otra sesión activa.
      */
     async function actIniciar(actId, user) {
         if (!user || !user.uid) {
             throw new Error('Usuario no identificado');
         }
 
-        // Verificar si ya tiene una sesión activa en cualquier actividad
         var yaTiene = await _usuarioTieneSesionActiva(user.uid);
         if (yaTiene) {
-            throw new Error('Ya tienes otro cronómetro corriendo. Finalízalo o pausalo antes de iniciar este.');
+            throw new Error('Ya tenés otro cronómetro corriendo. Frenalo antes de iniciar este.');
         }
 
-        // Obtener datos de la actividad
         var actRef = db.collection('actividades').doc(actId);
         var actSnap = await actRef.get();
         if (!actSnap.exists) throw new Error('La actividad no existe.');
@@ -151,7 +159,6 @@
 
         var ahora = tsAhora();
 
-        // Crear sesión en la colección raíz
         var sesionRef = await db.collection('sesiones').add({
             actividadId: actId,
             actividadNombre: actData.titulo || actData.nombre || '',
@@ -167,7 +174,6 @@
             actualizadoEn: ahora
         });
 
-        // Actualizar actividad
         await actRef.update({
             estado: 'en_curso',
             sesionActualId: sesionRef.id
@@ -177,160 +183,104 @@
     }
 
     /**
-     * Pausar sesión: cierra el bloque actual pero permite continuar después
-     * Mismo tipo de registro que finalizar — solo cambia estado:'pausada'
-     * Las horas trabajadas quedan registradas.
+     * Cerrar el ciclo de una actividad (interno).
+     * - Marca hecho / reprograma si es recurrente.
+     * - Reparte honorarios en proporción a las horas de las
+     *   sesiones finalizadas desde el cierre anterior.
+     * - Actualiza ultimoCierreEn en la actividad.
+     * conCrono: true si el cierre vino de un Stop, false si vino de un tilde.
      */
-    async function actPausar(actId, user) {
-        if (!user || !user.uid) {
-            throw new Error('Usuario no identificado');
-        }
-
+    async function _cerrarCicloActividad(actId, actRef, actData, user, conCrono) {
         var ahora = tsAhora();
+        try { await actCargarTemporada(); } catch (e) { }
+        var ciclo = actCiclo(actData);
 
-        // Buscar sesión activa del usuario en esta actividad
-        var snap = await db.collection('sesiones')
-            .where('uid', '==', user.uid)
-            .where('estado', '==', 'en_curso')
-            .where('actividadId', '==', actId)
-            .limit(1)
-            .get();
+        // ── 1. Repartir honorarios del ciclo que se cierra ──
+        var monto = parseFloat(actData.monto) || 0;
+        if (monto > 0) {
+            var prevMs = 0;
+            if (actData.ultimoCierreEn && actData.ultimoCierreEn.toMillis) {
+                prevMs = actData.ultimoCierreEn.toMillis();
+            }
 
-        if (snap.empty) {
-            throw new Error('No hay sesión activa para pausar');
+            // Sesiones finalizadas de esta actividad cuyo FIN cae en este ciclo.
+            // Un solo where de igualdad — sin índices compuestos; filtro en JS.
+            var porUid = {};
+            var totalHoras = 0;
+            try {
+                var sSnap = await db.collection('sesiones')
+                    .where('actividadId', '==', actId)
+                    .get();
+                sSnap.forEach(function (d) {
+                    var s = d.data();
+                    if (s.estado !== 'finalizada') return;
+                    var finMs = (s.fin && s.fin.toMillis) ? s.fin.toMillis() : 0;
+                    if (!finMs) return;
+                    if (finMs <= prevMs) return;
+                    var hrs = parseFloat(s.horas) || 0;
+                    if (!s.uid) return;
+                    if (!porUid[s.uid]) porUid[s.uid] = { nombre: s.nombre || '', horas: 0 };
+                    porUid[s.uid].horas += hrs;
+                    totalHoras += hrs;
+                });
+            } catch (e) { }
+
+            var uids = Object.keys(porUid);
+            if (totalHoras > 0.001 && uids.length > 0) {
+                // Reparto proporcional a las horas de cada persona
+                for (var u = 0; u < uids.length; u++) {
+                    var reg = porUid[uids[u]];
+                    var parte = Math.round(monto * (reg.horas / totalHoras) * 100) / 100;
+                    if (parte <= 0) continue;
+                    await db.collection('honorarios').add({
+                        uid: uids[u],
+                        nombre: reg.nombre,
+                        tareaId: actId,
+                        concepto: nombreDe(actData) || 'Actividad',
+                        horas: Math.round(reg.horas * 100) / 100,
+                        monto: parte,
+                        estado: 'pendiente',
+                        creadoEn: serverTs(),
+                        cicloCerradoEn: ahora,
+                        cerradoPor: user.uid,
+                        cerradoNombre: user.nombre || ''
+                    });
+                }
+            } else {
+                // Sin horas registradas en el ciclo (tilde puro): todo al que cierra
+                await db.collection('honorarios').add({
+                    uid: user.uid,
+                    nombre: user.nombre || '',
+                    tareaId: actId,
+                    concepto: nombreDe(actData) || 'Actividad',
+                    horas: 0,
+                    monto: monto,
+                    estado: 'pendiente',
+                    creadoEn: serverTs(),
+                    cicloCerradoEn: ahora,
+                    cerradoPor: user.uid,
+                    cerradoNombre: user.nombre || ''
+                });
+            }
         }
 
-        var doc = snap.docs[0];
-        var data = doc.data();
-        var inicioMs = data.inicio.toMillis();
-        var horas = (ahora.toMillis() - inicioMs) / 3600000;
-
-        await doc.ref.update({
-            fin: ahora,
-            horas: Math.round(horas * 100) / 100,
-            estado: 'pausada',
-            actualizadoEn: ahora
-        });
-
-        // Actualizar actividad
-        var actRef = db.collection('actividades').doc(actId);
-        await actRef.update({
-            estado: 'pendiente',
-            sesionActualId: null
-        });
-
-        return {
-            sesionId: doc.id,
-            horas: Math.round(horas * 100) / 100
-        };
-    }
-
-    /**
-     * Reanudar una sesión pausada (o iniciar nueva si no hay)
-     */
-    async function actReanudar(actId, user) {
-        if (!user || !user.uid) {
-            throw new Error('Usuario no identificado');
-        }
-
-        // Verificar que no tenga otra sesión activa
-        var yaTiene = await _usuarioTieneSesionActiva(user.uid);
-        if (yaTiene) {
-            throw new Error('Ya tienes una sesión activa en otra actividad');
-        }
-
-        // Buscar última sesión pausada de esta actividad
-        var snap = await db.collection('sesiones')
-            .where('uid', '==', user.uid)
-            .where('estado', '==', 'pausada')
-            .where('actividadId', '==', actId)
-            .orderBy('actualizadoEn', 'desc')
-            .limit(1)
-            .get();
-
-        var ahora = tsAhora();
-
-        if (!snap.empty) {
-            // Reactivar sesión existente
-            var doc = snap.docs[0];
-            await doc.ref.update({
-                fin: null,
-                estado: 'en_curso',
-                actualizadoEn: ahora
-            });
-
-            // Actualizar actividad
-            var actRef = db.collection('actividades').doc(actId);
+        // ── 2. Cerrar o reprogramar la actividad ──
+        if (ciclo > 0) {
+            // Recurrente: ciclo cumplido, se reprograma
             await actRef.update({
-                estado: 'en_curso',
-                sesionActualId: doc.id
+                estado: 'pendiente',
+                sesionActualId: null,
+                hecho: false,
+                hechoPor: null,
+                hechoEn: null,
+                fechaInicio: sumarDiasISO(ciclo),
+                ultimaRealizacion: sumarDiasISO(0),
+                ultimaRealizacionPor: user.nombre || '',
+                ultimaRealizacionConCrono: !!conCrono,
+                ultimoCierreEn: ahora
             });
-
-            return doc.id;
         } else {
-            // No hay sesión pausada — iniciar nueva
-            return await actIniciar(actId, user);
-        }
-    }
-
-    /**
-     * Finalizar sesión: cierra definitivamente (estado:'finalizada')
-     * Si cerrarActividad=true → marca la actividad como hecha
-     * Si es recurrente → reprograma la próxima ocurrencia
-     */
-    async function actFinalizar(actId, user, cerrarActividad) {
-        if (!user || !user.uid) {
-            throw new Error('Usuario no identificado');
-        }
-
-        cerrarActividad = (cerrarActividad !== false); // default true
-
-        var ahora = tsAhora();
-
-        // Buscar sesión activa o pausada más reciente
-        var snap = await db.collection('sesiones')
-            .where('uid', '==', user.uid)
-            .where('actividadId', '==', actId)
-            .where('estado', 'in', ['en_curso', 'pausada'])
-            .orderBy('actualizadoEn', 'desc')
-            .limit(1)
-            .get();
-
-        if (snap.empty) {
-            throw new Error('No hay sesión para finalizar');
-        }
-
-        var doc = snap.docs[0];
-        var data = doc.data();
-
-        // Calcular horas
-        var horas = data.horas || 0;
-        if (data.estado === 'en_curso') {
-            var inicioMs = data.inicio.toMillis();
-            horas = (ahora.toMillis() - inicioMs) / 3600000;
-        }
-
-        // Actualizar sesión
-        await doc.ref.update({
-            fin: ahora,
-            horas: Math.round(horas * 100) / 100,
-            estado: 'finalizada',
-            actualizadoEn: ahora,
-            finalizadoPor: user.uid,
-            finalizadoNombre: user.nombre || ''
-        });
-
-        // Actualizar actividad
-        var actRef = db.collection('actividades').doc(actId);
-        var actSnap = await actRef.get();
-        var actData = actSnap.data();
-
-        if (cerrarActividad) {
-            // Cerrar ciclo de la actividad
-            try { await actCargarTemporada(); } catch (e) { }
-            var ciclo = actCiclo(actData);
-
-            var updBase = {
+            await actRef.update({
                 estado: 'finalizada',
                 sesionActualId: null,
                 hecho: true,
@@ -338,60 +288,70 @@
                 hechoEn: ahora,
                 ultimaRealizacion: sumarDiasISO(0),
                 ultimaRealizacionPor: user.nombre || '',
-                ultimaRealizacionConCrono: true
-            };
-
-            if (ciclo > 0) {
-                // Recurrente: reprogramar
-                await actRef.update(Object.assign({}, updBase, {
-                    estado: 'pendiente',
-                    fechaInicio: sumarDiasISO(ciclo),
-                    hecho: false,
-                    hechoPor: null,
-                    hechoEn: null
-                }));
-            } else {
-                await actRef.update(updBase);
-            }
-
-            // Registrar en historial_tareas (compatibilidad con horas-stats)
-            var montoTarea = actData.monto || 0;
-            var costoLimpiezaBRL = 0;
-            if (actData.reservaId) {
-                try { var rSnap = await db.collection('reservas').doc(actData.reservaId).get(); if (rSnap.exists) costoLimpiezaBRL = rSnap.data().costoLimpiezaBRL || 0; } catch (e) { }
-            }
-
-            await db.collection('historial_tareas').add({
-                tareaId: actId,
-                nombre: nombreDe(actData),
-                tipo: actData.tipo || 'general',
-                cabana: (actData.cabana !== undefined && actData.cabana !== null) ? actData.cabana : null,
-                tipoRegistro: 'finalizada',
-                conCronometro: true,
-                totalHoras: Math.round(horas * 100) / 100,
-                monto: montoTarea,
-                costoLimpiezaBRL: costoLimpiezaBRL,
-                colaboradores: [{ uid: user.uid, nombre: user.nombre || '', horas: Math.round(horas * 100) / 100, montoRecibido: montoTarea }],
-                finalizadoEn: serverTs(),
-                finalizadoNombre: user.nombre || '',
-                finalizadoPor: user.uid
+                ultimaRealizacionConCrono: !!conCrono,
+                ultimoCierreEn: ahora
             });
+        }
+    }
 
-            // Honorario si corresponde
-            if (montoTarea > 0) {
-                await db.collection('honorarios').add({
-                    uid: user.uid,
-                    nombre: user.nombre || '',
-                    tareaId: actId,
-                    concepto: nombreDe(actData) || 'Actividad',
-                    horas: Math.round(horas * 100) / 100,
-                    monto: montoTarea,
-                    estado: 'pendiente',
-                    creadoEn: serverTs()
-                });
-            }
+    /**
+     * Stop: cierra la sesión en curso y registra las horas.
+     * terminada = true  → además cierra el ciclo de la actividad
+     *                     (reprograma si es recurrente, marca hecho si no)
+     *                     y reparte honorarios si tiene monto.
+     * terminada = false → la actividad queda pendiente; el tiempo
+     *                     ya quedó registrado y contará en el
+     *                     reparto cuando el ciclo se cierre.
+     */
+    async function actFinalizar(actId, user, terminada) {
+        if (!user || !user.uid) {
+            throw new Error('Usuario no identificado');
+        }
+
+        terminada = (terminada !== false); // default true
+
+        var ahora = tsAhora();
+
+        // Sesión en curso del usuario en esta actividad
+        // (solo igualdades — sin índice compuesto)
+        var snap = await db.collection('sesiones')
+            .where('uid', '==', user.uid)
+            .where('actividadId', '==', actId)
+            .where('estado', '==', 'en_curso')
+            .limit(1)
+            .get();
+
+        var horas = 0;
+        var sesionId = null;
+
+        if (!snap.empty) {
+            var doc = snap.docs[0];
+            var data = doc.data();
+            var inicioMs = data.inicio.toMillis();
+            horas = (ahora.toMillis() - inicioMs) / 3600000;
+            horas = Math.round(horas * 100) / 100;
+            sesionId = doc.id;
+
+            await doc.ref.update({
+                fin: ahora,
+                horas: horas,
+                estado: 'finalizada',
+                actualizadoEn: ahora,
+                finalizadoPor: user.uid,
+                finalizadoNombre: user.nombre || ''
+            });
+        } else if (!terminada) {
+            throw new Error('No hay una sesión en curso para frenar.');
+        }
+
+        var actRef = db.collection('actividades').doc(actId);
+        var actSnap = await actRef.get();
+        if (!actSnap.exists) return { sesionId: sesionId, horas: horas };
+        var actData = actSnap.data();
+
+        if (terminada) {
+            await _cerrarCicloActividad(actId, actRef, actData, user, true);
         } else {
-            // Solo pausar sin cerrar actividad
             await actRef.update({
                 estado: 'pendiente',
                 sesionActualId: null
@@ -399,62 +359,46 @@
         }
 
         return {
-            sesionId: doc.id,
-            horas: Math.round(horas * 100) / 100
+            sesionId: sesionId,
+            horas: horas,
+            terminada: terminada
         };
     }
 
     /**
-     * Tildar (realizar sin cronómetro)
+     * Tildar: dar la actividad por realizada SIN cronómetro.
+     * Deja una sesión de 0 horas en /sesiones/ (tipo 'tilde') para
+     * que todo el registro viva en un solo lugar, y cierra el ciclo
+     * (reprograma recurrentes, reparte honorarios si hay monto).
      */
     async function actTildar(actId, user) {
-        user = user || {};
+        if (!user || !user.uid) {
+            throw new Error('Usuario no identificado');
+        }
         var ref = db.collection('actividades').doc(actId);
         var snap = await ref.get();
         if (!snap.exists) throw new Error('La actividad no existe.');
         var t = snap.data();
 
-        await db.collection('historial_tareas').add({
-            tareaId: actId,
-            nombre: nombreDe(t),
-            tipo: t.tipo || 'general',
-            cabana: (t.cabana !== undefined && t.cabana !== null) ? t.cabana : null,
-            tipoRegistro: 'tildada',
-            conCronometro: false,
-            totalHoras: 0,
-            monto: 0,
-            costoLimpiezaBRL: 0,
-            colaboradores: [{ uid: user.uid || null, nombre: user.nombre || '', horas: 0, montoRecibido: 0 }],
-            finalizadoEn: serverTs(),
-            finalizadoNombre: user.nombre || '',
-            finalizadoPor: user.uid || null
+        var ahora = tsAhora();
+
+        await db.collection('sesiones').add({
+            actividadId: actId,
+            actividadNombre: nombreDe(t),
+            uid: user.uid,
+            nombre: user.nombre || '',
+            inicio: ahora,
+            fin: ahora,
+            horas: 0,
+            estado: 'finalizada',
+            tipo: 'tilde',
+            creadoPor: user.uid,
+            creadoEn: ahora,
+            actualizadoEn: ahora,
+            notas: ''
         });
 
-        try { await actCargarTemporada(); } catch (e) { }
-        var ciclo = actCiclo(t);
-
-        if (ciclo > 0) {
-            await ref.update({
-                estado: 'pendiente',
-                fechaInicio: sumarDiasISO(ciclo),
-                hecho: false,
-                hechoPor: null,
-                hechoEn: null,
-                ultimaRealizacion: sumarDiasISO(0),
-                ultimaRealizacionPor: user.nombre || '',
-                ultimaRealizacionConCrono: false
-            });
-        } else {
-            await ref.update({
-                estado: 'finalizada',
-                hecho: true,
-                hechoPor: user.uid || null,
-                hechoEn: serverTs(),
-                ultimaRealizacion: sumarDiasISO(0),
-                ultimaRealizacionPor: user.nombre || '',
-                ultimaRealizacionConCrono: false
-            });
-        }
+        await _cerrarCicloActividad(actId, ref, t, user, false);
     }
 
     // ── ════════════════════════════════════════════════════════
@@ -479,13 +423,7 @@
             query = query.where('estado', '==', filtros.estado);
         }
 
-        // Ordenar por inicio descendente
-        query = query.orderBy('inicio', 'desc');
-
-        if (filtros.limite) {
-            query = query.limit(filtros.limite);
-        }
-
+        // Sin orderBy con where compuesto: se ordena en JS más abajo
         var snap = await query.get();
         var sesiones = [];
         snap.forEach(function(doc) {
@@ -506,6 +444,17 @@
 
             sesiones.push(s);
         });
+
+        // Ordenar por inicio descendente (en JS)
+        sesiones.sort(function (a, b) {
+            var am = (a.inicio && a.inicio.toMillis) ? a.inicio.toMillis() : 0;
+            var bm = (b.inicio && b.inicio.toMillis) ? b.inicio.toMillis() : 0;
+            return bm - am;
+        });
+
+        if (filtros.limite && sesiones.length > filtros.limite) {
+            sesiones = sesiones.slice(0, filtros.limite);
+        }
 
         return sesiones;
     }
@@ -843,10 +792,8 @@
     CVC.actSemaforo = actSemaforo;
     CVC.actCiclo = actCiclo;
 
-    // Sesiones
+    // Sesiones (v5.2: sin pausa)
     CVC.actIniciar = actIniciar;
-    CVC.actPausar = actPausar;
-    CVC.actReanudar = actReanudar;
     CVC.actFinalizar = actFinalizar;
     CVC.actTildar = actTildar;
     CVC.actObtenerSesiones = actObtenerSesiones;

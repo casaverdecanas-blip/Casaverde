@@ -101,7 +101,6 @@
 .hs-sesion .tiempo { font-family: monospace; font-weight: 700; color: #2d5a27; }
 .hs-sesion .estado { font-size: .72rem; padding: 2px 8px; border-radius: 999px; }
 .hs-sesion .estado.activa { background: #d4edda; color: #155724; }
-.hs-sesion .estado.pausada { background: #cce5ff; color: #004085; }
 .hs-sesion .btn-del { background: none; border: none; color: #c0271f; cursor: pointer; padding: 4px; }
 .hs-sesion .btn-del:hover { color: #a02020; }
 .hs-sesion .sin-denorm { color: #d97706; font-size: .7rem; }
@@ -166,6 +165,11 @@
                     <option value="ARS">$ (pesos arg.)</option>
                 </select>
             </label>
+            <label>Proyecto
+                <select id="hsProyecto" onchange="render()" style="max-width:230px;">
+                    <option value="">Todos</option>
+                </select>
+            </label>
         </div>
         <div id="hsUsuariosWrap" style="display:none;">
             <div class="hs-lbl-min">Usuarios (tocá para incluir / excluir)</div>
@@ -175,11 +179,9 @@
 
     <!-- SESIONES ACTIVAS -->
     <div class="hs-card" id="hsSesionesCard" style="display:none;">
-        <h2><span class="material-icons">timer</span> Sesiones activas / en pausa</h2>
+        <h2><span class="material-icons">timer</span> Cronómetros corriendo ahora</h2>
         <p style="font-size:.78rem;color:#6c757d;margin:0 0 8px;">
-            Sesiones que aún no han sido finalizadas. 
-            <span style="color:#16a34a;">🆕</span> = nueva colección raíz.
-            <span style="color:#d97706;">⚠️</span> = sesión sin denormalizar.
+            Sesiones en curso: se suman a las estadísticas cuando se frenan con Stop.
             <span style="color:#c0271f;">🗑️</span> = eliminar (solo admin o dueño).
         </p>
         <div id="hsSesionesLista"></div>
@@ -234,7 +236,7 @@
         <a class="hs-link" href="contenido-sitio.html"><span class="material-icons" style="font-size:16px;">open_in_new</span> Actualizar precio de limpieza en Contenido del sitio</a>
     </div>
 
-    <p class="hs-nota">Las estadísticas incluyen el trabajo <b>finalizado</b> y los <b>ciclos en pausa</b> (marcados "en pausa" en el detalle, en azul). El segmento que está <b>corriendo en este momento</b> se suma al pausarlo o finalizarlo. Todos los valores se calculan en el momento — nada se guarda.</p>
+    <p class="hs-nota">Fuente única: la colección <b>/sesiones/</b>. Cada sesión es un bloque Play→Stop (o un registro manual del Gestor de Sesiones). El cronómetro que está <b>corriendo en este momento</b> se suma al frenarlo. Los honorarios reales salen de <b>/honorarios/</b>, generados al cerrar el ciclo de cada actividad con precio. Todos los valores se calculan en el momento — nada se guarda.</p>
 </main>
 
 <!-- Firebase 8.10.1 -->
@@ -253,7 +255,10 @@ var HS = {
     miNombre: '',
     lineas: [],
     docsLimp: [],
+    honorarios: [],
     actIdx: {},
+    actRoots: [],        // proyectos raíz ordenados alfabéticamente
+    arbolSelect: [],     // árbol completo en orden, con nivel (para el select)
     cabanas: [],
     usuarios: [],
     uidsSel: {},
@@ -267,8 +272,27 @@ var HS = {
     arbolUidsSel: {}   // uid -> true (selección para el desagregado)
 };
 
-var HS_COLORES = ['#2a9d8f', '#e76f51', '#4361ee', '#ff9f1c', '#7209b7',
-                  '#2ec4b6', '#e71d36', '#588157', '#b5838d', '#6c757d'];
+// ── Paleta de proyectos (compartida con gestion-sesiones.html) ──
+// Cada proyecto raíz recibe un par {a: acento, p: pastel} asignado
+// por orden alfabético — el mismo proyecto tiene siempre el mismo
+// color en todas las páginas.
+var PALETA_PROY = [
+    { a: '#2a9d8f', p: '#e2f2f0' },
+    { a: '#e76f51', p: '#fdeae3' },
+    { a: '#4361ee', p: '#e7ecfd' },
+    { a: '#b8860b', p: '#faf1d8' },
+    { a: '#7209b7', p: '#f2e4fa' },
+    { a: '#2d5a27', p: '#e6f0e4' },
+    { a: '#c2185b', p: '#fae2ec' },
+    { a: '#00838f', p: '#dff1f3' },
+    { a: '#6d4c41', p: '#f0e8e5' },
+    { a: '#546e7a', p: '#e8edf0' }
+];
+function colorProy(rootId) {
+    var i = HS.actRoots.indexOf(rootId);
+    if (i < 0) return { a: '#9aa69a', p: '#f1f3f0' };
+    return PALETA_PROY[i % PALETA_PROY.length];
+}
 var HS_SYM = { BRL: 'R$', USD: 'US$', ARS: '$' };
 var HS_TIPOS_LIMPIEZA = { limpieza: true, control_salida: true, control: true };
 
@@ -373,40 +397,13 @@ function pathDeRegistro(h) {
     return ['__otros'];
 }
 
-// ── Eliminar registro de historial ──────────────────────────
-window.eliminarRegistroHistorial = async function(docId, actNombre, horas) {
-    if (!HS.esAdmin) {
-        CVC.showToast('Solo administradores pueden eliminar registros.', 'warning');
-        return;
-    }
-
-    var msg = '¿Eliminar registro de "' + actNombre + '" (' + fmtH(horas) + ')?\nEsta acción no se puede deshacer.';
-    if (!confirm(msg)) return;
-    if (!confirm('¿Estás seguro? El registro se borrará permanentemente.')) return;
-
-    try {
-        await db.collection('historial_tareas').doc(docId).delete();
-        CVC.showToast('🗑️ Registro eliminado', 'success');
-        await cargar();
-        render();
-    } catch (e) {
-        CVC.showToast('❌ Error: ' + e.message, 'error');
-    }
-};
-
-// ── Eliminar sesión (unificada: subcolección o raíz) ────────
-window.eliminarSesion = async function(actId, sesId, esNueva) {
+// ── Eliminar sesión (solo colección raíz /sesiones/) ────────
+window.eliminarSesion = async function(sesId) {
     if (!confirm('¿ELIMINAR esta sesión permanentemente? Esta acción no se puede deshacer.')) return;
     if (!confirm('¿Estás seguro?')) return;
 
     try {
-        if (esNueva) {
-            // Sesión en colección raíz /sesiones/
-            await db.collection('sesiones').doc(sesId).delete();
-        } else {
-            // Sesión en subcolección actividades/{id}/sesiones
-            await db.collection('actividades').doc(actId).collection('sesiones').doc(sesId).delete();
-        }
+        await db.collection('sesiones').doc(sesId).delete();
         CVC.showToast('🗑️ Sesión eliminada', 'success');
         await cargar();
         render();
@@ -457,9 +454,59 @@ async function cargar() {
                 nombre: a.nombre || a.titulo || '',
                 parentId: a.parentId || null,
                 tipo: a.tipo || '',
+                tipoRaiz: a.tipoRaiz || '',
+                orden: a.orden || 0,
                 cabana: (a.cabana !== undefined && a.cabana !== null) ? a.cabana : null
             };
         }
+
+        // ── 1b. Proyectos raíz (orden alfabético = asignación de color) ──
+        HS.actRoots = [];
+        for (var rid in HS.actIdx) {
+            if (!HS.actIdx[rid].parentId && HS.actIdx[rid].tipoRaiz === 'proyecto') HS.actRoots.push(rid);
+        }
+        HS.actRoots.sort(function(x, y) {
+            return (HS.actIdx[x].nombre || '').localeCompare(HS.actIdx[y].nombre || '');
+        });
+
+        // ── 1c. Árbol para el select de proyecto (con nivel) ──
+        var hijosDeIdx = {};
+        for (var cid in HS.actIdx) {
+            var pp = HS.actIdx[cid].parentId || '';
+            if (!hijosDeIdx[pp]) hijosDeIdx[pp] = [];
+            hijosDeIdx[pp].push(cid);
+        }
+        function ordenarIds(arr) {
+            arr.sort(function(x, y) {
+                var ox = HS.actIdx[x].orden || 0, oy = HS.actIdx[y].orden || 0;
+                if (ox !== oy) return ox - oy;
+                return (HS.actIdx[x].nombre || '').localeCompare(HS.actIdx[y].nombre || '');
+            });
+            return arr;
+        }
+        var TIPOS_ESTRUCT = { 'categoria-chequeo': 1, 'item-chequeo': 1 };
+        HS.arbolSelect = [];
+        function armarSelect(id, nivel, visitados) {
+            if (visitados[id]) return;
+            visitados[id] = 1;
+            if (TIPOS_ESTRUCT[HS.actIdx[id].tipo]) return;
+            HS.arbolSelect.push({ id: id, nivel: nivel, nombre: HS.actIdx[id].nombre || id, esRaiz: nivel === 0 });
+            var hs2 = ordenarIds((hijosDeIdx[id] || []).slice());
+            for (var hh = 0; hh < hs2.length; hh++) armarSelect(hs2[hh], nivel + 1, visitados);
+        }
+        var visitadosSel = {};
+        for (var rr = 0; rr < HS.actRoots.length; rr++) armarSelect(HS.actRoots[rr], 0, visitadosSel);
+
+        var selProy = document.getElementById('hsProyecto');
+        var htmlSel = '<option value="">Todos</option>';
+        for (var vs = 0; vs < HS.arbolSelect.length; vs++) {
+            var nodoS = HS.arbolSelect[vs];
+            var sang = '';
+            for (var ns = 0; ns < nodoS.nivel; ns++) sang += '\u00A0\u00A0\u00A0\u00A0';
+            var prefS = nodoS.esRaiz ? '🏠 ' : '· ';
+            htmlSel += '<option value="' + nodoS.id + '">' + sang + prefS + esc(nodoS.nombre) + '</option>';
+        }
+        selProy.innerHTML = htmlSel;
 
         // ── 2. Cabañas ──
         var sCab = await db.collection('cabanas').get();
@@ -469,185 +516,108 @@ async function cargar() {
             HS.cabanas.push(c);
         });
 
-        // ── 3. Historial ──
+        // ── 3. Honorarios (dinero real registrado al cerrar ciclos) ──
         var usuariosMap = {};
-        var sHist = await db.collection('historial_tareas').get();
-
         HS.lineas = [];
         HS.docsLimp = [];
         HS.sesionesActivas = [];
+        HS.honorarios = [];
 
-        sHist.forEach(function(d) {
-            var h = d.data();
-            var fecha = aDate(h.finalizadoEn);
-            if (!fecha) return;
-            var path = pathDeRegistro(h);
-            var cols = h.colaboradores || [];
-            var sumaHorasDoc = 0;
-
-            for (var j = 0; j < cols.length; j++) {
-                var c2 = cols[j];
-                if (!c2 || !c2.uid) continue;
-                var horas = parseFloat(c2.horas) || 0;
-                sumaHorasDoc += horas;
-                usuariosMap[c2.uid] = c2.nombre || usuariosMap[c2.uid] || c2.uid;
-                HS.lineas.push({
-                    docId: d.id,
-                    fecha: fecha,
-                    ms: fecha.getTime(),
-                    uid: c2.uid,
-                    nombre: c2.nombre || '',
-                    horas: horas,
-                    montoBRL: parseFloat(c2.montoRecibido) || 0,
-                    path: path,
-                    actNombre: h.nombre || '',
-                    tipo: h.tipo || 'general',
-                    actId: h.tareaId || null,
-                    docRef: d.ref
-                });
-            }
-
-            if (HS_TIPOS_LIMPIEZA[h.tipo] && h.tipo === 'limpieza') {
-                HS.docsLimp.push({
-                    fecha: fecha,
-                    ms: fecha.getTime(),
-                    cabana: (h.cabana !== undefined && h.cabana !== null) ? h.cabana : '?',
-                    totalHoras: parseFloat(h.totalHoras) || sumaHorasDoc,
-                    personas: cols.length,
+        try {
+            var honSnap = await db.collection('honorarios').get();
+            honSnap.forEach(function(d) {
+                var h = d.data();
+                var fH = aDate(h.cicloCerradoEn) || aDate(h.creadoEn);
+                if (!fH) return;
+                HS.honorarios.push({
+                    uid: h.uid || null,
+                    ms: fH.getTime(),
                     montoBRL: parseFloat(h.monto) || 0,
-                    cobradoBRL: parseFloat(h.costoLimpiezaBRL) || 0,
-                    uids: cols.map(function(c3) { return c3.uid; }),
-                    conCronometro: h.conCronometro !== false
+                    tareaId: h.tareaId || null
                 });
-            }
-        });
-
-        // ── 4. Sesiones activas (subcolección VIEJA) ──────────
-        var ahoraMs = Date.now();
-        try {
-            var sesSnap = await db.collectionGroup('sesiones').get();
-
-            sesSnap.forEach(function(d) {
-                var s = d.data();
-                if (s.invalidada) return;
-                var ref = d.ref;
-                var parent = ref.parent;
-                var grandParent = parent ? parent.parent : null;
-                var actId = grandParent ? grandParent.id : null;
-                if (!actId) return;
-                var ini = aDate(s.inicio);
-                if (!ini) return;
-                var fin = aDate(s.fin);
-                var abierta = !fin;
-                var horas = fin ? Math.max(0, (fin - ini) / 3600000) : Math.max(0, (ahoraMs - ini.getTime()) / 3600000);
-                var act = HS.actIdx[actId];
-                var tieneDenorm = (s.alcance !== undefined && s.creadoPor !== undefined);
-                var esMia = (s.uid === HS.miUid);
-                var puedeEliminar = HS.esAdmin || esMia;
-
-                if (!HS.esAdmin && !act) return;
-                if (!HS.esAdmin && s.uid !== HS.miUid) return;
-
-                HS.sesionesActivas.push({
-                    id: d.id,
-                    ref: d.ref,
-                    actId: actId,
-                    actNombre: act ? act.nombre : '(actividad no visible)',
-                    uid: s.uid || null,
-                    nombre: s.nombre || '(sin nombre)',
-                    inicio: ini,
-                    fin: fin,
-                    abierta: abierta,
-                    horas: horas,
-                    tieneDenorm: tieneDenorm,
-                    esMia: esMia,
-                    puedeEliminar: puedeEliminar,
-                    alcance: s.alcance || '—',
-                    creadoPor: s.creadoPor || '—',
-                    esNuevaSesion: false
-                });
-
-                if (fin) {
-                    usuariosMap[s.uid] = s.nombre || usuariosMap[s.uid] || s.uid;
-                    HS.lineas.push({
-                        docId: 'ses-' + d.id,
-                        fecha: fin,
-                        ms: fin.getTime(),
-                        uid: s.uid,
-                        nombre: s.nombre || '',
-                        horas: Math.round(horas * 100) / 100,
-                        montoBRL: 0,
-                        path: act ? pathDe(actId) : ['__otros'],
-                        actNombre: act ? act.nombre : '(actividad)',
-                        tipo: act ? act.tipo : 'general',
-                        pausada: true,
-                        actId: actId,
-                        docRef: d.ref
-                    });
-                }
             });
-        } catch (e) { /* silencioso */ }
+        } catch (eh) { /* silencioso */ }
 
-        // ── 4b. Sesiones NUEVAS (colección raíz /sesiones/) ──
-        try {
-            var sesRaizSnap = await db.collection('sesiones').get();
+        // ── 4. Sesiones — FUENTE ÚNICA: colección raíz /sesiones/ ──
+        var ahoraMs = Date.now();
+        var limpMap = {};   // actividadId -> agregado de limpieza
 
-            sesRaizSnap.forEach(function(d) {
-                var s = d.data();
-                var actId = s.actividadId;
-                if (!actId) return;
-                var ini = aDate(s.inicio);
-                if (!ini) return;
-                var fin = aDate(s.fin);
-                var abierta = !fin;
-                var horas = fin ? Math.max(0, (fin - ini) / 3600000) : Math.max(0, (ahoraMs - ini.getTime()) / 3600000);
-                var act = HS.actIdx[actId];
-                var esMia = (s.uid === HS.miUid);
-                var puedeEliminar = HS.esAdmin || esMia;
+        var sesRaizSnap = await db.collection('sesiones').get();
+        sesRaizSnap.forEach(function(d) {
+            var s = d.data();
+            var actId = s.actividadId;
+            if (!actId) return;
+            var ini2 = aDate(s.inicio);
+            if (!ini2) return;
+            var fin2 = aDate(s.fin);
+            var act = HS.actIdx[actId];
+            var esMia = (s.uid === HS.miUid);
 
-                if (!HS.esAdmin && !act) return;
-                if (!HS.esAdmin && s.uid !== HS.miUid) return;
-
+            if (s.estado === 'en_curso' || !fin2) {
+                // Cronómetro corriendo
+                if (!HS.esAdmin && !esMia) return;
                 HS.sesionesActivas.push({
                     id: d.id,
-                    ref: d.ref,
                     actId: actId,
                     actNombre: act ? act.nombre : (s.actividadNombre || '(actividad no visible)'),
                     uid: s.uid || null,
                     nombre: s.nombre || '(sin nombre)',
-                    inicio: ini,
-                    fin: fin,
-                    abierta: abierta,
-                    horas: horas,
-                    tieneDenorm: true,
-                    esMia: esMia,
-                    puedeEliminar: puedeEliminar,
-                    alcance: '—',
-                    creadoPor: s.creadoPor || '—',
-                    esNuevaSesion: true
+                    inicio: ini2,
+                    horas: Math.max(0, (ahoraMs - ini2.getTime()) / 3600000),
+                    puedeEliminar: HS.esAdmin || esMia
                 });
+                return;
+            }
 
-                if (fin) {
-                    usuariosMap[s.uid] = s.nombre || usuariosMap[s.uid] || s.uid;
-                    HS.lineas.push({
-                        docId: 'ses-' + d.id,
-                        fecha: fin,
-                        ms: fin.getTime(),
-                        uid: s.uid,
-                        nombre: s.nombre || '',
-                        horas: Math.round(horas * 100) / 100,
-                        montoBRL: s._montoOriginal || 0,
-                        path: act ? pathDe(actId) : ['__otros'],
-                        actNombre: act ? act.nombre : (s.actividadNombre || '(actividad)'),
-                        tipo: act ? act.tipo : 'general',
-                        pausada: s.estado === 'pausada',
-                        actId: actId,
-                        docRef: d.ref,
-                        esNuevaSesion: true
-                    });
-                }
+            // Sesión finalizada → línea de estadística
+            var horas = parseFloat(s.horas);
+            if (isNaN(horas)) horas = Math.max(0, (fin2 - ini2) / 3600000);
+            usuariosMap[s.uid] = s.nombre || usuariosMap[s.uid] || s.uid;
+            var path = act ? pathDe(actId) : ['__otros'];
+
+            HS.lineas.push({
+                docId: d.id,
+                fecha: fin2,
+                ms: fin2.getTime(),
+                uid: s.uid,
+                nombre: s.nombre || '',
+                horas: Math.round(horas * 100) / 100,
+                path: path,
+                actNombre: act ? act.nombre : (s.actividadNombre || '(actividad)'),
+                tipo: act ? act.tipo : 'general',
+                tipoSesion: s.tipo || 'cronometro',
+                actId: actId
             });
-        } catch (e) { /* silencioso */ }
+
+            // Agregado de limpiezas (una actividad de tipo limpieza = una limpieza)
+            if (act && act.tipo === 'limpieza') {
+                if (!limpMap[actId]) limpMap[actId] = { cabana: (act.cabana !== null && act.cabana !== undefined) ? act.cabana : '?', horas: 0, uids: {}, ms: 0, path: path };
+                limpMap[actId].horas += horas;
+                if (s.uid) limpMap[actId].uids[s.uid] = 1;
+                if (fin2.getTime() > limpMap[actId].ms) limpMap[actId].ms = fin2.getTime();
+            }
+        });
+
+        // ── 4b. Consolidar limpiezas + honorarios por actividad ──
+        var honPorTarea = {};
+        for (var ht = 0; ht < HS.honorarios.length; ht++) {
+            var hx = HS.honorarios[ht];
+            if (!hx.tareaId) continue;
+            honPorTarea[hx.tareaId] = (honPorTarea[hx.tareaId] || 0) + hx.montoBRL;
+        }
+        for (var lk in limpMap) {
+            var lm = limpMap[lk];
+            var uidsArr = Object.keys(lm.uids);
+            HS.docsLimp.push({
+                ms: lm.ms,
+                cabana: lm.cabana,
+                totalHoras: lm.horas,
+                personas: uidsArr.length,
+                montoBRL: honPorTarea[lk] || 0,
+                uids: uidsArr,
+                path: lm.path
+            });
+        }
 
         // ── 5. Usuarios ──
         var uids = Object.keys(usuariosMap);
@@ -783,12 +753,24 @@ function pasaArbolUsuario(uid) {
     return !!HS.arbolUidsSel[uid];
 }
 
+function proyectoSel() {
+    var el = document.getElementById('hsProyecto');
+    return el ? el.value : '';
+}
+function pasaProyecto(path) {
+    var sel = proyectoSel();
+    if (!sel) return true;
+    if (!path) return false;
+    return path.indexOf(sel) !== -1;
+}
+
 function lineasFiltradas() {
     var out = [], d = HS.desde.getTime(), h = HS.hasta.getTime();
     for (var i = 0; i < HS.lineas.length; i++) {
         var l = HS.lineas[i];
         if (l.ms < d || l.ms > h) continue;
         if (!pasaUsuario(l.uid)) continue;
+        if (!pasaProyecto(l.path)) continue;
         out.push(l);
     }
     return out;
@@ -800,6 +782,7 @@ function lineasFiltradasArbol() {
         var l = HS.lineas[i];
         if (l.ms < d || l.ms > h) continue;
         if (!pasaArbolUsuario(l.uid)) continue;
+        if (!pasaProyecto(l.path)) continue;
         out.push(l);
     }
     return out;
@@ -810,12 +793,31 @@ function docsLimpFiltrados() {
     for (var i = 0; i < HS.docsLimp.length; i++) {
         var x = HS.docsLimp[i];
         if (x.ms < d || x.ms > h) continue;
+        if (!pasaProyecto(x.path)) continue;
         var ok = false;
         for (var j = 0; j < x.uids.length; j++) if (pasaUsuario(x.uids[j])) ok = true;
         if (x.uids.length === 0 && HS.esAdmin) ok = true;
         if (ok) out.push(x);
     }
     return out;
+}
+
+// Honorarios reales (BRL) dentro del período y usuarios seleccionados
+function honorariosFiltradosBRL(porUid) {
+    var d = HS.desde.getTime(), h = HS.hasta.getTime();
+    var total = 0, mapa = {};
+    for (var i = 0; i < HS.honorarios.length; i++) {
+        var x = HS.honorarios[i];
+        if (x.ms < d || x.ms > h) continue;
+        if (!pasaUsuario(x.uid)) continue;
+        if (proyectoSel() && x.tareaId) {
+            var p = HS.actIdx[x.tareaId] ? pathDe(x.tareaId) : null;
+            if (!pasaProyecto(p)) continue;
+        }
+        total += x.montoBRL;
+        if (x.uid) mapa[x.uid] = (mapa[x.uid] || 0) + x.montoBRL;
+    }
+    return porUid ? mapa : total;
 }
 
 // ── SELECTOR DE USUARIOS EN DESAGREGADO ─────────────────────
@@ -901,23 +903,15 @@ function renderSesiones() {
     for (var i = 0; i < visibles.length; i++) {
         var s = visibles[i];
         var actNom = s.actNombre || (HS.actIdx[s.actId] ? HS.actIdx[s.actId].nombre : '(actividad no visible)');
-        var estadoCls = s.abierta ? 'activa' : 'pausada';
-        var estadoLabel = s.abierta ? '▶ En curso' : '⏸ En pausa';
-        var tiempo = s.abierta ? fmtCrono(Date.now() - s.inicio.getTime()) : fmtH(s.horas);
+        var tiempo = fmtCrono(Date.now() - s.inicio.getTime());
 
         html += '<div class="hs-sesion">';
         html += '<span class="act">' + esc(actNom) + '</span>';
         html += '<span class="usr">' + esc(s.nombre || s.uid || '—') + '</span>';
         html += '<span class="tiempo">' + tiempo + '</span>';
-        html += '<span class="estado ' + estadoCls + '">' + estadoLabel + '</span>';
-        if (s.esNuevaSesion) {
-            html += '<span class="nueva-tag">🆕 colección raíz</span>';
-        }
-        if (!s.tieneDenorm) {
-            html += '<span class="sin-denorm">⚠️ sin denorm</span>';
-        }
+        html += '<span class="estado activa">▶ En curso</span>';
         if (s.puedeEliminar) {
-            html += '<button class="btn-del" onclick="eliminarSesion(\'' + s.actId + '\', \'' + s.id + '\', ' + (s.esNuevaSesion ? 'true' : 'false') + ')" title="Eliminar sesión">';
+            html += '<button class="btn-del" onclick="eliminarSesion(\'' + s.id + '\')" title="Eliminar sesión">';
             html += '<span class="material-icons" style="font-size:18px;">delete_outline</span>';
             html += '</button>';
         }
@@ -929,11 +923,10 @@ function renderSesiones() {
 
 // ── KPIs ─────────────────────────────────────────────────────
 function renderKpis(lineas) {
-    var total = 0, docs = {}, hPausa = 0;
+    var total = 0, docs = {};
     for (var i = 0; i < lineas.length; i++) {
         total += lineas[i].horas;
-        if (lineas[i].pausada) { hPausa += lineas[i].horas; }
-        else { docs[lineas[i].docId] = true; }
+        docs[lineas[i].docId] = true;
     }
     var nDocs = Object.keys(docs).length;
     var dias = Math.max(1, Math.round((HS.hasta - HS.desde) / 86400000) + 1);
@@ -941,10 +934,9 @@ function renderKpis(lineas) {
     var promMes = total / (dias / 30.44);
 
     var html = kpi(fmtH(total), 'Horas totales')
-             + kpi(String(nDocs), 'Tareas finalizadas')
+             + kpi(String(nDocs), 'Sesiones registradas')
              + kpi(fmtH(promSem), 'Promedio por semana')
              + kpi(fmtH(promMes), 'Promedio por mes')
-             + (hPausa > 0.001 ? kpi(fmtH(hPausa), 'De eso, en ciclos en pausa') : '')
              + kpi(String(dias) + ' días', 'Período analizado');
     document.getElementById('hsKpis').innerHTML = html;
 }
@@ -983,7 +975,7 @@ function renderTorta(lineas) {
     var svg = '<svg width="210" height="210" viewBox="0 0 210 210" role="img" aria-label="Tiempo por proyecto">';
     if (top.length === 1) {
         svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ((R + r) / 2) + '" fill="none" stroke="'
-             + HS_COLORES[0] + '" stroke-width="' + (R - r) + '"/>';
+             + colorProy(top[0].id).a + '" stroke-width="' + (R - r) + '"/>';
     } else {
         var ang = -Math.PI / 2;
         for (var k = 0; k < top.length; k++) {
@@ -998,7 +990,7 @@ function renderTorta(lineas) {
                  + ' A ' + R + ' ' + R + ' 0 ' + large + ' 1 ' + x2.toFixed(2) + ' ' + y2.toFixed(2)
                  + ' L ' + x3.toFixed(2) + ' ' + y3.toFixed(2)
                  + ' A ' + r + ' ' + r + ' 0 ' + large + ' 0 ' + x4.toFixed(2) + ' ' + y4.toFixed(2)
-                 + ' Z" fill="' + HS_COLORES[k % HS_COLORES.length] + '"/>';
+                 + ' Z" fill="' + colorProy(top[k].id).a + '"/>';
             ang = a2;
         }
     }
@@ -1012,8 +1004,8 @@ function renderTorta(lineas) {
         var g = top[m];
         var pct = total > 0 ? Math.round(g.horas / total * 100) : 0;
         var nom = g.label || nombreNodo(g.id);
-        ley += '<div class="fila">'
-             + '<span class="dot" style="background:' + HS_COLORES[m % HS_COLORES.length] + ';"></span>'
+        ley += '<div class="fila" style="background:' + colorProy(g.id).p + ';border-radius:6px;padding-left:6px;padding-right:6px;">'
+             + '<span class="dot" style="background:' + colorProy(g.id).a + ';"></span>'
              + '<span class="nom">' + esc(nom) + '</span>'
              + '<span class="hrs">' + fmtH(g.horas)
              + (ch > 0 ? ' · ' + fmtMonVal(g.horas * ch) : '') + '</span>'
@@ -1026,8 +1018,9 @@ function renderTorta(lineas) {
 
 // ── SIMULACIÓN ──────────────────────────────────────────────
 function renderSim(lineas) {
-    var total = 0, honBRL = 0;
-    for (var i = 0; i < lineas.length; i++) { total += lineas[i].horas; honBRL += lineas[i].montoBRL; }
+    var total = 0;
+    for (var i = 0; i < lineas.length; i++) { total += lineas[i].horas; }
+    var honBRL = honorariosFiltradosBRL(false);
     var ch = costoHora();
     var el = document.getElementById('hsSimRes');
     if (ch <= 0) {
@@ -1043,13 +1036,17 @@ function renderSim(lineas) {
 // ── POR PERSONA ─────────────────────────────────────────────
 function renderPersonas(lineas) {
     var map = {}, total = 0;
+    var honPorUid = honorariosFiltradosBRL(true);
     for (var i = 0; i < lineas.length; i++) {
         var l = lineas[i];
         if (!map[l.uid]) map[l.uid] = { nombre: l.nombre, horas: 0, honBRL: 0, docs: {} };
         map[l.uid].horas += l.horas;
-        map[l.uid].honBRL += l.montoBRL;
-        if (!l.pausada) map[l.uid].docs[l.docId] = true;
+        map[l.uid].docs[l.docId] = true;
         total += l.horas;
+    }
+    for (var hu in honPorUid) {
+        if (!map[hu]) continue;
+        map[hu].honBRL = honPorUid[hu];
     }
     var arr = Object.keys(map).map(function(k) { var x = map[k]; x.uid = k; return x; });
     arr.sort(function(a, b) { return b.horas - a.horas; });
@@ -1058,7 +1055,7 @@ function renderPersonas(lineas) {
 
     var ch = costoHora();
     var html = '<table class="hs-tabla"><thead><tr>'
-             + '<th>Persona</th><th class="num">Tareas</th><th class="num">Horas</th><th class="num">%</th>'
+             + '<th>Persona</th><th class="num">Sesiones</th><th class="num">Horas</th><th class="num">%</th>'
              + (ch > 0 ? '<th class="num">Costo simulado</th>' : '')
              + '<th class="num">Honorarios reales</th>'
              + '</tr></thead><tbody>';
@@ -1090,7 +1087,7 @@ function renderArbol(lineas) {
 
     var html = '';
     for (var j = 0; j < raices.length; j++) {
-        html += nodoHTML(raices[j].id, [raices[j].id], raices[j].horas, total, j);
+        html += nodoHTML(raices[j].id, [raices[j].id], raices[j].horas, total, raices[j].id);
     }
     el.innerHTML = html;
 }
@@ -1107,15 +1104,17 @@ function lineasDePrefijo(prefijo) {
     return out;
 }
 
-function nodoHTML(id, prefijo, horas, totalPadre, colorIdx) {
+function nodoHTML(id, prefijo, horas, totalPadre, rootId) {
     var clave = prefijo.join('>');
     var abierto = !!HS.expand[clave];
     var pct = totalPadre > 0 ? (horas / totalPadre * 100) : 0;
-    var color = HS_COLORES[colorIdx % HS_COLORES.length];
+    var par = colorProy(rootId);
+    var color = par.a;
+    var esRaizNodo = prefijo.length === 1;
     var ch = costoHora();
 
-    var html = '<div class="hs-node">'
-             + '<div class="hs-node-head" onclick="toggleNodo(\'' + clave.replace(/'/g, "\\'") + '\')">'
+    var html = '<div class="hs-node"' + (esRaizNodo ? ' style="border-left:5px solid ' + color + ';border-radius:8px;margin-bottom:4px;overflow:hidden;"' : '') + '>'
+             + '<div class="hs-node-head"' + (esRaizNodo ? ' style="background:' + par.p + ';"' : '') + ' onclick="toggleNodo(\'' + clave.replace(/'/g, "\\'") + '\')">'
              + '<span class="material-icons">' + (abierto ? 'expand_more' : 'chevron_right') + '</span>'
              + '<span class="nom">' + esc(nombreNodo(id)) + '</span>'
              + (ch > 0 ? '<span class="cost">' + fmtMonVal(horas * ch) + '</span>' : '')
@@ -1141,7 +1140,7 @@ function nodoHTML(id, prefijo, horas, totalPadre, colorIdx) {
 
         html += '<div class="hs-hijos">';
         for (var j = 0; j < arrH.length; j++) {
-            html += nodoHTML(arrH[j].id, prefijo.concat([arrH[j].id]), arrH[j].horas, horas, colorIdx);
+            html += nodoHTML(arrH[j].id, prefijo.concat([arrH[j].id]), arrH[j].horas, horas, rootId);
         }
         html += '</div>';
 
@@ -1152,18 +1151,17 @@ function nodoHTML(id, prefijo, horas, totalPadre, colorIdx) {
             for (var k = 0; k < tope; k++) {
                 var d = directas[k];
                 var docId = d.docId || '';
-                var canDelete = HS.esAdmin && docId && docId.indexOf('ses-') !== 0;
 
                 html += '<div class="hs-linea">'
                       + '<span class="f">' + CVC.formatFecha(d.fecha) + '</span>'
                       + '<span class="p">' + esc(d.nombre) + '</span>'
                       + '<span class="a">' + esc(d.actNombre) + '</span>'
-                      + (d.pausada ? '<span style="color:#4361ee;font-weight:600;white-space:nowrap;">en pausa</span>' : '')
-                      + (d.esNuevaSesion ? '<span style="color:#16a34a;font-weight:600;white-space:nowrap;">🆕</span>' : '')
+                      + (d.tipoSesion === 'manual' ? '<span style="white-space:nowrap;">📝</span>' : '')
+                      + (d.tipoSesion === 'tilde' ? '<span style="white-space:nowrap;">✔</span>' : '')
                       + '<span class="h">' + fmtH(d.horas) + '</span>';
 
-                if (HS.esAdmin && docId && docId.indexOf('ses-') !== 0) {
-                    html += '<button class="btn-del" onclick="eliminarRegistroHistorial(\'' + docId + '\', \'' + esc(d.actNombre) + '\', ' + d.horas + ')" title="Eliminar registro">';
+                if (HS.esAdmin && docId) {
+                    html += '<button class="btn-del" onclick="eliminarSesion(\'' + docId + '\')" title="Eliminar sesión">';
                     html += '<span class="material-icons" style="font-size:16px;">delete_outline</span>';
                     html += '</button>';
                 }
@@ -1198,12 +1196,11 @@ function renderLimp() {
     var map = {};
     for (var i = 0; i < docs.length; i++) {
         var d = docs[i], k = String(d.cabana);
-        if (!map[k]) map[k] = { cabana: d.cabana, n: 0, horas: 0, pers: 0, honBRL: 0, cobBRL: 0, nCob: 0 };
+        if (!map[k]) map[k] = { cabana: d.cabana, n: 0, horas: 0, pers: 0, honBRL: 0 };
         map[k].n++;
         map[k].horas += d.totalHoras;
         map[k].pers += d.personas;
         map[k].honBRL += d.montoBRL;
-        if (d.cobradoBRL > 0) { map[k].cobBRL += d.cobradoBRL; map[k].nCob++; }
     }
     var arr = Object.keys(map).map(function(k) { return map[k]; });
     arr.sort(function(a, b) { return String(a.cabana).localeCompare(String(b.cabana)); });
@@ -1214,7 +1211,7 @@ function renderLimp() {
     var html = '<table class="hs-tabla"><thead><tr>'
              + '<th>Cabaña</th><th class="num">Limpiezas</th><th class="num">Prom. horas</th>'
              + '<th class="num">Prom. personas</th><th class="num">Honorarios prom.</th>'
-             + '<th class="num">Cobrado prom.</th><th class="num">Precio config.</th>'
+             + '<th class="num">Precio config.</th>'
              + (ch > 0 ? '<th class="num">Sugerido (+' + mg + '%)</th>' : '')
              + '</tr></thead><tbody>';
 
@@ -1223,19 +1220,17 @@ function renderLimp() {
         var promH = x.horas / x.n;
         var promP = x.pers / x.n;
         var honProm = x.honBRL / x.n;
-        var cobProm = x.nCob > 0 ? (x.cobBRL / x.nCob) : 0;
         var cdoc = cabanaPorNumero(x.cabana);
         var confBRL = (cdoc && cdoc.tarifas && cdoc.tarifas.precioLimpieza) ? cdoc.tarifas.precioLimpieza : 0;
         var sugerido = promH * ch * (1 + mg / 100);
-        var alerta = cobProm > 0 && honProm > cobProm;
+        var alerta = confBRL > 0 && honProm > confBRL;
 
-        html += '<tr' + (alerta ? ' class="alerta" title="Los honorarios superan lo cobrado al cliente"' : '') + '>'
+        html += '<tr' + (alerta ? ' class="alerta" title="Los honorarios superan el precio configurado"' : '') + '>'
               + '<td>' + esc(etiquetaCabana(x.cabana)) + (alerta ? ' ⚠' : '') + '</td>'
               + '<td class="num">' + x.n + '</td>'
               + '<td class="num"><b>' + fmtH(promH) + '</b></td>'
               + '<td class="num">' + (Math.round(promP * 10) / 10) + '</td>'
               + '<td class="num">' + fmtMonBRL(honProm) + '</td>'
-              + '<td class="num">' + (cobProm > 0 ? fmtMonBRL(cobProm) : '—') + '</td>'
               + '<td class="num">' + (confBRL > 0 ? fmtMonBRL(confBRL) : '—') + '</td>'
               + (ch > 0
                     ? '<td class="num"><b>' + fmtMonVal(sugerido) + '</b>'
@@ -1261,8 +1256,7 @@ window.toggleArbolUsuario = toggleArbolUsuario;
 window.toggleArbolTodosUsuarios = toggleArbolTodosUsuarios;
 window.toggleNodo = toggleNodo;
 window.render = render;
-window.eliminarSesion = eliminarSesion;
-window.eliminarRegistroHistorial = eliminarRegistroHistorial;
+
 
 // ── INICIO ──────────────────────────────────────────────────
 cargar();

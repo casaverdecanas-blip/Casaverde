@@ -60,7 +60,6 @@
     background: #fafcf9; flex-wrap: wrap; font-size: 12.5px;
   }
   .gs-sesion.en_curso { border-left: 3px solid #1f5fb0; background: #f0f6ff; }
-  .gs-sesion.pausada { border-left: 3px solid #d97706; background: #fffdf5; }
   .gs-sesion.finalizada { border-left: 3px solid #16a34a; }
   .gs-sesion .su { font-weight: 600; color: #2a3328; min-width: 80px; }
   .gs-sesion .sh { font-weight: 700; font-variant-numeric: tabular-nums; color: #2d5a27; }
@@ -178,6 +177,28 @@ var usuarios = [];
 var abiertos = {};
 var actividadesPorProyecto = {};  // proyId -> [{id, nombre, ruta}]  TODAS las actividades
 
+// ── Paleta de proyectos (compartida con horas-stats) ─────────
+// Cada proyecto raíz recibe un par {a: acento, p: pastel} asignado
+// por orden alfabético de proyectos — mismo criterio en ambas
+// páginas, así un proyecto tiene siempre el mismo color.
+var PALETA_PROY = [
+    { a: '#2a9d8f', p: '#e2f2f0' },
+    { a: '#e76f51', p: '#fdeae3' },
+    { a: '#4361ee', p: '#e7ecfd' },
+    { a: '#b8860b', p: '#faf1d8' },
+    { a: '#7209b7', p: '#f2e4fa' },
+    { a: '#2d5a27', p: '#e6f0e4' },
+    { a: '#c2185b', p: '#fae2ec' },
+    { a: '#00838f', p: '#dff1f3' },
+    { a: '#6d4c41', p: '#f0e8e5' },
+    { a: '#546e7a', p: '#e8edf0' }
+];
+function colorProy(rootId) {
+    var i = actRoots.indexOf(rootId);
+    if (i < 0) return { a: '#9aa69a', p: '#f1f3f0' };
+    return PALETA_PROY[i % PALETA_PROY.length];
+}
+
 // ── Helpers ──────────────────────────────────────────────────
 function esc(s) { return CVC.escapeHtml ? CVC.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s); }
 function fmtHM(horas) { var h = Math.floor(horas), m = Math.round((horas - h) * 60); return h === 0 ? m + 'm' : h + 'h ' + m + 'm'; }
@@ -257,52 +278,65 @@ async function cargarTodo() {
     }
     actRoots.sort(function(a, b) { return (actIdx[a].nombre || '').localeCompare(actIdx[b].nombre || ''); });
 
-    // RECOLECTAR TODAS LAS ACTIVIDADES (no solo hojas) de cada proyecto
-    var TIPOS_NO_CRONO = ['chequeo-inventario', 'categoria-chequeo', 'item-chequeo', 'faltante-inventario'];
-    
-    function recolectarTodas(nodoId, visitados) {
+    // RECOLECTAR TODAS LAS ACTIVIDADES en ORDEN DE ÁRBOL con nivel
+    // v5.2: todas las actividades pueden registrar tiempo (tronco,
+    // ramas y hojas). Solo quedan afuera los renglones estructurales
+    // del chequeo de inventario.
+    var TIPOS_NO_CRONO = ['categoria-chequeo', 'item-chequeo'];
+
+    function hijosOrdenados(nodoId) {
+        var arr = (childrenOf[nodoId] || []).slice();
+        arr.sort(function(a, b) {
+            var oa = a.orden || 0, ob = b.orden || 0;
+            if (oa !== ob) return oa - ob;
+            return String(a.nombre || a.titulo || '').localeCompare(String(b.nombre || b.titulo || ''));
+        });
+        return arr;
+    }
+
+    function recolectarArbol(nodoId, nivel, visitados) {
         visitados = visitados || {};
         if (visitados[nodoId]) return [];
         visitados[nodoId] = true;
-        
-        var hijos = childrenOf[nodoId] || [];
+
+        var hijos = hijosOrdenados(nodoId);
         var resultado = [];
-        
+
         for (var i = 0; i < hijos.length; i++) {
             var hijo = hijos[i];
             var hid = hijo.id;
             var tipo = hijo.tipo || '';
-            
-            // Saltar nodos de chequeo
+
             if (TIPOS_NO_CRONO.indexOf(tipo) !== -1) continue;
-            
-            // Agregar este nodo (tenga o no hijos)
+
             resultado.push({
                 id: hid,
                 nombre: hijo.nombre || hijo.titulo || hid,
-                ruta: rutaDeTexto(hid),
+                nivel: nivel,
                 tieneHijos: !!childrenOf[hid] && childrenOf[hid].length > 0
             });
-            
-            // Seguir recorriendo hijos
-            var sub = recolectarTodas(hid, visitados);
+
+            var sub = recolectarArbol(hid, nivel + 1, visitados);
             for (var s = 0; s < sub.length; s++) {
                 resultado.push(sub[s]);
             }
         }
-        
+
         return resultado;
     }
 
     for (var p = 0; p < actRoots.length; p++) {
         var pid = actRoots[p];
-        var todas = recolectarTodas(pid);
-        // Ordenar: primero las que no tienen hijos (hojas), luego por nombre
-        todas.sort(function(a, b) {
-            if (a.tieneHijos && !b.tieneHijos) return 1;
-            if (!a.tieneHijos && b.tieneHijos) return -1;
-            return a.nombre.localeCompare(b.nombre);
-        });
+        // El proyecto raíz también puede registrar tiempo: va primero
+        var todas = [{
+            id: pid,
+            nombre: (actIdx[pid].nombre || pid) + ' (el proyecto en sí)',
+            nivel: 0,
+            tieneHijos: true,
+            esRaiz: true
+        }];
+        var arbol = recolectarArbol(pid, 1);
+        for (var t = 0; t < arbol.length; t++) todas.push(arbol[t]);
         actividadesPorProyecto[pid] = todas;
     }
 
@@ -315,20 +349,30 @@ async function cargarTodo() {
         if (TIPOS_NO_CRONO.indexOf(tipo) !== -1) continue;
         var rz = raizDe(aid);
         if (!rz) {
-            huerfanas.push({ id: aid, nombre: a.nombre, ruta: '', tieneHijos: false });
+            huerfanas.push({ id: aid, nombre: a.nombre, nivel: 0, tieneHijos: false });
         }
     }
     if (huerfanas.length > 0) {
         actividadesPorProyecto['__sin'] = huerfanas;
     }
 
-    // Selector de proyectos (filtro)
+    // Selector de filtro: árbol completo tabulado — se puede filtrar
+    // por el proyecto o por cualquier subcategoría anidada
     var fProy = document.getElementById('fProy');
-    fProy.innerHTML = '<option value="">Todos los proyectos</option>';
+    var fHtml = '<option value="">Todos los proyectos</option>';
     for (var j = 0; j < actRoots.length; j++) {
         var pid2 = actRoots[j];
-        fProy.innerHTML += '<option value="' + pid2 + '">' + (actIdx[pid2].nombre || pid2) + '</option>';
+        var lista2 = actividadesPorProyecto[pid2] || [];
+        for (var l2 = 0; l2 < lista2.length; l2++) {
+            var a2 = lista2[l2];
+            var sang2 = '';
+            for (var n2 = 0; n2 < (a2.nivel || 0); n2++) sang2 += '\u00A0\u00A0\u00A0\u00A0';
+            var pref2 = a2.esRaiz ? '🏠 ' : (a2.tieneHijos ? '📂 ' : '📋 ');
+            var nom2 = a2.esRaiz ? (actIdx[pid2].nombre || pid2) : a2.nombre;
+            fHtml += '<option value="' + a2.id + '">' + sang2 + pref2 + esc(nom2) + '</option>';
+        }
     }
+    fProy.innerHTML = fHtml;
 
     // Selector de proyectos (modal)
     var mProy = document.getElementById('mProy');
@@ -357,29 +401,20 @@ async function cargarSesiones() {
         });
     } catch (e) { console.warn('Error /sesiones/:', e.message); }
 
-    // Subcolecciones viejas
-    try {
-        var cgSnap = await db.collectionGroup('sesiones').get();
-        cgSnap.forEach(function(d) {
-            var s = d.data();
-            var ref = d.ref;
-            var parent = ref.parent;
-            var grandParent = parent ? parent.parent : null;
-            var actId = grandParent ? grandParent.id : null;
-            if (!actId) return;
-            s.id = d.id;
-            s.actividadId = actId;
-            s.actividadNombre = s.actividadNombre || '';
-            var dup = todasSesiones.some(function(x) {
-                return x.actividadId === actId && x.uid === s.uid &&
-                       x.inicio && s.inicio && Math.abs((x.inicio.toMillis() - s.inicio.toMillis())) < 1000;
-            });
-            if (!dup) todasSesiones.push(s);
-        });
-    } catch (e) {}
+    // v5.2: fuente única — solo la colección raíz /sesiones/
 }
 
 // ── Filtros ─────────────────────────────────────────────────
+function pathContiene(actId, nodoId) {
+    var cur = actId, guard = 0;
+    while (cur && guard < 25) {
+        if (cur === nodoId) return true;
+        cur = actIdx[cur] ? (actIdx[cur].parentId || null) : null;
+        guard++;
+    }
+    return false;
+}
+
 function sesionesFiltradas() {
     var fUsr = document.getElementById('fUsr').value;
     var fProy = document.getElementById('fProy').value;
@@ -388,13 +423,11 @@ function sesionesFiltradas() {
     for (var i = 0; i < todasSesiones.length; i++) {
         var s = todasSesiones[i];
         if (fUsr && s.uid !== fUsr) continue;
-        
-        if (fProy) {
-            var rz = raizDe(s.actividadId);
-            // Si la actividad no tiene raíz (huérfana), no mostrarla cuando hay filtro de proyecto
-            if (!rz || rz !== fProy) continue;
-        }
-        
+
+        // El filtro acepta un proyecto raíz o cualquier subcategoría:
+        // pasa si el nodo elegido está en el camino de la actividad
+        if (fProy && !pathContiene(s.actividadId, fProy)) continue;
+
         out.push(s);
     }
 
@@ -443,40 +476,24 @@ function renderArbol(filtradas) {
 
     var html = '';
 
-    if (fProy) {
-        // Mostrar solo el proyecto seleccionado
-        var ses = sesPorProy[fProy] || [];
-        if (ses.length > 0 || sinProy.length > 0) {
-            var hrs = 0;
-            for (var s = 0; s < ses.length; s++) hrs += ses[s].horas || 0;
-            if (ses.length > 0) html += nodoProyecto(fProy, ses, hrs);
-        }
-        // También mostrar huérfanas si las hay (pertenecen a este proyecto por descarte)
-        if (sinProy.length > 0) {
-            var hrsSin = 0;
-            for (var si = 0; si < sinProy.length; si++) hrsSin += sinProy[si].horas || 0;
-            html += nodoSinProyecto(sinProy, hrsSin);
-        }
-        if (!html) html = '<div class="gs-empty">No hay sesiones en este proyecto.</div>';
-    } else {
-        // Mostrar todos los proyectos
-        for (var r = 0; r < actRoots.length; r++) {
-            var rid = actRoots[r];
-            var ses = sesPorProy[rid] || [];
-            if (ses.length === 0) continue;
-            var hrs = 0;
-            for (var s = 0; s < ses.length; s++) hrs += ses[s].horas || 0;
-            html += nodoProyecto(rid, ses, hrs);
-        }
-
-        if (sinProy.length > 0) {
-            var hrsSin = 0;
-            for (var si = 0; si < sinProy.length; si++) hrsSin += sinProy[si].horas || 0;
-            html += nodoSinProyecto(sinProy, hrsSin);
-        }
-
-        if (!html) html = '<div class="gs-empty">No hay sesiones registradas.</div>';
+    // Las sesiones filtradas ya vienen restringidas por el filtro de
+    // proyecto/subcategoría, así que se agrupa siempre por raíz.
+    for (var r = 0; r < actRoots.length; r++) {
+        var rid = actRoots[r];
+        var ses = sesPorProy[rid] || [];
+        if (ses.length === 0) continue;
+        var hrs = 0;
+        for (var s = 0; s < ses.length; s++) hrs += ses[s].horas || 0;
+        html += nodoProyecto(rid, ses, hrs);
     }
+
+    if (sinProy.length > 0 && !fProy) {
+        var hrsSin = 0;
+        for (var si = 0; si < sinProy.length; si++) hrsSin += sinProy[si].horas || 0;
+        html += nodoSinProyecto(sinProy, hrsSin);
+    }
+
+    if (!html) html = fProy ? '<div class="gs-empty">No hay sesiones en lo seleccionado.</div>' : '<div class="gs-empty">No hay sesiones registradas.</div>';
 
     el.innerHTML = html;
 }
@@ -514,18 +531,19 @@ function nodoProyecto(proyId, sesiones, horas) {
     var proy = actIdx[proyId];
     var nombre = proy ? (proy.nombre || proyId) : proyId;
     var ab = !!abiertos[proyId];
+    var col = colorProy(proyId);
 
-    var html = '<div class="gs-node">';
-    html += '<div class="gs-nhead' + (ab ? ' open' : '') + '" onclick="toggleAbierto(\'' + proyId + '\')">';
-    html += '<span class="gs-caret has">' + (ab ? '▾' : '▸') + '</span>';
+    var html = '<div class="gs-node" style="border-left:5px solid ' + col.a + ';">';
+    html += '<div class="gs-nhead' + (ab ? ' open' : '') + '" style="background:' + col.p + ';" onclick="toggleAbierto(\'' + proyId + '\')">';
+    html += '<span class="gs-caret has" style="color:' + col.a + ';">' + (ab ? '▾' : '▸') + '</span>';
     html += '<span class="gs-nicon">📁</span>';
     html += '<span class="gs-ninfo"><span class="gs-nname">' + esc(nombre) + '</span></span>';
-    html += '<span class="gs-nhrs">' + fmtHM(horas) + '</span>';
-    html += '<span class="gs-nbadge" style="background:#eef2ee;color:#5a6a55;">' + sesiones.length + ' ses.</span>';
+    html += '<span class="gs-nhrs" style="color:' + col.a + ';">' + fmtHM(horas) + '</span>';
+    html += '<span class="gs-nbadge" style="background:#fff;color:' + col.a + ';border:1px solid ' + col.a + ';">' + sesiones.length + ' ses.</span>';
     html += '</div>';
 
     if (ab) {
-        html += '<div class="gs-children">';
+        html += '<div class="gs-children" style="border-left-color:' + col.a + ';background:' + col.p + '55;">';
         // Agrupar sesiones por el primer hijo del path
         var grupos = {};
         for (var i = 0; i < sesiones.length; i++) {
@@ -620,11 +638,11 @@ function nodoActividad(actId, sesiones, horas, abiertoForzado) {
             var s = sesiones[i];
             var ini = s.inicio ? (s.inicio.toDate ? s.inicio.toDate() : new Date(s.inicio)) : null;
             var fin = s.fin ? (s.fin.toDate ? s.fin.toDate() : new Date(s.fin)) : null;
-            var claseEst = s.estado || 'finalizada';
-            var labelEst = s.estado === 'en_curso' ? '▶ Curso' : (s.estado === 'pausada' ? '⏸ Pausa' : '✓ Fin');
-            var colorEst = claseEst === 'en_curso' ? '#d4edda;color:#155724' : (claseEst === 'pausada' ? '#cce5ff;color:#004085' : '#eef2ee;color:#5a6a55');
+            var claseEst = (s.estado === 'en_curso') ? 'en_curso' : 'finalizada';
+            var labelEst = s.estado === 'en_curso' ? '▶ Curso' : '✓ Fin';
+            var colorEst = claseEst === 'en_curso' ? '#d4edda;color:#155724' : '#eef2ee;color:#5a6a55';
             var migrado = s._migradoDe ? true : false;
-            var tipoBadge = s.tipo === 'manual' ? '📝' : '⏱';
+            var tipoBadge = s.tipo === 'manual' ? '📝' : (s.tipo === 'tilde' ? '✔' : '⏱');
 
             html += '<div class="gs-sesion ' + claseEst + '">';
             html += '<span class="su">' + esc(s.nombre || s.uid || '—') + '</span>';
@@ -668,13 +686,16 @@ window.filtrarActividadesPorProyecto = function() {
         return;
     }
 
-    mAct.innerHTML = '<option value="">Elegí una actividad...</option>';
+    // Tabulaciones que representan el anidado del proyecto
+    var html = '<option value="">Elegí una actividad...</option>';
     for (var i = 0; i < actividades.length; i++) {
         var a = actividades[i];
-        var prefijo = a.tieneHijos ? '📂 ' : '📋 ';
-        var ruta = a.ruta ? ' (' + a.ruta + ')' : '';
-        mAct.innerHTML += '<option value="' + a.id + '">' + prefijo + a.nombre + ruta + '</option>';
+        var sangria = '';
+        for (var n = 0; n < (a.nivel || 0); n++) sangria += '\u00A0\u00A0\u00A0\u00A0';
+        var prefijo = a.esRaiz ? '🏠 ' : (a.tieneHijos ? '📂 ' : '📋 ');
+        html += '<option value="' + a.id + '">' + sangria + prefijo + esc(a.nombre) + '</option>';
     }
+    mAct.innerHTML = html;
 };
 
 // ── Modal ────────────────────────────────────────────────────
@@ -765,9 +786,8 @@ window.guardarSesion = async function() {
     if (dFin <= dIni) dFin.setDate(dFin.getDate() + 1);
     var horas = Math.max(0, (dFin - dIni) / 3600000);
 
-    var actNombre = document.getElementById('mAct').options[document.getElementById('mAct').selectedIndex].text;
-    // Quitar prefijo y ruta
-    actNombre = actNombre.replace(/^[📂📋]\s*/, '').split(' (')[0];
+    // Nombre desde el índice de actividades (el texto de la opción tiene sangría y prefijos)
+    var actNombre = (actIdx[actId] && actIdx[actId].nombre) ? actIdx[actId].nombre : '';
     var usrId = document.getElementById('mUsr').value;
     var usrNombre = document.getElementById('mUsr').options[document.getElementById('mUsr').selectedIndex].text;
 
