@@ -632,6 +632,19 @@ function colorDeRaiz(it) {
   while (cur && cur.parentId && byId[cur.parentId] && guard < 15) { cur = byId[cur.parentId]; guard++; }
   return (cur && cur.color) ? cur.color : '#2d5a27';
 }
+// Versión pastel del color del proyecto: se mezcla con blanco (86%)
+// para usar como fondo de recuadro de toda la línea (raíz e hijos).
+var _pastelCache = {};
+function pastelDe(hex) {
+  if (!hex || hex.charAt(0) !== '#' || hex.length !== 7) hex = '#2d5a27';
+  if (_pastelCache[hex]) return _pastelCache[hex];
+  var r = parseInt(hex.substr(1, 2), 16), g = parseInt(hex.substr(3, 2), 16), b = parseInt(hex.substr(5, 2), 16);
+  function mez(c) { return Math.round(c + (255 - c) * 0.86); }
+  function h2(c) { var s = c.toString(16); return s.length < 2 ? '0' + s : s; }
+  var out = '#' + h2(mez(r)) + h2(mez(g)) + h2(mez(b));
+  _pastelCache[hex] = out;
+  return out;
+}
 // v5.2 — Regla única: TODAS las actividades pueden marcar reloj,
 // desde el tronco (proyecto) hasta cada rama y hoja. Solo quedan
 // afuera los renglones estructurales del chequeo de inventario
@@ -889,8 +902,11 @@ function nodoHTML(it, nivel) {
   var nueva = esNueva(it);
   var esSubChequeo = (it.tipo === 'item-chequeo' || it.tipo === 'categoria-chequeo');
 
+  var colProy = colorDeRaiz(it);
+  var fondoProy = pastelDe(colProy);
+
   var h = '<div class="act-item" id="nodo-' + it.id + '">';
-  h += '<div class="act-row act-clic' + (ab ? ' abierto' : '') + (nueva ? ' nueva' : '') + '" onclick="toggleAbierto(\'' + it.id + '\')">';
+  h += '<div class="act-row act-clic' + (ab ? ' abierto' : '') + (nueva ? ' nueva' : '') + '" style="background:' + esc(fondoProy) + ';" onclick="toggleAbierto(\'' + it.id + '\')">';
   h += '<span class="act-caret' + (tiene ? ' tiene' : '') + '">' + (ab ? '▾' : '▸') + '</span>';
   if (it.tipo === 'item-chequeo') {
     h += '<input type="checkbox" class="act-chk" ' + (it.hecho ? 'checked' : '') + ' onclick="event.stopPropagation();validarItemChequeo(\'' + it.id + '\')">';
@@ -953,7 +969,7 @@ function nodoHTML(it, nivel) {
   if (desglose[it.id]) h += desgloseHTML(it);
 
   if (ab) {
-    h += '<div class="act-detalle">';
+    h += '<div class="act-detalle" style="background:' + esc(fondoProy) + ';">';
     if (it.detalle) h += '<div class="act-desc">' + esc(it.detalle) + '</div>';
     h += '<div class="act-acc">';
     if (puedeCronometrar(it) && !it.hecho) {

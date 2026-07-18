@@ -288,7 +288,22 @@ var PALETA_PROY = [
     { a: '#6d4c41', p: '#f0e8e5' },
     { a: '#546e7a', p: '#e8edf0' }
 ];
+var _pastelCache = {};
+function pastelDe(hex) {
+    if (!hex || hex.charAt(0) !== '#' || hex.length !== 7) hex = '#2d5a27';
+    if (_pastelCache[hex]) return _pastelCache[hex];
+    var r = parseInt(hex.substr(1, 2), 16), g = parseInt(hex.substr(3, 2), 16), b = parseInt(hex.substr(5, 2), 16);
+    function mez(c) { return Math.round(c + (255 - c) * 0.86); }
+    function h2(c) { var s = c.toString(16); return s.length < 2 ? '0' + s : s; }
+    var out = '#' + h2(mez(r)) + h2(mez(g)) + h2(mez(b));
+    _pastelCache[hex] = out;
+    return out;
+}
+// El color se define EDITANDO EL PROYECTO (actividades.html). Toda la
+// línea lo hereda. La paleta solo es respaldo para proyectos sin color.
 function colorProy(rootId) {
+    var doc = HS.actIdx[rootId];
+    if (doc && doc.color) return { a: doc.color, p: pastelDe(doc.color) };
     var i = HS.actRoots.indexOf(rootId);
     if (i < 0) return { a: '#9aa69a', p: '#f1f3f0' };
     return PALETA_PROY[i % PALETA_PROY.length];
@@ -456,6 +471,7 @@ async function cargar() {
                 tipo: a.tipo || '',
                 tipoRaiz: a.tipoRaiz || '',
                 orden: a.orden || 0,
+                color: a.color || '',
                 cabana: (a.cabana !== undefined && a.cabana !== null) ? a.cabana : null
             };
         }
@@ -1114,7 +1130,7 @@ function nodoHTML(id, prefijo, horas, totalPadre, rootId) {
     var ch = costoHora();
 
     var html = '<div class="hs-node"' + (esRaizNodo ? ' style="border-left:5px solid ' + color + ';border-radius:8px;margin-bottom:4px;overflow:hidden;"' : '') + '>'
-             + '<div class="hs-node-head"' + (esRaizNodo ? ' style="background:' + par.p + ';"' : '') + ' onclick="toggleNodo(\'' + clave.replace(/'/g, "\\'") + '\')">'
+             + '<div class="hs-node-head" style="background:' + par.p + ';border-radius:6px;" onclick="toggleNodo(\'' + clave.replace(/'/g, "\\'") + '\')">'
              + '<span class="material-icons">' + (abierto ? 'expand_more' : 'chevron_right') + '</span>'
              + '<span class="nom">' + esc(nombreNodo(id)) + '</span>'
              + (ch > 0 ? '<span class="cost">' + fmtMonVal(horas * ch) + '</span>' : '')
@@ -1147,7 +1163,7 @@ function nodoHTML(id, prefijo, horas, totalPadre, rootId) {
         if (directas.length) {
             directas.sort(function(a, b) { return b.ms - a.ms; });
             var tope = Math.min(directas.length, 40);
-            html += '<div class="hs-lineas">';
+            html += '<div class="hs-lineas" style="background:' + par.p + ';border-radius:6px;padding:4px 8px;">';
             for (var k = 0; k < tope; k++) {
                 var d = directas[k];
                 var docId = d.docId || '';
