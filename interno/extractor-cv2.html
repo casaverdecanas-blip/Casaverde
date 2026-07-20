@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Extractor para CasaVerde 2.0</title>
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-<link rel="stylesheet" href="design-system.css">
 <style>
   body { font-family: system-ui, sans-serif; background: #f7f9f5; color: #22301f; margin: 0; }
   .caja { max-width: 640px; margin: 30px auto; background: #fff; border: 1px solid #dde5da; border-radius: 12px; padding: 20px; }
@@ -19,12 +18,16 @@
 <div class="caja">
   <h1>🌿 Extractor → CasaVerde 2.0</h1>
   <p class="gris">SOLO LECTURA: este archivo no modifica nada del sistema viejo.
-  Lee cabañas, contenido y configuración, y descarga un JSON para importar en el 2.0.
-  Tenés que estar logueado en el panel viejo (si no, abrí login.html primero).</p>
-  <p><button id="btn" onclick="extraer()">Extraer y descargar JSON</button></p>
+  Lee cabañas, contenido y configuración, y descarga un JSON para importar en el 2.0.</p>
+  <div class="fila" id="estado">Verificando sesión…</div>
+  <p><button id="btn" onclick="extraer()" disabled>Extraer y descargar JSON</button></p>
   <div id="log"></div>
 </div>
 
+<!-- El sistema viejo carga el SDK en cada página, ANTES de utils.js -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="utils.js"></script>
 <script>
 function linea(txt) {
@@ -37,66 +40,80 @@ function linea(txt) {
 // Documentos de config que NO se exportan (claves y tokens)
 var CONFIG_EXCLUIR = { integraciones: 1, github: 1, tokens_contador: 1 };
 
+// La sesión se restaura de forma asíncrona: esperar el estado real
+try {
+  firebase.auth().onAuthStateChanged(function (user) {
+    var e = document.getElementById('estado');
+    if (user) {
+      e.textContent = '✓ Sesión: ' + (user.email || user.uid);
+      document.getElementById('btn').disabled = false;
+    } else {
+      e.textContent = '⚠ Sin sesión. Abrí login.html del panel viejo en OTRA pestaña, entrá, y recargá esta página.';
+    }
+  });
+} catch (err) {
+  document.getElementById('estado').textContent = '✗ Firebase no cargó: ' + err.message;
+}
+
 function extraer() {
-  var user = firebase.auth().currentUser;
-  if (!user) {
-    linea('⚠ No hay sesión: abrí login.html del panel viejo, entrá, y volvé a esta página.');
-    return;
-  }
-  document.getElementById('btn').disabled = true;
-  linea('Sesión: ' + (user.email || user.uid));
+  try {
+    document.getElementById('btn').disabled = true;
+    var salida = { exportadoEn: new Date().toISOString(), origen: 'casaverdecanas-199' };
+    var baseDb = (typeof db !== 'undefined') ? db : firebase.firestore();
 
-  var salida = { exportadoEn: new Date().toISOString(), origen: 'casaverdecanas-199' };
-
-  db.collection('cabanas').get()
-    .then(function (snap) {
-      var arr = [];
-      snap.forEach(function (d) {
-        var x = d.data();
-        x.__id = d.id;
-        arr.push(x);
-      });
-      salida.cabanas = arr;
-      linea('✓ cabanas: ' + arr.length + ' documento(s)');
-      return db.collection('contenido').get().catch(function () { return null; });
-    })
-    .then(function (snap) {
-      var arr = [];
-      if (snap) {
+    baseDb.collection('cabanas').get()
+      .then(function (snap) {
+        var arr = [];
         snap.forEach(function (d) {
           var x = d.data();
           x.__id = d.id;
           arr.push(x);
         });
-      }
-      salida.contenido = arr;
-      linea('✓ contenido: ' + arr.length + ' documento(s)');
-      return db.collection('config').get().catch(function () { return null; });
-    })
-    .then(function (snap) {
-      var cfg = {};
-      var n = 0;
-      if (snap) {
-        snap.forEach(function (d) {
-          if (!CONFIG_EXCLUIR[d.id]) { cfg[d.id] = d.data(); n++; }
-        });
-      }
-      salida.config = cfg;
-      linea('✓ config: ' + n + ' documento(s) (claves excluidas)');
+        salida.cabanas = arr;
+        linea('✓ cabanas: ' + arr.length + ' documento(s)');
+        return baseDb.collection('contenido').get()['catch'](function () { return null; });
+      })
+      .then(function (snap) {
+        var arr = [];
+        if (snap) {
+          snap.forEach(function (d) {
+            var x = d.data();
+            x.__id = d.id;
+            arr.push(x);
+          });
+        }
+        salida.contenido = arr;
+        linea('✓ contenido: ' + arr.length + ' documento(s)');
+        return baseDb.collection('config').get()['catch'](function () { return null; });
+      })
+      .then(function (snap) {
+        var cfg = {};
+        var n = 0;
+        if (snap) {
+          snap.forEach(function (d) {
+            if (!CONFIG_EXCLUIR[d.id]) { cfg[d.id] = d.data(); n++; }
+          });
+        }
+        salida.config = cfg;
+        linea('✓ config: ' + n + ' documento(s) (claves excluidas)');
 
-      var blob = new Blob([JSON.stringify(salida, null, 2)], { type: 'application/json' });
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'export-casaverde-viejo.json';
-      document.body.appendChild(a);
-      a.click();
-      linea('⬇ Descargado: export-casaverde-viejo.json — llevalo al importador del 2.0');
-      document.getElementById('btn').disabled = false;
-    })
-    .catch(function (e) {
-      linea('✗ Error: ' + (e.code || e.message));
-      document.getElementById('btn').disabled = false;
-    });
+        var blob = new Blob([JSON.stringify(salida, null, 2)], { type: 'application/json' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'export-casaverde-viejo.json';
+        document.body.appendChild(a);
+        a.click();
+        linea('⬇ Descargado: export-casaverde-viejo.json — llevalo al importador del 2.0');
+        document.getElementById('btn').disabled = false;
+      })
+      ['catch'](function (e) {
+        linea('✗ Error leyendo: ' + (e.code || e.message));
+        document.getElementById('btn').disabled = false;
+      });
+  } catch (err) {
+    linea('✗ Error: ' + err.message);
+    document.getElementById('btn').disabled = false;
+  }
 }
 </script>
 </body>
