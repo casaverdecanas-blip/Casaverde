@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exportar todo · Casa Verde Canas</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="design-system.css">
+    <style>
+        .col-card {
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-3);
+            margin-bottom: var(--space-3);
+            background: var(--color-surface);
+        }
+        .col-card.vacia { opacity: .55; }
+        .col-card.error { border-left: 5px solid var(--color-danger); }
+        .col-card.llena { border-left: 5px solid var(--color-success); }
+        .col-titulo {
+            display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+            font-weight: 800; font-size: var(--text-md);
+        }
+        .col-conteo {
+            margin-left: auto; font-size: var(--text-sm); font-weight: 700;
+            border-radius: 12px; padding: 2px 12px; background: #e6f4ea; color: #137333;
+        }
+        .col-card.vacia .col-conteo { background: var(--color-bg); color: var(--color-text-secondary); }
+        .col-card.error .col-conteo { background: #fdecea; color: var(--color-danger); }
+        .campos { font-size: var(--text-xs); margin-top: var(--space-2); line-height: 1.8; }
+        .campo-chip {
+            display: inline-block; background: var(--color-bg); border-radius: 4px;
+            padding: 1px 7px; margin: 2px 3px 2px 0; font-family: var(--font-mono); font-size: 11px;
+        }
+        .campo-chip.parcial { background: #fef3e2; color: #b45309; }
+        .muestra {
+            display: none; background: #1e1e1e; color: #ce9;
+            font-family: var(--font-mono); font-size: 11px;
+            border-radius: var(--radius-sm); padding: var(--space-2);
+            overflow-x: auto; white-space: pre; margin-top: var(--space-2);
+            max-height: 320px; overflow-y: auto;
+        }
+        .barra {
+            height: 8px; background: var(--color-bg); border-radius: 4px;
+            overflow: hidden; margin: var(--space-2) 0;
+        }
+        .barra > div { height: 100%; background: var(--color-success); width: 0%; transition: width .2s; }
+        #informe {
+            width: 100%; min-height: 320px; font-family: var(--font-mono);
+            font-size: 11px; line-height: 1.5; white-space: pre;
+        }
+        .paso { font-size: var(--text-sm); color: var(--color-text-secondary); }
+    </style>
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-header__brand">
+        <span class="material-icons">database</span>
+        Exportar todo — radiografía y respaldo de la base
+    </div>
+    <div class="admin-header__actions">
+        <div class="user-chip"><span class="material-icons">person</span><span id="userName">—</span></div>
+        <button class="btn-logout" onclick="window.location.href='actividades.html'">
+            <span class="material-icons">arrow_back</span> Volver
+        </button>
+    </div>
+</header>
+
+<main class="admin-content">
+
+    <div class="alert alert-info" style="margin-bottom:var(--space-4);">
+        <span class="material-icons">info</span>
+        Página de administración, fuera del menú. <b>Solo lee</b>: no escribe ni borra nada.
+        Sirve para dos cosas: sacarle una <b>radiografía</b> a la base (qué colecciones hay, qué campos
+        tiene cada una y con qué frecuencia) para decidir la migración, y <b>exportar</b> todo a
+        archivos JSON que quedan como archivo histórico.
+    </div>
+
+    <div class="card" style="margin-bottom:var(--space-4);">
+        <div class="card__header"><h2 class="card__title">
+            <span class="material-icons">biotech</span> Paso 1 — Radiografía
+        </h2></div>
+        <p class="paso">
+            La <b>muestra</b> lee hasta 300 documentos por colección: es rápida y barata, y alcanza
+            para ver la forma de los datos. La <b>completa</b> lee todo y da los conteos exactos
+            (puede tardar varios minutos y consume muchas lecturas de Firestore — correla una sola vez).
+        </p>
+        <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-3);">
+            <button class="btn btn-primary" id="btnMuestra" onclick="analizar('muestra')">
+                <span class="material-icons">bolt</span> Radiografía por muestra
+            </button>
+            <button class="btn btn-secondary" id="btnCompleto" onclick="analizar('completo')">
+                <span class="material-icons">travel_explore</span> Radiografía completa
+            </button>
+        </div>
+        <div class="barra" id="barra" style="display:none;"><div id="barraInt"></div></div>
+        <div class="paso" id="progreso"></div>
+    </div>
+
+    <div class="card" id="cardInforme" style="display:none;margin-bottom:var(--space-4);">
+        <div class="card__header"><h2 class="card__title">
+            <span class="material-icons">content_paste</span> Paso 2 — Informe para revisar en el chat
+        </h2></div>
+        <p class="paso">
+            Copiá este texto y pegalo en la conversación. Es el insumo para decidir qué migra,
+            qué se descarta y cómo se mapea cada campo al sistema nuevo.
+        </p>
+        <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;margin:var(--space-3) 0;">
+            <button class="btn btn-primary" onclick="copiarInforme()">
+                <span class="material-icons">content_copy</span> Copiar informe
+            </button>
+            <button class="btn btn-secondary" onclick="bajarInforme()">
+                <span class="material-icons">download</span> Bajar como .txt
+            </button>
+        </div>
+        <textarea id="informe" class="form-control" readonly></textarea>
+    </div>
+
+    <div id="resultado"></div>
+
+    <div class="card" id="cardExport" style="display:none;margin-top:var(--space-6);">
+        <div class="card__header"><h2 class="card__title">
+            <span class="material-icons">archive</span> Paso 3 — Exportación completa
+        </h2></div>
+        <p class="paso">
+            Baja los documentos <b>enteros</b> a archivos JSON. Las fechas de Firestore se guardan
+            como <code>{"__tipo":"timestamp","iso":"…"}</code> para no perder nada en el camino.
+            Este archivo es el histórico definitivo y la fuente del archivo de carga del sistema nuevo.
+        </p>
+        <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-3);">
+            <button class="btn btn-primary" onclick="exportarTodo()">
+                <span class="material-icons">inventory_2</span> Bajar TODO en un archivo
+            </button>
+        </div>
+        <div id="exportIndividual" style="margin-top:var(--space-4);"></div>
+    </div>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="utils.js"></script>
+<script>
+(async function() {
+    var auth = await CVC.verificarAuth(['admin']);
+    var user = auth.user, userData = auth.userData;
+    document.getElementById('userName').textContent = userData.nombre || user.email;
+
+    var db = CVC.db;
+    var escapeHtml = CVC.escapeHtml;
+    var showToast = CVC.showToast;
+
+    // Todas las colecciones conocidas del sistema viejo. Si alguna no existe,
+    // se informa como vacía y no rompe nada.
+    var COLECCIONES = [
+        'usuarios', 'config',
+        'actividades', 'sesiones', 'historial_tareas', 'honorarios',
+        'cabanas', 'espacios_comunes', 'disponibilidad',
+        'reservas', 'presupuestos', 'clientes', 'pagos',
+        'gastos', 'movimientos', 'transferencias', 'retiros', 'cuentas',
+        'categorias', 'destinos', 'proyecciones', 'resumenes',
+        'cotizaciones_historial', 'informes_airbnb', 'auditoria_revisiones',
+        'comunicaciones', 'comunicaciones_lecturas', 'libro_visitas',
+        'mov_negocio', 'categorias_mov', 'gastos_fijos', 'cierres',
+        'tareas', 'pendientes', 'agenda'
+    ];
+
+    var LIMITE_MUESTRA = 300;
+    var radiografia = null;   // { modo, generadaEn, colecciones: [...] }
+
+    // ── Utilidades ────────────────────────────────────────────
+    function tipoDe(v) {
+        if (v === null || v === undefined) return 'null';
+        if (v && typeof v.toDate === 'function') return 'timestamp';
+        if (v && typeof v.path === 'string' && typeof v.id === 'string') return 'referencia';
+        if (Array.isArray(v)) return 'array';
+        if (typeof v === 'object') return 'objeto';
+        return typeof v;   // string | number | boolean
+    }
+
+    function aISO(ts) {
+        try { return ts.toDate().toISOString(); } catch (e) { return null; }
+    }
+
+    // Serializa conservando el tipo original de fechas y referencias.
+    function limpiar(v) {
+        var t = tipoDe(v);
+        if (t === 'timestamp') return { __tipo: 'timestamp', iso: aISO(v) };
+        if (t === 'referencia') return { __tipo: 'referencia', path: v.path };
+        if (t === 'array') {
+            var arr = [];
+            for (var i = 0; i < v.length; i++) arr.push(limpiar(v[i]));
+            return arr;
+        }
+        if (t === 'objeto') {
+            var o = {};
+            for (var k in v) { if (Object.prototype.hasOwnProperty.call(v, k)) o[k] = limpiar(v[k]); }
+            return o;
+        }
+        return v;
+    }
+
+    function recorte(s, n) {
+        s = String(s);
+        return s.length > n ? s.slice(0, n) + '…' : s;
+    }
+
+    function progreso(txt, pct) {
+        document.getElementById('progreso').textContent = txt || '';
+        var barra = document.getElementById('barra');
+        if (pct === null || pct === undefined) { barra.style.display = 'none'; return; }
+        barra.style.display = 'block';
+        document.getElementById('barraInt').style.width = Math.round(pct) + '%';
+    }
+
+    function bajarArchivo(nombre, contenido, tipo) {
+        var blob = new Blob([contenido], { type: tipo || 'application/json;charset=utf-8;' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = nombre;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+    }
+
+    function hoyISO() { return new Date().toISOString().slice(0, 10); }
+
+    // ── Análisis de una colección ─────────────────────────────
+    function analizarDocs(docs) {
+        var campos = {};       // nombre → { tipos:{}, presentes:n }
+        var fechaMin = null, fechaMax = null;
+        var i, j;
+
+        for (i = 0; i < docs.length; i++) {
+            var d = docs[i].datos;
+            for (var k in d) {
+                if (!Object.prototype.hasOwnProperty.call(d, k)) continue;
+                if (!campos[k]) campos[k] = { tipos: {}, presentes: 0 };
+                campos[k].presentes++;
+                var t = tipoDe(d[k]);
+                campos[k].tipos[t] = (campos[k].tipos[t] || 0) + 1;
+
+                // Rango de fechas: timestamps o strings 'YYYY-MM-DD'
+                var iso = null;
+                if (t === 'timestamp') iso = aISO(d[k]);
+                else if (t === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d[k])) iso = d[k].slice(0, 10);
+                if (iso) {
+                    if (!fechaMin || iso < fechaMin) fechaMin = iso;
+                    if (!fechaMax || iso > fechaMax) fechaMax = iso;
+                }
+            }
+        }
+
+        var lista = [];
+        for (var nombre in campos) {
+            if (!Object.prototype.hasOwnProperty.call(campos, nombre)) continue;
+            var c = campos[nombre];
+            var tipos = [];
+            for (var tt in c.tipos) {
+                if (Object.prototype.hasOwnProperty.call(c.tipos, tt)) tipos.push(tt);
+            }
+            lista.push({
+                nombre: nombre,
+                tipos: tipos.join('|'),
+                presentes: c.presentes,
+                pct: docs.length ? Math.round(c.presentes * 100 / docs.length) : 0
+            });
+        }
+        lista.sort(function(a, b) { return b.pct - a.pct || a.nombre.localeCompare(b.nombre); });
+
+        return { campos: lista, fechaMin: fechaMin, fechaMax: fechaMax };
+    }
+
+    async function leerColeccion(nombre, modo) {
+        var ref = db.collection(nombre);
+        if (modo === 'muestra') ref = ref.limit(LIMITE_MUESTRA);
+        var snap = await ref.get();
+        var docs = [];
+        snap.forEach(function(d) { docs.push({ id: d.id, datos: d.data() }); });
+        return docs;
+    }
+
+    // ── Radiografía ───────────────────────────────────────────
+    window.analizar = async function(modo) {
+        document.getElementById('btnMuestra').disabled = true;
+        document.getElementById('btnCompleto').disabled = true;
+        document.getElementById('resultado').innerHTML = '';
+
+        var resultado = [];
+        var i;
+        for (i = 0; i < COLECCIONES.length; i++) {
+            var nombre = COLECCIONES[i];
+            progreso('Leyendo ' + nombre + '…  (' + (i + 1) + ' de ' + COLECCIONES.length + ')',
+                     (i / COLECCIONES.length) * 100);
+            try {
+                var docs = await leerColeccion(nombre, modo);
+                var info = analizarDocs(docs);
+                resultado.push({
+                    nombre: nombre,
+                    cantidad: docs.length,
+                    truncada: (modo === 'muestra' && docs.length === LIMITE_MUESTRA),
+                    campos: info.campos,
+                    fechaMin: info.fechaMin,
+                    fechaMax: info.fechaMax,
+                    muestras: docs.slice(0, 3),
+                    error: null
+                });
+            } catch (e) {
+                resultado.push({
+                    nombre: nombre, cantidad: 0, truncada: false, campos: [],
+                    fechaMin: null, fechaMax: null, muestras: [],
+                    error: (e && e.code) ? e.code : String(e && e.message ? e.message : e)
+                });
+            }
+        }
+
+        // Sondeo de subcolecciones conocidas: actividades/{id}/sesiones (modelo viejo)
+        progreso('Sondeando subcolecciones…', 95);
+        var sub = { probadas: 0, conDatos: 0, total: 0, error: null };
+        try {
+            var act = await db.collection('actividades').limit(40).get();
+            var ids = [];
+            act.forEach(function(d) { ids.push(d.id); });
+            for (i = 0; i < ids.length; i++) {
+                var s = await db.collection('actividades').doc(ids[i]).collection('sesiones').get();
+                sub.probadas++;
+                if (s.size > 0) { sub.conDatos++; sub.total += s.size; }
+            }
+        } catch (e2) {
+            sub.error = (e2 && e2.code) ? e2.code : String(e2);
+        }
+
+        // Libros personales del módulo SIMPLE: mov_personal_{uid}
+        var personales = [];
+        try {
+            var us = await db.collection('usuarios').get();
+            var uids = [];
+            us.forEach(function(d) { uids.push({ uid: d.id, nombre: (d.data() || {}).nombre || d.id }); });
+            for (i = 0; i < uids.length; i++) {
+                try {
+                    var mp = await db.collection('mov_personal_' + uids[i].uid).get();
+                    if (mp.size > 0) personales.push({ nombre: uids[i].nombre, coleccion: 'mov_personal_' + uids[i].uid, cantidad: mp.size });
+                } catch (e3) { /* no existe: perfecto */ }
+            }
+        } catch (e4) { /* sin usuarios */ }
+
+        radiografia = {
+            modo: modo, generadaEn: new Date().toISOString(),
+            colecciones: resultado, subSesiones: sub, personales: personales
+        };
+
+        progreso('', null);
+        document.getElementById('btnMuestra').disabled = false;
+        document.getElementById('btnCompleto').disabled = false;
+        render();
+        armarInforme();
+        document.getElementById('cardInforme').style.display = '';
+        document.getElementById('cardExport').style.display = '';
+        showToast('Radiografía lista', 'success');
+    };
+
+    // ── Render en pantalla ────────────────────────────────────
+    function render() {
+        var html = '';
+        var cols = radiografia.colecciones;
+        for (var i = 0; i < cols.length; i++) {
+            var c = cols[i];
+            var clase = c.error ? 'error' : (c.cantidad ? 'llena' : 'vacia');
+            var conteo = c.error ? 'error' : (c.cantidad + (c.truncada ? '+ (muestra)' : ''));
+
+            html += '<div class="col-card ' + clase + '">';
+            html += '<div class="col-titulo"><span class="material-icons">folder</span>' +
+                    escapeHtml(c.nombre) + '<span class="col-conteo">' + escapeHtml(conteo) + '</span></div>';
+
+            if (c.error) {
+                html += '<div class="campos">No se pudo leer: <code>' + escapeHtml(c.error) + '</code></div>';
+            } else if (!c.cantidad) {
+                html += '<div class="campos">Vacía o inexistente.</div>';
+            } else {
+                if (c.fechaMin) {
+                    html += '<div class="campos">Fechas encontradas: <b>' + escapeHtml(c.fechaMin) +
+                            '</b> → <b>' + escapeHtml(c.fechaMax) + '</b></div>';
+                }
+                html += '<div class="campos">';
+                for (var j = 0; j < c.campos.length; j++) {
+                    var f = c.campos[j];
+                    html += '<span class="campo-chip' + (f.pct < 100 ? ' parcial' : '') + '">' +
+                            escapeHtml(f.nombre) + ' : ' + escapeHtml(f.tipos) +
+                            ' · ' + f.pct + '%</span>';
+                }
+                html += '</div>';
+                html += '<button class="btn btn-secondary" style="margin-top:8px;font-size:12px;padding:4px 10px;" onclick="verMuestra(' + i + ')">Ver 3 documentos de ejemplo</button>';
+                html += '<div class="muestra" id="muestra' + i + '">' +
+                        escapeHtml(JSON.stringify(limpiar(c.muestras), null, 2)) + '</div>';
+            }
+            html += '</div>';
+        }
+
+        // Subcolecciones y libros personales
+        var s = radiografia.subSesiones;
+        html += '<div class="col-card ' + (s.total ? 'llena' : 'vacia') + '">';
+        html += '<div class="col-titulo"><span class="material-icons">account_tree</span>' +
+                'actividades/{id}/sesiones (subcolección vieja)<span class="col-conteo">' +
+                s.total + '</span></div>';
+        html += '<div class="campos">Sondeadas ' + s.probadas + ' actividades · ' + s.conDatos +
+                ' con sesiones adentro' + (s.error ? ' · error: ' + escapeHtml(s.error) : '') + '</div>';
+        html += '</div>';
+
+        if (radiografia.personales.length) {
+            html += '<div class="col-card llena"><div class="col-titulo">' +
+                    '<span class="material-icons">person</span>Libros personales (módulo SIMPLE)' +
+                    '<span class="col-conteo">' + radiografia.personales.length + '</span></div><div class="campos">';
+            for (var p = 0; p < radiografia.personales.length; p++) {
+                html += '<span class="campo-chip">' + escapeHtml(radiografia.personales[p].nombre) +
+                        ' · ' + radiografia.personales[p].cantidad + ' movs</span>';
+            }
+            html += '</div></div>';
+        }
+
+        document.getElementById('resultado').innerHTML = html;
+        armarBotonesExport();
+    }
+
+    window.verMuestra = function(i) {
+        var el = document.getElementById('muestra' + i);
+        el.style.display = (el.style.display === 'block') ? 'none' : 'block';
+    };
+
+    // ── Informe de texto (para pegar en el chat) ──────────────
+    function armarInforme() {
+        var L = [];
+        L.push('RADIOGRAFIA DE LA BASE — Casa Verde Canas (sistema viejo)');
+        L.push('Modo: ' + radiografia.modo + (radiografia.modo === 'muestra' ? ' (hasta ' + LIMITE_MUESTRA + ' docs por coleccion)' : ' (conteos exactos)'));
+        L.push('Generada: ' + radiografia.generadaEn);
+        L.push('');
+
+        var cols = radiografia.colecciones;
+        var conDatos = [], vacias = [], errores = [];
+        var i, j;
+        for (i = 0; i < cols.length; i++) {
+            if (cols[i].error) errores.push(cols[i].nombre);
+            else if (cols[i].cantidad) conDatos.push(cols[i]);
+            else vacias.push(cols[i].nombre);
+        }
+
+        L.push('=== RESUMEN ===');
+        L.push('Con datos: ' + conDatos.length + ' · Vacias: ' + vacias.length + ' · Con error: ' + errores.length);
+        L.push('');
+
+        L.push('=== COLECCIONES CON DATOS ===');
+        for (i = 0; i < conDatos.length; i++) {
+            var c = conDatos[i];
+            L.push('');
+            L.push('--- ' + c.nombre + '  (' + c.cantidad + (c.truncada ? '+ , truncada' : '') + ' docs)');
+            if (c.fechaMin) L.push('    fechas: ' + c.fechaMin + ' -> ' + c.fechaMax);
+            L.push('    campos:');
+            for (j = 0; j < c.campos.length; j++) {
+                var f = c.campos[j];
+                L.push('      ' + f.nombre + ' : ' + f.tipos + '  (' + f.pct + '% de los docs)');
+            }
+            if (c.muestras.length) {
+                L.push('    ejemplo:');
+                L.push('      ' + recorte(JSON.stringify(limpiar(c.muestras[0].datos)), 700));
+            }
+        }
+
+        L.push('');
+        L.push('=== VACIAS O INEXISTENTES ===');
+        L.push(vacias.length ? vacias.join(', ') : '(ninguna)');
+
+        L.push('');
+        L.push('=== CON ERROR DE LECTURA ===');
+        if (errores.length) {
+            for (i = 0; i < cols.length; i++) {
+                if (cols[i].error) L.push('  ' + cols[i].nombre + ' : ' + cols[i].error);
+            }
+        } else { L.push('(ninguna)'); }
+
+        var s = radiografia.subSesiones;
+        L.push('');
+        L.push('=== SUBCOLECCION actividades/{id}/sesiones ===');
+        L.push('  sondeadas ' + s.probadas + ' actividades, ' + s.conDatos + ' con sesiones, ' + s.total + ' sesiones en esa muestra');
+        if (s.error) L.push('  error: ' + s.error);
+
+        L.push('');
+        L.push('=== LIBROS PERSONALES (mov_personal_*) ===');
+        if (radiografia.personales.length) {
+            for (i = 0; i < radiografia.personales.length; i++) {
+                L.push('  ' + radiografia.personales[i].coleccion + ' : ' + radiografia.personales[i].cantidad + ' docs');
+            }
+        } else { L.push('  (ninguno con datos)'); }
+
+        document.getElementById('informe').value = L.join('\n');
+    }
+
+    window.copiarInforme = function() {
+        var ta = document.getElementById('informe');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(ta.value).then(function() {
+                showToast('Informe copiado', 'success');
+            }, function() {
+                ta.removeAttribute('readonly'); ta.select(); showToast('Seleccionalo y copiá a mano', 'warning');
+            });
+        } else {
+            ta.removeAttribute('readonly'); ta.select();
+            showToast('Seleccionalo y copiá a mano', 'warning');
+        }
+    };
+
+    window.bajarInforme = function() {
+        bajarArchivo('radiografia-casaverde-' + hoyISO() + '.txt',
+                     document.getElementById('informe').value, 'text/plain;charset=utf-8;');
+    };
+
+    // ── Exportación ───────────────────────────────────────────
+    function armarBotonesExport() {
+        var html = '<p class="paso">O bajá una colección por vez:</p><div style="display:flex;gap:8px;flex-wrap:wrap;">';
+        var cols = radiografia.colecciones;
+        for (var i = 0; i < cols.length; i++) {
+            if (!cols[i].cantidad || cols[i].error) continue;
+            html += '<button class="btn btn-secondary" style="font-size:12px;padding:5px 11px;" onclick="exportarUna(\'' +
+                    cols[i].nombre + '\')">' + escapeHtml(cols[i].nombre) + '</button>';
+        }
+        html += '</div>';
+        document.getElementById('exportIndividual').innerHTML = html;
+    }
+
+    async function juntar(nombre) {
+        var docs = await leerColeccion(nombre, 'completo');
+        var salida = [];
+        for (var i = 0; i < docs.length; i++) {
+            salida.push({ id: docs[i].id, datos: limpiar(docs[i].datos) });
+        }
+        return salida;
+    }
+
+    window.exportarUna = async function(nombre) {
+        progreso('Exportando ' + nombre + '…', 50);
+        try {
+            var docs = await juntar(nombre);
+            bajarArchivo('casaverde-' + nombre + '-' + hoyISO() + '.json',
+                JSON.stringify({ coleccion: nombre, exportadoEn: new Date().toISOString(), cantidad: docs.length, documentos: docs }, null, 1));
+            showToast(nombre + ': ' + docs.length + ' documentos', 'success');
+        } catch (e) {
+            showToast('No se pudo exportar ' + nombre, 'error');
+        }
+        progreso('', null);
+    };
+
+    window.exportarTodo = async function() {
+        if (!confirm('Va a leer TODA la base y bajar un solo archivo JSON.\n\nEn una base grande puede tardar varios minutos y consumir muchas lecturas. ¿Seguimos?')) return;
+        var salida = { sistema: 'Casa Verde Canas — sistema viejo', exportadoEn: new Date().toISOString(), colecciones: {} };
+        var cols = radiografia.colecciones;
+        var totales = 0;
+        for (var i = 0; i < cols.length; i++) {
+            if (cols[i].error) continue;
+            progreso('Exportando ' + cols[i].nombre + '…  (' + (i + 1) + ' de ' + cols.length + ')', (i / cols.length) * 100);
+            try {
+                var docs = await juntar(cols[i].nombre);
+                if (docs.length) { salida.colecciones[cols[i].nombre] = docs; totales += docs.length; }
+            } catch (e) { /* se informa por pantalla en la radiografía */ }
+        }
+
+        // Subcolección vieja de sesiones, entera
+        progreso('Exportando subcolecciones de sesiones…', 96);
+        try {
+            var act = await db.collection('actividades').get();
+            var ids = [];
+            act.forEach(function(d) { ids.push(d.id); });
+            var subs = [];
+            for (var k = 0; k < ids.length; k++) {
+                var s = await db.collection('actividades').doc(ids[k]).collection('sesiones').get();
+                s.forEach(function(d) { subs.push({ actividadId: ids[k], id: d.id, datos: limpiar(d.data()) }); });
+            }
+            if (subs.length) { salida.colecciones['actividades__sesiones'] = subs; totales += subs.length; }
+        } catch (e) { /* sin subcolecciones */ }
+
+        salida.totalDocumentos = totales;
+        bajarArchivo('casaverde-EXPORT-COMPLETO-' + hoyISO() + '.json', JSON.stringify(salida));
+        progreso('', null);
+        showToast('Exportación lista: ' + totales + ' documentos', 'success');
+    };
+
+})();
+</script>
+</body>
+</html>
